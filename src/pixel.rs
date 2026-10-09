@@ -9,7 +9,11 @@ pub struct PixGrid {
 
 impl PixGrid {
     pub fn new(w: i32, h: i32) -> Self {
-        PixGrid { w, h, px: vec![[0, 0, 0, 0]; (w * h) as usize] }
+        PixGrid {
+            w,
+            h,
+            px: vec![[0, 0, 0, 0]; (w * h) as usize],
+        }
     }
     pub fn set(&mut self, x: i32, y: i32, c: [u8; 4]) {
         if x < 0 || y < 0 || x >= self.w || y >= self.h {

@@ -30,7 +30,14 @@ pub fn build_art() -> Art {
     let icon_pill = build_icon_pill();
     let icon_sword = build_icon_sword();
     let bg = build_bg();
-    Art { portrait, icon_stone, icon_yun, icon_pill, icon_sword, bg }
+    Art {
+        portrait,
+        icon_stone,
+        icon_yun,
+        icon_pill,
+        icon_sword,
+        bg,
+    }
 }
 
 fn build_portrait() -> Texture2D {
@@ -224,7 +231,11 @@ fn build_bg() -> Texture2D {
         // 楼阁剪影（画在中景山上）
         layer(d, 560.0, 70.0, [32, 22, 60, 255], 4.1);
         let (px0, py0) = (180i32, 445i32);
-        for (rx, ry, rw, rh) in [(px0 - 14, py0 + 0, 28, 40), (px0 - 10, py0 - 16, 20, 18), (px0 - 5, py0 - 30, 10, 16)] {
+        for (rx, ry, rw, rh) in [
+            (px0 - 14, py0 + 0, 28, 40),
+            (px0 - 10, py0 - 16, 20, 18),
+            (px0 - 5, py0 - 30, 10, 16),
+        ] {
             for y in ry..ry + rh {
                 for x in rx..rx + rw {
                     if x >= 0 && y >= 0 && x < w && y < h {
@@ -249,26 +260,70 @@ fn build_bg() -> Texture2D {
 }
 
 // 绘制修士：aura 色随境界变化，闭关时脚下光环脉动
-pub fn draw_cultivator(art: &Art, cx: f32, cy: f32, scale: f32, aura: Color, t: f32, meditating: bool) {
+pub fn draw_cultivator(
+    art: &Art,
+    cx: f32,
+    cy: f32,
+    scale: f32,
+    aura: Color,
+    t: f32,
+    meditating: bool,
+) {
     let s = scale;
     // 光环
     let pulse = 0.85 + 0.15 * (t * (if meditating { 2.2 } else { 1.1 })).sin();
     let r1 = 86.0 * s * pulse;
-    draw_circle(cx, cy + 6.0 * s, r1, Color::new(aura.r, aura.g, aura.b, 0.10));
-    draw_circle(cx, cy + 6.0 * s, r1 * 0.72, Color::new(aura.r, aura.g, aura.b, 0.14));
-    draw_circle_lines(cx, cy + 6.0 * s, r1, 2.0, Color::new(aura.r, aura.g, aura.b, 0.35 * pulse));
-    draw_circle_lines(cx, cy + 6.0 * s, r1 * 0.72, 1.5, Color::new(aura.r, aura.g, aura.b, 0.28 * pulse));
+    draw_circle(
+        cx,
+        cy + 6.0 * s,
+        r1,
+        Color::new(aura.r, aura.g, aura.b, 0.10),
+    );
+    draw_circle(
+        cx,
+        cy + 6.0 * s,
+        r1 * 0.72,
+        Color::new(aura.r, aura.g, aura.b, 0.14),
+    );
+    draw_circle_lines(
+        cx,
+        cy + 6.0 * s,
+        r1,
+        2.0,
+        Color::new(aura.r, aura.g, aura.b, 0.35 * pulse),
+    );
+    draw_circle_lines(
+        cx,
+        cy + 6.0 * s,
+        r1 * 0.72,
+        1.5,
+        Color::new(aura.r, aura.g, aura.b, 0.28 * pulse),
+    );
     // 底座蒲团阴影
-    draw_ellipse(cx, cy + 60.0 * s, 60.0 * s, 12.0 * s, 0.0, Color::new(0.0, 0.0, 0.0, 0.35));
+    draw_ellipse(
+        cx,
+        cy + 60.0 * s,
+        60.0 * s,
+        12.0 * s,
+        0.0,
+        Color::new(0.0, 0.0, 0.0, 0.35),
+    );
     // 本体 32×36 放大
     let pw = 32.0 * 5.0 * s;
     let ph = 36.0 * 5.0 * s;
-    let bob = if meditating { (t * 2.0).sin() * 3.0 } else { 0.0 };
+    let bob = if meditating {
+        (t * 2.0).sin() * 3.0
+    } else {
+        0.0
+    };
     draw_texture_ex(
         &art.portrait,
         cx - pw * 0.5,
         cy - ph * 0.52 + bob,
         WHITE,
-        DrawTextureParams { dest_size: Some(vec2(pw, ph)), ..Default::default() },
+        DrawTextureParams {
+            dest_size: Some(vec2(pw, ph)),
+            ..Default::default()
+        },
     );
 }

@@ -33,12 +33,21 @@ fn life_text(l: &Life) -> String {
     s.push_str(&format!("Lspan={}\n", l.lifespan));
     s.push_str(&format!("Lrealm={} {}\n", l.realm, l.layer));
     s.push_str(&format!("Lqi={}\n", l.qi));
-    s.push_str(&format!("Lstat={} {} {} {} {}\n", l.root, l.dao, l.luck, l.body, l.stones));
+    s.push_str(&format!(
+        "Lstat={} {} {} {} {}\n",
+        l.root, l.dao, l.luck, l.body, l.stones
+    ));
     s.push_str(&format!("Ltech={}\n", l.tech));
     s.push_str(&format!("Lrelics={:?}\n", l.relics));
     s.push_str(&format!("Lpills={:?}\n", l.pills));
-    s.push_str(&format!("Lflags={} {} {} {}\n", l.sect as i32, l.lingmai as i32, l.injured, l.washed));
-    s.push_str(&format!("Ltrack={} {} {}\n", l.max_realm, l.wins, l.natural_end as i32));
+    s.push_str(&format!(
+        "Lflags={} {} {} {}\n",
+        l.sect as i32, l.lingmai as i32, l.injured, l.washed
+    ));
+    s.push_str(&format!(
+        "Ltrack={} {} {}\n",
+        l.max_realm, l.wins, l.natural_end as i32
+    ));
     s
 }
 
@@ -54,9 +63,14 @@ pub fn load() -> Meta {
     let mut neme_realm = 0usize;
     let mut has_neme = false;
     for line in text.lines() {
-        let Some((k, v)) = line.split_once('=') else { continue };
+        let Some((k, v)) = line.split_once('=') else {
+            continue;
+        };
         let nums = |s: &str| -> Vec<f64> {
-            s.replace(['[', ']', '(', ')', ' '], "").split(',').filter_map(|x| x.parse().ok()).collect()
+            s.replace(['[', ']', '(', ')', ' '], "")
+                .split(',')
+                .filter_map(|x| x.parse().ok())
+                .collect()
         };
         match k {
             "lives" => m.lives = v.parse().unwrap_or(0),
@@ -155,7 +169,11 @@ pub fn load() -> Meta {
             .find(|t| t.to_string() == neme_title)
             .copied()
             .unwrap_or(crate::game::NEME_TITLES[0]);
-        m.neme = Some(Nemes { title, name: neme_name, realm: neme_realm });
+        m.neme = Some(Nemes {
+            title,
+            name: neme_name,
+            realm: neme_realm,
+        });
     }
     if in_life {
         m.life = Some(life);

@@ -81,9 +81,11 @@ fn pluck(freq: f32, dur: f32, vol: f32) -> Vec<f32> {
     for i in 0..n {
         let t = i as f32 / SR as f32;
         let env = (-t * 5.0).exp();
-        out[i] = vol * env * (0.72 * (2.0 * std::f32::consts::PI * freq * t).sin()
-            + 0.22 * (2.0 * std::f32::consts::PI * freq * 2.0 * t).sin()
-            + 0.08 * (2.0 * std::f32::consts::PI * freq * 3.0 * t).sin());
+        out[i] = vol
+            * env
+            * (0.72 * (2.0 * std::f32::consts::PI * freq * t).sin()
+                + 0.22 * (2.0 * std::f32::consts::PI * freq * 2.0 * t).sin()
+                + 0.08 * (2.0 * std::f32::consts::PI * freq * 3.0 * t).sin());
     }
     out
 }
@@ -132,7 +134,9 @@ fn build_bgm() -> Vec<u8> {
     let a3 = 220.0;
     let notes = [a3, 261.63, 293.66, 329.63, 392.0, 440.0, 523.25];
     // 旋律表（索引，9=休止）
-    let mel: [usize; 26] = [5, 4, 2, 3, 4, 9, 5, 4, 2, 0, 1, 9, 4, 5, 6, 5, 4, 9, 2, 3, 4, 2, 1, 0, 9, 9];
+    let mel: [usize; 26] = [
+        5, 4, 2, 3, 4, 9, 5, 4, 2, 0, 1, 9, 4, 5, 6, 5, 4, 9, 2, 3, 4, 2, 1, 0, 9, 9,
+    ];
     let step = 0.62;
     let mut t = 0.15;
     for &mi in mel.iter() {
@@ -154,7 +158,8 @@ fn build_bgm() -> Vec<u8> {
     // 低音持续音
     for i in 0..buf.len() {
         let tt = i as f32 / SR as f32;
-        buf[i] += 0.028 * (2.0 * std::f32::consts::PI * a3 * 0.5 * tt).sin()
+        buf[i] += 0.028
+            * (2.0 * std::f32::consts::PI * a3 * 0.5 * tt).sin()
             * (0.75 + 0.25 * (2.0 * std::f32::consts::PI * 0.125 * tt).sin());
     }
     // 首尾淡入淡出避免爆音
@@ -200,7 +205,11 @@ fn build_battle_bgm() -> Vec<u8> {
     // 低音持续（A2 与降 B2 交替，紧张感）
     for i in 0..buf.len() {
         let tt = i as f32 / SR as f32;
-        let f = if ((tt / 2.0) as i32) % 2 == 0 { 110.0 } else { 116.5 };
+        let f = if ((tt / 2.0) as i32) % 2 == 0 {
+            110.0
+        } else {
+            116.5
+        };
         buf[i] += 0.05 * (2.0 * std::f32::consts::PI * f * tt).sin();
     }
     let fade = (0.25 * SR as f32) as usize;
@@ -280,13 +289,25 @@ pub async fn init() -> Audio {
         coin: load_sound_from_bytes(&v[8]).await.unwrap(),
         page: load_sound_from_bytes(&v[9]).await.unwrap(),
     };
-    Audio { s: Some(sounds), music_on: true, sfx_on: true, music_vol: 0.5, sfx_vol: 0.9 }
+    Audio {
+        s: Some(sounds),
+        music_on: true,
+        sfx_on: true,
+        music_vol: 0.5,
+        sfx_vol: 0.9,
+    }
 }
 
 impl Audio {
     pub fn start_bgm(&self) {
         if let Some(s) = &self.s {
-            play_sound(&s.bgm, PlaySoundParams { looped: true, volume: self.music_vol });
+            play_sound(
+                &s.bgm,
+                PlaySoundParams {
+                    looped: true,
+                    volume: self.music_vol,
+                },
+            );
         }
     }
     pub fn stop_bgm(&self) {
@@ -304,9 +325,21 @@ impl Audio {
             stop_sound(&s.bgm);
             stop_sound(&s.battle);
             if battle {
-                play_sound(&s.battle, PlaySoundParams { looped: true, volume: self.music_vol });
+                play_sound(
+                    &s.battle,
+                    PlaySoundParams {
+                        looped: true,
+                        volume: self.music_vol,
+                    },
+                );
             } else {
-                play_sound(&s.bgm, PlaySoundParams { looped: true, volume: self.music_vol });
+                play_sound(
+                    &s.bgm,
+                    PlaySoundParams {
+                        looped: true,
+                        volume: self.music_vol,
+                    },
+                );
             }
         }
     }
@@ -327,7 +360,13 @@ impl Audio {
                 Which::Coin => &s.coin,
                 Which::Page => &s.page,
             };
-            play_sound(snd, PlaySoundParams { looped: false, volume: self.sfx_vol });
+            play_sound(
+                snd,
+                PlaySoundParams {
+                    looped: false,
+                    volume: self.sfx_vol,
+                },
+            );
         }
     }
 }

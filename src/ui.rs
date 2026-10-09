@@ -25,7 +25,12 @@ pub fn txt(s: &str, x: f32, y: f32, size: u16, c: Color) {
         s,
         x,
         y + size as f32 * 0.82,
-        TextParams { font: Some(font()), font_size: size, color: c, ..Default::default() },
+        TextParams {
+            font: Some(font()),
+            font_size: size,
+            color: c,
+            ..Default::default()
+        },
     );
 }
 
