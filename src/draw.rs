@@ -44,6 +44,57 @@ fn panel_card(x: f32, y: f32, w: f32, h: f32) {
     draw_rectangle(x, y, w, h, C_PANEL);
     draw_rectangle_lines(x, y, w, h, 2.5, C_GOLD_D);
     draw_rectangle_lines(x + 5.0, y + 5.0, w - 10.0, h - 10.0, 1.0, Color::from_rgba(96, 76, 130, 160));
+    // 四角金色 L 形角饰
+    let cl = 16.0f32;
+    let t = 3.0f32;
+    for (cx, cy, dx, dy) in [
+        (x, y, 1.0, 1.0),
+        (x + w, y, -1.0, 1.0),
+        (x, y + h, 1.0, -1.0),
+        (x + w, y + h, -1.0, -1.0),
+    ] {
+        draw_rectangle(cx - if dx < 0.0 { cl } else { 0.0 }, cy - if dy < 0.0 { t } else { 0.0 }, cl, t, C_GOLD);
+        draw_rectangle(cx - if dx < 0.0 { t } else { 0.0 }, cy - if dy < 0.0 { cl } else { 0.0 }, t, cl, C_GOLD);
+    }
+}
+
+// 修士脚下旋转法阵（透视椭圆 + 双圈刻度反向旋转）
+fn draw_magic_circle(cx: f32, cy: f32, t: f32, c: Color) {
+    let squash = 0.42f32;
+    let draw_ellipse_line = |ccx: f32, ccy: f32, r: f32, seg: i32, col: Color| {
+        let mut prev = (ccx + r, ccy);
+        for i in 1..=seg {
+            let a = std::f32::consts::TAU * i as f32 / seg as f32;
+            let p = (ccx + a.cos() * r, ccy + a.sin() * r * squash);
+            draw_line(prev.0, prev.1, p.0, p.1, 1.5, col);
+            prev = p;
+        }
+    };
+    let a = |v: f32| Color::new(c.r, c.g, c.b, v);
+    draw_ellipse_line(cx, cy, 86.0, 48, a(0.30));
+    draw_ellipse_line(cx, cy, 62.0, 40, a(0.20));
+    // 外圈顺时针刻度
+    for i in 0..12 {
+        let ang = t * 0.35 + std::f32::consts::TAU * i as f32 / 12.0;
+        let (r0, r1) = (72.0, 84.0);
+        draw_line(
+            cx + ang.cos() * r0,
+            cy + ang.sin() * r0 * squash,
+            cx + ang.cos() * r1,
+            cy + ang.sin() * r1 * squash,
+            2.0,
+            a(0.40),
+        );
+    }
+    // 内圈逆时针菱形符文点
+    for i in 0..6 {
+        let ang = -t * 0.5 + std::f32::consts::TAU * i as f32 / 6.0;
+        let px = cx + ang.cos() * 62.0;
+        let py = cy + ang.sin() * 62.0 * squash;
+        draw_rectangle(px - 2.0, py - 2.0, 4.0, 4.0, a(0.5));
+    }
+    // 中心微光
+    draw_ellipse(cx, cy, 60.0, 26.0, 0.0, a(0.06));
 }
 
 pub fn draw_bg(art: &Art) {
@@ -358,6 +409,7 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
     draw_rectangle(8.0, 60.0, LEFT_W, PANEL_B - 60.0, C_PANEL2);
     draw_rectangle_lines(8.0, 60.0, LEFT_W, PANEL_B - 60.0, 2.0, C_GOLD_D);
     let cx = 8.0 + LEFT_W * 0.5;
+    draw_magic_circle(cx, 218.0, g.time, col_realm(l.realm));
     draw_aura_motes(cx, 152.0, g.time, col_realm(l.realm));
     draw_cultivator(art, cx, 152.0, 0.80, col_realm(l.realm), g.time, l.seclusion.is_some());
     txt_c(&realm_full_name(l), cx, 236.0, 20, col_realm(l.realm));
@@ -369,20 +421,26 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
     txt_c(&qlabel, cx + 1.0, 277.0, 14, Color::from_rgba(10, 8, 20, 255));
     txt_c(&qlabel, cx, 276.0, 14, C_TEXT);
     let mut y = 312.0;
-    let row = |label: &str, y: f32| -> f32 { txt(label, 30.0, y, 15, C_DIM); y + 29.0 };
+    // 属性区交替行底色
+    for k in 0..8 {
+        if k % 2 == 0 {
+            draw_rectangle(20.0, 306.0 + k as f32 * 30.0, LEFT_W - 24.0, 30.0, Color::from_rgba(255, 255, 255, 6));
+        }
+    }
+    let row = |label: &str, y: f32| -> f32 { txt(label, 30.0, y, 16, C_DIM); y + 30.0 };
     y = row("灵根", y);
     let rc = root_color(l.root);
-    bar(100.0, y - 25.0, 150.0, 12.0, l.root / 100.0, Color::from_rgba(rc.0, rc.1, rc.2, 255));
-    txt(&format!("{} {}", l.root as i32, root_name(l.root)), 262.0, y - 21.0, 14, C_TEXT);
+    bar(104.0, y - 26.0, 168.0, 14.0, l.root / 100.0, Color::from_rgba(rc.0, rc.1, rc.2, 255));
+    txt(&format!("{} {}", l.root as i32, root_name(l.root)), 280.0, y - 21.0, 14, C_TEXT);
     y = row("道心", y);
-    bar(100.0, y - 25.0, 150.0, 12.0, l.dao / 100.0, C_GOLD);
-    txt(&format!("{:.0}", l.dao), 262.0, y - 21.0, 14, C_TEXT);
+    bar(104.0, y - 26.0, 168.0, 14.0, l.dao / 100.0, C_GOLD);
+    txt(&format!("{:.0}", l.dao), 280.0, y - 21.0, 14, C_TEXT);
     y = row("气运", y);
-    bar(100.0, y - 25.0, 150.0, 12.0, l.luck / 100.0, C_GREEN);
-    txt(&format!("{:.0}", l.luck), 262.0, y - 21.0, 14, C_TEXT);
+    bar(104.0, y - 26.0, 168.0, 14.0, l.luck / 100.0, C_GREEN);
+    txt(&format!("{:.0}", l.luck), 280.0, y - 21.0, 14, C_TEXT);
     y = row("体魄", y);
-    bar(100.0, y - 25.0, 150.0, 12.0, l.body / 100.0, C_RED);
-    txt(&format!("{:.0}", l.body), 262.0, y - 21.0, 14, C_TEXT);
+    bar(104.0, y - 26.0, 168.0, 14.0, l.body / 100.0, C_RED);
+    txt(&format!("{:.0}", l.body), 280.0, y - 21.0, 14, C_TEXT);
     y = row("战力", y);
     txt(&fmt_num(power(l)), 100.0, y - 21.0, 15, C_TEXT);
     if l.injured > 0 {
@@ -446,7 +504,9 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
         let x = x0 + i as f32 * (cw + gap);
         let y = 170.0;
         let selected = g.picked.contains(&t);
-        let hot = mx >= x && mx <= x + cw && my >= y && my <= y + ch;
+        let float = (g.time * 1.6 + i as f32 * 0.9).sin() * 3.0;
+        let y = y + float;
+        let hot = mx >= x && mx <= x + cw && my >= y - float && my <= y + ch;
         let (tr, tg, tb) = TIER_COLORS[card.tier as usize];
         let bg = if selected {
             Color::from_rgba(90, 66, 40, 245)
@@ -457,6 +517,9 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
         };
         draw_rectangle(x, y, cw, ch, bg);
         draw_rectangle_lines(x, y, cw, ch, if selected { 3.0 } else { 2.0 }, if selected { C_GOLD } else { Color::from_rgba(tr, tg, tb, 255) });
+        if selected {
+            draw_rectangle_lines(x - 4.0, y - 4.0, cw + 8.0, ch + 8.0, 1.0, Color::from_rgba(tr, tg, tb, 150));
+        }
         // 品级徽标
         draw_rectangle(x + cw * 0.5 - 34.0, y + 18.0, 68.0, 26.0, Color::from_rgba(tr, tg, tb, 60));
         txt_c(TIER_NAMES[card.tier as usize], x + cw * 0.5, y + 22.0, 16, Color::from_rgba(tr, tg, tb, 255));
@@ -485,7 +548,11 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
         draw_sky_life(g);
     }
     if tribbing {
-        draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.08, 0.03, 0.15, 0.55));
+        draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.10, 0.03, 0.18, 0.62));
+        // 四周暗角
+        for (x, y, w, h) in [(0.0, 0.0, V_W, 90.0), (0.0, V_H - 90.0, V_W, 90.0), (0.0, 0.0, 110.0, V_H), (V_W - 110.0, 0.0, 110.0, V_H)] {
+            draw_rectangle(x, y, w, h, Color::new(0.0, 0.0, 0.02, 0.35));
+        }
     }
     draw_motes(g);
     // 顶栏
@@ -521,29 +588,43 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
     draw_rectangle_lines(8.0, area_y - 8.0, V_W - 16.0, area_h + 12.0, 1.5, Color::from_rgba(120, 80, 150, 220));
     let start = g.sim_log.len().saturating_sub(max_lines);
     for (i, ll) in g.sim_log[start..].iter().enumerate() {
+        if i % 2 == 0 {
+            draw_rectangle(10.0, area_y - 2.0 + i as f32 * line_h, V_W - 20.0, line_h, Color::from_rgba(255, 255, 255, 7));
+        }
         txt(&ll.text, 24.0, area_y + 10.0 + i as f32 * line_h, 17, ll.color);
     }
     // 渡劫演出
     if tribbing {
         let t = s.trib.as_ref().unwrap();
-        // 雷云
-        for i in 0..7 {
-            let x = 200.0 + i as f32 * 150.0 + (g.time * 30.0 + i as f32 * 37.0).sin() * 24.0;
-            let y = 52.0 + (g.time * 18.0 + i as f32 * 13.0).sin() * 8.0;
-            draw_circle(x, y, 52.0, Color::new(0.25, 0.18, 0.4, 0.5));
+        // 多层雷云（远紫近黑）
+        for i in 0..9 {
+            let x = 120.0 + i as f32 * 130.0 + (g.time * 26.0 + i as f32 * 31.0).sin() * 22.0;
+            let y = 40.0 + (g.time * 16.0 + i as f32 * 11.0).sin() * 7.0;
+            draw_circle(x, y, 58.0, Color::new(0.20, 0.13, 0.34, 0.45));
+            draw_circle(x + 30.0, y + 12.0, 40.0, Color::new(0.13, 0.08, 0.24, 0.5));
         }
         if t.flash > 0.02 {
-            let _seed = (t.wave as i64 * 7919 + (g.time * 100.0) as i64) as u32;
             let bx = V_W * 0.5 + gen_range(-160.0, 160.0);
             let mut x = bx;
             let mut y = 90.0;
+            let mut branch = (bx, 90.0, 0);
             while y < 460.0 {
                 let nx = x + (gen_range(0.0, 1.0) - 0.5) * 90.0;
                 let ny = y + 40.0 + gen_range(0.0, 45.0);
                 draw_line(x, y, nx, ny, 4.0, Color::new(0.85, 0.92, 1.0, t.flash));
+                draw_line(x, y, nx, ny, 9.0, Color::new(0.5, 0.6, 1.0, t.flash * 0.35));
+                // 闪电分叉
+                if gen_range(0.0, 1.0) < 0.35 {
+                    let fx = nx + (gen_range(0.0, 1.0) - 0.5) * 130.0;
+                    draw_line(nx, ny, fx, ny + 30.0 + gen_range(0.0, 40.0), 2.0, Color::new(0.7, 0.8, 1.0, t.flash * 0.7));
+                }
+                if gen_range(0.0, 1.0) < 0.2 {
+                    branch = (nx, ny, 1);
+                }
                 x = nx;
                 y = ny;
             }
+            let _ = branch;
             draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.9, 0.95, 1.0, t.flash * 0.2));
         }
         txt_c(&format!("第 {} 重 · 雷 劫", (t.wave + 1).min(9)), V_W * 0.5, 660.0, 30, C_GOLD);

@@ -476,7 +476,14 @@ impl Game {
     }
 
     pub fn slog(&mut self, text: impl Into<String>, color: Color) {
-        self.sim_log.push(LogLine { text: text.into(), color });
+        let text = text.into();
+        // 自动带岁数前缀（轮回模拟器的灵魂）
+        let text = self
+            .sim
+            .as_ref()
+            .map(|s| format!("[{}岁] {}", s.age as i32, text))
+            .unwrap_or(text);
+        self.sim_log.push(LogLine { text, color });
         if self.sim_log.len() > 200 {
             self.sim_log.remove(0);
         }
