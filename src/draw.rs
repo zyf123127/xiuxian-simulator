@@ -50,6 +50,113 @@ pub fn draw_bg(art: &Art) {
     draw_texture(&art.bg, 0.0, 0.0, WHITE);
 }
 
+// 云雾带 + 仙鹤剪影（纯函数绘制，零分配）
+pub fn draw_sky_life(g: &Game) {
+    let t = g.time;
+    // 三条云雾带
+    for i in 0..3 {
+        let speed = 8.0 + i as f32 * 5.0;
+        let y = 180.0 + i as f32 * 150.0;
+        let off = ((t * speed) % (V_W + 400.0)) - 200.0;
+        let a = 0.045 + i as f32 * 0.012;
+        for k in 0..3 {
+            let cx = ((off + k as f32 * 460.0 + 100.0 * i as f32) % (V_W + 400.0)) - 200.0;
+            draw_ellipse(cx, y + (k as f32 * 23.0) % 40.0, 190.0, 22.0, 0.0, Color::new(0.65, 0.6, 0.85, a));
+        }
+    }
+    // 两只仙鹤剪影横穿
+    for h in 0..2 {
+        let period = 34.0 + h as f32 * 17.0;
+        let ph = (t / period + h as f32 * 0.45).fract();
+        let x = -80.0 + ph * (V_W + 160.0);
+        let y = 120.0 + h as f32 * 90.0 + (t * (0.7 + h as f32 * 0.3)).sin() * 18.0;
+        let s = 0.8 + h as f32 * 0.35;
+        let dir = 1.0;
+        let flap = ((t * 5.0 + h as f32 * 1.7).sin() * 6.0).abs();
+        let c = Color::new(0.82, 0.80, 0.92, 0.55);
+        // 身体
+        draw_ellipse(x, y, 13.0 * s, 3.2 * s, 0.0, c);
+        // 双翼（上下摆动）
+        draw_triangle(
+            vec2(x - 2.0 * s * dir, y - 1.0 * s),
+            vec2(x - 10.0 * s * dir, y - (6.0 + flap) * s),
+            vec2(x + 3.0 * s * dir, y - 1.0 * s),
+            c,
+        );
+        draw_triangle(
+            vec2(x - 2.0 * s * dir, y + 1.0 * s),
+            vec2(x - 10.0 * s * dir, y + (6.0 + flap) * s),
+            vec2(x + 3.0 * s * dir, y + 1.0 * s),
+            c,
+        );
+        // 颈与尾
+        draw_line(x + 10.0 * s * dir, y - 2.0 * s, x + 17.0 * s * dir, y - 5.0 * s, 2.0 * s, c);
+        draw_line(x - 12.0 * s * dir, y, x - 18.0 * s * dir, y + 2.5 * s, 2.0 * s, c);
+    }
+    // 流星（拖尾）
+    for m in &g.meteors {
+        let a = (m.life / 1.1).clamp(0.0, 1.0);
+        let tail = vec2(m.x - m.vx * 0.12, m.y - m.vy * 0.12);
+        draw_line(m.x, m.y, tail.x, tail.y, 2.0, Color::new(1.0, 1.0, 0.95, 0.7 * a));
+        draw_circle(m.x, m.y, 2.2, Color::new(1.0, 1.0, 0.9, 0.9 * a));
+    }
+}
+
+// 流光进度条（亮带在填充区往复）
+pub fn bar_glow(x: f32, y: f32, w: f32, h: f32, frac: f32, c: Color, t: f32) {
+    bar(x, y, w, h, frac, c);
+    let f = frac.clamp(0.0, 1.0);
+    if f > 0.02 {
+        let sweep = ((t * 0.45).fract() * 2.0 - 1.0).abs();
+        let gx = x + sweep * (w * f);
+        let gw = 26.0f32.min(w * f);
+        if gx + gw > x && gx < x + w * f {
+            draw_rectangle(gx, y + 1.0, gw, h - 2.0, Color::new(1.0, 1.0, 1.0, 0.18));
+        }
+    }
+}
+
+// 全屏横幅演出（突破/飞升/斩敌）
+pub fn draw_banner(g: &Game) {
+    if let Some((text, t, c)) = &g.banner {
+        let k = (1.0 - t / 2.4).clamp(0.0, 1.0);
+        let a = if k < 0.12 { k / 0.12 } else if k > 0.8 { (1.0 - k) / 0.2 } else { 1.0 };
+        let scale = 1.0 + 0.35 * (1.0 - (k * 4.0).min(1.0));
+        let size = (54.0 * scale) as u16;
+        let w = measure(text, size);
+        // 半透明底带提升可读性
+        draw_rectangle(0.0, 236.0, V_W, 86.0, Color::new(0.02, 0.01, 0.05, 0.45 * a));
+        draw_rectangle(0.0, 236.0, V_W, 2.0, Color::new(c.r, c.g, c.b, 0.5 * a));
+        draw_rectangle(0.0, 320.0, V_W, 2.0, Color::new(c.r, c.g, c.b, 0.5 * a));
+        // 描边底
+        for (dx, dy) in [(-2.0, 0.0), (2.0, 0.0), (0.0, -2.0), (0.0, 2.0)] {
+            txt_c(text, V_W * 0.5 - w * 0.5 + dx, 250.0 + dy, size, Color::new(0.05, 0.02, 0.1, 0.9 * a));
+        }
+        txt_c(text, V_W * 0.5 - w * 0.5, 250.0, size, Color::new(c.r, c.g, c.b, a));
+        // 两侧装饰线
+        let ly = 250.0 + size as f32 * 0.5;
+        let lw = (V_W - w) * 0.5 - 60.0;
+        if lw > 40.0 {
+            draw_line(60.0, ly, 60.0 + lw, ly, 2.0, Color::new(c.r, c.g, c.b, 0.5 * a));
+            draw_line(V_W - 60.0, ly, V_W - 60.0 - lw, ly, 2.0, Color::new(c.r, c.g, c.b, 0.5 * a));
+        }
+    }
+}
+
+// 修士灵气环绕粒子（现实左面板，纯函数无分配）
+pub fn draw_aura_motes(cx: f32, cy: f32, t: f32, c: Color) {
+    for i in 0..9 {
+        let seed = i as f32 * 2.399;
+        let ph = (t * (0.25 + 0.03 * (i % 4) as f32) + seed).fract();
+        let ang = seed + t * 0.4;
+        let r = 78.0 + (seed * 13.7).sin() * 16.0;
+        let x = cx + ang.cos() * r;
+        let y = cy + 30.0 - ph * 110.0;
+        let a = 0.35 * (ph * (1.0 - ph) * 4.0).min(1.0);
+        draw_circle(x, y, 1.6 + (seed % 1.4), Color::new(c.r, c.g, c.b, a));
+    }
+}
+
 pub fn draw_motes(g: &Game) {
     for m in &g.motes {
         let a = 0.20 + 0.16 * (g.time * 1.7 + m.ph).sin();
@@ -84,6 +191,7 @@ fn draw_toast(g: &Game) {
 // ================= 菜单 =================
 pub fn draw_menu(g: &mut Game, art: &Art) {
     draw_bg(art);
+    draw_sky_life(g);
     draw_motes(g);
     let t = g.time;
     let glow = 0.75 + 0.25 * (t * 1.2).sin();
@@ -147,6 +255,7 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
 pub fn draw_reality(g: &mut Game, art: &Art) {
     let Some(l) = g.life.clone() else { return };
     draw_bg(art);
+    draw_sky_life(g);
     draw_motes(g);
     render_top(g, &l);
     // 顶栏按钮
@@ -221,6 +330,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         4 => draw_help_panel(g),
         _ => {}
     }
+    draw_banner(g);
     draw_toast(g);
     version_mark();
 }
@@ -248,11 +358,13 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
     draw_rectangle(8.0, 60.0, LEFT_W, PANEL_B - 60.0, C_PANEL2);
     draw_rectangle_lines(8.0, 60.0, LEFT_W, PANEL_B - 60.0, 2.0, C_GOLD_D);
     let cx = 8.0 + LEFT_W * 0.5;
+    draw_aura_motes(cx, 152.0, g.time, col_realm(l.realm));
     draw_cultivator(art, cx, 152.0, 0.80, col_realm(l.realm), g.time, l.seclusion.is_some());
-    txt_c(&realm_full_name(l), cx, 242.0, 20, col_realm(l.realm));
+    txt_c(&realm_full_name(l), cx, 236.0, 20, col_realm(l.realm));
+    txt_c(&format!("『{}』", g.title_of()), cx, 258.0, 14, C_GOLD);
     let need = qi_need(l);
     let frac = (l.qi / need) as f32;
-    bar(28.0, 274.0, LEFT_W - 40.0, 20.0, frac, C_CYAN);
+    bar_glow(28.0, 274.0, LEFT_W - 40.0, 20.0, frac, C_CYAN, g.time);
     let qlabel = format!("修为 {}/{}（{:.0}%）", fmt_num(l.qi), fmt_num(need), frac * 100.0);
     txt_c(&qlabel, cx + 1.0, 277.0, 14, Color::from_rgba(10, 8, 20, 255));
     txt_c(&qlabel, cx, 276.0, 14, C_TEXT);
@@ -369,6 +481,9 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
     let Some(s) = g.sim.clone() else { return };
     let tribbing = s.trib.is_some();
     draw_bg(art);
+    if !tribbing {
+        draw_sky_life(g);
+    }
     if tribbing {
         draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.08, 0.03, 0.15, 0.55));
     }
@@ -463,6 +578,7 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
             }
         }
     }
+    draw_banner(g);
     draw_toast(g);
     version_mark();
 }
@@ -569,35 +685,80 @@ fn draw_shop(g: &mut Game, l: &Life) {
         g.play(crate::sounds::Which::Page);
         return;
     }
-    // 点数兑换
-    let cost = g.exchange_cost();
-    draw_rectangle(160.0, 108.0, 960.0, 46.0, Color::from_rgba(44, 30, 66, 220));
-    txt("模拟点数", 176.0, 120.0, 17, C_PURPLE);
-    txt(&format!("●{}", g.meta.sim_points), 280.0, 120.0, 17, C_PURPLE);
-    txt("轮回镜以灵石为引，可无限推演", 360.0, 120.0, 14, C_DIM);
-    txt_r(&format!("{} 灵石 / 1点", fmt_int(cost)), 990.0, 120.0, 15, C_CYAN);
-    if button(1010.0, 114.0, 94.0, 36.0, "兑换", None, l.stones >= cost) {
-        g.play(crate::sounds::Which::Coin);
-        g.exchange_points();
-        return;
-    }
-    draw_rectangle(160.0, 168.0, 960.0, 1.5, Color::from_rgba(96, 76, 130, 160));
-    for i in 0..6 {
-        let y = 186.0 + i as f32 * 74.0;
-        let p = &PILLS[i];
-        let price = g.pill_price(i);
-        draw_texture(&crate::art::art().icon_pill, 160.0, y - 6.0, WHITE);
-        txt(p.name, 184.0, y + 4.0, 18, C_GOLD);
-        txt(p.desc, 320.0, y + 4.0, 15, C_TEXT);
-        txt(&format!("存量 {}", l.pills[i]), 320.0, y + 26.0, 14, C_DIM);
-        txt_r(&format!("{} 灵石", fmt_int(price)), 1010.0, y + 8.0, 16, C_CYAN);
-        if button(1024.0, y - 6.0, 80.0, 40.0, "购买", None, l.stones >= price) {
-            g.play(crate::sounds::Which::Coin);
-            g.buy_pill(i);
-            return;
+    // 页签：丹药 / 藏经阁
+    let tabs = ["丹药", "藏经阁"];
+    for (i, t) in tabs.iter().enumerate() {
+        let x = 300.0 + i as f32 * 150.0;
+        if button(x, 74.0, 140.0, 34.0, t, None, true) {
+            g.shop_tab = i as u8;
+            g.play(crate::sounds::Which::Page);
+        }
+        if g.shop_tab == i as u8 {
+            draw_rectangle(x, 108.0, 140.0, 3.0, C_GOLD);
         }
     }
-    txt("（筑基丹/破境丹/护神丹在突破与渡劫时自动生效）", 180.0, 636.0, 14, C_DIM);
+    if g.shop_tab == 0 {
+        // 点数兑换
+        let cost = g.exchange_cost();
+        draw_rectangle(160.0, 118.0, 960.0, 46.0, Color::from_rgba(44, 30, 66, 220));
+        txt("模拟点数", 176.0, 130.0, 17, C_PURPLE);
+        txt(&format!("●{}", g.meta.sim_points), 280.0, 130.0, 17, C_PURPLE);
+        txt("轮回镜以灵石为引，可无限推演", 360.0, 130.0, 14, C_DIM);
+        txt_r(&format!("{} 灵石 / 1点", fmt_int(cost)), 990.0, 130.0, 15, C_CYAN);
+        if button(1010.0, 124.0, 94.0, 36.0, "兑换", None, l.stones >= cost) {
+            g.play(crate::sounds::Which::Coin);
+            g.exchange_points();
+            return;
+        }
+        draw_rectangle(160.0, 178.0, 960.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+        for i in 0..6 {
+            let y = 196.0 + i as f32 * 74.0;
+            let p = &PILLS[i];
+            let price = g.pill_price(i);
+            draw_texture(&crate::art::art().icon_pill, 160.0, y - 6.0, WHITE);
+            txt(p.name, 184.0, y + 4.0, 18, C_GOLD);
+            txt(p.desc, 320.0, y + 4.0, 15, C_TEXT);
+            txt(&format!("存量 {}", l.pills[i]), 320.0, y + 26.0, 14, C_DIM);
+            txt_r(&format!("{} 灵石", fmt_int(price)), 1010.0, y + 8.0, 16, C_CYAN);
+            if button(1024.0, y - 6.0, 80.0, 40.0, "购买", None, l.stones >= price) {
+                g.play(crate::sounds::Which::Coin);
+                g.buy_pill(i);
+                return;
+            }
+        }
+        txt("（筑基丹/破境丹/护神丹在突破与渡劫时自动生效）", 180.0, 636.0, 14, C_DIM);
+    } else {
+        txt("藏经阁——功法一经习得，现实与模拟通用", 180.0, 132.0, 15, C_DIM);
+        for idx in 1..TECHS.len() {
+            let y = 156.0 + idx as f32 * 68.0;
+            let t = &TECHS[idx];
+            let price = g.tech_price(idx);
+            let owned = l.tech >= idx;
+            let cur = l.tech == idx;
+            draw_rectangle(160.0, y - 12.0, 960.0, 60.0, if cur {
+                Color::from_rgba(70, 52, 24, 200)
+            } else {
+                Color::from_rgba(36, 28, 58, 180)
+            });
+            txt(&format!("《{}》", t.name), 180.0, y + 6.0, 18, C_GOLD);
+            txt(&format!("修炼×{:.1}  战力×{:.1}", t.mult, t.pow), 420.0, y + 6.0, 14, C_TEXT);
+            txt(t.desc, 420.0, y + 28.0, 14, C_DIM);
+            if owned {
+                if cur {
+                    txt_c("当前修习", 1058.0, y + 8.0, 15, C_GREEN);
+                } else {
+                    txt_c("已超越", 1058.0, y + 8.0, 15, C_DIM);
+                }
+            } else {
+                txt_r(&format!("{} 灵石", fmt_int(price)), 1030.0, y + 8.0, 15, C_CYAN);
+                if button(1040.0, y - 6.0, 80.0, 40.0, "求购", None, l.stones >= price) {
+                    g.play(crate::sounds::Which::Coin);
+                    g.buy_tech(idx);
+                    return;
+                }
+            }
+        }
+    }
 }
 
 // ================= 行囊 =================
@@ -654,8 +815,12 @@ fn draw_upgrade_panel(g: &mut Game) {
     }
     draw_rectangle(210.0, 132.0, 840.0, 1.5, Color::from_rgba(96, 76, 130, 160));
     txt("道韵不灭，烙印永随——纵使身死道消，来世仍享此泽。", 230.0, 156.0, 14, C_DIM);
+    txt(&format!(
+        "轮回总计：历世 {} · 模拟 {} 次 · 斩杀宿敌 {} · 最长享年 {} 载",
+        g.meta.lives, g.meta.total_sims, g.meta.neme_slain, fmt_num(g.meta.best_age)
+    ), 230.0, 176.0, 14, C_CYAN);
     for i in 0..UPGRADES.len() {
-        let y = 176.0 + i as f32 * 46.0;
+        let y = 202.0 + i as f32 * 42.0;
         let u = &UPGRADES[i];
         let lv = g.meta.upg[i];
         let maxed = lv >= u.max;

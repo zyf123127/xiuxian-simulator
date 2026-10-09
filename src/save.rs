@@ -93,6 +93,7 @@ pub fn load() -> Meta {
             "bpow" => m.best_power = v.parse().unwrap_or(0.0),
             "wins" => m.total_wins = v.parse().unwrap_or(0),
             "slain" => m.neme_slain = v.parse().unwrap_or(0),
+            "sims" => m.total_sims = v.parse().unwrap_or(0),
             "music" => m.music = v.trim().split(' ').next().map_or(true, |x| x == "1"),
             "sfx" => m.sfx = v.trim().split(' ').nth(1).map_or(true, |x| x == "1"),
             "neme" => {
@@ -131,6 +132,7 @@ pub fn load() -> Meta {
                     life.pills[i] = a.get(i).copied().unwrap_or(0.0) as i32;
                 }
             }
+            "Lbuf" => life.power_buff = v.parse().unwrap_or(0.0),
             "Lflags" => {
                 let a = nums(v);
                 life.sect = a.first().copied().unwrap_or(0.0) > 0.5;

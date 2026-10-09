@@ -97,10 +97,11 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
             std::process::exit(0);
         }
     }
-    // 面板巡检：shots 24..30 依次打开 坊市/行囊/烙印/帮助
+    // 面板巡检：shots 24..30 依次打开 坊市(丹药)/坊市(藏经阁)/行囊/烙印/帮助
     if *shots >= 24 && *shots < 30 && g.scene == Scene::Reality {
-        let seq = [1usize, 2, 3, 4, 3, 3];
+        let seq = [1usize, 1, 2, 3, 4, 3];
         g.panel = seq[(*shots - 24) as usize] as u8;
+        g.shop_tab = if *shots == 24 { 0 } else { 1 };
     }
     if frame < 30 {
         return;

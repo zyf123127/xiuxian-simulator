@@ -101,6 +101,7 @@ pub struct Life {
     pub natural_end: bool,
     pub highlights: Vec<String>, // 大事记
     pub gained: f64,             // 模拟中累计修为（继承依据）
+    pub power_buff: f64,         // 事件战力永久增益（+0.15 = +15%）
 }
 
 impl Default for Life {
@@ -111,7 +112,7 @@ impl Default for Life {
             relics: Vec::new(), pills: [0; 6], sect: false, lingmai: false, injured: 0,
             talents: Vec::new(), washed: 0, max_realm: 0, fights: 0, wins: 0,
             seclusion: None, trib: None, new_high: false, natural_end: false,
-            highlights: Vec::new(), gained: 0.0,
+            highlights: Vec::new(), gained: 0.0, power_buff: 0.0,
         }
     }
 }
@@ -143,6 +144,7 @@ pub struct Meta {
     pub best_power: f64,
     pub total_wins: u32,
     pub neme_slain: u32,
+    pub total_sims: u32,
     pub neme: Option<Nemes>,
     pub music: bool,
     pub sfx: bool,
@@ -163,6 +165,7 @@ impl Default for Meta {
             best_power: 0.0,
             total_wins: 0,
             neme_slain: 0,
+            total_sims: 0,
             neme: None,
             music: true,
             sfx: true,
@@ -178,6 +181,14 @@ pub struct Mote {
     pub size: f32,
     pub gold: bool,
     pub ph: f32,
+}
+
+pub struct Meteor {
+    pub x: f32,
+    pub y: f32,
+    pub vx: f32,
+    pub vy: f32,
+    pub life: f32,
 }
 
 pub struct Spark {
@@ -232,12 +243,15 @@ pub struct Game {
     pub modal: Option<EventCard>,
     pub panel: u8, // 0无 1坊市 2行囊 3轮回烙印 4帮助
     pub tab: u8,
+    pub shop_tab: u8,
     pub speed: usize, // 模拟速度 0暂停 1慢 2快 3跳过
     pub acc: f32,
     pub motes: Vec<Mote>,
+    pub meteors: Vec<Meteor>,
     pub sparks: Vec<Spark>,
     pub shake: f32,
     pub toast: Option<(String, f32, Color)>,
+    pub banner: Option<(String, f32, Color)>,
     pub settle: Option<SettleInfo>,
     pub time: f32,
     pub sfx_ok: Option<crate::sounds::Which>,
@@ -387,6 +401,7 @@ pub fn power(l: &Life) -> f64 {
     for &r in &l.relics {
         p *= 1.0 + RELICS[r].pow;
     }
+    p *= 1.0 + l.power_buff;
     if l.injured > 0 {
         p *= 0.7;
     }
@@ -437,12 +452,15 @@ impl Game {
             modal: None,
             panel: 0,
             tab: 0,
+            shop_tab: 0,
             speed: 2,
             acc: 0.0,
             motes,
+            meteors: Vec::new(),
             sparks: Vec::new(),
             shake: 0.0,
             toast: None,
+            banner: None,
             settle: None,
             time: 0.0,
             sfx_ok: None,
@@ -470,6 +488,24 @@ impl Game {
 
     pub fn play(&mut self, w: crate::sounds::Which) {
         self.sfx_ok = Some(w);
+    }
+
+    pub fn show_banner(&mut self, text: impl Into<String>, c: Color) {
+        self.banner = Some((text.into(), 2.4, c));
+    }
+
+    pub fn title_of(&self) -> String {
+        // 特殊称号优先
+        if self.meta.neme_slain >= 3 {
+            return "弑神者".to_string();
+        }
+        if let Some(l) = &self.life {
+            if l.max_realm >= 10 && l.realm >= 10 {
+                return realm_title(l.max_realm).to_string();
+            }
+            return realm_title(l.max_realm).to_string();
+        }
+        realm_title(self.meta.best_realm).to_string()
     }
 
     pub fn stone_scale(&self, realm: usize) -> f64 {
@@ -589,6 +625,7 @@ impl Game {
             self.log("轮回镜嗡鸣——本次演演不耗点数（点数亲和）。", C_CYAN);
         }
         self.meta.sim_points -= self.sim_cost();
+        self.meta.total_sims += 1;
         let mut s = self.life.as_ref().unwrap().clone();
         s.talents = self.picked.clone();
         s.highlights.clear();
@@ -631,6 +668,30 @@ impl Game {
                 self.toast = None;
             }
         }
+        if let Some((_, t, _)) = &mut self.banner {
+            *t -= dt;
+            if *t <= 0.0 {
+                self.banner = None;
+            }
+        }
+        // 流星：低概率生成
+        if gen_range(0.0, 1.0) < dt * 0.08 {
+            let from_left = gen_range(0.0, 1.0) < 0.5;
+            let x = if from_left { gen_range(0.0, V_W * 0.4) } else { gen_range(V_W * 0.6, V_W) };
+            self.meteors.push(Meteor {
+                x,
+                y: gen_range(20.0, 200.0),
+                vx: if from_left { gen_range(260.0, 420.0) } else { -gen_range(260.0, 420.0) },
+                vy: gen_range(90.0, 160.0),
+                life: 1.1,
+            });
+        }
+        self.meteors.retain_mut(|m| {
+            m.x += m.vx * dt;
+            m.y += m.vy * dt;
+            m.life -= dt;
+            m.life > 0.0
+        });
     }
 
     // ================= 模拟：每年推演 =================
@@ -877,6 +938,7 @@ impl Game {
                 }
                 self.slog(format!("功行圆满，天劫轰然而至！九重雷劫（均波存活 {:.0}%）——", est * 100.0), C_GOLD);
                 self.play(crate::sounds::Which::Thunder);
+                self.audio.swap_bgm(true);
                 return;
             }
             let p = {
@@ -925,6 +987,7 @@ impl Game {
                     self.slog(format!("轰！突破【{}境】！寿元大增，气冲霄汉！", rd.name), C_GOLD);
                     if first {
                         self.slog("【首登】此身首次踏入此境！", C_GOLD);
+                        self.show_banner(format!("突破 · {}境", rd.name), C_GOLD);
                     }
                     self.burst(50, true);
                     self.play(crate::sounds::Which::Ascend);
@@ -982,6 +1045,7 @@ impl Game {
                 self.meta.dao_yun += reward_dy;
                 self.meta.sim_points += 2;
                 self.log(format!("【模拟中反杀】你循战意逆斩宿敌{}！现实中的你已悟得其招，宿敌授首。", neme.full()), C_GOLD);
+                self.show_banner("宿敌授首！", C_GOLD);
                 self.log(format!("得灵石 {}（现实），道韵+{}，模拟点数+2。", fmt_int(reward_stones), reward_dy), C_GOLD);
                 self.spawn_next_neme();
                 self.play(crate::sounds::Which::Ascend);
@@ -1250,6 +1314,100 @@ impl Game {
                 e.msg = vec![format!("气运+6，得灵石 {}", fmt_int(g))];
                 card.opts.push(("收留".into(), e));
             }
+            20 => {
+                card.title = "仙人问道".into();
+                card.text = "云端降下一位白须仙人，含笑看你：\"小子，老夫可指你一条路，要哪般？\"".into();
+                let mut e1 = Eff::new();
+                e1.dao = 8.0;
+                e1.qi_pct = 0.15;
+                e1.msg = vec!["你求问道法。道心+8，修为+15%".into()];
+                card.opts.push(("求道！".into(), e1));
+                let mut e2 = Eff::new();
+                e2.special = 8;
+                e2.good = false;
+                e2.msg = vec!["你求问武道。战力永久+12%！".into()];
+                card.opts.push(("求武！".into(), e2));
+                let mut e3 = Eff::new();
+                e3.life_y = 50.0;
+                e3.msg = vec!["你求问长生。寿元+50 载".into()];
+                card.opts.push(("求寿！".into(), e3));
+            }
+            21 => {
+                card.title = "灵泉洞天".into();
+                card.text = "山谷深处一眼温泉汩汩冒泡，灵气凝成白雾，你入泉浸泡三日，通体舒泰。".into();
+                let mut e = Eff::new();
+                e.life_y = 30.0;
+                e.qi_pct = 0.10;
+                e.msg = vec!["寿元+30 载，修为+10%".into()];
+                card.opts.push(("入泉沐浴".into(), e));
+            }
+            22 => {
+                card.title = "古剑冢".into();
+                card.text = "荒原上插着十万柄锈剑，剑鸣如龙吟。中央一柄古剑兀自震颤，似在择主。".into();
+                let mut e1 = Eff::new();
+                e1.fight = 1.4;
+                e1.special = 9;
+                e1.good = false;
+                card.opts.push(("上前拔剑".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 4.0;
+                e2.msg = vec!["你恭敬参拜，剑鸣渐息。道心+4".into()];
+                card.opts.push(("躬身参拜".into(), e2));
+            }
+            23 => {
+                card.title = "魔窟探宝".into();
+                card.text = "山腹中一座魔修洞窟，入口白骨累累，深处宝光与魔气交织翻涌。".into();
+                let mut e1 = Eff::new();
+                e1.special = 10;
+                e1.good = false;
+                card.opts.push(("孤身深入".into(), e1));
+                card.opts.push(("转身就走".into(), Eff::new()));
+            }
+            24 => {
+                card.title = "雷击木".into();
+                card.text = "一株遭天雷劈中的古木倒在路边，焦黑树干里雷光未散，正是炼丹好材料。".into();
+                let mut e = Eff::new();
+                e.pill = Some((5, 2));
+                e.msg = vec!["得雷击木，炼成护神丹 ×2".into()];
+                card.opts.push(("采集".into(), e));
+            }
+            25 => {
+                card.title = "商队护送".into();
+                card.text = "一支灵石商队遭妖兽围困，管事高声求援：\"护我商队，重金相谢！\"".into();
+                let mut e1 = Eff::new();
+                e1.fight = 1.0;
+                e1.special = 11;
+                e1.good = false;
+                card.opts.push(("拔刀相助".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec!["你婉拒离去。气运+1".into()];
+                card.opts.push(("事不关己".into(), e2));
+            }
+            26 => {
+                card.title = "仙人赠礼".into();
+                card.text = "一位乘鹤老者路过，随手抛下锦盒：\"与你有缘，收着吧。\"鹤影转瞬没入云中。".into();
+                let rl = gen_range(0, RELICS.len());
+                let mut e = Eff::new();
+                e.relic = Some(rl);
+                e.qi_pct = 0.30;
+                e.msg = vec![format!("盒中是【{}】！修为+30%", RELICS[rl].name)];
+                card.opts.push(("叩谢仙长".into(), e));
+            }
+            27 => {
+                card.title = "天机阁卜卦".into();
+                card.text = "天机阁的瞎眼卦师掐指一算：\"道友印堂有光，是福是祸，在一念之间。\"".into();
+                let mut e1 = Eff::new();
+                e1.dao = 6.0;
+                e1.pill = Some((2, 1));
+                e1.msg = vec!["卦师赠你一枚破境丹，道心+6".into()];
+                card.opts.push(("求上一卦".into(), e1));
+                let mut e2 = Eff::new();
+                e2.stones = -500;
+                e2.luck = 8.0;
+                e2.msg = vec!["你留下香火钱。气运+8".into()];
+                card.opts.push(("捐些香火".into(), e2));
+            }
             _ => {}
         }
         if !card.opts.is_empty() {
@@ -1362,6 +1520,72 @@ impl Game {
                     self.slog("秘境禁制暴起，你重伤逃出！", C_RED);
                 }
                 return;
+            }
+            8 => {
+                let s = self.sim.as_mut().unwrap();
+                s.power_buff += 0.12;
+                self.slog("仙人指点了三招武道真意！战力永久+12%。", C_GOLD);
+            }
+            9 => {
+                let won = self.sim_fight(1.4, "守冢剑灵");
+                if won {
+                    let s = self.sim.as_mut().unwrap();
+                    if !s.relics.contains(&3) {
+                        s.relics.push(3);
+                        s.highlights.push(format!("{}岁，古剑冢得玄天斩灵剑", s.age as i32));
+                        self.slog("古剑认主——【玄天斩灵剑】出鞘！十万剑齐鸣相送！", C_GOLD);
+                    } else {
+                        s.power_buff += 0.15;
+                        self.slog("古剑已有所属，剑意却入了你的骨。战力永久+15%！", C_GOLD);
+                    }
+                }
+            }
+            10 => {
+                if gen_range(0.0, 1.0) < 0.5 {
+                    let ss = self.stone_scale(self.sim.as_ref().unwrap().realm);
+                    let (g, relic) = {
+                        let s = self.sim.as_mut().unwrap();
+                        let g = (900.0 * ss * gen_range(0.9, 1.5)) as i64;
+                        s.stones += g;
+                        gain_qi(s, qi_need(s) * 0.15);
+                        let mut relic = None;
+                        if gen_range(0.0, 1.0) < 0.45 {
+                            let rl = gen_range(0, RELICS.len());
+                            if !s.relics.contains(&rl) {
+                                s.relics.push(rl);
+                                relic = Some(rl);
+                            }
+                        }
+                        (g, relic)
+                    };
+                    let mut msg = format!("魔窟深处是前代魔君的库房！灵石+{}", fmt_int(g));
+                    if let Some(rl) = relic {
+                        msg = format!("{}，得魔功法宝【{}】", msg, RELICS[rl].name);
+                    }
+                    self.slog(msg, C_GOLD);
+                } else {
+                    let s = self.sim.as_mut().unwrap();
+                    s.injured = 10;
+                    s.stones = (s.stones as f64 * 0.7) as i64;
+                    self.slog("魔窟里残魂反噬，你重伤狂逃！（重伤，灵石-30%）", C_RED);
+                }
+            }
+            11 => {
+                let won = self.sim_fight(1.0, "围商妖兽");
+                if won {
+                    let ss = self.stone_scale(self.sim.as_ref().unwrap().realm);
+                    let g = (350.0 * ss * gen_range(1.0, 1.6)) as i64;
+                    let s = self.sim.as_mut().unwrap();
+                    s.stones += g;
+                    s.luck = (s.luck + 2.0).min(100.0);
+                    self.slog(format!("商队安抵坊市！管事奉上酬金 {}，气运+2。", fmt_int(g)), C_GREEN);
+                }
+            }
+            12 => {
+                let s = self.sim.as_mut().unwrap();
+                s.dao = (s.dao + 6.0).min(100.0);
+                s.pills[2] += 1;
+                self.slog("卦师赠破境丹一枚：此卦大吉。", C_GREEN);
             }
             7 => {
                 let (dao, luck) = {
@@ -1541,6 +1765,7 @@ impl Game {
                     f
                 };
                 self.slog("第九重雷劫散去，天门洞开！你踏虹而上——飞升成仙！", C_GOLD);
+                self.show_banner("飞 升 成 仙", C_GOLD);
                 if first {
                     self.slog("【首登】仙路初开！", C_GOLD);
                 }
@@ -1560,6 +1785,7 @@ impl Game {
 
     // ================= 模拟：死亡结算 → 继承 =================
     pub fn sim_die(&mut self, cause: &str) {
+        self.audio.swap_bgm(false);
         let (max_realm, age, years, qi_gain, tech, relic, stones, pills, highlights) = {
             let s = self.sim.as_ref().unwrap();
             let relic = s.relics.first().copied();
@@ -1806,7 +2032,7 @@ impl Game {
             };
             if ok {
                 self.log(format!("轰！现实突破【{}境】！寿元大增！", rd.name), C_GOLD);
-                self.toast(format!("突破 · {}境！", rd.name), C_GOLD);
+                self.show_banner(format!("突破 · {}境", rd.name), C_GOLD);
                 if first {
                     self.log("【首登】现实中的你首次踏入此境！", C_GOLD);
                 }
@@ -1877,6 +2103,7 @@ impl Game {
             self.meta.sim_points += 2;
             self.meta.neme_slain += 1;
             self.log(format!("血仇得报！你于现实中阵斩宿敌{}！", neme.full()), C_GOLD);
+            self.show_banner("血 仇 得 报", C_GOLD);
             self.log(format!("夺其家产：灵石 {}，道韵+{}，模拟点数+2。", fmt_int(reward_stones), reward_dy), C_GOLD);
             self.spawn_next_neme();
             self.play(crate::sounds::Which::Ascend);
@@ -1929,6 +2156,33 @@ impl Game {
             self.log(msg, C_GREEN);
             self.play(crate::sounds::Which::Gain);
         }
+        save::save(&self.meta);
+    }
+
+    pub fn tech_price(&self, idx: usize) -> i64 {
+        let realm = self.life.as_ref().map(|l| l.realm).unwrap_or(0);
+        ((TECH_PRICES[idx] as f64) * (1.0 + realm as f64).powf(1.1)).ceil() as i64
+    }
+
+    pub fn buy_tech(&mut self, idx: usize) {
+        let Some(l) = self.life.as_ref() else { return };
+        if idx <= l.tech {
+            self.toast("已修至更高", C_DIM);
+            return;
+        }
+        let price = self.tech_price(idx);
+        if l.stones < price {
+            self.toast("灵石不足", C_RED);
+            return;
+        }
+        let name = TECHS[idx].name;
+        {
+            let l = self.life.as_mut().unwrap();
+            l.stones -= price;
+            l.tech = idx;
+        }
+        self.log(format!("你于藏经阁重金求得《{}》，闭关参悟三日而通！", name), C_GOLD);
+        self.play(crate::sounds::Which::Ascend);
         save::save(&self.meta);
     }
 

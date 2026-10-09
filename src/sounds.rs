@@ -19,6 +19,7 @@ pub enum Which {
 
 pub struct Sounds {
     pub bgm: Sound,
+    pub battle: Sound,
     pub click: Sound,
     pub gain: Sound,
     pub ding: Sound,
@@ -167,6 +168,51 @@ fn build_bgm() -> Vec<u8> {
     wav_bytes(&buf)
 }
 
+// 战斗 BGM：低音鼓点 + 急促五声音阶，8 秒循环
+fn build_battle_bgm() -> Vec<u8> {
+    let dur = 8.0;
+    let mut buf = vec![0.0f32; (dur * SR as f32) as usize];
+    let notes = [220.0f32, 261.63, 293.66, 329.63, 392.0, 440.0];
+    let mel: [usize; 14] = [5, 3, 4, 2, 4, 1, 5, 3, 4, 0, 3, 2, 4, 5];
+    let step = 0.28;
+    let mut t = 0.05;
+    for &mi in mel.iter() {
+        mix_at(&mut buf, &pluck(notes[mi], 0.5, 0.15), t);
+        t += step;
+        if t > dur - 0.6 {
+            break;
+        }
+    }
+    // 鼓点（低频正弦快速衰减，每 0.5s）
+    let mut bt = 0.0f32;
+    while bt < dur - 0.2 {
+        let n = (0.16 * SR as f32) as usize;
+        for i in 0..n {
+            let tt = i as f32 / SR as f32;
+            let env = (-tt * 26.0).exp();
+            let idx = (bt * SR as f32) as usize + i;
+            if idx < buf.len() {
+                buf[idx] += 0.30 * env * (2.0 * std::f32::consts::PI * 72.0 * tt).sin();
+            }
+        }
+        bt += 0.5;
+    }
+    // 低音持续（A2 与降 B2 交替，紧张感）
+    for i in 0..buf.len() {
+        let tt = i as f32 / SR as f32;
+        let f = if ((tt / 2.0) as i32) % 2 == 0 { 110.0 } else { 116.5 };
+        buf[i] += 0.05 * (2.0 * std::f32::consts::PI * f * tt).sin();
+    }
+    let fade = (0.25 * SR as f32) as usize;
+    let n = buf.len();
+    for i in 0..fade {
+        let k = i as f32 / fade as f32;
+        buf[i] *= k;
+        buf[n - 1 - i] *= k;
+    }
+    wav_bytes(&buf)
+}
+
 fn build_sfx() -> Vec<Vec<u8>> {
     let mut click = vec![0.0f32; (0.12 * SR as f32) as usize];
     mix_at(&mut click, &pluck(880.0, 0.12, 0.30), 0.0);
@@ -222,6 +268,7 @@ pub async fn init() -> Audio {
     let v = build_sfx();
     let sounds = Sounds {
         bgm: load_sound_from_bytes(&build_bgm()).await.unwrap(),
+        battle: load_sound_from_bytes(&build_battle_bgm()).await.unwrap(),
         click: load_sound_from_bytes(&v[0]).await.unwrap(),
         gain: load_sound_from_bytes(&v[1]).await.unwrap(),
         ding: load_sound_from_bytes(&v[2]).await.unwrap(),
@@ -245,6 +292,22 @@ impl Audio {
     pub fn stop_bgm(&self) {
         if let Some(s) = &self.s {
             stop_sound(&s.bgm);
+            stop_sound(&s.battle);
+        }
+    }
+    // 切换常态/战斗 BGM
+    pub fn swap_bgm(&self, battle: bool) {
+        if !self.music_on {
+            return;
+        }
+        if let Some(s) = &self.s {
+            stop_sound(&s.bgm);
+            stop_sound(&s.battle);
+            if battle {
+                play_sound(&s.battle, PlaySoundParams { looped: true, volume: self.music_vol });
+            } else {
+                play_sound(&s.bgm, PlaySoundParams { looped: true, volume: self.music_vol });
+            }
         }
     }
     pub fn play(&self, w: Which) {
