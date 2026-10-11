@@ -19,7 +19,8 @@ pub fn button(
     sub: Option<&str>,
     enabled: bool,
 ) -> bool {
-    let (mx, my) = mouse_position();
+    // v1.5.0：经信箱相机回虚拟坐标（桌面恒等，H5 任意屏比例正确命中）
+    let (mx, my) = crate::cam::mouse();
     let hot = mx >= x && mx <= x + w && my >= y && my <= y + h;
     let base = if !enabled {
         Color::from_rgba(38, 32, 56, 225)
@@ -355,7 +356,17 @@ pub fn draw_motes(g: &Game) {
     }
 }
 
+static WATERMARK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
 pub fn version_mark() {
+    // v1.5.0：水印仅调试冒烟（GF_DEBUG=1）时绘制；GF_CLEAN=1 净版截图模式同样不画。
+    // H5/正式包（两个环境变量都不设）不画版本号，发布画面更干净。
+    let on = *WATERMARK.get_or_init(|| {
+        std::env::var("GF_DEBUG").is_ok() && std::env::var("GF_CLEAN").is_err()
+    });
+    if !on {
+        return;
+    }
     txt_r(
         &format!("v{}", env!("CARGO_PKG_VERSION")),
         V_W - 8.0,
@@ -418,6 +429,7 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
         col_realm(g.meta.best_realm),
         t,
         true,
+        portrait_tier(g.meta.best_realm),
     );
     let bx = V_W * 0.5 - 320.0;
     if button(bx, 522.0, 300.0, 54.0, "开始新的人生", None, true) {
@@ -742,9 +754,10 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
         col_realm(l.realm),
         g.time,
         l.seclusion.is_some(),
+        portrait_tier(l.realm),
     );
     txt_c(&realm_full_name(l), cx, 236.0, 20, col_realm(l.realm));
-    txt_c(&format!("『{}』", g.title_of()), cx, 258.0, 14, C_GOLD);
+    txt_c(&format!("『{}』", g.worn_title_of()), cx, 258.0, 14, C_GOLD);
     let need = qi_need(l);
     let frac = (l.qi / need) as f32;
     bar_glow(28.0, 274.0, LEFT_W - 40.0, 20.0, frac, C_CYAN, g.time);
@@ -827,15 +840,22 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
     y = row("功法", y);
     txt(TECHS[l.tech].name, 100.0, y - 21.0, 15, C_GOLD);
     y = row("法宝", y);
+    // v1.5.0：只留计数摘要（详情见角色面板·法宝页）
     if l.relics.is_empty() {
         txt("无", 100.0, y - 21.0, 14, C_DIM);
     } else {
-        let names: Vec<&str> = l.relics.iter().take(2).map(|&r| RELICS[r].name).collect();
-        let mut s = names.join("·");
-        if l.relics.len() > 2 {
-            s.push_str(&format!(" 等{}件", l.relics.len()));
-        }
-        txt(&s, 100.0, y - 21.0, 14, C_CYAN);
+        txt(
+            &format!(
+                "已装 {}/{} · 包内 {}",
+                l.equipped.len().min(RELIC_EQUIP_MAX),
+                RELIC_EQUIP_MAX,
+                l.relics.len()
+            ),
+            100.0,
+            y - 21.0,
+            14,
+            C_CYAN,
+        );
     }
     // 宿敌卡片（贴面板底部）
     if show_neme {
@@ -892,7 +912,7 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
     let gap = 30.0f32;
     let total_w = n as f32 * cw + (n as f32 - 1.0) * gap;
     let x0 = V_W * 0.5 - total_w * 0.5;
-    let (mx, my) = mouse_position();
+    let (mx, my) = crate::cam::mouse();
     let draft = g.draft.clone();
     for (i, &t) in draft.iter().enumerate() {
         let card = &TALENTS[t];
@@ -959,6 +979,7 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
             Color::from_rgba(tr, tg, tb, 200),
             g.time + i as f32,
             true,
+            portrait_tier(g.meta.best_realm),
         );
         if hot && is_mouse_button_pressed(MouseButton::Left) {
             g.toggle_pick(i);
@@ -1246,7 +1267,7 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     for (i, &idx) in g.inherit_opts.iter().enumerate() {
         let card = &INHERITS[idx];
         let y = 160.0 + i as f32 * 62.0;
-        let (mx, my) = mouse_position();
+        let (mx, my) = crate::cam::mouse();
         let hot = mx >= 520.0 && mx <= 1200.0 && my >= y && my <= y + 54.0;
         draw_rectangle(
             520.0,
@@ -1430,7 +1451,8 @@ fn draw_shop(g: &mut Game, l: &Life) {
             C_DIM,
         );
         for idx in 1..TECHS.len() {
-            let y = 156.0 + idx as f32 * 68.0;
+            // 行距 68→64：末行（idx=7）描述不再贴面板底边被金线穿过（验收非阻断①）
+            let y = 156.0 + idx as f32 * 64.0;
             let t = &TECHS[idx];
             let price = g.tech_price(idx);
             let owned = l.tech >= idx;
@@ -1511,12 +1533,18 @@ fn draw_bag(g: &mut Game, l: &Life) {
                 168.0 + row as f32 * 26.0,
                 WHITE,
             );
+            // v1.5.0：颜色标记装备态（已装=金，未装=暗；零几何改动）
+            let tc = if l.equipped.contains(&r) {
+                C_GOLD
+            } else {
+                C_DIM
+            };
             txt(
                 &format!("【{}】{}", RELICS[r].name, RELICS[r].desc),
                 256.0 + col as f32 * 320.0,
                 180.0 + row as f32 * 26.0,
                 13,
-                C_CYAN,
+                tc,
             );
         }
     }

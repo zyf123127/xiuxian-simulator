@@ -3,6 +3,8 @@ use crate::pixel::*;
 use macroquad::prelude::*;
 
 pub struct Art {
+    // v1.5.0 起 draw_cultivator 改用 portraits[tier]；portrait 保留为 0 档快捷引用
+    #[allow(dead_code)]
     pub portrait: Texture2D,
     pub icon_stone: Texture2D,
     pub icon_yun: Texture2D,
@@ -11,6 +13,7 @@ pub struct Art {
     pub bg: Texture2D,
     pub map_bg: Texture2D,
     pub map_icons: [Texture2D; 6],
+    pub portraits: [Texture2D; 4], // v1.5.0：立绘四档（0凡人 1道基 2紫府 3真仙），portrait = portraits[0]
 }
 
 static ART: std::sync::OnceLock<Art> = std::sync::OnceLock::new();
@@ -26,7 +29,7 @@ pub fn art() -> &'static Art {
 const O: [u8; 4] = [10, 8, 16, 255]; // 描边
 
 pub fn build_art() -> Art {
-    let portrait = build_portrait();
+    let portraits = std::array::from_fn(build_portrait);
     let icon_stone = build_icon_stone();
     let icon_yun = build_icon_yun();
     let icon_pill = build_icon_pill();
@@ -35,7 +38,7 @@ pub fn build_art() -> Art {
     let map_bg = build_map_bg();
     let map_icons = std::array::from_fn(build_map_icon);
     Art {
-        portrait,
+        portrait: portraits[0].clone(),
         icon_stone,
         icon_yun,
         icon_pill,
@@ -43,10 +46,13 @@ pub fn build_art() -> Art {
         bg,
         map_bg,
         map_icons,
+        portraits,
     }
 }
 
-fn build_portrait() -> Texture2D {
+// v1.5.0 立绘四档：0凡人 1道基（金冠）2紫府（金冠+霜鬓+袖口金纹）3真仙（金冠+白发披肩）
+fn build_portrait(tier: usize) -> Texture2D {
+    let tier = tier.min(3);
     let mut g = PixGrid::new(32, 36);
     let skin = rgba(255, 219, 186, 255);
     let skin_d = rgba(222, 178, 148, 255);
@@ -55,13 +61,28 @@ fn build_portrait() -> Texture2D {
     let robe_l = rgba(126, 164, 205, 255);
     let hair = rgba(30, 26, 38, 255);
     let gold = rgba(222, 186, 110, 255);
-    // 发髻 + 头
-    g.fill_ellipse(16, 5, 2, 2, hair);
-    g.fill_ellipse(16, 9, 4, 4, hair);
+    let frost = rgba(226, 230, 238, 255);
+    // 发髻 + 头（真仙档须发皆白）
+    let hair_c = if tier >= 3 { frost } else { hair };
+    g.fill_ellipse(16, 5, 2, 2, hair_c);
+    g.fill_ellipse(16, 9, 4, 4, hair_c);
     g.fill_ellipse(16, 11, 3, 3, skin);
     // 眉眼（垂目入定）
     g.rect(14, 11, 1, 1, rgba(40, 34, 50, 255));
     g.rect(18, 11, 1, 1, rgba(40, 34, 50, 255));
+    // 道基以上：束发金冠
+    if tier >= 1 {
+        g.rect(14, 2, 4, 2, gold);
+        g.set(15, 1, rgba(246, 216, 150, 255));
+        g.set(16, 1, rgba(246, 216, 150, 255));
+    }
+    // 紫府以上：霜鬓
+    if tier >= 2 {
+        g.set(12, 10, frost);
+        g.set(13, 10, frost);
+        g.set(19, 10, frost);
+        g.set(20, 10, frost);
+    }
     // 肩与道袍
     g.tri([(10, 13), (22, 13), (16, 27)], robe);
     g.rect(11, 14, 10, 5, robe);
@@ -73,6 +94,11 @@ fn build_portrait() -> Texture2D {
     g.rect(20, 16, 3, 6, robe_d);
     g.fill_circle(12, 22, 2, skin_d);
     g.fill_circle(20, 22, 2, skin_d);
+    // 紫府以上：袖口金纹
+    if tier >= 2 {
+        g.rect(9, 21, 3, 1, gold);
+        g.rect(20, 21, 3, 1, gold);
+    }
     // 结印双手
     g.fill_circle(16, 21, 2, skin);
     // 腰带
@@ -265,6 +291,11 @@ fn build_bg() -> Texture2D {
     tex
 }
 
+// 河心曲线（图像系坐标，画河/林木规避/水面波光共用，坐标单一来源）
+pub fn map_river_y(x: f32) -> f32 {
+    320.0 + 40.0 * (x * 0.004).sin() + 20.0 * (x * 0.011 + 1.7).sin()
+}
+
 // 1264×480 山河图志底图：渐变夜幕 + 苔斑 + 山脊带 + 河流 + 林木 + 暗金双线边框
 fn build_map_bg() -> Texture2D {
     let (iw, ih) = (1264u16, 480u16);
@@ -283,10 +314,7 @@ fn build_map_bg() -> Texture2D {
                 d[(y * w + x) as usize] = [r, g, b, 255];
             }
         }
-        // 河心曲线（画河与林木规避共用，坐标单一来源）
-        let river_y = |x: i32| -> f32 {
-            320.0 + 40.0 * (x as f32 * 0.004).sin() + 20.0 * (x as f32 * 0.011 + 1.7).sin()
-        };
+        // 河心曲线：抽为 pub fn map_river_y（v1.5.0 与水面波光共用，坐标单一来源）
         // 确定性伪随机（照 build_bg 先例）
         let mut seed = 20261011u32;
         let mut rnd = || {
@@ -335,7 +363,7 @@ fn build_map_bg() -> Texture2D {
         band(d, 330.0, 70.0, 4.1, [38, 36, 48, 255]);
         // 河流：横贯折线带，主色 [58,96,110] + 上缘高光 [86,130,140]
         for x in 0..w {
-            let yc = river_y(x);
+            let yc = map_river_y(x as f32);
             let hw = 11.0 + 3.0 * (x as f32 * 0.02 + 0.5).sin();
             let y0 = (yc - hw) as i32;
             let y1 = (yc + hw) as i32;
@@ -351,7 +379,7 @@ fn build_map_bg() -> Texture2D {
         for _ in 0..220 {
             let x = (rnd() * w as f32) as i32;
             let y = (rnd() * h as f32) as i32;
-            let mut ok = (y as f32 - river_y(x)).abs() >= 20.0;
+            let mut ok = (y as f32 - map_river_y(x as f32)).abs() >= 20.0;
             if ok {
                 for nd in &crate::data::LOCATIONS {
                     let dx = x as f32 - nd.x;
@@ -475,6 +503,7 @@ fn build_map_icon(i: usize) -> Texture2D {
 }
 
 // 绘制修士：aura 色随境界变化，闭关时脚下光环脉动
+// v1.5.0 立绘分档：tier≥2 背光+环绕光点，tier≥3 仙环；tier 选 portraits[tier.min(3)]
 pub fn draw_cultivator(
     art: &Art,
     cx: f32,
@@ -483,11 +512,22 @@ pub fn draw_cultivator(
     aura: Color,
     t: f32,
     meditating: bool,
+    tier: usize,
 ) {
     let s = scale;
+    let tier = tier.min(3);
     // 光环
     let pulse = 0.85 + 0.15 * (t * (if meditating { 2.2 } else { 1.1 })).sin();
     let r1 = 86.0 * s * pulse;
+    // 紫府以上：背后背光
+    if tier >= 2 {
+        draw_circle(
+            cx,
+            cy + 6.0 * s,
+            r1 * 1.22,
+            Color::new(aura.r, aura.g, aura.b, 0.10),
+        );
+    }
     draw_circle(
         cx,
         cy + 6.0 * s,
@@ -514,6 +554,16 @@ pub fn draw_cultivator(
         1.5,
         Color::new(aura.r, aura.g, aura.b, 0.28 * pulse),
     );
+    // 真仙档：身后金色仙环
+    if tier >= 3 {
+        draw_circle_lines(
+            cx,
+            cy + 6.0 * s,
+            r1 * 1.18,
+            2.5,
+            Color::new(1.0, 0.85, 0.5, 0.5 * pulse),
+        );
+    }
     // 底座蒲团阴影
     draw_ellipse(
         cx,
@@ -532,7 +582,7 @@ pub fn draw_cultivator(
         0.0
     };
     draw_texture_ex(
-        &art.portrait,
+        &art.portraits[tier],
         cx - pw * 0.5,
         cy - ph * 0.52 + bob,
         WHITE,
@@ -541,4 +591,18 @@ pub fn draw_cultivator(
             ..Default::default()
         },
     );
+    // 紫府以上：绕体光点
+    if tier >= 2 {
+        for k in 0..5 {
+            let a = t * 1.4 + k as f32 * std::f32::consts::TAU / 5.0;
+            let ox = a.cos() * r1 * 1.05;
+            let oy = (a.sin() * 0.45) * r1 * 1.05 - 14.0 * s;
+            draw_circle(
+                cx + ox,
+                cy + 6.0 * s + oy,
+                2.2 * s,
+                Color::new(1.0, 0.92, 0.65, 0.55 + 0.4 * (t * 3.0 + k as f32).sin()),
+            );
+        }
+    }
 }

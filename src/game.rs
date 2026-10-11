@@ -4,6 +4,10 @@
 
 // 借用规范：对 life/sim 的可变借用限定在块内，日志/音效/存档在块外调用
 
+// v1.5.0 守则：新增任何「模拟侧」法宝获得点，必须在同一守卫体内同步
+// `s.equipped.push(...)`（否则该法宝在模拟中只按 30% 灵性计，见 RELIC_UNEQUIP_FRAC）；
+// 任何克隆/构造模拟 Life 的地方，必须同步 `equipped = relics.clone()` 镜像（先例 launch_sim）。
+
 use crate::data::*;
 
 use crate::save;
@@ -208,6 +212,12 @@ pub struct Life {
     pub pending_break: Option<(usize, f32)>, // 模拟抉择：(目标境界, 蓄势加成)
 
     pub loc: usize, // 所在地（LOCATIONS 索引，山河图志）
+
+    pub equipped: Vec<usize>, // 已装备法宝（RELICS 索引，⊆ relics，至多 RELIC_EQUIP_MAX 件；v1.5.0）
+
+    pub slot: u8,    // 时段 0..=3（晨/昼/昏/夜，随推岁流转；v1.5.0）
+
+    pub weather: u8, // 天气 0..=4（WEATHERS 索引，随推岁演化；v1.5.0）
 }
 
 impl Default for Life {
@@ -276,6 +286,12 @@ impl Default for Life {
             pending_break: None,
 
             loc: NODE_START,
+
+            equipped: Vec::new(),
+
+            slot: 0,
+
+            weather: 0,
         }
     }
 }
@@ -344,6 +360,10 @@ pub struct Meta {
     pub life: Option<Life>,
 
     pub sect_contrib: u32, // 宗门贡献（跨世持久）
+
+    pub worn_title: i32, // 佩戴称号：-1 自动跟随 / 0..=14 境界称号 / 15 弑神者（v1.5.0）
+
+    pub dongfu: [i32; 3], // 洞府设施等级 0..=3：0聚灵阵 1灵田 2丹房（v1.5.0）
 }
 
 impl Default for Meta {
@@ -386,6 +406,10 @@ impl Default for Meta {
             life: None,
 
             sect_contrib: 0,
+
+            worn_title: -1,
+
+            dongfu: [0; 3],
         }
     }
 }
@@ -502,6 +526,8 @@ pub struct Game {
     pub modal: Option<EventCard>,
 
     pub panel: u8, // 0无 1坊市 2行囊 3轮回烙印 4帮助 5角色
+
+    pub char_tab: u8, // 角色面板页签 0总览 1法宝 2成就·称号（v1.5.0）
 
     pub tab: u8,
 
@@ -645,8 +671,15 @@ pub fn env_mult(l: &Life) -> f64 {
 pub fn relic_cult(l: &Life) -> f64 {
     let mut c = 1.0;
 
+    // v1.5.0 装备态：已装备法宝全额生效，未装备按 RELIC_UNEQUIP_FRAC 计三成灵性
     for &r in &l.relics {
-        c *= RELICS[r].cult;
+        let m = if l.equipped.contains(&r) {
+            RELICS[r].cult
+        } else {
+            1.0 + (RELICS[r].cult - 1.0) * RELIC_UNEQUIP_FRAC
+        };
+
+        c *= m;
     }
 
     c
@@ -757,8 +790,14 @@ pub fn power(l: &Life) -> f64 {
         * (1.0 + l.body as f64 / 100.0)
         * teff(l).power_mult.max(1.0);
 
+    // v1.5.0 装备态：已装备法宝全额生效，未装备按 RELIC_UNEQUIP_FRAC 计三成灵性
     for &r in &l.relics {
-        p *= 1.0 + RELICS[r].pow;
+        p *= 1.0
+            + if l.equipped.contains(&r) {
+                RELICS[r].pow
+            } else {
+                RELICS[r].pow * RELIC_UNEQUIP_FRAC
+            };
     }
 
     p *= 1.0 + l.power_buff;
@@ -840,6 +879,8 @@ impl Game {
             modal: None,
 
             panel: 0,
+
+            char_tab: 0,
 
             tab: 0,
 
@@ -1175,6 +1216,10 @@ impl Game {
         self.meta.sims_since_bless += 1;
 
         let mut s = self.life.as_ref().unwrap().clone();
+
+        // v1.5.0 必修：模拟主角由现实 Life 克隆而来，装备态重置为全量镜像
+        // （否则模拟侧未装备法宝按 RELIC_UNEQUIP_FRAC=30% 计，低于 v1.4 的全量生效）
+        s.equipped = s.relics.clone();
 
         s.talents = self.picked.clone();
 
@@ -2841,6 +2886,8 @@ impl Game {
                             if !s.relics.contains(&rl) {
                                 s.relics.push(rl);
 
+                                s.equipped.push(rl); // v1.5.0：模拟获得即装备（守则见文件头）
+
                                 L::Relic(rl)
                             } else {
                                 let g = (200.0 * ss) as i64;
@@ -2897,6 +2944,8 @@ impl Game {
                             if !s.relics.contains(&rl) {
                                 s.relics.push(rl);
 
+                                s.equipped.push(rl); // v1.5.0：模拟获得即装备（守则见文件头）
+
                                 W::Relic(rl)
                             } else {
                                 let g = (300.0 * ss) as i64;
@@ -2947,6 +2996,8 @@ impl Game {
                             if !s.relics.contains(&rl) {
                                 s.relics.push(rl);
 
+                                s.equipped.push(rl); // v1.5.0：模拟获得即装备（守则见文件头）
+
                                 relic = Some(rl);
                             }
                         }
@@ -2991,6 +3042,8 @@ impl Game {
                     if !s.relics.contains(&3) {
                         s.relics.push(3);
 
+                        s.equipped.push(3); // v1.5.0：模拟获得即装备（守则见文件头）
+
                         s.highlights
                             .push(format!("{}岁，古剑冢得玄天斩灵剑", s.age as i32));
 
@@ -3023,6 +3076,8 @@ impl Game {
 
                             if !s.relics.contains(&rl) {
                                 s.relics.push(rl);
+
+                                s.equipped.push(rl); // v1.5.0：模拟获得即装备（守则见文件头）
 
                                 relic = Some(rl);
                             }
@@ -3169,6 +3224,8 @@ impl Game {
             if let Some(r) = e.relic {
                 if !s.relics.contains(&r) {
                     s.relics.push(r);
+
+                    s.equipped.push(r); // v1.5.0：模拟获得即装备（守则见文件头）
                 }
             }
 
@@ -3626,6 +3683,10 @@ impl Game {
                 r *= DONGFU_CULT_MULT;
             }
 
+            // v1.5.0 四时洞天：聚灵阵层级 + 天气×所在地收益
+            r *= JUELING_MULT[self.meta.dongfu[0].clamp(0, 3) as usize];
+            r *= weather_loc_mult(l.weather as usize, l.loc);
+
             r
         };
 
@@ -3657,9 +3718,188 @@ impl Game {
             return;
         }
 
+        // v1.5.0 四时：死亡当年不推时辰、不产灵田（推进点=现实推岁口，唯一）
+        self.advance_time();
+
         self.check_ach_all();
 
         self.sync_save();
+    }
+
+    // ================= v1.5.0 四时洞天：称号 / 法宝装备 / 洞府经营 / 成就进度 =================
+
+    // 佩戴称号：-1 自动跟随 title_of；15 弑神者；0..=14 锁定境界称号
+    pub fn worn_title_of(&self) -> String {
+        match self.meta.worn_title {
+            -1 => self.title_of(),
+            15 => "弑神者".to_string(),
+            t => realm_title(t.clamp(0, 14) as usize).to_string(),
+        }
+    }
+
+    // 佩戴称号（值域即 {-1, 0..=14, 15}）：越权/未获得拒绝并 toast
+    pub fn set_worn_title(&mut self, t: i32) {
+        let ok = match t {
+            -1 => true,
+            15 => self.meta.neme_slain >= 3,
+            v if (0..=14).contains(&v) => self.meta.best_realm >= v as usize,
+            _ => false,
+        };
+        if !ok {
+            self.toast("尚未获得此称号", C_RED);
+            return;
+        }
+        self.meta.worn_title = t;
+        let name = self.worn_title_of();
+        self.log(format!("你戴上称号『{}』。", name), C_GOLD);
+        self.play(crate::sounds::Which::Click);
+        self.sync_save();
+    }
+
+    // 装备法宝 r（未拥有静默拒绝；重复/槽满提示）
+    pub fn equip_relic(&mut self, r: usize) {
+        let Some(l) = self.life.as_ref() else {
+            return;
+        };
+        if !l.relics.contains(&r) {
+            return;
+        }
+        if l.equipped.contains(&r) {
+            self.toast("此宝已在用", C_DIM);
+            return;
+        }
+        if l.equipped.len() >= RELIC_EQUIP_MAX {
+            self.toast("法宝槽已满，请先卸下一件", C_RED);
+            return;
+        }
+        if let Some(l) = self.life.as_mut() {
+            l.equipped.push(r);
+        }
+        self.log(format!("你祭起【{}】，灵光贯体。", RELICS[r].name), C_GOLD);
+        self.play(crate::sounds::Which::Ascend);
+        self.sync_save();
+    }
+
+    // 卸下法宝 r（不消失，仍保有 RELIC_UNEQUIP_FRAC 三成灵性）
+    pub fn unequip_relic(&mut self, r: usize) {
+        let had = self
+            .life
+            .as_ref()
+            .map_or(false, |l| l.equipped.contains(&r));
+        if !had {
+            return;
+        }
+        if let Some(l) = self.life.as_mut() {
+            l.equipped.retain(|&x| x != r);
+        }
+        self.log(format!("你收起【{}】，灵光渐敛。", RELICS[r].name), C_TEXT);
+        self.play(crate::sounds::Which::Click);
+        self.sync_save();
+    }
+
+    // 四时推进（每推岁一载调用一次）：时段流转、天气演化、灵田产出。
+    // 调用点唯一化：现实 act_cultivate（寿尽提前 return 不调用）与世界 spend_year（寿尽同样不调用）。
+    // 借用纪律：life.as_mut 圈在块内，日志在块外。
+    pub fn advance_time(&mut self) {
+        let mut lingtian = 0i64;
+        let weather_changed;
+        {
+            let Some(l) = self.life.as_mut() else {
+                return;
+            };
+            // 时段：晨→昼→昏→夜
+            l.slot = (l.slot + 1) % 4;
+            // 天气：按转移矩阵 roll（浮点概率，索引兜底取当前）
+            let row = WEATHER_TRANS[l.weather.min(4) as usize];
+            let roll = gen_range(0.0, 1.0f32);
+            let mut next = l.weather.min(4) as usize;
+            let mut acc = 0.0f32;
+            for (k, &p) in row.iter().enumerate() {
+                acc += p;
+                if roll <= acc {
+                    next = k;
+                    break;
+                }
+            }
+            next = next.min(4);
+            weather_changed = next != l.weather.min(4) as usize;
+            l.weather = next as u8;
+            // 灵田：按层级产出，收成随天气与所在地起伏
+            let lv = self.meta.dongfu[1].clamp(0, 3) as usize;
+            let y = (LINGTIAN_YIELD[lv.min(3)] as f64
+                * weather_loc_mult(l.weather as usize, l.loc))
+            .round() as i64;
+            if y > 0 {
+                l.stones += y;
+                lingtian = y;
+            }
+        }
+        if lingtian > 0 {
+            self.log(format!("洞府灵田岁入灵石 {}。", fmt_int(lingtian)), C_CYAN);
+        }
+        if weather_changed {
+            let w = self
+                .life
+                .as_ref()
+                .map(|l| l.weather.min(4) as usize)
+                .unwrap_or(0);
+            self.log(format!("天象流转：{}。", WEATHERS[w]), C_DIM);
+        }
+    }
+
+    // 成就进度：(当前, 目标) 文案；无量化进度的成就返回 None
+    pub fn ach_progress(&self, id: usize) -> Option<(String, String)> {
+        let l = self.life.as_ref();
+        let mr = self.meta.best_realm;
+        let realm_goal = [1usize, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13];
+        Some(match id {
+            0..=11 => (
+                REALMS[mr.min(14)].name.to_string(),
+                REALMS[realm_goal[id]].name.to_string(),
+            ),
+            12 => (fmt_num(l.map(|x| x.age).unwrap_or(0.0)), "十万".to_string()),
+            13 => (format!("{}", self.meta.lives), "10".to_string()),
+            14 => (format!("{}", self.meta.lives), "100".to_string()),
+            15 => (
+                fmt_num(l.map(|x| x.stones as f64).unwrap_or(0.0)),
+                "100万".to_string(),
+            ),
+            16 => (fmt_num(l.map(power).unwrap_or(0.0)), "10亿".to_string()),
+            17 => (
+                format!("{}", l.map(|x| x.washed).unwrap_or(0)),
+                "10".to_string(),
+            ),
+            18 => (format!("{}", self.meta.neme_slain), "1".to_string()),
+            19 => (fmt_num(l.map(|x| x.age).unwrap_or(0.0)), "1000".to_string()),
+            20 => (
+                if l.map_or(false, |x| x.sect) {
+                    REALMS[mr.min(14)].name.to_string()
+                } else {
+                    "未入宗".to_string()
+                },
+                REALMS[3].name.to_string(),
+            ),
+            21 => (
+                if l.map_or(false, |x| x.natural_end) {
+                    REALMS[mr.min(14)].name.to_string()
+                } else {
+                    "未坐化".to_string()
+                },
+                REALMS[4].name.to_string(),
+            ),
+            22 => (format!("{}", self.meta.companion_lives), "1".to_string()),
+            26 => (format!("{}", self.meta.companion_lives), "3".to_string()),
+            27 => (
+                REALMS[l.map(|x| x.realm).unwrap_or(0).min(14)].name.to_string(),
+                REALMS[10].name.to_string(),
+            ),
+            28 => (
+                fmt_num(l.map(|x| x.stones as f64).unwrap_or(0.0)),
+                "1亿".to_string(),
+            ),
+            29 => (fmt_num(l.map(|x| x.age).unwrap_or(0.0)), "5000".to_string()),
+            _ => return None,
+        })
     }
 
     pub fn can_break(&self) -> bool {
@@ -4196,6 +4436,9 @@ impl Game {
         } else {
             d
         };
+
+        // v1.5.0 洞府经营：丹房炉火折扣
+        let d = d * DANFANG_DISC[self.meta.dongfu[2].clamp(0, 3) as usize];
 
         ((PILL_PRICES[id] as f64) * (1.0 + realm as f64).powf(1.2) * d).ceil() as i64
     }

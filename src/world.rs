@@ -23,6 +23,7 @@ pub struct WorldState {
     pub sel: usize,            // 当前选中节点
     pub exp: Option<Exped>,    // 进行中的远征
     pub shop: bool,            // 宗门商店覆盖层
+    pub dev: bool,             // 洞府经营覆盖层（v1.5.0）
 }
 
 impl WorldState {
@@ -31,6 +32,7 @@ impl WorldState {
             sel: NODE_START,
             exp: None,
             shop: false,
+            dev: false,
         }
     }
 }
@@ -45,11 +47,17 @@ pub fn open_world(g: &mut Game) {
     g.panel = 0;
     g.world.sel = g.life.as_ref().map(|l| l.loc).unwrap_or(NODE_START);
     g.world.shop = false;
+    g.world.dev = false;
     g.play(crate::sounds::Which::Page);
 }
 
-// Escape / 「返回现实」的单一出口；远征中拒绝离场（P5 门①）
+// Escape / 「返回现实」的单一出口；洞府经营覆盖层先于此关闭，远征中拒绝离场（P5 门①）
 pub fn close_world(g: &mut Game) {
+    if g.world.dev {
+        g.world.dev = false;
+        g.play(crate::sounds::Which::Page);
+        return;
+    }
     if g.world.exp.is_some() {
         g.toast("远征未竟，不可中途离场", C_RED);
         return;
@@ -74,6 +82,8 @@ fn spend_year(g: &mut Game, cause: &str) -> bool {
         g.real_die(cause);
         return false;
     }
+    // v1.5.0 四时：推岁口唯一化（现实 act_cultivate + 此处），死亡当年不推时辰不产灵田
+    g.advance_time();
     true
 }
 
@@ -138,9 +148,19 @@ pub fn sect_quest(g: &mut Game) {
     }
     let (realm, stones) = {
         let l = g.life.as_ref().unwrap();
-        (l.realm, quest_stones(l.realm))
+        // v1.5.0：宗门任务收益随天气起伏（青云宗列）
+        (
+            l.realm,
+            (quest_stones(l.realm) as f64 * weather_loc_mult(l.weather as usize, NODE_SECT))
+                as i64,
+        )
     };
-    let contrib = quest_contrib(realm);
+    // v1.5.0：贡献同样随天气起伏
+    let contrib = (quest_contrib(realm) as f64
+        * weather_loc_mult(
+            g.life.as_ref().map(|l| l.weather as usize).unwrap_or(0),
+            NODE_SECT,
+        )) as u32;
     {
         let l = g.life.as_mut().unwrap();
         l.stones += stones;
@@ -297,6 +317,13 @@ pub fn exp_choose(g: &mut Game, i: usize) {
         let l = g.life.as_ref().unwrap();
         l.realm
     };
+    // v1.5.0：秘境战获随天气起伏（落霞秘境列）
+    let wx = g
+        .life
+        .as_ref()
+        .map(|l| l.weather as usize)
+        .unwrap_or(0);
+    let wxm = weather_loc_mult(wx, NODE_RUINS);
     let p = {
         let l = g.life.as_ref().unwrap();
         let base = match kind {
@@ -328,7 +355,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
             0 => {
                 // 战：灵石 + 25% 掉宝（查重，已有则折算——先例 game.rs take_inherit 法宝）
                 let scale = g.stone_scale(realm);
-                let s = (EXPED_STONE * scale * mult as f64) as i64;
+                let s = (EXPED_STONE * scale * mult as f64 * wxm) as i64;
                 {
                     let l = g.life.as_mut().unwrap();
                     l.stones += s;
@@ -376,7 +403,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
                 // 宝：50% 灵石 / 50% 贡献
                 if gen_range(0.0, 1.0f32) < 0.5 {
                     let scale = g.stone_scale(realm);
-                    let s = (EXPED_STONE_BONE * scale * mult as f64) as i64;
+                    let s = (EXPED_STONE_BONE * scale * mult as f64 * wxm) as i64;
                     {
                         let l = g.life.as_mut().unwrap();
                         l.stones += s;
@@ -416,6 +443,46 @@ pub fn exp_choose(g: &mut Game, i: usize) {
     g.sync_save();
 }
 
+// ---------------- 洞府经营（v1.5.0） ----------------
+
+// 升级设施 i（0 聚灵阵 1 灵田 2 丹房）：灵石 + 贡献双代价
+pub fn dongfu_up(g: &mut Game, i: usize) {
+    if i >= 3 {
+        return;
+    }
+    let lv = g.meta.dongfu[i].clamp(0, 3);
+    if lv >= 3 {
+        g.toast("此设施已臻圆满", C_DIM);
+        return;
+    }
+    let stones = DONGFU_UP_STONES[lv as usize];
+    let contrib = DONGFU_UP_CONTRIB[lv as usize];
+    let ok_stones = g.life.as_ref().map_or(false, |l| l.stones >= stones);
+    let ok_contrib = g.meta.sect_contrib >= contrib;
+    if !ok_stones || !ok_contrib {
+        g.toast("灵石或贡献不足", C_RED);
+        return;
+    }
+    {
+        let l = g.life.as_mut().unwrap();
+        l.stones -= stones;
+    }
+    g.meta.sect_contrib -= contrib;
+    g.meta.dongfu[i] = lv + 1;
+    g.log(
+        format!(
+            "洞府{}扩建至{}级。（灵石-{}，贡献-{}）",
+            DONGFU_FACS[i],
+            lv + 1,
+            fmt_int(stones),
+            contrib
+        ),
+        C_GOLD,
+    );
+    g.play(crate::sounds::Which::Ascend);
+    g.sync_save();
+}
+
 // 链中收手与链尾归返共用，不耗时
 pub fn exp_quit(g: &mut Game) {
     let loot = g
@@ -443,8 +510,8 @@ pub fn draw_world(g: &mut Game, art: &Art) {
         g.scene = Scene::Menu;
         return;
     };
-    // 覆盖层门控（P5 四处一致的总闸）
-    let gate = g.world.exp.is_none() && !g.world.shop;
+    // 覆盖层门控（P5 四处一致的总闸；v1.5.0 增洞府经营）
+    let gate = g.world.exp.is_none() && !g.world.shop && !g.world.dev;
     draw_bg(art);
     // 地图底图（画布 1264×480，屏幕偏移 (8,60)）
     draw_texture_ex(
@@ -457,6 +524,47 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             ..Default::default()
         },
     );
+    // v1.5.0 四时：时段/天气叠色（a=0 跳过不画）
+    {
+        let (sr, sg, sb, sa) = SLOT_TINT[l.slot.min(3) as usize];
+        if sa > 0 {
+            draw_rectangle(8.0, 60.0, 1264.0, 480.0, Color::from_rgba(sr, sg, sb, sa));
+        }
+        let (wr, wg, wb, wa) = WEATHER_TINT[l.weather.min(4) as usize];
+        if wa > 0 {
+            draw_rectangle(8.0, 60.0, 1264.0, 480.0, Color::from_rgba(wr, wg, wb, wa));
+        }
+    }
+    // v1.5.0 水面波光：河面流光 5 点（map_river_y 取图像系坐标，屏幕 x 需 -8 校正）
+    for k in 0..5 {
+        let sx = ((g.time * 46.0 + k as f32 * 253.0) % 1264.0) + 8.0;
+        let sy = crate::art::map_river_y(sx - 8.0) + 60.0;
+        let a = 0.16 + 0.12 * (g.time * 2.4 + k as f32 * 1.7).sin();
+        draw_line(
+            sx - 10.0,
+            sy,
+            sx + 10.0,
+            sy,
+            1.6,
+            Color::new(0.75, 0.92, 0.95, a),
+        );
+    }
+    // v1.5.0 飞鸟 3 只（+8/+60 偏移入地图画布）
+    for i in 0..3 {
+        let bx = ((g.time * (26.0 + i as f32 * 9.0) + i as f32 * 480.0) % 1500.0) - 120.0 + 8.0;
+        let by = 130.0 + i as f32 * 46.0 + (g.time * (1.3 + i as f32 * 0.4) + i as f32 * 2.1).sin() * 24.0 + 60.0;
+        let flap = (g.time * 6.0 + i as f32 * 0.9).sin() * 3.5;
+        draw_line(bx - 7.0, by - flap, bx, by, 1.5, Color::new(0.85, 0.82, 0.75, 0.7));
+        draw_line(bx, by, bx + 7.0, by - flap, 1.5, Color::new(0.85, 0.82, 0.75, 0.7));
+    }
+    // v1.5.0 洞府炊烟：清源洞府节点上方（屏幕基准 (438,150)，烟柱 y∈[120,150]）
+    for k in 0..4 {
+        let ph = (g.time * 0.42 + k as f32 * 0.25) % 1.0;
+        let sx = 438.0 + (g.time * 0.9 + k as f32 * 1.7).sin() * 5.0 + ph * 9.0;
+        let sy = 150.0 - ph * 30.0;
+        let a = (1.0 - ph) * 0.32;
+        draw_circle(sx, sy, 2.6 + ph * 4.2, Color::new(0.78, 0.78, 0.84, a));
+    }
     draw_motes(g);
     // 路径虚线（半透明金，每 18px 留空）
     for (a, b) in MAP_PATHS {
@@ -476,6 +584,17 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                 1.5,
                 Color::new(1.0, 0.85, 0.5, 0.28),
             );
+        }
+    }
+    // v1.5.0 路线高亮：与选中节点相连的边描金
+    {
+        let sel = g.world.sel.min(LOCATIONS.len() - 1);
+        for (a, b) in MAP_PATHS {
+            if a == sel || b == sel {
+                let (x0, y0) = (LOCATIONS[a].x + 8.0, LOCATIONS[a].y + 60.0);
+                let (x1, y1) = (LOCATIONS[b].x + 8.0, LOCATIONS[b].y + 60.0);
+                draw_line(x0, y0, x1, y1, 2.5, Color::new(1.0, 0.85, 0.5, 0.55));
+            }
         }
     }
     // 云雾（4 团 ×3 圆）
@@ -546,9 +665,9 @@ pub fn draw_world(g: &mut Game, art: &Art) {
         }
         txt_c("你在此", px, py + 48.0, 13, C_CYAN);
     }
-    // 点击选点（P5 门④：覆盖层打开时静默）
+    // 点击选点（P5 门④：覆盖层打开时静默；v1.5.0 经信箱相机回虚拟坐标）
     {
-        let (mx, my) = mouse_position();
+        let (mx, my) = crate::cam::mouse();
         if gate && is_mouse_button_pressed(MouseButton::Left) {
             for (i, nd) in LOCATIONS.iter().enumerate() {
                 let (nx, ny) = (nd.x + 8.0, nd.y + 60.0);
@@ -567,6 +686,17 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     draw_rectangle(0.0, 0.0, V_W, 52.0, Color::from_rgba(16, 11, 30, 245));
     draw_rectangle(0.0, 50.0, V_W, 2.0, C_GOLD_D);
     txt("—— 山河图志 ——", 16.0, 15.0, 20, C_GOLD);
+    // v1.5.0 四时：顶栏时段·天气
+    txt(
+        &format!(
+            "{}·{}",
+            SLOTS[l.slot.min(3) as usize], WEATHERS[l.weather.min(4) as usize]
+        ),
+        202.0,
+        16.0,
+        15,
+        C_CYAN,
+    );
     txt(
         &format!(
             "所在：{}",
@@ -694,6 +824,19 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                         g.play(crate::sounds::Which::Click);
                         g.act_cultivate();
                     }
+                    // v1.5.0 洞府经营入口
+                    if button(
+                        330.0,
+                        640.0,
+                        220.0,
+                        56.0,
+                        "经营洞府",
+                        Some("聚灵阵·灵田·丹房"),
+                        true,
+                    ) {
+                        g.play(crate::sounds::Which::Page);
+                        g.world.dev = true;
+                    }
                 }
                 NODE_BONES => {
                     if g.can_revenge() {
@@ -739,7 +882,8 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                 }
             }
         }
-    } else {
+    } else if g.world.exp.is_some() {
+        // v1.5.0（建议②）：仅远征中提示误文案；洞府经营覆盖层打开时此处静默
         txt(
             &format!(
                 "可做：{}——远征进行中，暂不可操作。",
@@ -807,6 +951,76 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             );
             if button(950.0, y - 2.0, 70.0, 38.0, "兑换", None, ok) {
                 sect_buy(g, i);
+            }
+        }
+    }
+    // ---------- 洞府经营覆盖层（v1.5.0 四时洞天） ----------
+    if g.world.dev {
+        draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
+        panel_card(240.0, 100.0, 800.0, 520.0);
+        txt("洞 府 经 营", 270.0, 132.0, 24, C_GOLD);
+        txt(
+            &format!(
+                "今岁 {} · {}",
+                SLOTS[l.slot.min(3) as usize],
+                WEATHERS[l.weather.min(4) as usize]
+            ),
+            560.0,
+            136.0,
+            16,
+            C_CYAN,
+        );
+        if button(976.0, 114.0, 44.0, 36.0, "×", None, true) {
+            g.world.dev = false;
+            g.play(crate::sounds::Which::Page);
+        }
+        draw_rectangle(260.0, 152.0, 760.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+        txt(
+            "四时流转，气象各异——设施升级需灵石与宗门贡献。",
+            270.0,
+            166.0,
+            13,
+            C_DIM,
+        );
+        for i in 0..3usize {
+            let y = 196.0 + i as f32 * 132.0;
+            let lv = g.meta.dongfu[i].clamp(0, 3) as usize;
+            draw_texture(&crate::art::art().icon_yun, 270.0, y, WHITE);
+            txt(DONGFU_FACS[i], 300.0, y + 2.0, 20, C_GOLD);
+            txt(
+                &format!("{}级", lv),
+                400.0,
+                y + 6.0,
+                16,
+                if lv >= 3 { C_GOLD } else { C_TEXT },
+            );
+            txt(DONGFU_FAC_DESC[i], 300.0, y + 34.0, 13, C_DIM);
+            let eff = match i {
+                0 => format!("当前：修炼效率 ×{:.2}", JUELING_MULT[lv]),
+                1 => format!("当前：每载产灵石 {}", LINGTIAN_YIELD[lv]),
+                _ => format!("当前：坊市丹价 ×{:.2}", DANFANG_DISC[lv]),
+            };
+            txt(&eff, 300.0, y + 58.0, 14, C_CYAN);
+            if lv < 3 {
+                let (cs, cc) = (DONGFU_UP_STONES[lv], DONGFU_UP_CONTRIB[lv]);
+                let ok = l.stones >= cs && g.meta.sect_contrib >= cc;
+                txt(
+                    &format!(
+                        "升{}级：{} 灵石 + {} 贡献",
+                        lv + 1,
+                        fmt_int(cs),
+                        cc
+                    ),
+                    540.0,
+                    y + 58.0,
+                    13,
+                    if ok { C_TEXT } else { C_RED },
+                );
+                if button(916.0, y + 12.0, 96.0, 44.0, "扩建", None, ok) {
+                    dongfu_up(g, i);
+                }
+            } else {
+                txt("圆满", 940.0, y + 58.0, 16, C_GOLD);
             }
         }
     }

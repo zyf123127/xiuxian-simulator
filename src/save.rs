@@ -1,7 +1,63 @@
-// 行式文本存档（桌面端 std::fs；损坏字段静默回退默认值）
+// 行式文本存档（损坏字段静默回退默认值）
+// v1.5.0 双端存档后端：桌面走 std::fs 文件；WASM（TapTap H5）走 localStorage——
+// 由 index.html 注册的 miniquad 插件 xx_storage 提供 env 导入函数
+// （xx_save_len / xx_save_read / xx_save_write，长度一律 UTF-8 字节数），
+// 存档格式与解析逻辑两端完全一致（照 GetFish src/save.rs 已验证实现平移）。
+use crate::data::{RELICS, RELIC_EQUIP_MAX};
 use crate::game::{Life, Meta, Nemes};
 
+// v1.5.0 wasm 后端不使用文件路径（键名由 JS 插件持有），此常量供桌面后端与文档引用
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub const PATH: &str = "xiuxian_save.txt";
+// v1.5.0 H5 localStorage 键名（wasm 端键名由 JS 插件持有，此常量供文档引用）
+#[allow(dead_code)]
+pub const STORAGE_KEY: &str = "xiuxian_save";
+
+// ---- 存档后端：读取全文 / 写入全文 ----
+#[cfg(target_arch = "wasm32")]
+mod backend {
+    // 供 mq_js_bundle 插件版本核对（init_plugins 检查 wasm_exports.xx_storage() == version）
+    #[unsafe(no_mangle)]
+    pub extern "C" fn xx_storage() -> i32 {
+        1
+    }
+
+    #[link(wasm_import_module = "env")]
+    unsafe extern "C" {
+        fn xx_save_len() -> i32;
+        fn xx_save_read(ptr: *mut u8, len: i32);
+        fn xx_save_write(ptr: *const u8, len: i32);
+    }
+
+    pub fn read_text() -> Option<String> {
+        unsafe {
+            let n = xx_save_len();
+            if n < 0 {
+                return None;
+            }
+            let mut buf = vec![0u8; n as usize];
+            xx_save_read(buf.as_mut_ptr(), n);
+            Some(String::from_utf8_lossy(&buf).into_owned())
+        }
+    }
+
+    pub fn write_text(txt: &str) {
+        unsafe { xx_save_write(txt.as_ptr(), txt.len() as i32) }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+mod backend {
+    use super::PATH;
+
+    pub fn read_text() -> Option<String> {
+        std::fs::read_to_string(PATH).ok()
+    }
+
+    pub fn write_text(txt: &str) {
+        let _ = std::fs::write(PATH, txt);
+    }
+}
 
 pub fn save(m: &Meta) {
     let mut s = String::new();
@@ -18,6 +74,8 @@ pub fn save(m: &Meta) {
     s.push_str(&format!("slain={}\n", m.neme_slain));
     s.push_str(&format!("sims={}\n", m.total_sims));
     s.push_str(&format!("sc={}\n", m.sect_contrib));
+    s.push_str(&format!("wtitle={}\n", m.worn_title));
+    s.push_str(&format!("df={:?}\n", m.dongfu));
     s.push_str(&format!("music={} sfx={}\n", m.music as i32, m.sfx as i32));
     if let Some(n) = &m.neme {
         s.push_str(&format!("neme={} {} {}\n", n.title, n.name, n.realm));
@@ -25,7 +83,8 @@ pub fn save(m: &Meta) {
     if let Some(l) = &m.life {
         s.push_str(&life_text(l));
     }
-    let _ = std::fs::write(PATH, s);
+    // v1.5.0 双端后端：桌面写文件 / WASM 写 localStorage（JS 侧 try/catch，配额异常不上抛）
+    backend::write_text(&s);
 }
 
 fn life_text(l: &Life) -> String {
@@ -52,16 +111,26 @@ fn life_text(l: &Life) -> String {
     ));
     s.push_str(&format!("Lbuf={}\n", l.power_buff));
     s.push_str(&format!("Lloc={}\n", l.loc));
+    s.push_str(&format!("Lequip={:?}\n", l.equipped));
+    s.push_str(&format!("Lslot={}\n", l.slot));
+    s.push_str(&format!("Lweather={}\n", l.weather));
     s
 }
 
 pub fn load() -> Meta {
+    // v1.5.0 双端后端：桌面读文件 / WASM 读 localStorage（无档时 None → 全默认值开局）
+    match backend::read_text() {
+        Some(text) => parse_save(&text),
+        None => Meta::default(),
+    }
+}
+
+// 解析存档文本（抽出为纯函数以便单测迁移/清洗规则；load 负责读文件）
+fn parse_save(text: &str) -> Meta {
     let mut m = Meta::default();
-    let Ok(text) = std::fs::read_to_string(PATH) else {
-        return m;
-    };
     let mut in_life = false;
     let mut life = Life::default();
+    let mut has_lequip = false; // v1.5.0：区分「缺键」（旧档→迁移）与「显式卸光」
     let mut neme_title = String::new();
     let mut neme_name = String::new();
     let mut neme_realm = 0usize;
@@ -117,6 +186,13 @@ pub fn load() -> Meta {
             "slain" => m.neme_slain = v.parse().unwrap_or(0),
             "sims" => m.total_sims = v.parse().unwrap_or(0),
             "sc" => m.sect_contrib = v.parse().unwrap_or(0),
+            "wtitle" => m.worn_title = v.parse().unwrap_or(-1),
+            "df" => {
+                let a = nums(v);
+                for i in 0..3 {
+                    m.dongfu[i] = (a.get(i).copied().unwrap_or(0.0) as i32).clamp(0, 3);
+                }
+            }
             "music" => m.music = v.trim().split(' ').next().map_or(true, |x| x == "1"),
             "sfx" => m.sfx = v.trim().split(' ').nth(1).map_or(true, |x| x == "1"),
             "neme" => {
@@ -157,6 +233,16 @@ pub fn load() -> Meta {
             }
             "Lbuf" => life.power_buff = v.parse().unwrap_or(0.0),
             "Lloc" => life.loc = v.parse().unwrap_or(crate::data::NODE_START),
+            "Lequip" => {
+                life.equipped = nums(v).iter().map(|&x| x as usize).collect();
+                has_lequip = true;
+            }
+            "Lslot" => {
+                life.slot = v.trim().parse::<i64>().unwrap_or(0).clamp(0, 3) as u8;
+            }
+            "Lweather" => {
+                life.weather = v.trim().parse::<i64>().unwrap_or(0).clamp(0, 4) as u8;
+            }
             "Lflags" => {
                 let a = nums(v);
                 life.sect = a.first().copied().unwrap_or(0.0) > 0.5;
@@ -185,8 +271,82 @@ pub fn load() -> Meta {
             realm: neme_realm,
         });
     }
+    // v1.5.0：佩戴称号值域限定 {-1, 0..=14, 15}，越界一律回退自动跟随
+    if !(-1..=15).contains(&m.worn_title) {
+        m.worn_title = -1;
+    }
     if in_life {
+        // v1.5.0 迁移与清洗（顺序不可变）：先清 relics → 迁移 equipped → 再清 equipped
+        fn dedup_keep_order(v: &mut Vec<usize>) {
+            let mut seen = std::collections::HashSet::new();
+            v.retain(|&x| seen.insert(x));
+        }
+        life.relics.retain(|&r| r < RELICS.len());
+        dedup_keep_order(&mut life.relics);
+        if !has_lequip {
+            // 旧档缺 Lequip 键：默认装备包内前 3 件（与 v1.4 全量生效行为最接近）
+            life.equipped = life
+                .relics
+                .iter()
+                .take(RELIC_EQUIP_MAX)
+                .copied()
+                .collect();
+        }
+        life.equipped.retain(|&r| life.relics.contains(&r));
+        dedup_keep_order(&mut life.equipped);
+        life.equipped.truncate(RELIC_EQUIP_MAX);
         m.life = Some(life);
     }
     m
+}
+
+#[cfg(test)]
+mod tests {
+    // v1.5.0 迁移与清洗规则回归（纯 parse_save，不落盘）
+    use super::*;
+
+    const OLD_BASE: &str = "lives=3\ndy=10\nsc=5\nLn=3\nLage=20\nLspan=75\nLrealm=1 0\n\
+Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=3\n";
+
+    #[test]
+    fn old_save_migrates_equipped_first3() {
+        let m = parse_save(OLD_BASE); // 缺 Lequip/Lslot/Lweather/wtitle/df
+        let l = m.life.unwrap();
+        assert_eq!(l.equipped, vec![0, 4, 2]); // 前 3 件保序迁移
+        assert_eq!(l.slot, 0);
+        assert_eq!(l.weather, 0);
+        assert_eq!(m.worn_title, -1);
+        assert_eq!(m.dongfu, [0, 0, 0]);
+    }
+
+    #[test]
+    fn explicit_empty_equip_respected() {
+        let m = parse_save(&format!("{}Lequip=[]\n", OLD_BASE)); // 显式卸光
+        assert!(m.life.unwrap().equipped.is_empty());
+    }
+
+    #[test]
+    fn out_of_range_keys_clamped() {
+        let t = format!(
+            "{}Lequip=[0, 4]\nLslot=9\nLweather=9\nwtitle=99\ndf=[9, -2, 1]\n",
+            OLD_BASE
+        );
+        let m = parse_save(&t);
+        let l = m.life.unwrap();
+        assert_eq!(l.slot, 3);
+        assert_eq!(l.weather, 4);
+        assert_eq!(m.worn_title, -1);
+        assert_eq!(m.dongfu, [3, 0, 1]);
+        assert_eq!(l.equipped, vec![0, 4]); // ⊆ relics 且保序
+    }
+
+    #[test]
+    fn relics_sanitized_and_title15_kept() {
+        let t = format!("{}slain=3\nwtitle=15\nLrelics=[0, 0, 99, 3]\n", OLD_BASE);
+        let m = parse_save(&t);
+        let l = m.life.unwrap();
+        assert_eq!(l.relics, vec![0, 3]); // 越界剔除+保序去重
+        assert_eq!(l.equipped, vec![0, 3]); // 缺键迁移：≤3 全装
+        assert_eq!(m.worn_title, 15); // 合法值域保留
+    }
 }

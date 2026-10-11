@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>凡人修仙·轮回模拟器</title>
+    <meta name="description" content="凡人修仙·轮回模拟器 —— 修仙放置 H5 游戏：轮回镜中推演一生、天赋抽取、造化继承、宿敌血仇、山河图志六大地点、洞府经营与四时气象。Rust + WebAssembly，打开即玩。" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%E2%98%AF%3C/text%3E%3C/svg%3E" />
+    <style>
+        html, body, canvas {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background: #000;
+            z-index: 0;
+        }
+        canvas {
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+            cursor: pointer;
+        }
+        #loading {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            color: #ffd782;
+            font-family: "Microsoft YaHei", sans-serif;
+            font-size: 16px;
+            background: #0a0818;
+            z-index: 10;
+            opacity: 1;
+            transition: opacity .6s ease;
+        }
+        #loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #loading .bar {
+            width: 180px; height: 6px;
+            border-radius: 3px;
+            background: rgba(255,255,255,.12);
+            overflow: hidden;
+        }
+        #loading .bar i {
+            display: block; height: 100%; width: 40%;
+            border-radius: 3px;
+            background: #ffd782;
+            animation: slide 1.1s ease-in-out infinite alternate;
+        }
+        @keyframes slide { from { margin-left: 0; } to { margin-left: 60%; } }
+        #errlog {
+            position: fixed; top: 0; left: 0;
+            color: #f66; background: rgba(0,0,0,.85);
+            font: 12px/1.4 Consolas, monospace;
+            white-space: pre-wrap; z-index: 99; padding: 4px;
+            max-width: 100%; max-height: 100%; overflow: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div>凡人修仙 · 加载中…</div>
+        <div class="bar"><i></i></div>
+        <div style="font-size:12px;color:#b8a8e0;">首次加载需要数秒，请稍候</div>
+    </div>
+    <div id="errlog"></div>
+    <canvas id="glcanvas" tabindex='1'></canvas>
+    <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
+    <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
+    <script>var GAME_VER = "1.5.0";</script>
+    <script src="mq_js_bundle.js?v=1.5.0"></script>
+    <script>
+        // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
+        // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
+        // Rust 侧 save.rs 的 wasm 后端按固定键读写，存档内容与桌面版 xiuxian_save.txt 完全同格式；
+        // 长度一律 UTF-8 字节数（Rust 侧按字节分配缓冲区，中文字段 3 字节/字）。
+        window.miniquad_add_plugin({
+            name: "xx_storage",
+            version: 1,
+            register_plugin: function (importObject) {
+                var XX_KEY = "xiuxian_save";
+                importObject.env.xx_save_len = function () {
+                    try {
+                        var v = localStorage.getItem(XX_KEY);
+                        return v == null ? -1 : new TextEncoder().encode(v).length;
+                    } catch (e) { return -1; }
+                };
+                importObject.env.xx_save_read = function (ptr, len) {
+                    try {
+                        var v = localStorage.getItem(XX_KEY) || "";
+                        var bytes = new TextEncoder().encode(v);
+                        var arr = new Uint8Array(wasm_memory.buffer, ptr, len);
+                        arr.set(bytes.subarray(0, len));
+                    } catch (e) { console.error("xx_save_read:", e); }
+                };
+                importObject.env.xx_save_write = function (ptr, len) {
+                    try {
+                        var bytes = new Uint8Array(wasm_memory.buffer, ptr, len);
+                        localStorage.setItem(XX_KEY, new TextDecoder("utf-8").decode(bytes));
+                    } catch (e) { console.error("xx_save_write:", e); }
+                };
+            },
+            on_init: function () {}
+        });
+
+        // 打不开诊断：无 WebGL / 无 WebAssembly 时给出可见提示，而不是无限白屏
+        var XX_GPU_OK = !!(window.WebGLRenderingContext || window.WebGL2RenderingContext);
+        function xx_gpu_report() {
+            var el = document.getElementById("errlog");
+            var msgs = "";
+            if (!XX_GPU_OK) {
+                msgs += "诊断：此设备的 WebView 未开启 WebGL 硬件加速，游戏画面无法创建。\n" +
+                        "请到系统/浏览器设置开启「硬件加速」后重试。\n";
+            }
+            if (!window.WebAssembly) {
+                msgs += "诊断：此设备的 WebView 过旧、不支持 WebAssembly，无法运行游戏。\n" +
+                        "请升级系统 WebView 或更换设备。\n";
+            }
+            if (msgs) {
+                el.textContent += msgs;
+                var ld = document.getElementById("loading");
+                if (ld) ld.textContent = "设备不支持，无法运行（详见页面诊断信息）";
+            }
+        }
+        xx_gpu_report();
+    </script>
+    <script>
+        var errlog = document.getElementById("errlog");
+        // 加载阶段标记：写在加载层上，真机"打不开"时能看出卡在哪一步
+        var xxLoading = document.getElementById("loading");
+        function xx_stage(msg) {
+            if (xxLoading && !xxLoading.classList.contains("hidden")) {
+                xxLoading.textContent = "凡人修仙 · " + msg;
+            }
+        }
+        window.onerror = function (msg, src, line, col, err) {
+            errlog.textContent += "ERR: " + msg + " @" + (src || "") + ":" + line + "\n" +
+                (err && err.stack ? err.stack : "") + "\n";
+        };
+        // Promise 链上的失败（如 wasm 实例化被拒）不经过 window.onerror，单独兜底
+        window.addEventListener("unhandledrejection", function (ev) {
+            var r = ev && ev.reason;
+            errlog.textContent += "ERR(promise): " + (r && (r.message || r) || "unknown") + "\n" +
+                (r && r.stack ? r.stack + "\n" : "");
+        });
+        var isFile = location.protocol === "file:";
+        if (isFile) {
+            // 浏览器禁止 file:// 加载 WASM，直接给出提示而不是一片空白
+            errlog.textContent = "无法以 file:// 方式运行游戏（浏览器禁止 file:// 加载 WASM）。\n\n" +
+                "【手动】先启动本地服务器：\n" +
+                "  cd E:\\Rust_Game\\Daoism_Game\\web\n" +
+                "  python -m http.server 8124\n\n" +
+                "然后浏览器打开：http://localhost:8124/";
+            document.getElementById("loading").textContent = "请通过 http://localhost:8124/ 访问";
+        } else {
+            // 点击/触摸时聚焦 canvas，保证进入游戏后键盘输入立即可用
+            var glcanvas = document.getElementById("glcanvas");
+            ["pointerdown", "touchstart", "click"].forEach(function (ev) {
+                glcanvas.addEventListener(ev, function () { glcanvas.focus(); }, { passive: true });
+            });
+            // WebGL 上下文丢失处理：miniquad 不注册任何 handler，手机 WebView
+            // 切后台被系统回收 GL 上下文后恢复时纹理全空 → 整个 UI 变黑。
+            // contextlost 必须 preventDefault 才允许恢复；restored 后 miniquad 不会
+            // 重建任何纹理，唯一可靠做法是整页重载（存档已在关键操作时落盘，进度不丢）
+            glcanvas.addEventListener("webglcontextlost", function (e) {
+                e.preventDefault();
+                errlog.textContent += "WARN: WebGL 上下文丢失（切后台/显存回收），等待恢复…\n";
+            }, false);
+            glcanvas.addEventListener("webglcontextrestored", function () {
+                location.reload();
+            }, false);
+            xx_stage("编译游戏引擎…");
+            try {
+                load("xiuxian.wasm?v=" + GAME_VER);
+            } catch (e) {
+                errlog.textContent += "load() threw: " + (e && e.message ? e.message : e) + "\n";
+            }
+            // 加载看门狗：12 秒仍未启动（无 WebGL/无 WASM/网络失败都会卡在
+            // 白屏加载层）则把加载层变成可点的重试按钮，不再无限等待
+            setTimeout(function () {
+                if (!window.wasm_exports) {
+                    var ld = document.getElementById("loading");
+                    if (ld && !ld.classList.contains("hidden")) {
+                        ld.textContent = "加载失败或超时，点击此处重试";
+                        ld.style.pointerEvents = "auto";
+                        ld.onclick = function () { location.reload(); };
+                    }
+                }
+            }, 12000);
+        }
+        // 首帧检测：wasm 导出就绪即隐藏加载覆盖层（就绪后约一帧内出画面）。
+        // 用 setInterval 而非 rAF 驱动：rAF 在页面不可见时会被浏览器挂起；
+        // 保留 8 秒兜底防异常。
+        (function pollFirstFrame() {
+            var loading = document.getElementById("loading");
+            var started = performance.now();
+            var timer = null;
+            function hide() {
+                if (timer) { clearInterval(timer); timer = null; }
+                loading.classList.add("hidden");
+            }
+            timer = setInterval(function () {
+                if (window.wasm_exports) {
+                    hide();
+                } else if (performance.now() - started >= 8000) {
+                    hide();
+                }
+            }, 250);
+        })();
+        // 手机竖持时强制横屏视野：整页旋转 90°（TapTap/X5 内核横屏不旋转页面的标准解法）。
+        // 缩放交由 Rust 侧信箱相机（src/cam.rs）等比适配，此处原样 JS 零缩放。
+        function orientFix() {
+            var b = document.body;
+            if (window.innerHeight > window.innerWidth) {
+                b.style.transformOrigin = "left top";
+                b.style.transform = "rotate(90deg) translate(0px, -100%)";
+                b.style.width = window.innerHeight + "px";
+                b.style.height = window.innerWidth + "px";
+            } else {
+                b.style.transform = "";
+                b.style.width = "100%";
+                b.style.height = "100%";
+            }
+            var c = document.getElementById("glcanvas");
+            if (c) {
+                c.style.width = "100%";
+                c.style.height = "100%";
+            }
+        }
+        window.addEventListener("resize", orientFix);
+        window.addEventListener("orientationchange", function () { setTimeout(orientFix, 120); });
+        window.addEventListener("load", orientFix);
+        // 加载完成后隐藏 loading 提示（file:// 时不隐藏，保留提示文字）
+        window.addEventListener("load", function () {
+            var el = document.getElementById("loading");
+            if (el && !isFile) el.style.display = "none";
+        });
+
+    </script>
+</body>
+</html>
