@@ -32,6 +32,8 @@ pub enum Scene {
     Inherit, // 模拟结束：选择继承
 
     Settle, // 现实身故：总结算
+
+    World, // 山河图志：世界地图（v1.4.0）
 }
 
 pub struct LogLine {
@@ -204,6 +206,8 @@ pub struct Life {
     pub companion: Option<String>, // 道侣（仅模拟）
 
     pub pending_break: Option<(usize, f32)>, // 模拟抉择：(目标境界, 蓄势加成)
+
+    pub loc: usize, // 所在地（LOCATIONS 索引，山河图志）
 }
 
 impl Default for Life {
@@ -270,6 +274,8 @@ impl Default for Life {
             companion: None,
 
             pending_break: None,
+
+            loc: NODE_START,
         }
     }
 }
@@ -336,6 +342,8 @@ pub struct Meta {
     pub sfx: bool,
 
     pub life: Option<Life>,
+
+    pub sect_contrib: u32, // 宗门贡献（跨世持久）
 }
 
 impl Default for Meta {
@@ -376,6 +384,8 @@ impl Default for Meta {
             sfx: true,
 
             life: None,
+
+            sect_contrib: 0,
         }
     }
 }
@@ -491,11 +501,13 @@ pub struct Game {
 
     pub modal: Option<EventCard>,
 
-    pub panel: u8, // 0无 1坊市 2行囊 3轮回烙印 4帮助
+    pub panel: u8, // 0无 1坊市 2行囊 3轮回烙印 4帮助 5角色
 
     pub tab: u8,
 
     pub shop_tab: u8,
+
+    pub world: crate::world::WorldState, // 山河图志会话状态（不进存档）
 
     pub speed: usize, // 模拟速度 0暂停 1慢 2快 3跳过
 
@@ -833,6 +845,8 @@ impl Game {
 
             shop_tab: 0,
 
+            world: crate::world::WorldState::new(),
+
             speed: 2,
 
             acc: 0.0,
@@ -857,6 +871,15 @@ impl Game {
 
             audio,
         }
+    }
+
+    // 统一存档入口：先把现实主角快照进 meta.life 再落盘
+    // （v1.4 起：保证「承接前缘」始终有档可承；draw.rs 菜单音乐/音效开关仍直写 save::save，
+    //   因菜单场景 g.life 必为 None，sync_save 会把快照覆写为 None 落盘）
+    pub fn sync_save(&mut self) {
+        self.meta.life = self.life.clone();
+
+        save::save(&self.meta);
     }
 
     pub fn log(&mut self, text: impl Into<String>, color: Color) {
@@ -982,6 +1005,8 @@ impl Game {
 
         self.life = Some(life);
 
+        self.world = crate::world::WorldState::new();
+
         self.log.clear();
 
         self.scene = Scene::Reality;
@@ -996,7 +1021,7 @@ impl Game {
         );
 
         self.log(
-            "十六岁这年，你于一间破败道观中醒来，识海中多出一座古朴的【轮回镜】。",
+            "十六岁这年，你于清源洞府侧的破败道观中醒来，识海中多出一座古朴的【轮回镜】。",
             C_GOLD,
         );
 
@@ -1017,7 +1042,7 @@ impl Game {
 
         self.check_ach_all();
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     // ================= 模拟：开始 =================
@@ -2682,7 +2707,7 @@ impl Game {
 
         self.apply_eff(&eff);
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     fn apply_eff(&mut self, e: &Eff) {
@@ -3444,7 +3469,7 @@ impl Game {
 
         self.play(crate::sounds::Which::Death);
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     // ================= 继承 =================
@@ -3569,7 +3594,7 @@ impl Game {
 
         self.play(crate::sounds::Which::Ascend);
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     pub fn finish_inherit(&mut self) {
@@ -3581,7 +3606,7 @@ impl Game {
 
         self.log("大梦初醒，轮回镜归于沉寂。镜中一生，造化归身。", C_TEXT);
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     // ================= 现实：行动 =================
@@ -3594,7 +3619,14 @@ impl Game {
         let rate = {
             let l = self.life.as_ref().unwrap();
 
-            cult_rate(l, &self.meta)
+            let mut r = cult_rate(l, &self.meta);
+
+            // 山河图志：清源洞府闭关加成
+            if l.loc == NODE_DONGFU {
+                r *= DONGFU_CULT_MULT;
+            }
+
+            r
         };
 
         let (died, msg) = {
@@ -3627,7 +3659,7 @@ impl Game {
 
         self.check_ach_all();
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     pub fn can_break(&self) -> bool {
@@ -3708,19 +3740,26 @@ impl Game {
             };
 
             if target >= REALMS.len() {
-                if target == 10 {
+                return;
+            }
+
+            if target == 10 {
                     // 现实渡劫：九重雷劫一次性结算（轮回镜护持，失败重伤不身死）
                     let mut report: Vec<String> = Vec::new();
                     let (pw, dead_at) = {
                         let l = self.life.as_ref().unwrap();
                         let e = teff(l);
-                        let base = (0.92 - 4.0 * 0.015)
+                        let mut base = (0.92 - 4.0 * 0.015)
                             + l.dao / 500.0
                             + l.luck / 600.0
                             + l.body as f32 / 800.0;
                         let mut b = e.trib_add + if l.pills[5] > 0 { 0.12 } else { 0.0 };
                         if l.pills[5] > 0 {
                             report.push("护神丹化作雷纹护体（存活+12%）。".to_string());
+                        }
+                        if l.loc == NODE_PEAK {
+                            base += PEAK_TRIB_BONUS;
+                            report.push("天雷峰渡劫台：每重雷劫存活+2%。".to_string());
                         }
                         let mut pw = 0u8;
                         let mut dead_at = None;
@@ -3789,12 +3828,9 @@ impl Game {
                     ), C_RED);
                         self.play(crate::sounds::Which::BreakFail);
                     }
-                    save::save(&self.meta);
+                    self.sync_save();
                     return;
                 }
-
-                return;
-            }
 
             let p = {
                 let l = self.life.as_ref().unwrap();
@@ -3873,7 +3909,7 @@ impl Game {
             }
         }
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     pub fn exchange_points(&mut self) {
@@ -3902,7 +3938,7 @@ impl Game {
 
         self.play(crate::sounds::Which::Coin);
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     pub fn exchange_cost(&self) -> i64 {
@@ -4005,7 +4041,7 @@ impl Game {
             self.play(crate::sounds::Which::BreakFail);
         }
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     pub fn eat_pill(&mut self, id: usize) {
@@ -4067,7 +4103,7 @@ impl Game {
             self.play(crate::sounds::Which::Gain);
         }
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     pub fn tech_price(&self, idx: usize) -> i64 {
@@ -4110,7 +4146,7 @@ impl Game {
 
         self.play(crate::sounds::Which::Ascend);
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     pub fn buy_pill(&mut self, id: usize) {
@@ -4141,7 +4177,7 @@ impl Game {
 
         self.play(crate::sounds::Which::Coin);
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     pub fn pill_price(&self, id: usize) -> i64 {
@@ -4153,6 +4189,13 @@ impl Game {
             .map_or(false, |l| teff(l).pill_mult >= 2.0);
 
         let d = if disc { 0.8 } else { 1.0 };
+
+        // 山河图志：身在临仙坊市，丹药九折
+        let d = if self.life.as_ref().is_some_and(|l| l.loc == NODE_MARKET) {
+            d * MARKET_PILL_DISC
+        } else {
+            d
+        };
 
         ((PILL_PRICES[id] as f64) * (1.0 + realm as f64).powf(1.2) * d).ceil() as i64
     }
@@ -4186,7 +4229,7 @@ impl Game {
 
         self.play(crate::sounds::Which::Ascend);
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     // ================= 成就 =================
@@ -4360,7 +4403,7 @@ impl Game {
 
         self.scene = Scene::Settle;
 
-        save::save(&self.meta);
+        self.sync_save();
     }
 
     pub fn burst(&mut self, n: usize, gold: bool) {

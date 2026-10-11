@@ -81,7 +81,7 @@ pub fn bar(x: f32, y: f32, w: f32, h: f32, frac: f32, c: Color) {
     draw_rectangle_lines(x, y, w, h, 1.5, Color::from_rgba(96, 80, 130, 255));
 }
 
-fn panel_card(x: f32, y: f32, w: f32, h: f32) {
+pub(crate) fn panel_card(x: f32, y: f32, w: f32, h: f32) {
     draw_rectangle(x, y, w, h, C_PANEL);
     draw_rectangle_lines(x, y, w, h, 2.5, C_GOLD_D);
     draw_rectangle_lines(
@@ -365,7 +365,7 @@ pub fn version_mark() {
     );
 }
 
-fn draw_toast(g: &Game) {
+pub(crate) fn draw_toast(g: &Game) {
     if let Some((text, t, c)) = &g.toast {
         let a = t.min(1.0).clamp(0.0, 1.0);
         let w = measure(text, 22) + 60.0;
@@ -435,6 +435,8 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
             true,
         ) {
             g.play(crate::sounds::Which::Click);
+            g.life = g.meta.life.clone(); // 还原现实主角（缺失则 draw_reality 黑屏）
+            g.panel = 0;
             g.scene = Scene::Reality;
             g.log("轮回镜微亮，前缘未了。", C_TEXT);
         }
@@ -535,6 +537,13 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         13,
         Color::from_rgba(110, 100, 130, 220),
     );
+    txt_r(
+        &format!("所在：{}", LOCATIONS[l.loc.min(5)].name),
+        1244.0,
+        68.0,
+        14,
+        C_DIM,
+    );
     let area_y = 88.0;
     let area_h = PANEL_B - 60.0 - 36.0;
     let line_h = 24.0;
@@ -544,10 +553,10 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         txt(&ll.text, 390.0, area_y + i as f32 * line_h, 16, ll.color);
     }
 
-    // 底部行动栏
-    let bw = 200.0;
-    let gap = 12.8;
-    let x0 = 10.0;
+    // 底部行动栏（v1.4.0：6→8，新增 山河图 / 角色）
+    let bw = 140.0;
+    let gap = 12.0;
+    let x0 = 36.0;
     let by = 620.0;
     let bh = 88.0;
     let pts_ok = g.meta.sim_points >= g.sim_cost();
@@ -563,17 +572,16 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         g.play(crate::sounds::Which::Click);
         g.start_draft();
     }
-    if button(
-        x0 + (bw + gap),
-        by,
-        bw,
-        bh,
-        "闭关修炼",
-        Some("一载苦修 · 寿元-1"),
-        true,
-    ) {
-        g.play(crate::sounds::Which::Click);
-        g.act_cultivate();
+    {
+        let sub = if l.loc == NODE_DONGFU {
+            "洞府闭关 · +25%"
+        } else {
+            "一载苦修 · 寿元-1"
+        };
+        if button(x0 + (bw + gap), by, bw, bh, "闭关修炼", Some(sub), true) {
+            g.play(crate::sounds::Which::Click);
+            g.act_cultivate();
+        }
     }
     let can = g.can_break();
     let blabel = g.break_label();
@@ -594,6 +602,18 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         by,
         bw,
         bh,
+        "山河图",
+        Some("世界地图 · M"),
+        true,
+    ) {
+        g.play(crate::sounds::Which::Page);
+        crate::world::open_world(g);
+    }
+    if button(
+        x0 + (bw + gap) * 4.0,
+        by,
+        bw,
+        bh,
         "坊市",
         Some("丹药 · 点数兑换"),
         true,
@@ -602,7 +622,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         g.play(crate::sounds::Which::Page);
     }
     if button(
-        x0 + (bw + gap) * 4.0,
+        x0 + (bw + gap) * 5.0,
         by,
         bw,
         bh,
@@ -613,11 +633,23 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         g.panel = 2;
         g.play(crate::sounds::Which::Page);
     }
+    if button(
+        x0 + (bw + gap) * 6.0,
+        by,
+        bw,
+        bh,
+        "角色",
+        Some("C 键查看"),
+        true,
+    ) {
+        g.panel = 5;
+        g.play(crate::sounds::Which::Page);
+    }
     if g.can_revenge() {
         let neme = g.meta.neme.clone().unwrap();
         let p = g.revenge_p();
         if button(
-            x0 + (bw + gap) * 5.0,
+            x0 + (bw + gap) * 7.0,
             by,
             bw,
             bh,
@@ -629,7 +661,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
             g.act_revenge();
         }
     } else if button(
-        x0 + (bw + gap) * 5.0,
+        x0 + (bw + gap) * 7.0,
         by,
         bw,
         bh,
@@ -645,6 +677,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         2 => draw_bag(g, &l),
         3 => draw_upgrade_panel(g),
         4 => draw_help_panel(g),
+        5 => crate::charpanel::draw_char_panel(g),
         _ => {}
     }
     draw_banner(g);
@@ -1594,14 +1627,14 @@ fn draw_help_panel(g: &mut Game) {
         "【轮回镜】耗 1 枚模拟点数，推演“可能的你”的一生，直至死亡。",
         "【模拟前】3 选 1 天赋（仅此一梦生效）；模拟中自动修炼、游历、闭关、突破。",
         "【模拟毕】随机给出数项“造化”，选一项带回现实：修为、功法、法宝、丹药……",
-        "【现实】闭关修炼涨修为（寿元-1年）；修为满可突破，现实突破有镜护持，不会身死。",
+        "【现实】闭关涨修为（寿元-1年）；修为满可突破；清源洞府闭关+25%，天雷峰渡劫更稳。",
         "【坊市】灵石购丹药，亦可兑换模拟点数（境界越高越贵）。",
         "【宿敌】血仇之敌每世模拟中皆会遭遇——实力不足则被斩，可逃可死。",
         "【斩敌】在模拟中反杀宿敌（领悟其招）或现实寻仇，皆可得灵石、点数与大笔道韵。",
         "【宿敌不灭】斩其一身，还有更强的幕后之敌接棒，直至……",
         "【现实身死】寿元耗尽则一世归尘，结算大笔道韵；轮回再起，烙印永存。",
         "【轮回烙印】道韵购买永久强化：属性下限、继承选项数、点数返还……",
-        "【操作】模拟中：空格暂停；1/2/3/4 或点按钮调速；“跳过”瞬间演完。",
+        "【操作】M 键打开山河图（世界地图），C 键查看角色面板；模拟中空格暂停、数字键调速。",
         "此身虽微，万世可期。道友，请开始你的第一次模拟。",
     ];
     for (i, s) in lines.iter().enumerate() {

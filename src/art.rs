@@ -9,6 +9,8 @@ pub struct Art {
     pub icon_pill: Texture2D,
     pub icon_sword: Texture2D,
     pub bg: Texture2D,
+    pub map_bg: Texture2D,
+    pub map_icons: [Texture2D; 6],
 }
 
 static ART: std::sync::OnceLock<Art> = std::sync::OnceLock::new();
@@ -30,6 +32,8 @@ pub fn build_art() -> Art {
     let icon_pill = build_icon_pill();
     let icon_sword = build_icon_sword();
     let bg = build_bg();
+    let map_bg = build_map_bg();
+    let map_icons = std::array::from_fn(build_map_icon);
     Art {
         portrait,
         icon_stone,
@@ -37,6 +41,8 @@ pub fn build_art() -> Art {
         icon_pill,
         icon_sword,
         bg,
+        map_bg,
+        map_icons,
     }
 }
 
@@ -257,6 +263,215 @@ fn build_bg() -> Texture2D {
     let tex = Texture2D::from_image(&img);
     tex.set_filter(FilterMode::Linear);
     tex
+}
+
+// 1264×480 山河图志底图：渐变夜幕 + 苔斑 + 山脊带 + 河流 + 林木 + 暗金双线边框
+fn build_map_bg() -> Texture2D {
+    let (iw, ih) = (1264u16, 480u16);
+    let w = 1264i32;
+    let h = 480i32;
+    let mut img = Image::gen_image_color(iw, ih, Color::from_rgba(0, 0, 0, 255));
+    {
+        let d = img.get_image_data_mut();
+        // 纵向渐变底 (24,34,40) → (14,20,26)
+        for y in 0..h {
+            let t = y as f32 / h as f32;
+            let r = (24.0 - 10.0 * t) as u8;
+            let g = (34.0 - 14.0 * t) as u8;
+            let b = (40.0 - 14.0 * t) as u8;
+            for x in 0..w {
+                d[(y * w + x) as usize] = [r, g, b, 255];
+            }
+        }
+        // 河心曲线（画河与林木规避共用，坐标单一来源）
+        let river_y = |x: i32| -> f32 {
+            320.0 + 40.0 * (x as f32 * 0.004).sin() + 20.0 * (x as f32 * 0.011 + 1.7).sin()
+        };
+        // 确定性伪随机（照 build_bg 先例）
+        let mut seed = 20261011u32;
+        let mut rnd = || {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            (seed >> 8) as f32 / 16777216.0
+        };
+        // 苔斑噪点 ~600 个 1-2px 暗绿/暗褐
+        for _ in 0..600 {
+            let x = (rnd() * w as f32) as i32;
+            let y = (rnd() * h as f32) as i32;
+            let c = if rnd() < 0.6 {
+                [
+                    (30.0 + rnd() * 14.0) as u8,
+                    (52.0 + rnd() * 12.0) as u8,
+                    38,
+                    255,
+                ]
+            } else {
+                [
+                    (56.0 + rnd() * 10.0) as u8,
+                    (46.0 + rnd() * 8.0) as u8,
+                    36,
+                    255,
+                ]
+            };
+            d[(y * w + x) as usize] = c;
+            if rnd() < 0.4 && x + 1 < w {
+                d[(y * w + x + 1) as usize] = c;
+            }
+        }
+        // 两条横向山脊带（逐列：脊线 y = base ± amp·sin 噪声，向下填充成带）
+        let band = |d: &mut [[u8; 4]], base: f32, amp: f32, ph: f32, col: [u8; 4]| {
+            for x in 0..w {
+                let t = x as f32 / w as f32;
+                let top = (base
+                    - amp
+                        * (0.6 * (t * 9.0 + ph).sin().abs()
+                            + 0.4 * (t * 21.0 + ph * 2.0).sin().abs())) as i32;
+                let bh = (46.0 + 26.0 * (t * 13.0 + ph).sin().abs()) as i32;
+                for y in top.max(0)..(top + bh).min(h) {
+                    d[(y * w + x) as usize] = col;
+                }
+            }
+        };
+        band(d, 200.0, 55.0, 1.3, [46, 44, 58, 255]);
+        band(d, 330.0, 70.0, 4.1, [38, 36, 48, 255]);
+        // 河流：横贯折线带，主色 [58,96,110] + 上缘高光 [86,130,140]
+        for x in 0..w {
+            let yc = river_y(x);
+            let hw = 11.0 + 3.0 * (x as f32 * 0.02 + 0.5).sin();
+            let y0 = (yc - hw) as i32;
+            let y1 = (yc + hw) as i32;
+            for y in y0.max(0)..=y1.min(h - 1) {
+                d[(y * w + x) as usize] = [58, 96, 110, 255];
+            }
+            let hl = y0.max(0);
+            if hl <= y1.min(h - 1) {
+                d[(hl * w + x) as usize] = [86, 130, 140, 255];
+            }
+        }
+        // 林木 220 个 2×2/3×3 深绿点簇（距节点 <40px 或 |y−河心|<20 不画）
+        for _ in 0..220 {
+            let x = (rnd() * w as f32) as i32;
+            let y = (rnd() * h as f32) as i32;
+            let mut ok = (y as f32 - river_y(x)).abs() >= 20.0;
+            if ok {
+                for nd in &crate::data::LOCATIONS {
+                    let dx = x as f32 - nd.x;
+                    let dy = y as f32 - nd.y;
+                    if (dx * dx + dy * dy).sqrt() < 40.0 {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if !ok {
+                continue;
+            }
+            let c = if rnd() < 0.5 {
+                [30, 48, 36, 255]
+            } else {
+                [26, 42, 32, 255]
+            };
+            let s = if rnd() < 0.5 { 2 } else { 3 };
+            for yy in y..(y + s).min(h) {
+                for xx in x..(x + s).min(w) {
+                    d[(yy * w + xx) as usize] = c;
+                }
+            }
+        }
+        // 四周 8px 暗金双线边框 [122,96,52]
+        for i in [0, 1, 6, 7] {
+            for x in 0..w {
+                d[(i * w + x) as usize] = [122, 96, 52, 255];
+                d[((h - 1 - i) * w + x) as usize] = [122, 96, 52, 255];
+            }
+            for y in 0..h {
+                d[(y * w + i) as usize] = [122, 96, 52, 255];
+                d[(y * w + w - 1 - i) as usize] = [122, 96, 52, 255];
+            }
+        }
+    }
+    let tex = Texture2D::from_image(&img);
+    tex.set_filter(FilterMode::Linear);
+    tex
+}
+
+// 6 地点图标：12×12 像素图（宗门/坊市/秘境/洞府/荒骨/天雷峰）
+fn build_map_icon(i: usize) -> Texture2D {
+    let mut g = PixGrid::new(12, 12);
+    match i {
+        0 => {
+            // 青云宗：三层收分塔 + 翘檐（瓦青/木金）
+            let wq = rgba(90, 120, 110, 255);
+            let gd = rgba(222, 186, 110, 255);
+            g.rect(4, 8, 4, 3, wq);
+            g.rect(5, 9, 2, 2, gd); // 门
+            g.rect(2, 7, 8, 1, gd); // 一层檐
+            g.set(1, 6, gd); // 翘檐
+            g.set(10, 6, gd);
+            g.rect(4, 4, 4, 3, wq);
+            g.rect(3, 3, 6, 1, gd);
+            g.set(2, 2, gd);
+            g.set(9, 2, gd);
+            g.rect(5, 1, 2, 2, wq);
+            g.set(5, 0, gd);
+            g.set(6, 0, gd);
+        }
+        1 => {
+            // 临仙坊市：屋舍 + 方孔铜钱（暖褐/铜黄）
+            let br = rgba(190, 140, 80, 255);
+            let cp = rgba(230, 190, 100, 255);
+            g.rect(1, 6, 5, 5, br);
+            g.tri([(0, 6), (6, 6), (3, 3)], rgba(150, 105, 60, 255));
+            g.set(3, 8, rgba(90, 60, 40, 255)); // 门
+            g.fill_circle(9, 8, 3, cp);
+            g.rect(8, 7, 2, 2, rgba(40, 30, 20, 255)); // 方孔
+        }
+        2 => {
+            // 落霞秘境：拱形石门 + 门内辉光（石灰/青白）
+            let st = rgba(140, 140, 160, 255);
+            let gl = rgba(180, 240, 240, 255);
+            g.rect(3, 5, 6, 6, st);
+            g.fill_circle(6, 5, 3, st);
+            g.rect(5, 6, 2, 5, gl);
+            g.set(6, 5, gl);
+            g.set(5, 5, rgba(220, 252, 252, 255));
+        }
+        3 => {
+            // 清源洞府：月洞门 + 雾纹（岩灰/雾白）
+            let rk = rgba(110, 105, 125, 255);
+            let mt = rgba(210, 220, 230, 255);
+            g.tri([(0, 11), (6, 2), (11, 11)], rk);
+            g.rect(0, 10, 12, 1, rk);
+            g.fill_circle(6, 9, 3, rgba(22, 18, 34, 255)); // 洞口
+            g.rect(4, 7, 4, 1, mt);
+            g.set(3, 9, mt);
+            g.set(9, 10, mt);
+        }
+        4 => {
+            // 荒骨战场：交叉断剑/断骨（骨白/锈红）
+            let bn = rgba(210, 205, 190, 255);
+            let ru = rgba(150, 80, 70, 255);
+            for k in 0..6 {
+                g.set(2 + k, 9 - k, bn);
+                g.set(9 - k, 9 - k, ru);
+            }
+            g.rect(1, 10, 2, 1, bn);
+            g.rect(7, 10, 3, 1, bn);
+            g.set(1, 4, ru);
+        }
+        _ => {
+            // 天雷峰：尖峰 + 闪电折线（岩蓝灰/电白）
+            let pk = rgba(90, 100, 130, 255);
+            let lt = rgba(240, 240, 180, 255);
+            g.tri([(1, 11), (6, 1), (11, 11)], pk);
+            g.tri([(4, 4), (6, 1), (8, 4)], rgba(222, 230, 246, 255)); // 雪顶
+            g.set(3, 2, lt);
+            g.set(4, 3, lt);
+            g.set(3, 4, lt);
+            g.set(4, 5, lt);
+        }
+    }
+    g.outline(O);
+    g.to_texture()
 }
 
 // 绘制修士：aura 色随境界变化，闭关时脚下光环脉动

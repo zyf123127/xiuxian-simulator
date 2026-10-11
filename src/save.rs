@@ -16,6 +16,8 @@ pub fn save(m: &Meta) {
     s.push_str(&format!("bpow={}\n", m.best_power));
     s.push_str(&format!("wins={}\n", m.total_wins));
     s.push_str(&format!("slain={}\n", m.neme_slain));
+    s.push_str(&format!("sims={}\n", m.total_sims));
+    s.push_str(&format!("sc={}\n", m.sect_contrib));
     s.push_str(&format!("music={} sfx={}\n", m.music as i32, m.sfx as i32));
     if let Some(n) = &m.neme {
         s.push_str(&format!("neme={} {} {}\n", n.title, n.name, n.realm));
@@ -48,6 +50,8 @@ fn life_text(l: &Life) -> String {
         "Ltrack={} {} {}\n",
         l.max_realm, l.wins, l.natural_end as i32
     ));
+    s.push_str(&format!("Lbuf={}\n", l.power_buff));
+    s.push_str(&format!("Lloc={}\n", l.loc));
     s
 }
 
@@ -66,11 +70,15 @@ pub fn load() -> Meta {
         let Some((k, v)) = line.split_once('=') else {
             continue;
         };
+        // v1.4.0 修复：旧实现先删除空格再按逗号分割，导致空格分隔的多值行
+        // （Lrealm=9 3 / Lstat=a b c d e / Lflags / Ltrack）被并成一位大数（如 "9 3"→93）。
+        // v1.3 中 life 块从不落盘故从未触发；v1.4 sync_save 起真实持久化 life，按分隔符切分修复。
         let nums = |s: &str| -> Vec<f64> {
-            s.replace(['[', ']', '(', ')', ' '], "")
-                .split(',')
-                .filter_map(|x| x.parse().ok())
-                .collect()
+            s.split([
+                ',', ' ', '[', ']', '(', ')',
+            ])
+            .filter_map(|x| x.parse().ok())
+            .collect()
         };
         match k {
             "lives" => m.lives = v.parse().unwrap_or(0),
@@ -108,6 +116,7 @@ pub fn load() -> Meta {
             "wins" => m.total_wins = v.parse().unwrap_or(0),
             "slain" => m.neme_slain = v.parse().unwrap_or(0),
             "sims" => m.total_sims = v.parse().unwrap_or(0),
+            "sc" => m.sect_contrib = v.parse().unwrap_or(0),
             "music" => m.music = v.trim().split(' ').next().map_or(true, |x| x == "1"),
             "sfx" => m.sfx = v.trim().split(' ').nth(1).map_or(true, |x| x == "1"),
             "neme" => {
@@ -147,6 +156,7 @@ pub fn load() -> Meta {
                 }
             }
             "Lbuf" => life.power_buff = v.parse().unwrap_or(0.0),
+            "Lloc" => life.loc = v.parse().unwrap_or(crate::data::NODE_START),
             "Lflags" => {
                 let a = nums(v);
                 life.sect = a.first().copied().unwrap_or(0.0) > 0.5;

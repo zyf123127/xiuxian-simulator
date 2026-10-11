@@ -1535,3 +1535,192 @@ pub const COMPANION_NAMES: [&str; 10] = [
     "苏婉",
     "月灵",
 ];
+
+// ================= v1.4.0 山河图志 =================
+
+// 世界地图节点定义（画布 1264×480，屏幕偏移 (8,60)）
+pub struct NodeDef {
+    pub name: &'static str,
+    pub x: f32,
+    pub y: f32,
+    pub desc: &'static str,
+    pub acts: &'static [&'static str],
+}
+
+pub const NODE_SECT: usize = 0; // 青云宗
+pub const NODE_MARKET: usize = 1; // 临仙坊市
+pub const NODE_RUINS: usize = 2; // 落霞秘境
+pub const NODE_DONGFU: usize = 3; // 清源洞府
+pub const NODE_BONES: usize = 4; // 荒骨战场
+pub const NODE_PEAK: usize = 5; // 天雷峰
+pub const NODE_START: usize = NODE_DONGFU;
+
+pub const LOCATIONS: [NodeDef; 6] = [
+    NodeDef {
+        name: "青云宗",
+        x: 200.0,
+        y: 130.0,
+        desc: "南疆第一仙宗，山门巍峨，剑气冲霄。拜入宗门可得名师指点，修炼事半功倍；完成宗门任务更可积攒贡献，换取宗门珍藏。",
+        acts: &["拜入青云", "宗门任务·1年", "宗门商店"],
+    },
+    NodeDef {
+        name: "临仙坊市",
+        x: 640.0,
+        y: 230.0,
+        desc: "凡仙杂处的水陆大埠，三教九流云集。坊市丹药对本地修士九折优惠，南来北往的消息也最为灵通。",
+        acts: &["打开坊市"],
+    },
+    NodeDef {
+        name: "落霞秘境",
+        x: 980.0,
+        y: 110.0,
+        desc: "上古修士遗府，每逢霞光贯日便开启一线。秘境中机缘与凶险并存——深入远征，逐层探取宝藏，见好就收方为上策。",
+        acts: &["开始远征·1年"],
+    },
+    NodeDef {
+        name: "清源洞府",
+        x: 430.0,
+        y: 90.0,
+        desc: "一处灵气充沛的天然洞天，泉鸣如琴，石髓生烟。于此闭关修炼，每载修为+25%。",
+        acts: &["闭关修炼·1年"],
+    },
+    NodeDef {
+        name: "荒骨战场",
+        x: 1120.0,
+        y: 330.0,
+        desc: "上古大战的古场，白骨露野，煞气不散。血仇之敌常于此设伏等你——是了断恩怨之地。",
+        acts: &["寻仇"],
+    },
+    NodeDef {
+        name: "天雷峰",
+        x: 780.0,
+        y: 390.0,
+        desc: "直插云霄的孤峰，峰顶终年雷云不散。峰顶渡劫台引雷入体淬炼元神——冲击大境界时，每重雷劫存活+2%。",
+        acts: &["冲击境界"],
+    },
+];
+
+// 纯视觉连线；赶路支持任意两地直达
+pub const MAP_PATHS: [(usize, usize); 6] = [(0, 3), (0, 1), (1, 2), (1, 4), (4, 5), (2, 5)];
+
+// 宗门经济：quest_contrib(r)=20+8r → 炼气28 / 金丹44 / 渡劫92 / 道祖132
+pub fn quest_contrib(realm: usize) -> u32 {
+    20 + 8 * realm as u32
+}
+
+pub fn quest_stones(realm: usize) -> i64 {
+    (300.0 * (1.0 + realm as f64).powf(1.6)) as i64
+}
+
+pub enum SectGoodKind {
+    Qi15,
+    Dao2,
+    Body2,
+    Life8,
+    Relic(usize),
+    Tech(usize),
+}
+
+pub struct SectGood {
+    pub name: &'static str,
+    pub desc: &'static str,
+    pub cost: u32,
+    pub kind: SectGoodKind,
+}
+
+pub const SECT_GOODS: [SectGood; 6] = [
+    SectGood {
+        name: "凝元丹",
+        desc: "宗门秘制，服之修为+当前层15%",
+        cost: 60,
+        kind: SectGoodKind::Qi15,
+    },
+    SectGood {
+        name: "洗心丹",
+        desc: "涤荡心尘，道心永久+2",
+        cost: 90,
+        kind: SectGoodKind::Dao2,
+    },
+    SectGood {
+        name: "铁骨丹",
+        desc: "淬炼筋骨，体魄永久+2",
+        cost: 90,
+        kind: SectGoodKind::Body2,
+    },
+    SectGood {
+        name: "延寿丹",
+        desc: "以灵物炼制，寿元+8载",
+        cost: 140,
+        kind: SectGoodKind::Life8,
+    },
+    SectGood {
+        name: "八灵尺",
+        desc: "镇派之宝拓影，战力+60%（需元婴期）",
+        cost: 260,
+        kind: SectGoodKind::Relic(5),
+    },
+    SectGood {
+        name: "混沌天帝诀",
+        desc: "镇派无上功法（需元婴期）",
+        cost: 420,
+        kind: SectGoodKind::Tech(7),
+    },
+];
+
+// 远征步骤：kind 0战 1药 2宝 3奇
+pub struct ExpedStep {
+    pub text: &'static str,
+    pub kind: u8,
+}
+
+pub const EXPED_STEPS: [ExpedStep; 8] = [
+    ExpedStep {
+        text: "一群妖狼拦住去路，绿瞳幽幽，獠牙滴涎。",
+        kind: 0,
+    },
+    ExpedStep {
+        text: "几名邪修残党盯上了你，杀意毕露。",
+        kind: 0,
+    },
+    ExpedStep {
+        text: "谷中灵药遍地，异香扑鼻，时有兽吼隐隐。",
+        kind: 1,
+    },
+    ExpedStep {
+        text: "一座上古药园废墟，灵株在禁制中自生自灭。",
+        kind: 1,
+    },
+    ExpedStep {
+        text: "上古宝库大门半启，禁制流光如网。",
+        kind: 2,
+    },
+    ExpedStep {
+        text: "湖底沉船遗藏隐约可见，水寒刺骨。",
+        kind: 2,
+    },
+    ExpedStep {
+        text: "一位前辈坐化之地，道韵未散，石刻斑驳。",
+        kind: 3,
+    },
+    ExpedStep {
+        text: "一眼灵泉汩汩涌动，泉水中蕴含精纯灵气。",
+        kind: 3,
+    },
+];
+
+pub const EXPED_CHOICE_LABELS: [[&str; 2]; 4] = [
+    ["正面迎击", "绕道潜行"],
+    ["细致采撷", "速取而返"],
+    ["强破禁制", "小心搜检"],
+    ["静心感悟", "略作参详"],
+];
+
+pub const EXPED_LEN_BASE: usize = 3; // 链长 = 3 + gen_range(0, 3) → 3..=5
+pub const EXPED_QI_PCT: f64 = 0.10;
+pub const EXPED_HERB_QI: f64 = 0.04;
+pub const EXPED_STONE: f64 = 700.0;
+pub const EXPED_STONE_BONE: f64 = 1400.0;
+pub const EXPED_CONTRIB: u32 = 15;
+pub const MARKET_PILL_DISC: f64 = 0.9;
+pub const DONGFU_CULT_MULT: f64 = 1.25;
+pub const PEAK_TRIB_BONUS: f32 = 0.02; // 生效前提：现实冲真仙走九重雷劫分支

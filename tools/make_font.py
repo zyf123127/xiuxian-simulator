@@ -7,7 +7,10 @@ from fontTools import subset
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "src")
 OUT = os.path.join(ROOT, "assets", "font.ttf")
-SRC_FONT = r"E:\Rust_Game\GetFish_Game\fonts\NotoSansSC-700.ttf"
+# 源字体：fontsource NotoSansSC-700 与 unicode-range 切片(105=●,59=渟)合并而成
+# （重建见 tools/build_src_font.py），覆盖主切片缺失的符号/生僻字
+# （本项目曾缺 ※→①②④●渟）；同源 OFL 1.1 许可
+SRC_FONT = os.path.join(ROOT, "fonts", "NotoSansSC-src.ttf")
 
 chars = set()
 # ASCII 可打印
