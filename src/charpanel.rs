@@ -20,8 +20,8 @@ pub fn draw_char_panel(g: &mut Game) {
         g.play(crate::sounds::Which::Page);
         return;
     }
-    // ---------- 页签 ----------
-    let tabs = ["总览", "法宝", "成就·称号"];
+    // ---------- 页签（v1.6.0 D：追加第 4 页「人物」） ----------
+    let tabs = ["总览", "法宝", "成就·称号", "人物"];
     for (i, t) in tabs.iter().enumerate() {
         let x = 300.0 + i as f32 * 150.0;
         if button(x, 74.0, 140.0, 34.0, t, None, true) {
@@ -35,8 +35,116 @@ pub fn draw_char_panel(g: &mut Game) {
     match g.char_tab {
         1 => draw_relic_page(g, &l),
         2 => draw_ach_title_page(g, &l),
+        3 => draw_npc_page(g, &l), // v1.6.0 D：好感度页
         _ => draw_overview(g, &l),
     }
+}
+
+// ---------- 页 3：人物（v1.6.0 D 好感度：长老 / 商人 / 道侣 三卡 + 赠礼） ----------
+fn draw_npc_page(g: &mut Game, l: &Life) {
+    for i in 0..2usize {
+        let y = 120.0 + i as f32 * 170.0; // 卡 960×160 @y=120/290
+        let fav = g.meta.npc_fav[i];
+        let cost = crate::npc::gift_cost(fav);
+        draw_rectangle(160.0, y, 960.0, 160.0, Color::from_rgba(30, 24, 50, 210));
+        draw_rectangle_lines(160.0, y, 960.0, 160.0, 2.0, C_GOLD_D);
+        draw_texture(&crate::art::art().icon_yun, 184.0, y + 18.0, WHITE);
+        txt(NPC_NAMES[i], 230.0, y + 22.0, 20, C_GOLD);
+        txt_c(crate::npc::tier_name(fav), 420.0, y + 24.0, 15, C_PURPLE);
+        txt(
+            &format!("好感 {}/{}", fav, NPC_FAV_MAX),
+            500.0,
+            y + 24.0,
+            15,
+            C_TEXT,
+        );
+        bar(230.0, y + 56.0, 340.0, 14.0, fav as f32 / NPC_FAV_MAX as f32, C_PURPLE);
+        // 档次刻度
+        for &th in NPC_FAV_TIERS.iter() {
+            let tx = 230.0 + th as f32 / NPC_FAV_MAX as f32 * 340.0;
+            draw_rectangle(tx - 1.0, y + 54.0, 2.0, 18.0, Color::from_rgba(96, 76, 130, 200));
+        }
+        wrap_draw(NPC_DESC[i], 230.0, y + 86.0, 14, 600.0, 22.0, C_DIM);
+        // 增益一行
+        let eff = if i == crate::npc::NPC_ELDER {
+            format!("当前：宗门任务收益 ×{:.2}", crate::npc::elder_quest_mult(fav))
+        } else {
+            format!("当前：坊市丹价 ×{:.2}", crate::npc::merchant_disc(fav))
+        };
+        txt(&eff, 230.0, y + 134.0, 14, C_CYAN);
+        if button(920.0, y + 60.0, 150.0, 56.0, "赠礼", Some(&format!("{} 灵石", fmt_int(cost))), l.stones >= cost)
+        {
+            crate::npc::gift_npc(g, i);
+            return;
+        }
+    }
+    // 第三卡：道侣
+    let y = 460.0;
+    let cfav = l.comp_fav;
+    draw_rectangle(160.0, y, 960.0, 160.0, Color::from_rgba(42, 26, 52, 210));
+    draw_rectangle_lines(160.0, y, 960.0, 160.0, 2.0, C_PURPLE);
+    draw_texture(&crate::art::art().icon_pill, 184.0, y + 18.0, WHITE);
+    match &l.companion {
+        Some(cn) => {
+            txt(cn, 230.0, y + 22.0, 20, C_PURPLE);
+            txt_c(crate::npc::tier_name(cfav), 420.0, y + 24.0, 15, C_PURPLE);
+            txt(
+                &format!("情谊 {}/{}", cfav, NPC_FAV_MAX),
+                500.0,
+                y + 24.0,
+                15,
+                C_TEXT,
+            );
+            bar(230.0, y + 56.0, 340.0, 14.0, cfav as f32 / NPC_FAV_MAX as f32, C_PURPLE);
+            txt(
+                &format!(
+                    "当前：双修加成 ×{:.2}（结缘起步+{:.0}%，只升不降）",
+                    crate::npc::comp_cult_mult(cfav),
+                    (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0
+                ),
+                230.0,
+                y + 86.0,
+                14,
+                C_CYAN,
+            );
+            txt(
+                "情谊随赠礼事件与遗泽积累；更换道侣亦不忘旧谊。",
+                230.0,
+                y + 112.0,
+                14,
+                C_DIM,
+            );
+        }
+        None => {
+            txt("道侣 · 此生未结缘", 230.0, y + 22.0, 20, C_DIM);
+            txt(
+                "模拟中「良缘天定」事件可选执子之手；遗泽亦可携道侣魂归现实。",
+                230.0,
+                y + 56.0,
+                14,
+                C_DIM,
+            );
+            txt(
+                &format!(
+                    "结缘起步情谊 {}（双修 +{:.0}%），道侣赠礼事件再 +{}。",
+                    COMPANION_BOND_FAV,
+                    (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0,
+                    COMPANION_GIFT_FAV
+                ),
+                230.0,
+                y + 84.0,
+                14,
+                C_CYAN,
+            );
+        }
+    }
+    txt(
+        "好感随交往与赠礼增长，跨世持久（随轮回烙印存档）；赠礼价随交情水涨船高。",
+        170.0,
+        636.0,
+        13,
+        C_DIM,
+    );
 }
 
 // ---------- 页 0：总览 ----------

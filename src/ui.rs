@@ -14,13 +14,19 @@ pub fn font() -> &'static Font {
     FONT.get().expect("字体未初始化")
 }
 
+// v1.6.0 A 清晰度：字号下限。低于 14px 的中文在 150% 物理栅格下发虚/笔画粘连，
+// measure/txt 两处统一夹取保证宽度测量与实际绘制一致（右对齐 txt_r 不漂移）。
+pub const MIN_FONT: u16 = 14;
+
 pub fn measure(s: &str, size: u16) -> f32 {
+    let size = size.max(MIN_FONT);
     let d = measure_text(s, Some(font()), size, 1.0);
     d.width
 }
 
 // 以 (x, y) 为文字左上角绘制
 pub fn txt(s: &str, x: f32, y: f32, size: u16, c: Color) {
+    let size = size.max(MIN_FONT);
     draw_text_ex(
         s,
         x,

@@ -58,7 +58,7 @@ pub fn button(
             if enabled {
                 C_DIM
             } else {
-                Color::from_rgba(110, 104, 120, 255)
+                Color::from_rgba(152, 148, 168, 255) // v1.6.0：对比度提升（110,104,120→）
             },
         );
     } else {
@@ -547,7 +547,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         376.0 + (V_W - 384.0) * 0.5,
         68.0,
         13,
-        Color::from_rgba(110, 100, 130, 220),
+        Color::from_rgba(162, 152, 184, 220), // v1.6.0：对比度提升（110,100,130→）
     );
     txt_r(
         &format!("所在：{}", LOCATIONS[l.loc.min(5)].name),
@@ -558,19 +558,22 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     );
     let area_y = 88.0;
     let area_h = PANEL_B - 60.0 - 36.0;
-    let line_h = 24.0;
+    let line_h = 28.0; // v1.6.0：24→28，16px 中文行距 1.5 倍更透气（18 行预算仍够）
     let max_lines = (area_h / line_h) as usize;
     let start = g.log.len().saturating_sub(max_lines);
     for (i, ll) in g.log[start..].iter().enumerate() {
         txt(&ll.text, 390.0, area_y + i as f32 * line_h, 16, ll.color);
     }
 
-    // 底部行动栏（v1.4.0：6→8，新增 山河图 / 角色）
+    // 底部行动栏（v1.4.0：6→8；v1.6.0 B：修炼组收进弹层 + 全钮返回值门控防弹层期穿透。
+    // 取舍声明：原槽 2「冲击破境」一键直达收进修炼弹层（数字键 2 仍一键触发），
+    // 核心循环动作一步变两步——Ask B 明确要求修炼组归入同一子菜单，接受）
     let bw = 140.0;
     let gap = 12.0;
     let x0 = 36.0;
     let by = 620.0;
     let bh = 88.0;
+    let sub_open = g.submenu.is_some();
     let pts_ok = g.meta.sim_points >= g.sim_cost();
     if button(
         x0,
@@ -580,57 +583,55 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "开始模拟",
         Some(&format!("推演一生 · {} 点", g.sim_cost())),
         pts_ok,
-    ) {
+    ) && !sub_open
+    {
         g.play(crate::sounds::Which::Click);
         g.start_draft();
     }
     {
-        let sub = if l.loc == NODE_DONGFU {
-            "洞府闭关 · +25%"
-        } else {
-            "一载苦修 · 寿元-1"
-        };
-        if button(x0 + (bw + gap), by, bw, bh, "闭关修炼", Some(sub), true) {
+        // v1.6.0 B：修炼弹层（统一入口 open_sub 打开帧门闩，防未来回归）
+        if button(x0 + (bw + gap), by, bw, bh, "修炼", Some("闭关 · 破境"), true) && !sub_open {
             g.play(crate::sounds::Which::Click);
-            g.act_cultivate();
+            crate::menu::open_sub(g, crate::menu::Sub::Cult);
         }
     }
-    let can = g.can_break();
-    let blabel = g.break_label();
     if button(
         x0 + (bw + gap) * 2.0,
-        by,
-        bw,
-        bh,
-        &blabel,
-        Some("现实突破 · 不死"),
-        can,
-    ) {
-        g.play(crate::sounds::Which::Click);
-        g.act_break();
-    }
-    if button(
-        x0 + (bw + gap) * 3.0,
         by,
         bw,
         bh,
         "山河图",
         Some("世界地图 · M"),
         true,
-    ) {
+    ) && !sub_open
+    {
         g.play(crate::sounds::Which::Page);
         crate::world::open_world(g);
+    }
+    if button(
+        x0 + (bw + gap) * 3.0,
+        by,
+        bw,
+        bh,
+        "坊市",
+        Some("丹药 · 藏经 · 兑换"),
+        true,
+    ) && !sub_open
+    {
+        g.panel = 1;
+        g.play(crate::sounds::Which::Page);
     }
     if button(
         x0 + (bw + gap) * 4.0,
         by,
         bw,
         bh,
-        "坊市",
-        Some("丹药 · 点数兑换"),
+        "行囊",
+        Some("丹药 · 法宝 · 行装"),
         true,
-    ) {
-        g.panel = 1;
+    ) && !sub_open
+    {
+        g.panel = 2;
         g.play(crate::sounds::Which::Page);
     }
     if button(
@@ -638,11 +639,13 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         by,
         bw,
         bh,
-        "行囊",
-        Some("服用丹药"),
+        "人物",
+        Some("长老 · 商人 · 道侣"),
         true,
-    ) {
-        g.panel = 2;
+    ) && !sub_open
+    {
+        g.panel = 5;
+        g.char_tab = 3; // v1.6.0 D：直入人物页
         g.play(crate::sounds::Which::Page);
     }
     if button(
@@ -653,8 +656,10 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "角色",
         Some("C 键查看"),
         true,
-    ) {
+    ) && !sub_open
+    {
         g.panel = 5;
+        g.char_tab = 0; // v1.6.0 应修①②：直点「角色」归总览页，防沿用人物页签
         g.play(crate::sounds::Which::Page);
     }
     if g.can_revenge() {
@@ -668,7 +673,8 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
             "寻仇",
             Some(&format!("{:.0}% · {}", p * 100.0, neme.name)),
             true,
-        ) {
+        ) && !sub_open
+        {
             g.play(crate::sounds::Which::Click);
             g.act_revenge();
         }
@@ -691,6 +697,10 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         4 => draw_help_panel(g),
         5 => crate::charpanel::draw_char_panel(g),
         _ => {}
+    }
+    // v1.6.0 B：修炼弹层（底栏之后绘制，盖住中部区域）
+    if g.submenu.is_some() {
+        crate::menu::draw_sub(g);
     }
     draw_banner(g);
     draw_toast(g);
@@ -1170,30 +1180,32 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
             draw_circle(x, 690.0, 8.0, c);
         }
     }
-    // 事件弹窗
+    // 事件弹窗（v1.6.0 B：卡面加高、选项纵排带机制摘要副标签）
     if g.modal.is_some() {
-        let (title, text, labels) = {
+        let (title, text, opts) = {
             let card = g.modal.as_ref().unwrap();
             (
                 card.title.clone(),
                 card.text.clone(),
-                card.opts.iter().map(|(l, _)| l.clone()).collect::<Vec<_>>(),
+                card.opts.clone(), // 保留 Eff 以生成副标签
             )
         };
         draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.5));
-        panel_card(340.0, 200.0, 600.0, 300.0);
-        txt_c(&title, V_W * 0.5, 228.0, 24, C_GOLD);
-        draw_rectangle(380.0, 246.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
-        wrap_draw(&text, 380.0, 264.0, 17, 520.0, 28.0, C_TEXT);
-        let n = labels.len();
-        let bw2 = if n == 1 { 260.0 } else { 250.0 };
-        for (i, label) in labels.iter().enumerate() {
-            let bx = if n == 1 {
-                V_W * 0.5 - bw2 * 0.5
-            } else {
-                V_W * 0.5 - bw2 - 8.0 + i as f32 * (bw2 + 16.0)
-            };
-            if button(bx, 434.0, bw2, 46.0, label, None, true) {
+        panel_card(340.0, 160.0, 600.0, 400.0);
+        txt_c(&title, V_W * 0.5, 188.0, 24, C_GOLD);
+        draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+        wrap_draw(&text, 380.0, 224.0, 17, 520.0, 28.0, C_TEXT);
+        for (i, (label, eff)) in opts.iter().enumerate() {
+            let desc = eff.eff_desc();
+            if button(
+                380.0,
+                316.0 + i as f32 * 74.0,
+                520.0,
+                62.0,
+                label,
+                Some(&desc),
+                true,
+            ) {
                 g.play(crate::sounds::Which::Click);
                 g.choose_option(i);
             }
@@ -1264,26 +1276,27 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
         C_PURPLE,
     );
     txt("所选将随神魂带回现实", 524.0, 142.0, 14, C_DIM);
+    // v1.6.0 B：行高 62 / 步进 70（至多 5 行，卡底 564 内收齐）
     for (i, &idx) in g.inherit_opts.iter().enumerate() {
         let card = &INHERITS[idx];
-        let y = 160.0 + i as f32 * 62.0;
+        let y = 160.0 + i as f32 * 70.0;
         let (mx, my) = crate::cam::mouse();
-        let hot = mx >= 520.0 && mx <= 1200.0 && my >= y && my <= y + 54.0;
+        let hot = mx >= 520.0 && mx <= 1200.0 && my >= y && my <= y + 62.0;
         draw_rectangle(
             520.0,
             y,
             680.0,
-            54.0,
+            62.0,
             if hot {
                 Color::from_rgba(80, 58, 110, 240)
             } else {
                 Color::from_rgba(44, 34, 70, 235)
             },
         );
-        draw_rectangle_lines(520.0, y, 680.0, 54.0, 1.5, C_GOLD_D);
-        txt(&format!("【{}】", card.name), 536.0, y + 8.0, 18, C_GOLD);
-        txt(card.desc, 700.0, y + 8.0, 15, C_TEXT);
-        txt_c("选此项", 1160.0, y + 8.0, 14, C_CYAN);
+        draw_rectangle_lines(520.0, y, 680.0, 62.0, 1.5, C_GOLD_D);
+        txt(&format!("【{}】", card.name), 536.0, y + 10.0, 18, C_GOLD);
+        txt(card.desc, 700.0, y + 12.0, 15, C_TEXT);
+        txt_c("选此项", 1160.0, y + 12.0, 14, C_CYAN);
         if hot && is_mouse_button_pressed(MouseButton::Left) {
             g.play(crate::sounds::Which::Ascend);
             g.take_inherit(i);
@@ -1376,46 +1389,53 @@ fn draw_shop(g: &mut Game, l: &Life) {
         g.play(crate::sounds::Which::Page);
         return;
     }
-    // 页签：丹药 / 藏经阁
-    let tabs = ["丹药", "藏经阁"];
+    // 页签（v1.6.0 B：三页签分组——丹药阁 / 藏经阁 / 点数兑换）
+    let tabs = ["丹药阁", "藏经阁", "点数兑换"];
     for (i, t) in tabs.iter().enumerate() {
-        let x = 300.0 + i as f32 * 150.0;
-        if button(x, 74.0, 140.0, 34.0, t, None, true) {
+        let x = 300.0 + i as f32 * 170.0;
+        if button(x, 74.0, 150.0, 34.0, t, None, true) {
             g.shop_tab = i as u8;
             g.play(crate::sounds::Which::Page);
         }
         if g.shop_tab == i as u8 {
-            draw_rectangle(x, 108.0, 140.0, 3.0, C_GOLD);
+            draw_rectangle(x, 108.0, 150.0, 3.0, C_GOLD);
         }
     }
-    if g.shop_tab == 0 {
-        // 点数兑换
+    if g.shop_tab == 2 {
+        // 点数兑换（自丹药页移入独立页签）
         let cost = g.exchange_cost();
-        draw_rectangle(160.0, 118.0, 960.0, 46.0, Color::from_rgba(44, 30, 66, 220));
-        txt("模拟点数", 176.0, 130.0, 17, C_PURPLE);
+        draw_rectangle(160.0, 150.0, 960.0, 46.0, Color::from_rgba(44, 30, 66, 220));
+        txt("模拟点数", 176.0, 162.0, 17, C_PURPLE);
         txt(
             &format!("●{}", g.meta.sim_points),
             280.0,
-            130.0,
+            162.0,
             17,
             C_PURPLE,
         );
-        txt("轮回镜以灵石为引，可无限推演", 360.0, 130.0, 14, C_DIM);
+        txt("轮回镜以灵石为引，可无限推演", 360.0, 162.0, 14, C_DIM);
         txt_r(
             &format!("{} 灵石 / 1点", fmt_int(cost)),
             990.0,
-            130.0,
+            162.0,
             15,
             C_CYAN,
         );
-        if button(1010.0, 124.0, 94.0, 36.0, "兑换", None, l.stones >= cost) {
+        if button(1010.0, 156.0, 94.0, 36.0, "兑换", None, l.stones >= cost) {
             g.play(crate::sounds::Which::Coin);
             g.exchange_points();
             return;
         }
-        draw_rectangle(160.0, 178.0, 960.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+        txt(
+            "（境界越高兑换越贵；模拟中反杀宿敌亦可得点数）",
+            176.0,
+            216.0,
+            14,
+            C_DIM,
+        );
+    } else if g.shop_tab == 0 {
         for i in 0..6 {
-            let y = 196.0 + i as f32 * 74.0;
+            let y = 192.0 + i as f32 * 78.0;
             let p = &PILLS[i];
             let price = g.pill_price(i);
             draw_texture(&crate::art::art().icon_pill, 160.0, y - 6.0, WHITE);
@@ -1446,13 +1466,13 @@ fn draw_shop(g: &mut Game, l: &Life) {
         txt(
             "藏经阁——功法一经习得，现实与模拟通用",
             180.0,
-            132.0,
+            124.0,
             15,
             C_DIM,
         );
         for idx in 1..TECHS.len() {
-            // 行距 68→64：末行（idx=7）描述不再贴面板底边被金线穿过（验收非阻断①）
-            let y = 156.0 + idx as f32 * 64.0;
+            // v1.6.0 B：行 y=150+(idx-1)*66、盒高 58（原 156+idx*64 / 60）
+            let y = 150.0 + (idx - 1) as f32 * 66.0;
             let t = &TECHS[idx];
             let price = g.tech_price(idx);
             let owned = l.tech >= idx;
@@ -1461,37 +1481,37 @@ fn draw_shop(g: &mut Game, l: &Life) {
                 160.0,
                 y - 12.0,
                 960.0,
-                60.0,
+                58.0,
                 if cur {
                     Color::from_rgba(70, 52, 24, 200)
                 } else {
                     Color::from_rgba(36, 28, 58, 180)
                 },
             );
-            txt(&format!("《{}》", t.name), 180.0, y + 6.0, 18, C_GOLD);
+            txt(&format!("《{}》", t.name), 180.0, y + 4.0, 18, C_GOLD);
             txt(
                 &format!("修炼×{:.1}  战力×{:.1}", t.mult, t.pow),
                 420.0,
-                y + 6.0,
+                y + 4.0,
                 14,
                 C_TEXT,
             );
-            txt(t.desc, 420.0, y + 28.0, 14, C_DIM);
+            txt(t.desc, 420.0, y + 26.0, 14, C_DIM);
             if owned {
                 if cur {
-                    txt_c("当前修习", 1058.0, y + 8.0, 15, C_GREEN);
+                    txt_c("当前修习", 1058.0, y + 6.0, 15, C_GREEN);
                 } else {
-                    txt_c("已超越", 1058.0, y + 8.0, 15, C_DIM);
+                    txt_c("已超越", 1058.0, y + 6.0, 15, C_DIM);
                 }
             } else {
                 txt_r(
                     &format!("{} 灵石", fmt_int(price)),
                     1030.0,
-                    y + 8.0,
+                    y + 6.0,
                     15,
                     C_CYAN,
                 );
-                if button(1040.0, y - 6.0, 80.0, 40.0, "求购", None, l.stones >= price) {
+                if button(1040.0, y - 8.0, 80.0, 40.0, "求购", None, l.stones >= price) {
                     g.play(crate::sounds::Which::Coin);
                     g.buy_tech(idx);
                     return;
@@ -1501,7 +1521,7 @@ fn draw_shop(g: &mut Game, l: &Life) {
     }
 }
 
-// ================= 行囊 =================
+// ================= 行囊（v1.6.0 B：三页签分组 0丹药 1法宝 2行装） =================
 fn draw_bag(g: &mut Game, l: &Life) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
     panel_card(140.0, 70.0, 1000.0, 580.0);
@@ -1511,64 +1531,138 @@ fn draw_bag(g: &mut Game, l: &Life) {
         g.play(crate::sounds::Which::Page);
         return;
     }
-    draw_rectangle(160.0, 126.0, 960.0, 1.5, Color::from_rgba(96, 76, 130, 160));
-    txt("功法", 180.0, 152.0, 17, C_DIM);
-    txt(
-        &format!("《{}》 {}", TECHS[l.tech].name, TECHS[l.tech].desc),
-        250.0,
-        152.0,
-        16,
-        C_GOLD,
-    );
-    txt("法宝", 180.0, 180.0, 17, C_DIM);
-    if l.relics.is_empty() {
-        txt("尚无法宝，模拟奇遇可寻。", 250.0, 180.0, 15, C_DIM);
-    } else {
-        for (i, &r) in l.relics.iter().enumerate() {
-            let col = i % 3;
-            let row = i / 3;
-            draw_texture(
-                &crate::art::art().icon_sword,
-                236.0 + col as f32 * 320.0,
-                168.0 + row as f32 * 26.0,
-                WHITE,
-            );
-            // v1.5.0：颜色标记装备态（已装=金，未装=暗；零几何改动）
-            let tc = if l.equipped.contains(&r) {
-                C_GOLD
-            } else {
-                C_DIM
-            };
-            txt(
-                &format!("【{}】{}", RELICS[r].name, RELICS[r].desc),
-                256.0 + col as f32 * 320.0,
-                180.0 + row as f32 * 26.0,
-                13,
-                tc,
-            );
+    // 页签
+    let tabs = ["丹药", "法宝", "行装"];
+    for (i, t) in tabs.iter().enumerate() {
+        let x = 300.0 + i as f32 * 150.0;
+        if button(x, 86.0, 140.0, 34.0, t, None, true) {
+            g.bag_tab = i as u8;
+            g.play(crate::sounds::Which::Page);
+        }
+        if g.bag_tab == i as u8 {
+            draw_rectangle(x, 120.0, 140.0, 3.0, C_GOLD);
         }
     }
-    draw_rectangle(160.0, 240.0, 960.0, 1.5, Color::from_rgba(96, 76, 130, 160));
-    txt("丹药", 180.0, 266.0, 17, C_DIM);
-    for i in 0..6 {
-        let y = 292.0 + i as f32 * 56.0;
-        let p = &PILLS[i];
-        txt(p.name, 180.0, y + 4.0, 18, C_GOLD);
-        txt(&format!("×{}", l.pills[i]), 300.0, y + 4.0, 16, C_TEXT);
-        txt(p.desc, 360.0, y + 4.0, 15, C_TEXT);
-        if button(
-            1040.0,
-            y - 8.0,
-            84.0,
-            40.0,
-            "服用",
-            None,
-            p.edible && l.pills[i] > 0,
-        ) {
-            g.play(crate::sounds::Which::Gain);
-            g.eat_pill(i);
-            return;
+    draw_rectangle(160.0, 134.0, 960.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    if g.bag_tab == 0 {
+        // 丹药（原列表移入，行距 62）
+        txt("丹药（服用即生效）", 180.0, 158.0, 16, C_DIM);
+        for i in 0..6 {
+            let y = 188.0 + i as f32 * 62.0;
+            let p = &PILLS[i];
+            txt(p.name, 180.0, y + 4.0, 18, C_GOLD);
+            txt(&format!("×{}", l.pills[i]), 300.0, y + 4.0, 16, C_TEXT);
+            txt(p.desc, 360.0, y + 4.0, 15, C_TEXT);
+            if button(
+                1040.0,
+                y - 8.0,
+                84.0,
+                40.0,
+                "服用",
+                None,
+                p.edible && l.pills[i] > 0,
+            ) {
+                g.play(crate::sounds::Which::Gain);
+                g.eat_pill(i);
+                return;
+            }
         }
+    } else if g.bag_tab == 1 {
+        // 法宝行式列表：装备/卸下钮 110×40 @x=1000
+        txt("法宝（未装备仍保有 30% 灵性）", 180.0, 158.0, 16, C_DIM);
+        for (k, rl) in RELICS.iter().enumerate() {
+            let y = 190.0 + k as f32 * 54.0;
+            let owned = l.relics.contains(&k);
+            let on = l.equipped.contains(&k);
+            draw_rectangle(
+                160.0,
+                y - 8.0,
+                960.0,
+                46.0,
+                if on {
+                    Color::from_rgba(70, 52, 24, 200)
+                } else if owned {
+                    Color::from_rgba(44, 34, 70, 200)
+                } else {
+                    Color::from_rgba(26, 22, 42, 160)
+                },
+            );
+            draw_texture(&crate::art::art().icon_sword, 172.0, y - 2.0, WHITE);
+            txt(
+                &format!("【{}】", rl.name),
+                196.0,
+                y + 2.0,
+                16,
+                if owned { C_GOLD } else { C_DIM },
+            );
+            txt(
+                rl.desc,
+                360.0,
+                y + 4.0,
+                14,
+                if owned { C_TEXT } else { C_DIM },
+            );
+            if on {
+                if button(1000.0, y - 4.0, 110.0, 40.0, "卸下", None, true) {
+                    g.play(crate::sounds::Which::Click);
+                    g.unequip_relic(k);
+                    return;
+                }
+            } else if owned {
+                let can = l.equipped.len() < RELIC_EQUIP_MAX;
+                if button(1000.0, y - 4.0, 110.0, 40.0, "装备", None, can) {
+                    g.play(crate::sounds::Which::Ascend);
+                    g.equip_relic(k);
+                    return;
+                }
+            } else {
+                txt_c("未得", 1055.0, y + 6.0, 14, C_DIM);
+            }
+        }
+    } else {
+        // 行装：功法 / 法宝摘要 / 宗门 / 称号
+        txt("功法", 180.0, 164.0, 17, C_DIM);
+        txt(
+            &format!("《{}》 {}", TECHS[l.tech].name, TECHS[l.tech].desc),
+            250.0,
+            164.0,
+            16,
+            C_GOLD,
+        );
+        txt("法宝", 180.0, 200.0, 17, C_DIM);
+        if l.relics.is_empty() {
+            txt("尚无法宝，模拟奇遇可寻。", 250.0, 200.0, 15, C_DIM);
+        } else {
+            txt(
+                &format!(
+                    "已装 {}/{} · 包内 {}（详情与装卸见「法宝」页签）",
+                    l.equipped.len().min(RELIC_EQUIP_MAX),
+                    RELIC_EQUIP_MAX,
+                    l.relics.len()
+                ),
+                250.0,
+                200.0,
+                15,
+                C_CYAN,
+            );
+        }
+        txt("宗门", 180.0, 236.0, 17, C_DIM);
+        txt(
+            if l.sect { "青云宗弟子" } else { "无门无派" },
+            250.0,
+            236.0,
+            15,
+            C_TEXT,
+        );
+        txt("称号", 180.0, 264.0, 17, C_DIM);
+        txt(&format!("『{}』", g.worn_title_of()), 250.0, 264.0, 15, C_GOLD);
+        txt(
+            "—— 随身行装一览；丹药服用见「丹药」页签，法宝装卸见「法宝」页签 ——",
+            180.0,
+            320.0,
+            14,
+            C_DIM,
+        );
     }
 }
 

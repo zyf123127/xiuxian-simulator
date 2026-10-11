@@ -59,7 +59,9 @@ mod backend {
     }
 }
 
-pub fn save(m: &Meta) {
+// 存档文本生成（双端共用：桌面文件与 wasm localStorage 写入的是同一段文本，
+// 差异仅在 backend::write_text 的存储介质）。抽出为纯函数以便单测做写读回环。
+pub fn save_text(m: &Meta) -> String {
     let mut s = String::new();
     s.push_str(&format!("lives={}\n", m.lives));
     s.push_str(&format!("dy={}\n", m.dao_yun));
@@ -76,6 +78,11 @@ pub fn save(m: &Meta) {
     s.push_str(&format!("sc={}\n", m.sect_contrib));
     s.push_str(&format!("wtitle={}\n", m.worn_title));
     s.push_str(&format!("df={:?}\n", m.dongfu));
+    // v1.6.0 山河万象：地图种子与地区（缺键回退默认 = 主题 0，旧档像素级等价）
+    s.push_str(&format!("mseed={}\n", m.map_seed));
+    s.push_str(&format!("mreg={}\n", m.map_region));
+    // v1.6.0 D：NPC 好感（跨世持久）
+    s.push_str(&format!("nf={:?}\n", m.npc_fav));
     s.push_str(&format!("music={} sfx={}\n", m.music as i32, m.sfx as i32));
     if let Some(n) = &m.neme {
         s.push_str(&format!("neme={} {} {}\n", n.title, n.name, n.realm));
@@ -83,8 +90,12 @@ pub fn save(m: &Meta) {
     if let Some(l) = &m.life {
         s.push_str(&life_text(l));
     }
+    s
+}
+
+pub fn save(m: &Meta) {
     // v1.5.0 双端后端：桌面写文件 / WASM 写 localStorage（JS 侧 try/catch，配额异常不上抛）
-    backend::write_text(&s);
+    backend::write_text(&save_text(m));
 }
 
 fn life_text(l: &Life) -> String {
@@ -111,6 +122,7 @@ fn life_text(l: &Life) -> String {
     ));
     s.push_str(&format!("Lbuf={}\n", l.power_buff));
     s.push_str(&format!("Lloc={}\n", l.loc));
+    s.push_str(&format!("Lcfav={}\n", l.comp_fav)); // v1.6.0 D：道侣好感
     s.push_str(&format!("Lequip={:?}\n", l.equipped));
     s.push_str(&format!("Lslot={}\n", l.slot));
     s.push_str(&format!("Lweather={}\n", l.weather));
@@ -193,6 +205,21 @@ fn parse_save(text: &str) -> Meta {
                     m.dongfu[i] = (a.get(i).copied().unwrap_or(0.0) as i32).clamp(0, 3);
                 }
             }
+            // v1.6.0 山河万象：地图种子/地区（旧档缺键 → 默认值）
+            "mseed" => {
+                m.map_seed = v.trim().parse::<u64>().unwrap_or(crate::data::MAP_SEED_DEFAULT as u64) as u32;
+            }
+            "mreg" => {
+                m.map_region = v.trim().parse::<u64>().unwrap_or(0) as u32;
+            }
+            // v1.6.0 D：NPC 好感（缺键 → 全 0；越界 clamp 0..=100）
+            "nf" => {
+                let a = nums(v);
+                for i in 0..2 {
+                    m.npc_fav[i] = (a.get(i).copied().unwrap_or(0.0) as i32)
+                        .clamp(0, crate::data::NPC_FAV_MAX);
+                }
+            }
             "music" => m.music = v.trim().split(' ').next().map_or(true, |x| x == "1"),
             "sfx" => m.sfx = v.trim().split(' ').nth(1).map_or(true, |x| x == "1"),
             "neme" => {
@@ -233,6 +260,14 @@ fn parse_save(text: &str) -> Meta {
             }
             "Lbuf" => life.power_buff = v.parse().unwrap_or(0.0),
             "Lloc" => life.loc = v.parse().unwrap_or(crate::data::NODE_START),
+            // v1.6.0 D：道侣好感（缺键 → 0；越界 clamp）
+            "Lcfav" => {
+                life.comp_fav = v
+                    .trim()
+                    .parse::<i64>()
+                    .unwrap_or(0)
+                    .clamp(0, crate::data::NPC_FAV_MAX as i64) as i32;
+            }
             "Lequip" => {
                 life.equipped = nums(v).iter().map(|&x| x as usize).collect();
                 has_lequip = true;
@@ -348,5 +383,62 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
         assert_eq!(l.relics, vec![0, 3]); // 越界剔除+保序去重
         assert_eq!(l.equipped, vec![0, 3]); // 缺键迁移：≤3 全装
         assert_eq!(m.worn_title, 15); // 合法值域保留
+    }
+
+    // v1.6.0 山河万象：地图种子/地区迁移规则
+    #[test]
+    fn map_keys_default_when_missing() {
+        let m = parse_save(OLD_BASE); // v1.5.0 旧档缺 mseed/mreg
+        assert_eq!(m.map_seed, crate::data::MAP_SEED_DEFAULT);
+        assert_eq!(m.map_region, 0); // 主题 0 = 现版地图，像素级等价
+    }
+
+    #[test]
+    fn map_keys_parse_and_overflow_safe() {
+        let t = format!("{}mseed=31415926\nmreg=7\n", OLD_BASE);
+        let m = parse_save(&t);
+        assert_eq!(m.map_seed, 31415926);
+        assert_eq!(m.map_region, 7); // 任意 u32 合法（theme_of 内部取模兜底）
+        let bad = format!("{}mseed=abc\nmreg=-1\n", OLD_BASE);
+        let m2 = parse_save(&bad); // 坏值静默回退默认
+        assert_eq!(m2.map_seed, crate::data::MAP_SEED_DEFAULT);
+        assert_eq!(m2.map_region, 0);
+    }
+
+    // v1.6.0 D：好感键迁移规则（缺键全 0；越界 clamp 0..=100）
+    #[test]
+    fn npc_fav_defaults_and_clamp() {
+        let m = parse_save(OLD_BASE); // 旧档缺 nf/Lcfav
+        assert_eq!(m.npc_fav, [0, 0]);
+        assert_eq!(m.life.unwrap().comp_fav, 0);
+        let t = format!("{}nf=[120, -5]\nLcfav=99\n", OLD_BASE);
+        let m2 = parse_save(&t);
+        assert_eq!(m2.npc_fav, [100, 0]); // 上溢夹 100 / 负值夹 0
+        assert_eq!(m2.life.unwrap().comp_fav, 99); // 合法值保留
+    }
+
+    // v1.6.0 H5 存档桥一致性：save_text → parse_save 写读回环。
+    // 双端（桌面 std::fs / wasm localStorage 插件）写入的是同一段 save_text 文本、
+    // 走同一个 parse_save 解析，介质差异不影响键与格式；此测试锁死四新键的对称性。
+    #[test]
+    fn roundtrip_new_keys_save_text_parse() {
+        let mut m = Meta::default();
+        m.map_seed = 31415926;
+        m.map_region = 7;
+        m.npc_fav = [70, 25];
+        let mut l = Life::default();
+        l.comp_fav = 35;
+        m.life = Some(l);
+        let text = save_text(&m);
+        // 新键确实落盘（wasm localStorage 与桌面文件内容一致的前提）
+        assert!(text.contains("mseed=31415926\n"));
+        assert!(text.contains("mreg=7\n"));
+        assert!(text.contains("nf=[70, 25]\n"));
+        assert!(text.contains("Lcfav=35\n"));
+        let m2 = parse_save(&text);
+        assert_eq!(m2.map_seed, 31415926);
+        assert_eq!(m2.map_region, 7);
+        assert_eq!(m2.npc_fav, [70, 25]);
+        assert_eq!(m2.life.unwrap().comp_fav, 35);
     }
 }

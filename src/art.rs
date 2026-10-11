@@ -2,6 +2,8 @@
 use crate::pixel::*;
 use macroquad::prelude::*;
 
+use std::sync::Mutex;
+
 pub struct Art {
     // v1.5.0 起 draw_cultivator 改用 portraits[tier]；portrait 保留为 0 档快捷引用
     #[allow(dead_code)]
@@ -11,7 +13,7 @@ pub struct Art {
     pub icon_pill: Texture2D,
     pub icon_sword: Texture2D,
     pub bg: Texture2D,
-    pub map_bg: Texture2D,
+    // v1.6.0 C：map_bg 移除固定字段——改 map_bg_for(region, seed) 按主题参数化 + 缓存
     pub map_icons: [Texture2D; 6],
     pub portraits: [Texture2D; 4], // v1.5.0：立绘四档（0凡人 1道基 2紫府 3真仙），portrait = portraits[0]
 }
@@ -26,6 +28,23 @@ pub fn art() -> &'static Art {
     ART.get().expect("art 未初始化")
 }
 
+// v1.6.0 C 仇敌换图：地图底图缓存（region, seed) → Texture2D，容量 8 上限淘汰最旧。
+// 主题 0/默认种子会命中 v1.5.0 逐值路径（像素级等价），仅换幕后重建。
+static MAP_BG_CACHE: Mutex<Vec<(u32, u32, Texture2D)>> = Mutex::new(Vec::new());
+
+pub fn map_bg_for(region: u32, seed: u32) -> Texture2D {
+    let mut cache = MAP_BG_CACHE.lock().unwrap();
+    if let Some((_, _, t)) = cache.iter().find(|(r, s, _)| *r == region && *s == seed) {
+        return t.clone();
+    }
+    let t = build_map_bg(region, seed);
+    if cache.len() >= 8 {
+        cache.remove(0);
+    }
+    cache.push((region, seed, t.clone()));
+    t
+}
+
 const O: [u8; 4] = [10, 8, 16, 255]; // 描边
 
 pub fn build_art() -> Art {
@@ -35,7 +54,6 @@ pub fn build_art() -> Art {
     let icon_pill = build_icon_pill();
     let icon_sword = build_icon_sword();
     let bg = build_bg();
-    let map_bg = build_map_bg();
     let map_icons = std::array::from_fn(build_map_icon);
     Art {
         portrait: portraits[0].clone(),
@@ -44,7 +62,6 @@ pub fn build_art() -> Art {
         icon_pill,
         icon_sword,
         bg,
-        map_bg,
         map_icons,
         portraits,
     }
@@ -297,46 +314,51 @@ pub fn map_river_y(x: f32) -> f32 {
 }
 
 // 1264×480 山河图志底图：渐变夜幕 + 苔斑 + 山脊带 + 河流 + 林木 + 暗金双线边框
-fn build_map_bg() -> Texture2D {
+// v1.6.0 C 仇敌换图：按 (region, seed) 参数化——主题色/密度取 MAP_THEMES[region%5]，
+// LCG 种子由调用方传入，林木避让坐标经 data::node_xy（含主题抖动）。
+// 主题 0 + 默认种子 = v1.5.0 逐值路径（LCG 调用序列保持一致，像素级等价）。
+fn build_map_bg(region: u32, seed_arg: u32) -> Texture2D {
+    let t = crate::data::theme_of(region);
     let (iw, ih) = (1264u16, 480u16);
     let w = 1264i32;
     let h = 480i32;
     let mut img = Image::gen_image_color(iw, ih, Color::from_rgba(0, 0, 0, 255));
     {
         let d = img.get_image_data_mut();
-        // 纵向渐变底 (24,34,40) → (14,20,26)
+        // 纵向渐变（主题 0：(24,34,40) → (14,20,26)）
         for y in 0..h {
-            let t = y as f32 / h as f32;
-            let r = (24.0 - 10.0 * t) as u8;
-            let g = (34.0 - 14.0 * t) as u8;
-            let b = (40.0 - 14.0 * t) as u8;
+            let f = y as f32 / h as f32;
+            let r = (t.grad_top.0 as f32 + (t.grad_bot.0 as f32 - t.grad_top.0 as f32) * f) as u8;
+            let g = (t.grad_top.1 as f32 + (t.grad_bot.1 as f32 - t.grad_top.1 as f32) * f) as u8;
+            let b = (t.grad_top.2 as f32 + (t.grad_bot.2 as f32 - t.grad_top.2 as f32) * f) as u8;
             for x in 0..w {
                 d[(y * w + x) as usize] = [r, g, b, 255];
             }
         }
         // 河心曲线：抽为 pub fn map_river_y（v1.5.0 与水面波光共用，坐标单一来源）
-        // 确定性伪随机（照 build_bg 先例）
-        let mut seed = 20261011u32;
+        // 确定性伪随机（照 build_bg 先例）；v1.6.0 种子参数化
+        let mut seed = seed_arg;
         let mut rnd = || {
             seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
             (seed >> 8) as f32 / 16777216.0
         };
-        // 苔斑噪点 ~600 个 1-2px 暗绿/暗褐
-        for _ in 0..600 {
+        // 苔斑噪点（主题 0：600 个 1-2px 暗绿/暗褐）
+        let moss_n = (600.0 * t.deco) as usize;
+        for _ in 0..moss_n {
             let x = (rnd() * w as f32) as i32;
             let y = (rnd() * h as f32) as i32;
             let c = if rnd() < 0.6 {
                 [
-                    (30.0 + rnd() * 14.0) as u8,
-                    (52.0 + rnd() * 12.0) as u8,
-                    38,
+                    (t.moss_a.0 as f32 + rnd() * 14.0) as u8,
+                    (t.moss_a.1 as f32 + rnd() * 12.0) as u8,
+                    t.moss_a.2,
                     255,
                 ]
             } else {
                 [
-                    (56.0 + rnd() * 10.0) as u8,
-                    (46.0 + rnd() * 8.0) as u8,
-                    36,
+                    (t.moss_b.0 as f32 + rnd() * 10.0) as u8,
+                    (t.moss_b.1 as f32 + rnd() * 8.0) as u8,
+                    t.moss_b.2,
                     255,
                 ]
             };
@@ -348,42 +370,44 @@ fn build_map_bg() -> Texture2D {
         // 两条横向山脊带（逐列：脊线 y = base ± amp·sin 噪声，向下填充成带）
         let band = |d: &mut [[u8; 4]], base: f32, amp: f32, ph: f32, col: [u8; 4]| {
             for x in 0..w {
-                let t = x as f32 / w as f32;
+                let tt = x as f32 / w as f32;
                 let top = (base
                     - amp
-                        * (0.6 * (t * 9.0 + ph).sin().abs()
-                            + 0.4 * (t * 21.0 + ph * 2.0).sin().abs())) as i32;
-                let bh = (46.0 + 26.0 * (t * 13.0 + ph).sin().abs()) as i32;
+                        * (0.6 * (tt * 9.0 + ph).sin().abs()
+                            + 0.4 * (tt * 21.0 + ph * 2.0).sin().abs())) as i32;
+                let bh = (46.0 + 26.0 * (tt * 13.0 + ph).sin().abs()) as i32;
                 for y in top.max(0)..(top + bh).min(h) {
                     d[(y * w + x) as usize] = col;
                 }
             }
         };
-        band(d, 200.0, 55.0, 1.3, [46, 44, 58, 255]);
-        band(d, 330.0, 70.0, 4.1, [38, 36, 48, 255]);
-        // 河流：横贯折线带，主色 [58,96,110] + 上缘高光 [86,130,140]
+        band(d, 200.0, 55.0, 1.3, [t.ridge_a.0, t.ridge_a.1, t.ridge_a.2, 255]);
+        band(d, 330.0, 70.0, 4.1, [t.ridge_b.0, t.ridge_b.1, t.ridge_b.2, 255]);
+        // 河流：横贯折线带，主色 + 上缘高光
         for x in 0..w {
             let yc = map_river_y(x as f32);
             let hw = 11.0 + 3.0 * (x as f32 * 0.02 + 0.5).sin();
             let y0 = (yc - hw) as i32;
             let y1 = (yc + hw) as i32;
             for y in y0.max(0)..=y1.min(h - 1) {
-                d[(y * w + x) as usize] = [58, 96, 110, 255];
+                d[(y * w + x) as usize] = [t.river.0, t.river.1, t.river.2, 255];
             }
             let hl = y0.max(0);
             if hl <= y1.min(h - 1) {
-                d[(hl * w + x) as usize] = [86, 130, 140, 255];
+                d[(hl * w + x) as usize] = [t.river_hl.0, t.river_hl.1, t.river_hl.2, 255];
             }
         }
-        // 林木 220 个 2×2/3×3 深绿点簇（距节点 <40px 或 |y−河心|<20 不画）
-        for _ in 0..220 {
+        // 林木（主题 0：220 个 2×2/3×3 深绿点簇；距节点 <40px 或 |y−河心|<20 不画）
+        let forest_n = (220.0 * t.deco) as usize;
+        for _ in 0..forest_n {
             let x = (rnd() * w as f32) as i32;
             let y = (rnd() * h as f32) as i32;
             let mut ok = (y as f32 - map_river_y(x as f32)).abs() >= 20.0;
             if ok {
-                for nd in &crate::data::LOCATIONS {
-                    let dx = x as f32 - nd.x;
-                    let dy = y as f32 - nd.y;
+                for k in 0..crate::data::LOCATIONS.len() {
+                    let (nx, ny) = crate::data::node_xy(k, region);
+                    let dx = x as f32 - nx;
+                    let dy = y as f32 - ny;
                     if (dx * dx + dy * dy).sqrt() < 40.0 {
                         ok = false;
                         break;
@@ -394,9 +418,9 @@ fn build_map_bg() -> Texture2D {
                 continue;
             }
             let c = if rnd() < 0.5 {
-                [30, 48, 36, 255]
+                [t.forest_a.0, t.forest_a.1, t.forest_a.2, 255]
             } else {
-                [26, 42, 32, 255]
+                [t.forest_b.0, t.forest_b.1, t.forest_b.2, 255]
             };
             let s = if rnd() < 0.5 { 2 } else { 3 };
             for yy in y..(y + s).min(h) {
@@ -405,15 +429,15 @@ fn build_map_bg() -> Texture2D {
                 }
             }
         }
-        // 四周 8px 暗金双线边框 [122,96,52]
+        // 四周 8px 暗金双线边框
         for i in [0, 1, 6, 7] {
             for x in 0..w {
-                d[(i * w + x) as usize] = [122, 96, 52, 255];
-                d[((h - 1 - i) * w + x) as usize] = [122, 96, 52, 255];
+                d[(i * w + x) as usize] = [t.frame.0, t.frame.1, t.frame.2, 255];
+                d[((h - 1 - i) * w + x) as usize] = [t.frame.0, t.frame.1, t.frame.2, 255];
             }
             for y in 0..h {
-                d[(y * w + i) as usize] = [122, 96, 52, 255];
-                d[(y * w + w - 1 - i) as usize] = [122, 96, 52, 255];
+                d[(y * w + i) as usize] = [t.frame.0, t.frame.1, t.frame.2, 255];
+                d[(y * w + w - 1 - i) as usize] = [t.frame.0, t.frame.1, t.frame.2, 255];
             }
         }
     }

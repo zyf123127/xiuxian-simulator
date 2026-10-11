@@ -6,6 +6,8 @@ set RUSTFLAGS=-C link-arg=--import-undefined
 cargo build --release --target wasm32-unknown-unknown || exit /b 1
 copy /y target\wasm32-unknown-unknown\release\xiuxian.wasm web\xiuxian.wasm >nul
 copy /y target\wasm32-unknown-unknown\release\xiuxian.wasm taptap\taptap_verify\taptap_h5\xiuxian.wasm >nul
+rem keep taptap_h5\index.html in sync with web\index.html (cache-bust params live there)
+copy /y web\index.html taptap\taptap_verify\taptap_h5\index.html >nul
 rem assert the TapTap trio is complete (index.html + mq_js_bundle.js + xiuxian.wasm)
 python -c "import os; root='taptap/taptap_verify/taptap_h5'; need=['index.html','mq_js_bundle.js','xiuxian.wasm']; missing=[n for n in need if not os.path.isfile(os.path.join(root,n))]; assert not missing, 'taptap_h5 missing: '+str(missing)" || exit /b 1
 python -c "import zipfile,os; root='taptap/taptap_verify/taptap_h5'; out='taptap/taptap_verify.zip'; z=zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED); [z.write(os.path.join(root,n),'taptap_h5/'+n) for n in sorted(os.listdir(root))]; z.close()"

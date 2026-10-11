@@ -122,6 +122,82 @@ impl Eff {
             good: true,
         }
     }
+
+    // v1.6.0 B：抉择按钮副标签——机制字段的一行式摘要（弹层纵排选项用）
+    pub fn eff_desc(&self) -> String {
+        let mut parts: Vec<String> = Vec::new();
+        if self.qi_pct != 0.0 {
+            parts.push(format!("修为+{:.0}%", self.qi_pct * 100.0));
+        }
+        if self.stones != 0 {
+            parts.push(format!(
+                "灵石{}{}",
+                if self.stones > 0 { "+" } else { "-" },
+                fmt_int(self.stones.abs())
+            ));
+        }
+        if self.stones_pct.abs() > 0.001 {
+            parts.push(format!("灵石{:+.0}%", self.stones_pct * 100.0));
+        }
+        if self.dao != 0.0 {
+            parts.push(format!("道心+{:.0}", self.dao));
+        }
+        if self.luck != 0.0 {
+            parts.push(format!("气运+{:.0}", self.luck));
+        }
+        if self.life_y != 0.0 {
+            parts.push(format!("寿元+{}载", fmt_num(self.life_y)));
+        }
+        if self.fight > 0.0 {
+            parts.push(format!("交战 ×{:.2}", self.fight));
+        }
+        if let Some(r) = self.relic {
+            parts.push(format!("法宝·{}", RELICS[r].name));
+        }
+        if let Some((p, n)) = self.pill {
+            parts.push(format!("{}×{}", PILLS[p].name, n));
+        }
+        if self.dy != 0 {
+            parts.push(format!("道韵+{}", fmt_int(self.dy)));
+        }
+        if self.injure {
+            parts.push("可能重伤".to_string());
+        }
+        if self.sect {
+            parts.push("拜入宗门".to_string());
+        }
+        if self.lingmai {
+            parts.push("灵脉洞府".to_string());
+        }
+        if self.death > 0.0 {
+            parts.push(format!("身死率{:.0}%", self.death * 100.0));
+        }
+        if self.special != 0 {
+            let s = match self.special {
+                1 => "探索上古洞府",
+                2 => "夺取天材地宝",
+                3 => "深入秘境",
+                7 => "心魔检定",
+                8 => "武道传承",
+                9 => "拔剑试炼",
+                10 => "魔窟探宝",
+                11 => "护送驰援",
+                13 => "立即渡劫",
+                14 => "闭关备劫",
+                15 => "立即破境",
+                16 => "蛰伏蓄势",
+                17 => "结为道侣",
+                18 => "登擂夺魁",
+                _ => "机缘",
+            };
+            parts.push(s.to_string());
+        }
+        if parts.is_empty() {
+            "此路平稳无事".to_string()
+        } else {
+            parts.join(" · ")
+        }
+    }
 }
 
 pub struct EventCard {
@@ -207,7 +283,9 @@ pub struct Life {
 
     pub power_buff: f64, // 事件战力永久增益（+0.15 = +15%）
 
-    pub companion: Option<String>, // 道侣（仅模拟）
+    pub companion: Option<String>, // 道侣（模拟结缘；v1.6.0 遗泽可带回现实）
+
+    pub comp_fav: i32, // v1.6.0 D：道侣好感 0..=100（结缘起步 25，只升不降）
 
     pub pending_break: Option<(usize, f32)>, // 模拟抉择：(目标境界, 蓄势加成)
 
@@ -282,6 +360,8 @@ impl Default for Life {
             power_buff: 0.0,
 
             companion: None,
+
+            comp_fav: 0,
 
             pending_break: None,
 
@@ -364,6 +444,11 @@ pub struct Meta {
     pub worn_title: i32, // 佩戴称号：-1 自动跟随 / 0..=14 境界称号 / 15 弑神者（v1.5.0）
 
     pub dongfu: [i32; 3], // 洞府设施等级 0..=3：0聚灵阵 1灵田 2丹房（v1.5.0）
+
+    pub map_seed: u32,   // v1.6.0 山河万象：地图伪随机种子（LCG 演化）
+    pub map_region: u32, // v1.6.0 山河万象：当前地区索引（MAP_THEMES 下标，wrapping 递增）
+
+    pub npc_fav: [i32; 2], // v1.6.0 D：NPC 好感 0长老 1商人（跨世持久，0..=100）
 }
 
 impl Default for Meta {
@@ -410,6 +495,12 @@ impl Default for Meta {
             worn_title: -1,
 
             dongfu: [0; 3],
+
+            map_seed: MAP_SEED_DEFAULT,
+
+            map_region: 0,
+
+            npc_fav: [0, 0],
         }
     }
 }
@@ -480,6 +571,9 @@ pub struct SimResult {
     pub pills: [i32; 6],
 
     pub highlights: Vec<String>,
+
+    pub comp: Option<String>, // v1.6.0 D：道侣（遗泽 idx 8 承接现实）
+    pub comp_fav: i32,        // v1.6.0 D：模拟一世落幕时的道侣好感
 }
 
 pub fn gain_qi(l: &mut Life, amount: f64) {
@@ -534,6 +628,10 @@ pub struct Game {
     pub shop_tab: u8,
 
     pub world: crate::world::WorldState, // 山河图志会话状态（不进存档）
+
+    pub submenu: Option<crate::menu::Sub>, // v1.6.0 B：当前弹层（None 无弹层，不进存档）
+    pub bag_tab: u8,   // v1.6.0 B：行囊页签 0丹药 1法宝 2行装
+    pub sub_fresh: bool, // v1.6.0 B：开帧门闩——open_sub 置位、主循环顶部清零（硬伤 1）
 
     pub speed: usize, // 模拟速度 0暂停 1慢 2快 3跳过
 
@@ -771,7 +869,8 @@ pub fn cult_rate(l: &Life, meta: &Meta) -> f64 {
         * teff(l).cult_mult.max(1.0);
 
     if l.companion.is_some() {
-        r *= 1.2;
+        // v1.6.0 D：双修倍率由道侣好感档决定（结缘起步 25 → ×1.20，生死之交 ×1.35）
+        r *= crate::npc::comp_cult_mult(l.comp_fav);
     }
 
     if l.injured > 0 {
@@ -887,6 +986,12 @@ impl Game {
             shop_tab: 0,
 
             world: crate::world::WorldState::new(),
+
+            submenu: None,
+
+            bag_tab: 0,
+
+            sub_fresh: false,
 
             speed: 2,
 
@@ -1450,10 +1555,15 @@ impl Game {
             let cn = {
                 let s = self.sim.as_mut().unwrap();
                 s.stones += g;
+                // v1.6.0 D：赠礼事件积攒道侣好感
+                s.comp_fav = (s.comp_fav + COMPANION_GIFT_FAV).min(NPC_FAV_MAX);
                 s.companion.clone().unwrap()
             };
             self.slog(
-                format!("{}为你炼制了一炉养神丹，并附赠灵石 {}。", cn, fmt_int(g)),
+                format!(
+                    "{}为你炼制了一炉养神丹，并附赠灵石 {}。（好感+{}）",
+                    cn, fmt_int(g), COMPANION_GIFT_FAV
+                ),
                 C_GREEN,
             );
         }
@@ -2087,6 +2197,28 @@ impl Game {
             format!("宿敌虽死，其背后之势涌动——新的强敌浮出水面：{}。", nm),
             C_RED,
         );
+
+        // v1.6.0 山河万象：斩敌换幕（现实寻仇与模拟反杀共用此口）
+        self.advance_map();
+    }
+
+    // v1.6.0 仇敌突破换地图：region+1、种子 LCG 演化、人归清源洞府、横幅宣告
+    fn advance_map(&mut self) {
+        self.meta.map_region = self.meta.map_region.wrapping_add(1);
+        self.meta.map_seed = self
+            .meta
+            .map_seed
+            .wrapping_mul(1664525)
+            .wrapping_add(1013904223);
+        if let Some(l) = self.life.as_mut() {
+            l.loc = NODE_DONGFU;
+        }
+        let t = theme_of(self.meta.map_region);
+        self.log(
+            format!("山河变色——你携新胜之势踏入{}。{}", t.name, t.desc),
+            C_GOLD,
+        );
+        self.show_banner(&format!("山 河 换 幕 · {}", t.name), C_GOLD);
     }
 
     pub fn sim_event(&mut self) {
@@ -2799,6 +2931,10 @@ impl Game {
                     let s = self.sim.as_mut().unwrap();
                     let first = s.companion.is_none();
                     s.companion = Some(cn.to_string());
+                    // v1.6.0 D 应修②：好感只升不降——sim Life 由现实克隆（launch_sim）带入
+                    // comp_fav，直接赋 25 会让遗泽等来源的高好感倒退（如 1.30 档→1.20）。
+                    // 换伴侣保留好感：好感挂「玩家—NPC 体系」而非具体人名。
+                    s.comp_fav = s.comp_fav.max(COMPANION_BOND_FAV);
                     s.highlights
                         .push(format!("{}岁，与{}结为道侣", s.age as i32, cn));
                     first
@@ -2811,7 +2947,11 @@ impl Game {
                     }
                 }
                 self.slog(
-                    format!("你与{}于月下结为道侣！修炼速度+20%，心魔有抚。", cn),
+                    format!(
+                        "你与{}于月下结为道侣！修炼速度+{:.0}%，心魔有抚。",
+                        cn,
+                        (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0
+                    ),
                     C_GOLD,
                 );
             }
@@ -3467,6 +3607,7 @@ impl Game {
                     .push(format!("{}与你相伴至最后一刻，含笑而逝。", cn));
             }
         }
+        let comp_fav = self.sim.as_ref().map(|s| s.comp_fav).unwrap_or(0);
 
         self.meta.dao_yun += dy;
 
@@ -3492,6 +3633,10 @@ impl Game {
             pills,
 
             highlights,
+
+            comp: comp.clone(), // 原值保留给下方继承选项 idx 8 判定
+
+            comp_fav,
         });
 
         self.sim = None;
@@ -3637,7 +3782,21 @@ impl Game {
             8 => {
                 life.dao = (life.dao + 8.0).min(100.0);
                 life.luck = (life.luck + 8.0).min(100.0);
-                msg = "道侣遗泽：道心 +8，气运 +8（永久）".to_string();
+                // v1.6.0 D：道侣遗泽单义——有伴才承接（comp_fav = max(现实,模拟) + 10）；
+                // 无伴时维持原「道心+8 气运+8」文案
+                let comp = sr.comp.clone();
+                if let Some(cn) = &comp {
+                    let fav = (sr.comp_fav.max(life.comp_fav) + INHERIT_LEGACY_FAV)
+                        .min(NPC_FAV_MAX);
+                    life.comp_fav = fav;
+                    life.companion = Some(cn.clone());
+                    msg = format!(
+                        "道侣遗泽：{}随你魂归现实，情谊不减（好感+{}）。道心 +8，气运 +8。",
+                        cn, INHERIT_LEGACY_FAV
+                    );
+                } else {
+                    msg = "道侣遗泽：道心 +8，气运 +8（永久）".to_string();
+                }
             }
 
             _ => {}
@@ -3668,27 +3827,31 @@ impl Game {
 
     // ================= 现实：行动 =================
 
+    // v1.6.0 B：每载修炼收益完整乘链单一来源（act_cultivate 与 Cult 弹层副标签共用）
+    // 乘链：cult_rate（四维/功法/环境/法宝/烙印/天赋/道侣/伤势）
+    //   × 洞府闭关 DONGFU_CULT_MULT × 聚灵阵 JUELING_MULT × 天气×所在地 weather_loc_mult
+    //   × 每载 4 倍（原 act_cultivate 的 rate*4.0）
+    pub fn cult_gain_per_year(&self) -> f64 {
+        let Some(l) = self.life.as_ref() else {
+            return 0.0;
+        };
+        let mut r = cult_rate(l, &self.meta);
+        // 山河图志：清源洞府闭关加成
+        if l.loc == NODE_DONGFU {
+            r *= DONGFU_CULT_MULT;
+        }
+        // v1.5.0 四时洞天：聚灵阵层级 + 天气×所在地收益
+        r *= JUELING_MULT[self.meta.dongfu[0].clamp(0, 3) as usize];
+        r *= weather_loc_mult(l.weather as usize, l.loc);
+        r * 4.0
+    }
+
     pub fn act_cultivate(&mut self) {
         if self.life.is_none() {
             return;
         }
 
-        let rate = {
-            let l = self.life.as_ref().unwrap();
-
-            let mut r = cult_rate(l, &self.meta);
-
-            // 山河图志：清源洞府闭关加成
-            if l.loc == NODE_DONGFU {
-                r *= DONGFU_CULT_MULT;
-            }
-
-            // v1.5.0 四时洞天：聚灵阵层级 + 天气×所在地收益
-            r *= JUELING_MULT[self.meta.dongfu[0].clamp(0, 3) as usize];
-            r *= weather_loc_mult(l.weather as usize, l.loc);
-
-            r
-        };
+        let rate = self.cult_gain_per_year();
 
         let (died, msg) = {
             let l = self.life.as_mut().unwrap();
@@ -3699,9 +3862,9 @@ impl Game {
                 l.injured -= 1;
             }
 
-            l.qi += rate * 4.0;
+            l.qi += rate;
 
-            let msg = format!("你闭关一载，修为精进。（+{}）", fmt_num(rate * 4.0));
+            let msg = format!("你闭关一载，修为精进。（+{}）", fmt_num(rate));
 
             let died = l.age >= l.lifespan;
 
@@ -4219,50 +4382,10 @@ impl Game {
         let win = gen_range(0.0, 1.0) < p;
 
         if win {
-            let reward_stones = (4000.0 * self.stone_scale(neme.realm)) as i64;
-
-            let reward_dy = 50 * (1 + neme.realm as i64);
-
-            {
-                let l = self.life.as_mut().unwrap();
-
-                l.stones += reward_stones;
-
-                l.wins += 1;
-
-                l.highlights
-                    .push(format!("{}岁，现实斩杀宿敌{}", l.age as i32, neme.name));
-            }
-
-            self.meta.dao_yun += reward_dy;
-
-            self.meta.sim_points += 2;
-
-            self.meta.neme_slain += 1;
-
-            self.log(
-                format!("血仇得报！你于现实中阵斩宿敌{}！", neme.full()),
-                C_GOLD,
-            );
-
-            self.show_banner("血 仇 得 报", C_GOLD);
-
-            self.log(
-                format!(
-                    "夺其家产：灵石 {}，道韵+{}，模拟点数+2。",
-                    fmt_int(reward_stones),
-                    reward_dy
-                ),
-                C_GOLD,
-            );
-
-            self.spawn_next_neme();
-
-            self.play(crate::sounds::Which::Ascend);
-
-            self.burst(80, true);
-
-            self.check_ach_all();
+            // v1.6.0：胜利分支抽为 revenge_win——结构性必需：debug_win_revenge 需复用
+            // 胜利分支（否则复制 45 行）；非借用修复（借用检查流敏感，
+            // else 臂继续使用 neme 合法，nfull 提取不做、else 臂零改动）
+            self.revenge_win(neme);
         } else {
             let l = self.life.as_mut().unwrap();
 
@@ -4282,6 +4405,62 @@ impl Game {
         }
 
         self.sync_save();
+    }
+
+    // 寻仇胜利分支（act_revenge 抽取；debug_win_revenge 复用）：
+    // 奖励结算 → 宿敌递进 → spawn_next_neme→advance_map 换幕链
+    fn revenge_win(&mut self, neme: Nemes) {
+        let reward_stones = (4000.0 * self.stone_scale(neme.realm)) as i64;
+
+        let reward_dy = 50 * (1 + neme.realm as i64);
+
+        {
+            let l = self.life.as_mut().unwrap();
+
+            l.stones += reward_stones;
+
+            l.wins += 1;
+
+            l.highlights
+                .push(format!("{}岁，现实斩杀宿敌{}", l.age as i32, neme.name));
+        }
+
+        self.meta.dao_yun += reward_dy;
+
+        self.meta.sim_points += 2;
+
+        self.meta.neme_slain += 1;
+
+        self.log(
+            format!("血仇得报！你于现实中阵斩宿敌{}！", neme.full()),
+            C_GOLD,
+        );
+
+        self.show_banner("血 仇 得 报", C_GOLD);
+
+        self.log(
+            format!(
+                "夺其家产：灵石 {}，道韵+{}，模拟点数+2。",
+                fmt_int(reward_stones),
+                reward_dy
+            ),
+            C_GOLD,
+        );
+
+        self.spawn_next_neme();
+
+        self.play(crate::sounds::Which::Ascend);
+
+        self.burst(80, true);
+
+        self.check_ach_all();
+    }
+
+    // 冒烟专用（GF_DEBUG）：直接走寻仇胜利路径，覆盖 spawn_next_neme→advance_map 换图链。
+    pub fn debug_win_revenge(&mut self) {
+        if let Some(n) = self.meta.neme.take() {
+            self.revenge_win(n);
+        }
     }
 
     pub fn eat_pill(&mut self, id: usize) {
@@ -4410,6 +4589,9 @@ impl Game {
             l.pills[id] += 1;
         }
 
+        // v1.6.0 D：购丹积攒掌柜好感
+        crate::npc::add_fav(self, crate::npc::NPC_MERCHANT, MERCHANT_BUY_FAV);
+
         self.log(
             format!("购得{}一枚（{}灵石）。", name, fmt_int(price)),
             C_CYAN,
@@ -4439,6 +4621,9 @@ impl Game {
 
         // v1.5.0 洞府经营：丹房炉火折扣
         let d = d * DANFANG_DISC[self.meta.dongfu[2].clamp(0, 3) as usize];
+
+        // v1.6.0 D：坊市掌柜好感折扣
+        let d = d * crate::npc::merchant_disc(self.meta.npc_fav[crate::npc::NPC_MERCHANT]);
 
         ((PILL_PRICES[id] as f64) * (1.0 + realm as f64).powf(1.2) * d).ceil() as i64
     }

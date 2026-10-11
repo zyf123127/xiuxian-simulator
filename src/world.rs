@@ -148,24 +148,29 @@ pub fn sect_quest(g: &mut Game) {
     }
     let (realm, stones) = {
         let l = g.life.as_ref().unwrap();
-        // v1.5.0：宗门任务收益随天气起伏（青云宗列）
+        // v1.5.0：宗门任务收益随天气起伏（青云宗列）；v1.6.0 D：长老好感加成
         (
             l.realm,
-            (quest_stones(l.realm) as f64 * weather_loc_mult(l.weather as usize, NODE_SECT))
+            (quest_stones(l.realm) as f64
+                * weather_loc_mult(l.weather as usize, NODE_SECT)
+                * crate::npc::elder_quest_mult(g.meta.npc_fav[crate::npc::NPC_ELDER]))
                 as i64,
         )
     };
-    // v1.5.0：贡献同样随天气起伏
+    // v1.5.0：贡献同样随天气起伏；v1.6.0 D：长老好感加成
     let contrib = (quest_contrib(realm) as f64
         * weather_loc_mult(
             g.life.as_ref().map(|l| l.weather as usize).unwrap_or(0),
             NODE_SECT,
-        )) as u32;
+        )
+        * crate::npc::elder_quest_mult(g.meta.npc_fav[crate::npc::NPC_ELDER])) as u32;
     {
         let l = g.life.as_mut().unwrap();
         l.stones += stones;
     }
     g.meta.sect_contrib += contrib;
+    // v1.6.0 D：为长老办差，积攒交情
+    crate::npc::add_fav(g, crate::npc::NPC_ELDER, ELDER_QUEST_FAV);
     g.log(
         format!(
             "宗门任务完成：贡献+{}，灵石+{}。",
@@ -510,12 +515,13 @@ pub fn draw_world(g: &mut Game, art: &Art) {
         g.scene = Scene::Menu;
         return;
     };
-    // 覆盖层门控（P5 四处一致的总闸；v1.5.0 增洞府经营）
-    let gate = g.world.exp.is_none() && !g.world.shop && !g.world.dev;
+    // 覆盖层门控（P5 四处一致的总闸；v1.5.0 增洞府经营；v1.6.0 增山河弹层）
+    let gate = g.world.exp.is_none() && !g.world.shop && !g.world.dev && g.submenu.is_none();
     draw_bg(art);
-    // 地图底图（画布 1264×480，屏幕偏移 (8,60)）
+    // 地图底图（画布 1264×480，屏幕偏移 (8,60)；v1.6.0 按主题/种子取缓存）
+    let map_bg = crate::art::map_bg_for(g.meta.map_region, g.meta.map_seed);
     draw_texture_ex(
-        &art.map_bg,
+        &map_bg,
         8.0,
         60.0,
         WHITE,
@@ -557,19 +563,28 @@ pub fn draw_world(g: &mut Game, art: &Art) {
         draw_line(bx - 7.0, by - flap, bx, by, 1.5, Color::new(0.85, 0.82, 0.75, 0.7));
         draw_line(bx, by, bx + 7.0, by - flap, 1.5, Color::new(0.85, 0.82, 0.75, 0.7));
     }
-    // v1.5.0 洞府炊烟：清源洞府节点上方（屏幕基准 (438,150)，烟柱 y∈[120,150]）
-    for k in 0..4 {
-        let ph = (g.time * 0.42 + k as f32 * 0.25) % 1.0;
-        let sx = 438.0 + (g.time * 0.9 + k as f32 * 1.7).sin() * 5.0 + ph * 9.0;
-        let sy = 150.0 - ph * 30.0;
-        let a = (1.0 - ph) * 0.32;
-        draw_circle(sx, sy, 2.6 + ph * 4.2, Color::new(0.78, 0.78, 0.84, a));
+    // v1.5.0 洞府炊烟：清源洞府节点上方（v1.6.0 锚点随主题 node_xy 抖动）
+    {
+        let (dfx, dfy) = node_xy(NODE_DONGFU, g.meta.map_region);
+        for k in 0..4 {
+            let ph = (g.time * 0.42 + k as f32 * 0.25) % 1.0;
+            let sx = dfx + 8.0 + (g.time * 0.9 + k as f32 * 1.7).sin() * 5.0 + ph * 9.0;
+            let sy = dfy + 60.0 - ph * 30.0;
+            let a = (1.0 - ph) * 0.32;
+            draw_circle(sx, sy, 2.6 + ph * 4.2, Color::new(0.78, 0.78, 0.84, a));
+        }
     }
     draw_motes(g);
-    // 路径虚线（半透明金，每 18px 留空）
+    // 路径虚线（半透明金，每 18px 留空；v1.6.0 坐标经 node_xy 含主题抖动）
     for (a, b) in MAP_PATHS {
-        let (x0, y0) = (LOCATIONS[a].x + 8.0, LOCATIONS[a].y + 60.0);
-        let (x1, y1) = (LOCATIONS[b].x + 8.0, LOCATIONS[b].y + 60.0);
+        let (x0, y0) = {
+            let (ax, ay) = node_xy(a, g.meta.map_region);
+            (ax + 8.0, ay + 60.0)
+        };
+        let (x1, y1) = {
+            let (bx, by) = node_xy(b, g.meta.map_region);
+            (bx + 8.0, by + 60.0)
+        };
         let (dx, dy) = (x1 - x0, y1 - y0);
         let len = (dx * dx + dy * dy).sqrt();
         let n = (len / 18.0).max(1.0);
@@ -591,8 +606,14 @@ pub fn draw_world(g: &mut Game, art: &Art) {
         let sel = g.world.sel.min(LOCATIONS.len() - 1);
         for (a, b) in MAP_PATHS {
             if a == sel || b == sel {
-                let (x0, y0) = (LOCATIONS[a].x + 8.0, LOCATIONS[a].y + 60.0);
-                let (x1, y1) = (LOCATIONS[b].x + 8.0, LOCATIONS[b].y + 60.0);
+                let (x0, y0) = {
+                    let (ax, ay) = node_xy(a, g.meta.map_region);
+                    (ax + 8.0, ay + 60.0)
+                };
+                let (x1, y1) = {
+                    let (bx, by) = node_xy(b, g.meta.map_region);
+                    (bx + 8.0, by + 60.0)
+                };
                 draw_line(x0, y0, x1, y1, 2.5, Color::new(1.0, 0.85, 0.5, 0.55));
             }
         }
@@ -612,11 +633,12 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             );
         }
     }
-    // 节点 ×6
+    // 节点 ×6（v1.6.0：坐标经 node_xy 含主题抖动）
     let sel = g.world.sel.min(LOCATIONS.len() - 1);
     for (i, nd) in LOCATIONS.iter().enumerate() {
-        let nx = nd.x + 8.0;
-        let ny = nd.y + 60.0;
+        let (bx, by) = node_xy(i, g.meta.map_region);
+        let nx = bx + 8.0;
+        let ny = by + 60.0;
         let r = 24.0 + 3.5 * (g.time * 2.0 + i as f32).sin();
         let hot = sel == i;
         draw_circle_lines(
@@ -648,8 +670,8 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     }
     // 玩家标记：金点 + 青色 8 段旋转刻度圈
     {
-        let pl = &LOCATIONS[l.loc.min(LOCATIONS.len() - 1)];
-        let (px, py) = (pl.x + 8.0, pl.y + 60.0);
+        let (bx, by) = node_xy(l.loc.min(LOCATIONS.len() - 1), g.meta.map_region);
+        let (px, py) = (bx + 8.0, by + 60.0);
         draw_circle(px, py, 4.5, C_GOLD);
         draw_circle_lines(px, py, 6.5, 2.0, C_CYAN);
         for k in 0..8 {
@@ -669,13 +691,18 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     {
         let (mx, my) = crate::cam::mouse();
         if gate && is_mouse_button_pressed(MouseButton::Left) {
-            for (i, nd) in LOCATIONS.iter().enumerate() {
-                let (nx, ny) = (nd.x + 8.0, nd.y + 60.0);
+            for (i, _) in LOCATIONS.iter().enumerate() {
+                let (bx, by) = node_xy(i, g.meta.map_region);
+                let (nx, ny) = (bx + 8.0, by + 60.0);
                 let d2 = (mx - nx) * (mx - nx) + (my - ny) * (my - ny);
                 if d2 < 28.0 * 28.0 {
                     if g.world.sel != i {
                         g.world.sel = i;
                         g.play(crate::sounds::Which::Click);
+                        // v1.6.0 B：非原地节点直接开「前往确认」弹层（经 open_sub 打开帧门闩）
+                        if i != l.loc {
+                            crate::menu::open_sub(g, crate::menu::Sub::MapGo(i));
+                        }
                     }
                     break;
                 }
@@ -686,13 +713,21 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     draw_rectangle(0.0, 0.0, V_W, 52.0, Color::from_rgba(16, 11, 30, 245));
     draw_rectangle(0.0, 50.0, V_W, 2.0, C_GOLD_D);
     txt("—— 山河图志 ——", 16.0, 15.0, 20, C_GOLD);
+    // v1.6.0：顶栏追加当前地区名（时段/天气、「所在」相应右移让位）
+    txt(
+        &format!("· {}", theme_of(g.meta.map_region).name),
+        216.0,
+        17.0,
+        15,
+        C_GOLD_D,
+    );
     // v1.5.0 四时：顶栏时段·天气
     txt(
         &format!(
             "{}·{}",
             SLOTS[l.slot.min(3) as usize], WEATHERS[l.weather.min(4) as usize]
         ),
-        202.0,
+        340.0,
         16.0,
         15,
         C_CYAN,
@@ -702,7 +737,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             "所在：{}",
             LOCATIONS[l.loc.min(LOCATIONS.len() - 1)].name
         ),
-        280.0,
+        440.0,
         15.0,
         16,
         C_TEXT,
@@ -725,24 +760,12 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     } else {
         txt("尚未抵达", 140.0, 564.0, 13, C_RED);
     }
-    wrap_draw(nd.desc, 36.0, 592.0, 14, 560.0, 20.0, C_DIM);
+    wrap_draw(nd.desc, 36.0, 592.0, 14, 560.0, 24.0, C_DIM); // v1.6.0：行距 20→24（desc 3 行预算内）
     txt("可做", 36.0, 664.0, 14, C_DIM);
-    // 动作区（P5 门②：覆盖层打开时不渲染）
+    // 动作区（P5 门②：覆盖层打开时不渲染；v1.6.0 B：异地「赶路」收进山河弹层——
+    // 点节点即弹 Sub::MapGo 确认，主卡只保留原地动作）
     if gate {
-        if sel != l.loc {
-            if button(
-                100.0,
-                640.0,
-                220.0,
-                56.0,
-                "赶路至此",
-                Some("寿元-1载"),
-                true,
-            ) {
-                g.play(crate::sounds::Which::Click);
-                travel(g, sel);
-            }
-        } else {
+        if sel == l.loc {
             match sel {
                 NODE_SECT => {
                     if button(
@@ -1001,25 +1024,26 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                 _ => format!("当前：坊市丹价 ×{:.2}", DANFANG_DISC[lv]),
             };
             txt(&eff, 300.0, y + 58.0, 14, C_CYAN);
-            if lv < 3 {
-                let (cs, cc) = (DONGFU_UP_STONES[lv], DONGFU_UP_CONTRIB[lv]);
-                let ok = l.stones >= cs && g.meta.sect_contrib >= cc;
-                txt(
-                    &format!(
-                        "升{}级：{} 灵石 + {} 贡献",
-                        lv + 1,
-                        fmt_int(cs),
-                        cc
-                    ),
-                    540.0,
-                    y + 58.0,
-                    13,
-                    if ok { C_TEXT } else { C_RED },
-                );
-                if button(916.0, y + 12.0, 96.0, 44.0, "扩建", None, ok) {
-                    dongfu_up(g, i);
-                }
-            } else {
+                if lv < 3 {
+                    let (cs, cc) = (DONGFU_UP_STONES[lv], DONGFU_UP_CONTRIB[lv]);
+                    let ok = l.stones >= cs && g.meta.sect_contrib >= cc;
+                    txt(
+                        &format!(
+                            "升{}级：{} 灵石 + {} 贡献",
+                            lv + 1,
+                            fmt_int(cs),
+                            cc
+                        ),
+                        540.0,
+                        y + 58.0,
+                        13,
+                        if ok { C_TEXT } else { C_RED },
+                    );
+                    // v1.6.0：扩建钮 120px 宽（96px 装不下“扩建”两字 14px 下限渲染）
+                    if button(896.0, y + 12.0, 120.0, 44.0, "扩建", None, ok) {
+                        dongfu_up(g, i);
+                    }
+                } else {
                 txt("圆满", 940.0, y + 58.0, 16, C_GOLD);
             }
         }
@@ -1071,27 +1095,41 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                 );
             }
             wrap_draw(step_text, 280.0, 240.0, 17, 720.0, 26.0, C_TEXT);
+            // v1.6.0 B：双钮纵排 + 副标签（收益/风险一眼可读，替代原单行提示文案）
             let labels = EXPED_CHOICE_LABELS[kind.min(3)];
-            if button(290.0, 420.0, 348.0, 52.0, labels[0], None, true) {
+            if button(
+                290.0,
+                396.0,
+                620.0,
+                52.0,
+                labels[0],
+                Some("收获 ×1.5 · 风险 +10%"),
+                true,
+            ) {
                 g.play(crate::sounds::Which::Click);
                 exp_choose(g, 0);
             }
-            if button(662.0, 420.0, 348.0, 52.0, labels[1], None, true) {
+            if button(
+                290.0,
+                456.0,
+                620.0,
+                52.0,
+                labels[1],
+                Some("稳妥 ×0.6 · 风险 -10%"),
+                true,
+            ) {
                 g.play(crate::sounds::Which::Click);
                 exp_choose(g, 1);
             }
-            txt_c(
-                "左：收获×1.5 · 风险+10%　　右：稳妥×0.6 · 风险-10%",
-                640.0,
-                486.0,
-                13,
-                C_DIM,
-            );
-            if button(450.0, 504.0, 180.0, 40.0, "就此收手", None, true) {
+            if button(450.0, 514.0, 180.0, 40.0, "就此收手", None, true) {
                 g.play(crate::sounds::Which::Page);
                 exp_quit(g);
             }
         }
+    }
+    // v1.6.0 B：山河图确认弹层（点节点后出现；sub_fresh 开帧只显示不响应）
+    if g.submenu.is_some() {
+        crate::menu::draw_sub(g);
     }
     draw_banner(g);
     draw_toast(g);

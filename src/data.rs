@@ -1803,3 +1803,166 @@ pub const DANFANG_DISC: [f64; 4] = [1.00, 0.90, 0.80, 0.70];
 // 升到 L+1 级费用：灵石 DONGFU_UP_STONES[L] + 贡献 DONGFU_UP_CONTRIB[L]
 pub const DONGFU_UP_STONES: [i64; 3] = [2000, 20000, 200000];
 pub const DONGFU_UP_CONTRIB: [u32; 3] = [30, 120, 400];
+
+// ================= v1.6.0 山河万象：仇敌突破换地图 =================
+
+// 地图种子默认值（旧档缺 mseed 键时的迁移缺省）
+pub const MAP_SEED_DEFAULT: u32 = 20261011;
+
+// 五区主题表：主题 0 与 v1.5.0 现版逐值一致（旧档/未换幕前像素级等价）
+pub struct MapTheme {
+    pub name: &'static str,
+    pub desc: &'static str,
+    pub grad_top: (u8, u8, u8),  // 纵向渐变顶色
+    pub grad_bot: (u8, u8, u8),  // 纵向渐变底色
+    pub moss_a: (u8, u8, u8),    // 苔斑主色基准（实际值 ±随机抖动）
+    pub moss_b: (u8, u8, u8),    // 苔斑次色基准
+    pub ridge_a: (u8, u8, u8),   // 山脊带 1
+    pub ridge_b: (u8, u8, u8),   // 山脊带 2
+    pub river: (u8, u8, u8),     // 河流主色
+    pub river_hl: (u8, u8, u8),  // 河流上缘高光
+    pub forest_a: (u8, u8, u8),  // 林木主色
+    pub forest_b: (u8, u8, u8),  // 林木次色
+    pub frame: (u8, u8, u8),     // 暗金双线边框
+    pub deco: f32,               // 苔斑/林木密度倍率
+    pub jitter: [(f32, f32); 6], // 六节点位置抖动（主题 0 全 0 = 现版坐标）
+}
+
+pub const MAP_THEMES: [MapTheme; 5] = [
+    // 0 东境（现版逐值：渐变 (24,34,40)→(14,20,26)、苔斑 (30,52,38)/(56,46,36) 600、
+    //   山脊 (46,44,58)/(38,36,48)、河 (58,96,110)/(86,130,140)、林 (30,48,36)/(26,42,32) 220、
+    //   边框 (122,96,52)、deco 1.0、jitter 全 0）
+    MapTheme {
+        name: "东境青云",
+        desc: "灵气氤氲的青云故地，山河如初。",
+        grad_top: (24, 34, 40),
+        grad_bot: (14, 20, 26),
+        moss_a: (30, 52, 38),
+        moss_b: (56, 46, 36),
+        ridge_a: (46, 44, 58),
+        ridge_b: (38, 36, 48),
+        river: (58, 96, 110),
+        river_hl: (86, 130, 140),
+        forest_a: (30, 48, 36),
+        forest_b: (26, 42, 32),
+        frame: (122, 96, 52),
+        deco: 1.0,
+        jitter: [(0.0, 0.0); 6],
+    },
+    MapTheme {
+        name: "西漠黄沙",
+        desc: "大漠孤烟，残卷称此地埋着上古魔宗的埋骨窟。",
+        grad_top: (50, 40, 26),
+        grad_bot: (30, 22, 14),
+        moss_a: (70, 58, 36),
+        moss_b: (88, 72, 46),
+        ridge_a: (100, 80, 54),
+        ridge_b: (80, 64, 44),
+        river: (64, 110, 116),
+        river_hl: (98, 150, 150),
+        forest_a: (76, 66, 40),
+        forest_b: (64, 56, 34),
+        frame: (152, 112, 60),
+        deco: 0.55,
+        jitter: [(30.0, -20.0), (-36.0, 14.0), (20.0, 28.0), (-24.0, 26.0), (18.0, 22.0), (-28.0, 14.0)],
+    },
+    MapTheme {
+        name: "南疆瘴林",
+        desc: "瘴气弥漫的十万大山，蛊修与灵药同生于此。",
+        grad_top: (18, 40, 26),
+        grad_bot: (10, 24, 16),
+        moss_a: (36, 66, 42),
+        moss_b: (26, 54, 36),
+        ridge_a: (42, 64, 50),
+        ridge_b: (34, 54, 42),
+        river: (46, 110, 84),
+        river_hl: (78, 150, 112),
+        forest_a: (18, 54, 32),
+        forest_b: (14, 46, 26),
+        frame: (98, 142, 74),
+        deco: 1.6,
+        jitter: [(-26.0, 20.0), (28.0, -18.0), (-18.0, -24.0), (22.0, -26.0), (-16.0, 18.0), (24.0, 20.0)],
+    },
+    MapTheme {
+        name: "北境冰原",
+        desc: "万里雪封的极北之地，冰河之下镇着未醒的古修。",
+        grad_top: (42, 48, 60),
+        grad_bot: (22, 26, 38),
+        moss_a: (118, 126, 140),
+        moss_b: (94, 102, 120),
+        ridge_a: (88, 96, 116),
+        ridge_b: (70, 78, 98),
+        river: (96, 140, 170),
+        river_hl: (150, 190, 215),
+        forest_a: (60, 82, 86),
+        forest_b: (50, 70, 76),
+        frame: (150, 172, 202),
+        deco: 0.8,
+        jitter: [(20.0, 26.0), (-22.0, 24.0), (26.0, -20.0), (-30.0, -16.0), (20.0, -24.0), (-18.0, 26.0)],
+    },
+    MapTheme {
+        name: "东海仙屿",
+        desc: "沧溟之上的散修岛屿，潮声里有仙宫的传闻。",
+        grad_top: (16, 42, 58),
+        grad_bot: (8, 22, 36),
+        moss_a: (42, 72, 82),
+        moss_b: (30, 58, 70),
+        ridge_a: (54, 86, 98),
+        ridge_b: (42, 70, 82),
+        river: (60, 140, 160),
+        river_hl: (102, 180, 195),
+        forest_a: (36, 82, 72),
+        forest_b: (28, 70, 62),
+        frame: (110, 162, 190),
+        deco: 1.2,
+        jitter: [(-24.0, -16.0), (30.0, 20.0), (-20.0, 24.0), (26.0, -22.0), (-22.0, -20.0), (18.0, 18.0)],
+    },
+];
+
+pub fn theme_of(region: u32) -> &'static MapTheme {
+    &MAP_THEMES[(region as usize) % MAP_THEMES.len()]
+}
+
+// 节点屏幕系坐标（画布 1264×480）：LOCATIONS 基准 + 主题抖动，clamp 画布安全边
+// （地图绘制/点击命中/林木规避三处共用，坐标单一来源）
+pub fn node_xy(i: usize, region: u32) -> (f32, f32) {
+    let j = theme_of(region).jitter[i.min(5)];
+    let nd = &LOCATIONS[i.min(LOCATIONS.len() - 1)];
+    (
+        (nd.x + j.0).clamp(60.0, 1204.0),
+        (nd.y + j.1).clamp(60.0, 420.0),
+    )
+}
+
+// ================= v1.6.0 D 好感度 NPC 关系系统 =================
+
+// NPC 名与卡面描述（0 长老 1 商人；与 npc.rs NPC_ELDER/NPC_MERCHANT 对应）
+pub const NPC_NAMES: [&str; 2] = ["玄诚长老", "胡掌柜"];
+pub const NPC_DESC: [&str; 2] = [
+    "青云宗执事长老，掌外门杂役与任务分派。交情深厚者，所托任务常有厚报。",
+    "临仙坊市万宝楼的胡姓掌柜，眼光毒辣。熟客购丹，向来给足面子。",
+];
+
+// 好感档次阈值与名称（fav ≥ 阈值即入档）
+pub const NPC_FAV_TIERS: [i32; 5] = [0, 20, 40, 70, 95];
+pub const NPC_TIER_NAMES: [&str; 5] = [
+    "素不相识",
+    "点头之交",
+    "相谈甚欢",
+    "莫逆之交",
+    "生死之交",
+];
+
+// 各档增益曲线（下标 = tier_of(fav)）
+pub const ELDER_QUEST_MULT: [f64; 5] = [1.00, 1.05, 1.10, 1.18, 1.25]; // 宗门任务收益
+pub const MERCHANT_DISC: [f64; 5] = [1.00, 0.97, 0.94, 0.90, 0.85]; // 坊市丹价乘数
+pub const COMPANION_CULT_MULT: [f64; 5] = [1.00, 1.20, 1.25, 1.30, 1.35]; // 道侣双修倍率
+
+pub const NPC_FAV_MAX: i32 = 100;
+pub const NPC_GIFT_BASE: i64 = 500; // 赠礼基础价（×(1+档位)）
+pub const NPC_GIFT_FAV: i32 = 2; // 赠礼好感
+pub const ELDER_QUEST_FAV: i32 = 3; // 宗门任务好感
+pub const MERCHANT_BUY_FAV: i32 = 1; // 坊市购丹好感
+pub const COMPANION_BOND_FAV: i32 = 25; // 结缘起步好感
+pub const COMPANION_GIFT_FAV: i32 = 5; // 道侣赠礼事件好感
+pub const INHERIT_LEGACY_FAV: i32 = 10; // 遗泽承接好感加成
