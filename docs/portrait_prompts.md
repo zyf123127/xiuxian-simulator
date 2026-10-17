@@ -13,6 +13,22 @@
 | `portrait_3.png` | 真仙档立绘（渡劫以上） | 同上 |
 | `npc_elder.png` | 玄诚长老 | 人物页、宗门界面 |
 | `npc_merchant.png` | 胡掌柜 | 人物页、坊市界面 |
+| `comp_0.png` ~ `comp_9.png` | 十位女道侣（顺序见下表） | 人物页道侣卡 |
+
+## 女道侣文件对照
+
+| 文件 | 道侣 | 气质关键词 |
+| --- | --- | --- |
+| `comp_0.png` | 南宫婉 | 清冷白衣仙子 |
+| `comp_1.png` | 紫灵 | 神秘紫衣面纱 |
+| `comp_2.png` | 陈巧倩 | 俏皮鹅黄少女 |
+| `comp_3.png` | 董萱儿 | 妩媚红衣 |
+| `comp_4.png` | 慕沛灵 | 灵巧浅绿侍女 |
+| `comp_5.png` | 严灵儿 | 英气女剑修 |
+| `comp_6.png` | 白瑶怡 | 冰山医仙 |
+| `comp_7.png` | 云芝 | 端庄宗门师姐 |
+| `comp_8.png` | 苏婉 | 温婉书卷气 |
+| `comp_9.png` | 月灵 | 月华银纱仙子 |
 
 尺寸建议 **512×640（4:5）**，PNG。游戏内会等比缩放绘制，不需要多余留白。
 
@@ -59,7 +75,58 @@
 >
 > **英文**：2D Chinese xianxia game portrait, plump middle-aged market shopkeeper, crimson brocade robe with gold buttons, hand on an abacus, beaming shrewd smile, plain deep purple background, warm rim light, clean cel-shaded illustration
 
+### comp_0 南宫婉
+> 2D国风仙侠游戏立绘，单人半身像，清冷仙子，素白广袖仙裙，青丝如瀑垂腰，眉目如画气质出尘，微微侧首，纯深紫色背景，无场景，冷白轮廓光，干净实边插画风格，512x640
+>
+> **英文**：2D Chinese xianxia game portrait, ethereal cold fairy in plain white wide-sleeved immortal dress, waist-length black hair, exquisite serene features, plain deep purple background, cool white rim light, clean cel-shaded illustration
+
+### comp_1 紫灵
+> 2D国风仙侠游戏立绘，单人半身像，神秘女修，紫纱遮下半面，紫衣绣银纹，只露出的双眸灵动狡黠，纯深紫色背景，无场景，紫色轮廓光，干净实边插画风格，512x640
+>
+> **英文**：2D Chinese xianxia game portrait, mysterious cultivator in violet robe with silver embroidery, lower face veiled by purple gauze, lively cunning eyes, plain deep purple background, violet rim light, clean cel-shaded illustration
+
+### comp_2 陈巧倩
+> 2D国风仙侠游戏立绘，单人半身像，俏皮少女修士，鹅黄衫子水绿裙，梳双环髻缀小铃铛，笑容明快，纯深紫色背景，无场景，暖黄轮廓光，干净实边插画风格，512x640
+>
+> **英文**：2D Chinese xianxia game portrait, playful young cultivator girl in pale-yellow top and jade-green skirt, twin-bun hairstyle with tiny bells, bright cheerful smile, plain deep purple background, warm yellow rim light, clean cel-shaded illustration
+
+### comp_3 董萱儿
+> 2D国风仙侠游戏立绘，单人半身像，妩媚女修，绛红纱衣金线滚边，长发松挽金步摇，眼波流转笑意盈盈，气质张扬而不失克制，纯深紫色背景，无场景，绯红轮廓光，干净实边插画风格，512x640
+>
+> **英文**：2D Chinese xianxia game portrait, alluring cultivator in crimson gauze robe with gold trim, loosely pinned long hair with a golden hairpin, charming knowing smile, plain deep purple background, crimson rim light, clean cel-shaded illustration
+
+### comp_4 慕沛灵
+> 2D国风仙侠游戏立绘，单人半身像，灵巧女修，浅绿襦裙素雅干净，单侧发髻系青丝带，神情温婉乖巧，纯深紫色背景，无场景，淡青轮廓光，干净实边插画风格，512x640
+>
+> **英文**：2D Chinese xianxia game portrait, graceful gentle cultivator in light-green ruqun, side bun tied with a teal ribbon, soft demure expression, plain deep purple background, pale cyan rim light, clean cel-shaded illustration
+
+### comp_5 严灵儿
+> 2D国风仙侠游戏立绘，单人半身像，英气女剑修，玄色劲装束袖，背负长剑，高马尾红发带，目光锐利飒爽，纯深紫色背景，无场景，银白轮廓光，干净实边插画风格，512x640
+>
+> **英文**：2D Chinese xianxia game portrait, valiant swordswoman in dark fitted martial outfit, long sword on her back, high ponytail with red ribbon, sharp dashing gaze, plain deep purple background, silver rim light, clean cel-shaded illustration
+
+### comp_6 白瑶怡
+> 2D国风仙侠游戏立绘，单人半身像，清冷医仙，素白医袍银线绣药草纹，广袖间隐有药香雾气，神情疏离淡然，纯深紫色背景，无场景，月白轮廓光，干净实边插画风格，512x640
+>
+> **英文**：2D Chinese xianxia game portrait, aloof healer immortal in plain white physician robe with silver herb embroidery, faint medicinal mist around sleeves, detached serene expression, plain deep purple background, moonlight-white rim light, clean cel-shaded illustration
+
+### comp_7 云芝
+> 2D国风仙侠游戏立绘，单人半身像，端庄女修，蓝白相间宗门道袍云纹缘边，发髻整洁玉簪固定，举止大方沉静，纯深紫色背景，无场景，天青轮廓光，干净实边插画风格，512x640
+>
+> **英文**：2D Chinese xianxia game portrait, dignified cultivator in blue-and-white sect robe with cloud patterns, neat hair bun fixed with a jade pin, calm composed manner, plain deep purple background, azure rim light, clean cel-shaded illustration
+
+### comp_8 苏婉
+> 2D国风仙侠游戏立绘，单人半身像，温婉女修，月白襦裙外罩淡青披帛，怀抱一卷古籍，眉眼温柔含笑，书卷气十足，纯深紫色背景，无场景，柔和暖白轮廓光，干净实边插画风格，512x640
+>
+> **英文**：2D Chinese xianxia game portrait, gentle scholarly cultivator in moon-white ruqun with pale-teal shawl, holding an ancient book scroll, soft warm smiling eyes, plain deep purple background, soft warm-white rim light, clean cel-shaded illustration
+
+### comp_9 月灵
+> 2D国风仙侠游戏立绘，单人半身像，月华仙子，银白纱衣层叠如月色流光，额间一点月印记，周身萦绕淡淡月辉，神情清冷悠远，纯深紫色背景，无场景，银辉轮廓光，干净实边插画风格，512x640
+>
+> **英文**：2D Chinese xianxia game portrait, moon fairy in layered silver-white gauze dress shimmering like moonlight, a small moon mark on her forehead, faint lunar glow around her, serene distant expression, plain deep purple background, silver glow rim light, clean cel-shaded illustration
+
 ### 通用负向提示词（negative prompt）
+
 > 多人, 文字, 水印, 签名, 复杂背景, 场景, 相框, 过曝, 3D渲染, 照片质感, 崩坏的手
 >
 > **英文**：multiple people, text, watermark, signature, busy background, scenery, frame, overexposed, 3D render, photorealistic, bad hands

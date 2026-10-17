@@ -176,6 +176,14 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
             30 => 3, // 角色·人物页（好感度三卡）
             _ => 0,
         };
+        // 冒烟专用：人物页入镜前给现实主角注入道侣（正式玩法不由此入账；
+        // 覆盖 v1.7.1 道侣 AI 立绘 comp_ovr 渲染路径——有 comp_N.png 即见其像，无则丹药图标）
+        if *shots == 30 && frame % 120 == 0 {
+            if let Some(l) = g.life.as_mut() {
+                l.companion = Some("南宫婉".to_string());
+                l.comp_fav = 60;
+            }
+        }
         if *shots != 29 {
             g.submenu = None;
         }

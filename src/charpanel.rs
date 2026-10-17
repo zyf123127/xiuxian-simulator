@@ -96,7 +96,25 @@ fn draw_npc_page(g: &mut Game, l: &Life) {
     let cfav = l.comp_fav;
     draw_rectangle(160.0, y, 960.0, 160.0, Color::from_rgba(42, 26, 52, 210));
     draw_rectangle_lines(160.0, y, 960.0, 160.0, 2.0, C_PURPLE);
-    draw_texture(&crate::art::art().icon_pill, 184.0, y + 18.0, WHITE);
+    // v1.7.1：有道侣且有对应 AI 立绘（comp_0..9 按 COMPANION_NAMES 顺序）则替代丹药图标
+    let comp_idx = l
+        .companion
+        .as_deref()
+        .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn));
+    let comp_ovr = comp_idx.and_then(|i| crate::art::art().comp_ovr[i].as_ref());
+    match comp_ovr {
+        Some(t) => draw_texture_ex(
+            t,
+            182.0,
+            y + 14.0,
+            WHITE,
+            DrawTextureParams {
+                dest_size: Some(vec2(48.0, 60.0)),
+                ..Default::default()
+            },
+        ),
+        None => draw_texture(&crate::art::art().icon_pill, 184.0, y + 18.0, WHITE),
+    }
     match &l.companion {
         Some(cn) => {
             txt(cn, 230.0, y + 22.0, 20, C_PURPLE);

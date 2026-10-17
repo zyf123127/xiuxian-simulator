@@ -20,6 +20,8 @@ pub struct Art {
     // （portrait_0..3=境界四档；npc_ovr: 0=玄诚长老 1=胡掌柜。wasm 恒回退）
     pub portrait_ovr: [Option<Texture2D>; 4],
     pub npc_ovr: [Option<Texture2D>; 2],
+    // v1.7.1 女道侣立绘：comp_0..9 与 COMPANION_NAMES 顺序一一对应（缺失回退丹药图标）
+    pub comp_ovr: [Option<Texture2D>; 10],
 }
 
 static ART: std::sync::OnceLock<Art> = std::sync::OnceLock::new();
@@ -79,6 +81,7 @@ pub fn build_art() -> Art {
         portraits,
         portrait_ovr: [None, None, None, None],
         npc_ovr: [None, None],
+        comp_ovr: [None, None, None, None, None, None, None, None, None, None],
     };
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -87,6 +90,9 @@ pub fn build_art() -> Art {
         }
         a.npc_ovr[0] = try_load_ovr("npc_elder");
         a.npc_ovr[1] = try_load_ovr("npc_merchant");
+        for (i, o) in a.comp_ovr.iter_mut().enumerate() {
+            *o = try_load_ovr(&format!("comp_{}", i));
+        }
     }
     a
 }
