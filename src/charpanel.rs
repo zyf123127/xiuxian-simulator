@@ -48,18 +48,25 @@ fn draw_npc_page(g: &mut Game, l: &Life) {
         let cost = crate::npc::gift_cost(fav);
         draw_rectangle(160.0, y, 960.0, 160.0, Color::from_rgba(30, 24, 50, 210));
         draw_rectangle_lines(160.0, y, 960.0, 160.0, 2.0, C_GOLD_D);
-        // v1.7.0：有 AI 覆盖立绘则替代云纹小图标（4:5 等比收进 48×60）
+        // v1.7.2：有 AI 覆盖立绘（全身像）则按宽高比 contain 收进 48×60、底边对齐；
+        // 无则用云纹小图标
         match crate::art::art().npc_ovr[i].as_ref() {
-            Some(t) => draw_texture_ex(
-                t,
-                182.0,
-                y + 14.0,
-                WHITE,
-                DrawTextureParams {
-                    dest_size: Some(vec2(48.0, 60.0)),
-                    ..Default::default()
-                },
-            ),
+            Some(t) => {
+                let ar = t.width() / t.height().max(1.0);
+                let h = 60.0;
+                let w = (h * ar).min(48.0);
+                let hh = w / ar;
+                draw_texture_ex(
+                    t,
+                    182.0 + (48.0 - w) * 0.5,
+                    y + 14.0 + (60.0 - hh),
+                    WHITE,
+                    DrawTextureParams {
+                        dest_size: Some(vec2(w, hh)),
+                        ..Default::default()
+                    },
+                )
+            }
             None => draw_texture(&crate::art::art().icon_yun, 184.0, y + 18.0, WHITE),
         }
         txt(NPC_NAMES[i], 230.0, y + 22.0, 20, C_GOLD);
@@ -96,23 +103,30 @@ fn draw_npc_page(g: &mut Game, l: &Life) {
     let cfav = l.comp_fav;
     draw_rectangle(160.0, y, 960.0, 160.0, Color::from_rgba(42, 26, 52, 210));
     draw_rectangle_lines(160.0, y, 960.0, 160.0, 2.0, C_PURPLE);
-    // v1.7.1：有道侣且有对应 AI 立绘（comp_0..9 按 COMPANION_NAMES 顺序）则替代丹药图标
+    // v1.7.1：有道侣且有对应 AI 立绘（comp_0..9 按 COMPANION_NAMES 顺序）则替代丹药图标；
+    // v1.7.2 全身像按宽高比 contain 收进 48×60、底边对齐
     let comp_idx = l
         .companion
         .as_deref()
         .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn));
     let comp_ovr = comp_idx.and_then(|i| crate::art::art().comp_ovr[i].as_ref());
     match comp_ovr {
-        Some(t) => draw_texture_ex(
-            t,
-            182.0,
-            y + 14.0,
-            WHITE,
-            DrawTextureParams {
-                dest_size: Some(vec2(48.0, 60.0)),
-                ..Default::default()
-            },
-        ),
+        Some(t) => {
+            let ar = t.width() / t.height().max(1.0);
+            let h = 60.0;
+            let w = (h * ar).min(48.0);
+            let hh = w / ar;
+            draw_texture_ex(
+                t,
+                182.0 + (48.0 - w) * 0.5,
+                y + 14.0 + (60.0 - hh),
+                WHITE,
+                DrawTextureParams {
+                    dest_size: Some(vec2(w, hh)),
+                    ..Default::default()
+                },
+            )
+        }
         None => draw_texture(&crate::art::art().icon_pill, 184.0, y + 18.0, WHITE),
     }
     match &l.companion {

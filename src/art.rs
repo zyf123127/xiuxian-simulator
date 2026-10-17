@@ -627,20 +627,26 @@ pub fn draw_cultivator(
         0.0,
         Color::new(0.0, 0.0, 0.0, 0.35),
     );
-    // 本体 32×36 放大；AI 覆盖立绘（4:5）按原框高度等比收进
+    // 本体 32×36 放大；v1.7.2 AI 覆盖立绘为全身像（约 1:2 竖版）——按宽高比
+    // contain 收进原框（宽上限防超框），底边对齐像素立绘框底（足底落于蒲团垫）
     let bob = if meditating {
         (t * 2.0).sin() * 3.0
     } else {
         0.0
     };
     let (tex, pw, ph) = match art.portrait_ovr[tier].as_ref() {
-        Some(t) => (t, 144.0 * s, 180.0 * s),
+        Some(t) => {
+            let ar = t.width() / t.height().max(1.0);
+            let h = 180.0 * s;
+            let w = (h * ar).min(220.0 * s);
+            (t, w, (w / ar).min(h))
+        }
         None => (&art.portraits[tier], 160.0 * s, 180.0 * s),
     };
     draw_texture_ex(
         tex,
         cx - pw * 0.5,
-        cy - ph * 0.52 + bob,
+        cy + 86.4 * s - ph + bob,
         WHITE,
         DrawTextureParams {
             dest_size: Some(vec2(pw, ph)),
