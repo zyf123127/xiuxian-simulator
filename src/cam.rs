@@ -28,6 +28,14 @@ pub fn view_cam() -> Camera2D {
 
 // 虚拟坐标鼠标：纯矩阵运算，每帧 ~5 次调用，无需缓存
 pub fn mouse() -> (f32, f32) {
-    let p = view_cam().screen_to_world(vec2(mouse_position().0, mouse_position().1));
-    (p.x, p.y)
+    // v1.7.0 wasm high_dpi 坐标系对齐：screen_width() 返回 backing 像素（CSS×dpr），
+    // 而 macroquad mouse_position() 内部已除以 dpi_scale 返回 CSS 像素——先乘回再换算
+    // （桌面端 screen_width 与 mouse_position 同为逻辑像素，恒等不乘）
+    #[cfg(target_arch = "wasm32")]
+    let s = macroquad::miniquad::window::dpi_scale();
+    #[cfg(not(target_arch = "wasm32"))]
+    let s = 1.0;
+    let p = vec2(mouse_position().0 * s, mouse_position().1 * s);
+    let w = view_cam().screen_to_world(p);
+    (w.x, w.y)
 }

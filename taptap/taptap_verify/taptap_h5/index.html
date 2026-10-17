@@ -21,10 +21,9 @@
             overscroll-behavior: none;
             -webkit-tap-highlight-color: transparent;
             cursor: pointer;
-            /* v1.6.0 A 清晰度：wasm 侧 macroquad dpi_scale() 恒 1，backing store 为 CSS 像素，
-               dpr>1 的手机浏览器会把 canvas 位图双线性放大到物理像素 → 文字发虚。
-               pixelated 改为最近邻上采样：像素画风下边缘锐利，与本作程序化像素美术一致。 */
-            image-rendering: pixelated;
+            /* v1.6.0 B 清晰度：wasm 侧已开 high_dpi，backing store = CSS×dpr 恰好
+               1:1 物理像素，无需任何 image-rendering 处理；此前 pixelated 在 dpr>1
+               时对 1× 位图做非整数倍最近邻放大反而导致文字发虚，已移除。 */
         }
         #loading {
             position: fixed;
@@ -78,8 +77,8 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.6.0";</script>
-    <script src="mq_js_bundle.js?v=1.6.0"></script>
+    <script>var GAME_VER = "1.7.0";</script>
+    <script src="mq_js_bundle.js?v=1.7.0"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -114,8 +113,37 @@
             on_init: function () {}
         });
 
-        // 打不开诊断：无 WebGL / 无 WebAssembly 时给出可见提示，而不是无限白屏
+        // v1.6.0 B 清晰度（移植自 GetFish v7.9.6）：GPU 能力懒探测。vendor/macroquad
+        // 图集封顶补丁在 wasm 首次询问 gf_max_texture_size 时——此时 miniquad 已在
+        // glcanvas 上建好渲染上下文——直接查询 MAX_TEXTURE_SIZE，图集按
+        // min(设备上限) 动态封顶，配合 high_dpi 支撑 dpr>1 设备的原生字形栅格。
+        // 必须在 load() 之前注册（与 xx_storage 同理）。
         var XX_GPU_OK = !!(window.WebGLRenderingContext || window.WebGL2RenderingContext);
+        var XX_MAX_TEX = 0; // 0 = 未探测
+        function xx_probe_max_tex() {
+            if (XX_MAX_TEX) return XX_MAX_TEX;
+            try {
+                var c = document.getElementById("glcanvas");
+                var gl = c.getContext("webgl2") || c.getContext("webgl") ||
+                         c.getContext("experimental-webgl");
+                if (gl) {
+                    var v = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+                    if (typeof v === "number" && v > 0) XX_MAX_TEX = v;
+                }
+            } catch (e) { /* 探测失败走默认，图集侧另有 512 下限兜底 */ }
+            if (!XX_MAX_TEX) XX_MAX_TEX = 8192;
+            return XX_MAX_TEX;
+        }
+        window.miniquad_add_plugin({
+            name: "xx_gpu",
+            version: 1,
+            register_plugin: function (importObject) {
+                importObject.env.gf_max_texture_size = function () { return xx_probe_max_tex() | 0; };
+            },
+            on_init: function () {}
+        });
+
+        // 打不开诊断：无 WebGL / 无 WebAssembly 时给出可见提示，而不是无限白屏
         function xx_gpu_report() {
             var el = document.getElementById("errlog");
             var msgs = "";

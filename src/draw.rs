@@ -510,6 +510,11 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
 // ================= 现实主界面 =================
 pub fn draw_reality(g: &mut Game, art: &Art) {
     let Some(l) = g.life.clone() else { return };
+    // v1.7.0：幻境广告浮层独占输入（模态期间不画不响应其余界面）
+    if g.ad.is_some() {
+        draw_ad_overlay(g);
+        return;
+    }
     draw_bg(art);
     draw_sky_life(g);
     draw_motes(g);
@@ -575,14 +580,21 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     let bh = 88.0;
     let sub_open = g.submenu.is_some();
     let pts_ok = g.meta.sim_points >= g.sim_cost();
+    // v1.7.0：山穷水尽时按钮改引广告（点了进 start_draft → start_ad）
+    let stuck = g.is_stuck();
+    let sim_sub: Option<String> = if stuck {
+        Some("山穷水尽 · 观看广告".to_string())
+    } else {
+        Some(format!("推演一生 · {} 点", g.sim_cost()))
+    };
     if button(
         x0,
         by,
         bw,
         bh,
         "开始模拟",
-        Some(&format!("推演一生 · {} 点", g.sim_cost())),
-        pts_ok,
+        sim_sub.as_deref(),
+        pts_ok || stuck,
     ) && !sub_open
     {
         g.play(crate::sounds::Which::Click);
@@ -1522,12 +1534,56 @@ fn draw_shop(g: &mut Game, l: &Life) {
 }
 
 // ================= 行囊（v1.6.0 B：三页签分组 0丹药 1法宝 2行装） =================
+// v1.7.0 幻境广告浮层：死档救急的模态界面（倒计时走完才能领取，放弃无奖励）
+fn draw_ad_overlay(g: &mut Game) {
+    draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.02, 0.01, 0.05, 0.97));
+    let t = g.ad.unwrap_or(0.0);
+    let secs = crate::data::AD_SECONDS;
+    let ready = t <= 0.0;
+    panel_card(300.0, 140.0, 680.0, 440.0);
+    txt_c("轮 回 商 阁", 640.0, 196.0, 28, C_GOLD);
+    draw_rectangle(360.0, 216.0, 560.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    // 创意区：按已看次数轮换的假广告
+    let creative = crate::data::AD_CREATIVES[(g.meta.ad_watched.max(0) as usize) % 3];
+    txt_c(creative, 640.0, 288.0, 24, C_TEXT);
+    txt_c("—— 山穷水尽？镜灵为你接引一段商途幻境 ——", 640.0, 326.0, 14, C_DIM);
+    // 倒计时条
+    let frac = (t / secs).clamp(0.0, 1.0);
+    draw_rectangle(440.0, 360.0, 400.0, 14.0, Color::new(0.0, 0.0, 0.0, 0.5));
+    draw_rectangle(440.0, 360.0, 400.0 * frac, 14.0, C_CYAN);
+    txt_c(
+        &format!("看完可得 {} 枚模拟点数", crate::data::AD_REWARD),
+        640.0,
+        408.0,
+        16,
+        C_DIM,
+    );
+    if ready {
+        if button(520.0, 440.0, 240.0, 56.0, "领取模拟点", None, true) {
+            g.collect_ad();
+        }
+    } else {
+        txt_c(
+            &format!("幻境播送中… {:.0} 秒", t.ceil()),
+            640.0,
+            470.0,
+            18,
+            C_CYAN,
+        );
+    }
+    if button(560.0, 516.0, 160.0, 36.0, "放弃", None, true) {
+        g.ad = None;
+        g.play(crate::sounds::Which::Page);
+    }
+}
+
 fn draw_bag(g: &mut Game, l: &Life) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
     panel_card(140.0, 70.0, 1000.0, 580.0);
     txt("行囊", 170.0, 100.0, 26, C_GOLD);
     if button(1064.0, 86.0, 44.0, 36.0, "×", None, true) {
         g.panel = 0;
+        g.sac_pending = None; // v1.7.0：关行囊清献祭确认态
         g.play(crate::sounds::Which::Page);
         return;
     }
@@ -1617,6 +1673,32 @@ fn draw_bag(g: &mut Game, l: &Life) {
                 }
             } else {
                 txt_c("未得", 1055.0, y + 6.0, 14, C_DIM);
+            }
+            // v1.7.0：献祭换模拟点（二次确认；点别行自动取消）
+            if owned {
+                let confirming = g.sac_pending == Some(k);
+                let lbl = if confirming {
+                    "确认献祭?".to_string()
+                } else {
+                    format!("献祭+{}", rl.pt)
+                };
+                if button(866.0, y - 4.0, 120.0, 40.0, &lbl, None, true) {
+                    if confirming {
+                        g.sac_pending = None;
+                        g.sacrifice_relic(k);
+                        return;
+                    }
+                    g.sac_pending = Some(k);
+                    g.play(crate::sounds::Which::Click);
+                } else if confirming
+                    && (crate::cam::mouse().0 < 860.0
+                        || crate::cam::mouse().0 > 990.0
+                        || crate::cam::mouse().1 < y - 10.0
+                        || crate::cam::mouse().1 > y + 42.0)
+                    && is_mouse_button_pressed(MouseButton::Left)
+                {
+                    g.sac_pending = None;
+                }
             }
         }
     } else {

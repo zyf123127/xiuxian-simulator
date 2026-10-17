@@ -448,6 +448,8 @@ pub struct Meta {
     pub map_seed: u32,   // v1.6.0 山河万象：地图伪随机种子（LCG 演化）
     pub map_region: u32, // v1.6.0 山河万象：当前地区索引（MAP_THEMES 下标，wrapping 递增）
 
+    pub ad_watched: i32, // v1.7.0：累计观看幻境广告次数（也用于广告创意轮换）
+
     pub npc_fav: [i32; 2], // v1.6.0 D：NPC 好感 0长老 1商人（跨世持久，0..=100）
 }
 
@@ -499,6 +501,8 @@ impl Default for Meta {
             map_seed: MAP_SEED_DEFAULT,
 
             map_region: 0,
+
+            ad_watched: 0,
 
             npc_fav: [0, 0],
         }
@@ -631,6 +635,9 @@ pub struct Game {
 
     pub submenu: Option<crate::menu::Sub>, // v1.6.0 B：当前弹层（None 无弹层，不进存档）
     pub bag_tab: u8,   // v1.6.0 B：行囊页签 0丹药 1法宝 2行装
+
+    pub ad: Option<f32>,           // v1.7.0：幻境广告倒计时（Some 播放中/Some(0.0) 可领取；不进存档）
+    pub sac_pending: Option<usize>, // v1.7.0：行囊献祭二次确认的法宝下标（不进存档）
     pub sub_fresh: bool, // v1.6.0 B：开帧门闩——open_sub 置位、主循环顶部清零（硬伤 1）
 
     pub speed: usize, // 模拟速度 0暂停 1慢 2快 3跳过
@@ -991,6 +998,10 @@ impl Game {
 
             bag_tab: 0,
 
+            ad: None,
+
+            sac_pending: None,
+
             sub_fresh: false,
 
             speed: 2,
@@ -1199,6 +1210,10 @@ impl Game {
 
     pub fn start_draft(&mut self) {
         if self.life.is_none() || self.meta.sim_points < self.sim_cost() {
+            // v1.7.0：山穷水尽时不空手而归，引去看广告
+            if self.life.is_some() && self.is_stuck() {
+                self.start_ad();
+            }
             return;
         }
 
@@ -4348,6 +4363,76 @@ impl Game {
         let realm = self.life.as_ref().map(|l| l.realm).unwrap_or(0);
 
         (1500.0 * (1.0 + realm as f64).powf(1.3)) as i64
+    }
+
+    // ================= v1.7.0 点数经济：法宝献祭 / 死档 / 幻境广告 =================
+
+    /// 山穷水尽：点数不够一次模拟、灵石不够一次兑换、又无可献祭的法宝
+    pub fn is_stuck(&self) -> bool {
+        if self.life.is_none() || self.meta.sim_points >= self.sim_cost() {
+            return false;
+        }
+        match self.life.as_ref() {
+            Some(l) => l.stones < self.exchange_cost() as i64 && l.relics.is_empty(),
+            None => false,
+        }
+    }
+
+    /// 打开幻境广告浮层（模态，独占输入直到领取或放弃）
+    pub fn start_ad(&mut self) {
+        if self.ad.is_some() {
+            return;
+        }
+        self.ad = Some(crate::data::AD_SECONDS);
+        self.log(
+            "山穷水尽之际，镜灵为你接引一段『商途幻境』——看完可得模拟点数。",
+            C_CYAN,
+        );
+        self.play(crate::sounds::Which::Click);
+    }
+
+    /// 每帧推进广告倒计时（真实秒；归 0 后钳住，等待领取）
+    pub fn tick_ad(&mut self, dt: f32) {
+        if let Some(t) = self.ad.as_mut() {
+            *t = (*t - dt).max(0.0);
+        }
+    }
+
+    /// 领取广告奖励（仅倒计时走完可用）
+    pub fn collect_ad(&mut self) {
+        if self.ad != Some(0.0) {
+            return;
+        }
+        self.ad = None;
+        self.meta.sim_points += crate::data::AD_REWARD;
+        self.meta.ad_watched += 1;
+        self.toast(
+            &format!("领取 {} 枚模拟点数", crate::data::AD_REWARD),
+            C_CYAN,
+        );
+        self.play(crate::sounds::Which::Coin);
+        self.sync_save();
+    }
+
+    /// 献祭法宝换模拟点（永久失去；已装备的一并卸下）
+    pub fn sacrifice_relic(&mut self, k: usize) {
+        let (gain, name) = {
+            let Some(l) = self.life.as_mut() else { return };
+            let Some(pos) = l.relics.iter().position(|&r| r == k) else {
+                return;
+            };
+            l.relics.remove(pos);
+            l.equipped.retain(|&r| r != k);
+            (RELICS[k].pt, RELICS[k].name)
+        };
+        self.meta.sim_points += gain;
+        self.log(
+            format!("献祭【{}】，轮回镜折算 {} 枚模拟点数。", name, gain),
+            C_CYAN,
+        );
+        self.play(crate::sounds::Which::Coin);
+        self.check_ach_all();
+        self.sync_save();
     }
 
     // 现实寻仇

@@ -323,6 +323,8 @@ pub struct RelicDef {
     pub pow: f64,
     pub cult: f64,
     pub desc: &'static str,
+    /// v1.7.0 献祭折算的模拟点数（永久失去法宝；按 pow+cult 强弱定价）
+    pub pt: i32,
 }
 pub const RELICS: [RelicDef; 8] = [
     RelicDef {
@@ -330,49 +332,69 @@ pub const RELICS: [RelicDef; 8] = [
         pow: 0.15,
         cult: 1.0,
         desc: "七十二口飞剑，寒光凛冽",
+        pt: 3,
     },
     RelicDef {
         name: "金雷竹剑",
         pow: 0.25,
         cult: 1.0,
         desc: "金雷竹所炼，坚不可摧",
+        pt: 4,
     },
     RelicDef {
         name: "蕴灵葫芦",
         pow: 0.0,
         cult: 1.25,
         desc: "蕴养灵气，修炼加速",
+        pt: 4,
     },
     RelicDef {
         name: "玄天斩灵剑",
         pow: 0.40,
         cult: 1.0,
         desc: "一剑斩灵，锐不可当",
+        pt: 6,
     },
     RelicDef {
         name: "聚灵鼎",
         pow: 0.0,
         cult: 1.40,
         desc: "鼎中自成灵脉",
+        pt: 7,
     },
     RelicDef {
         name: "八灵尺",
         pow: 0.60,
         cult: 1.0,
         desc: "上古异宝，镇压八方",
+        pt: 9,
     },
     RelicDef {
         name: "玄天如意刃",
         pow: 0.90,
         cult: 1.0,
         desc: "心念所至，刃光所至",
+        pt: 12,
     },
     RelicDef {
         name: "掌天瓶",
         pow: 1.50,
         cult: 1.30,
         desc: "神秘小瓶，可催熟万物",
+        pt: 15,
     },
+];
+
+// ---------------- v1.7.0 点数经济：死档广告 ----------------
+/// 看完一次幻境广告获得的模拟点数
+pub const AD_REWARD: i32 = 2;
+/// 幻境广告时长（真实秒）
+pub const AD_SECONDS: f32 = 5.0;
+/// 轮回商阁假广告创意（按已看次数轮换）
+pub const AD_CREATIVES: [&str; 3] = [
+    "琼华仙丹 · 服之延寿一纪",
+    "青云宗 · 今岁招收外门弟子",
+    "轮回镜保养指南 · 镜灵亲自认证",
 ];
 
 // ---------------- 丹药 ----------------

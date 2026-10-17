@@ -1,10 +1,18 @@
 [package]
 name = "xiuxian"
-version = "1.6.0"
+version = "1.7.0"
 edition = "2021"
 
 [dependencies]
 macroquad = { version = "0.4", features = ["audio"] }
+
+# v1.6.0 B 清晰度：wasm 也开 high_dpi 后，dpr>1 设备上默认 4096 图集不够用
+# （字形按物理像素栅格）。vendor/macroquad 0.4.16 与依赖同版本，含图集封顶
+# 补丁（atlas 按 gf_max_texture_size 动态封顶 + 原地重置）与 text.rs 丢失重栅格化，
+# PATCH(getfish) 标记，符号名保持 gf_max_texture_size。features=["audio"] 经
+# path 依赖仍生效（features 合并规则不变）。
+[patch.crates-io]
+macroquad = { path = "vendor/macroquad" }
 
 [profile.release]
 opt-level = 3

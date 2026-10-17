@@ -21,10 +21,12 @@ fn window_conf() -> Conf {
         window_title: "凡人修仙·轮回模拟器".to_owned(),
         window_width: 1280,
         window_height: 720,
-        // v1.6.0 A 清晰度：桌面开启 high_dpi 使 miniquad 调 SetProcessDPIAware()，
-        // 窗口以 1280×720 物理像素开窗 + 字形按 dpr 原生栅格（DWM 位图拉伸是 v1.5.0 发虚主因）。
-        // wasm 恒关：真机 dpr≈3 会按比例放大字形图集，有爆图集/黑块风险（skill 第 9 节），不走此路。
-        high_dpi: cfg!(not(target_arch = "wasm32")),
+        // v1.6.0 B 清晰度：high_dpi 恒开。桌面端 miniquad 调 SetProcessDPIAware()，
+        // 窗口按物理像素开窗 + 字形按 dpr 原生栅格；wasm 端 backing store = CSS×dpr
+        // 1:1 物理像素，dpr>1 设备上文字按原生分辨率栅格（此前 1× 位图被非整数倍
+        // 放大发虚）。图集爆量风险已由 vendor/macroquad 封顶补丁护持（Cargo.toml
+        // [patch.crates-io]，atlas 按 JS 探测的 MAX_TEXTURE_SIZE 动态封顶）。
+        high_dpi: true,
         ..Default::default()
     }
 }
@@ -63,6 +65,8 @@ async fn main() {
         let dt = get_frame_time().min(1.0 / 20.0);
         // v1.6.0 B：开帧门闩清零（置位发生于上一帧绘制阶段、本帧输入/绘制前清零，时序闭合）
         g.sub_fresh = false;
+        // v1.7.0：幻境广告倒计时按真实秒推进（与场景无关）
+        g.tick_ad(dt);
         // 快捷键
         if g.scene == Scene::Sim {
             if is_key_pressed(KeyCode::Space) {
@@ -139,12 +143,12 @@ async fn main() {
 
 // 自动驾驶：自动玩几个轮回并截图，用于无人冒烟验收
 fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
-    if frame % 120 == 30 && *shots < 52 {
+    if frame % 120 == 30 && *shots < 56 {
         let img = get_screen_data();
         let path = format!("shots/shot_{:03}.png", *shots);
         img.export_png(&path);
         *shots += 1;
-        if *shots >= 52 {
+        if *shots >= 56 {
             g.sync_save();
             std::process::exit(0);
         }
@@ -194,6 +198,44 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
         return;
     }
     if frame < 30 {
+        return;
+    }
+    // v1.7.0 死档→广告→献祭链路（51..54 置场，对应截图 052..055；frame%120 错开截图帧）
+    if *shots >= 51 && *shots <= 54 {
+        if frame % 120 == 0 {
+            match *shots {
+                // 强制死档场：回现实、清点数/灵石/法宝 → shot_052 底栏「山穷水尽」
+                51 => {
+                    g.scene = Scene::Reality;
+                    g.sim = None;
+                    g.draft.clear();
+                    g.picked.clear();
+                    g.panel = 0;
+                    g.submenu = None;
+                    g.meta.sim_points = 0;
+                    if let Some(l) = g.life.as_mut() {
+                        l.stones = 0;
+                        l.relics.clear();
+                        l.equipped.clear();
+                    }
+                }
+                // shot_052 已拍 → 打开广告浮层 → shot_053
+                52 => g.start_ad(),
+                // shot_053 已拍 → 倒计时快进到可领取 → shot_054
+                53 => g.ad = Some(0.0),
+                // shot_054 已拍 → 领取，再发一件法宝献祭 → shot_055
+                54 => {
+                    g.collect_ad();
+                    if let Some(l) = g.life.as_mut() {
+                        if !l.relics.contains(&5) {
+                            l.relics.push(5);
+                        }
+                    }
+                    g.sacrifice_relic(5);
+                }
+                _ => {}
+            }
+        }
         return;
     }
     match g.scene {

@@ -25,12 +25,14 @@ pub fn measure(s: &str, size: u16) -> f32 {
 }
 
 // 以 (x, y) 为文字左上角绘制
+// v1.6.0 B 清晰度：最终 x 与基线 y 都取整——txt_c/txt_r/wrap_draw 均经此处输出，
+// measure*0.5 求中与 0.82 基线系数常产生小数坐标，亚像素采样导致笔画羽化发虚。
 pub fn txt(s: &str, x: f32, y: f32, size: u16, c: Color) {
     let size = size.max(MIN_FONT);
     draw_text_ex(
         s,
-        x,
-        y + size as f32 * 0.82,
+        x.floor(),
+        (y + size as f32 * 0.82).floor(),
         TextParams {
             font: Some(font()),
             font_size: size,

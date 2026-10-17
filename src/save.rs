@@ -83,6 +83,8 @@ pub fn save_text(m: &Meta) -> String {
     s.push_str(&format!("mreg={}\n", m.map_region));
     // v1.6.0 D：NPC 好感（跨世持久）
     s.push_str(&format!("nf={:?}\n", m.npc_fav));
+    // v1.7.0：累计观看幻境广告次数（旧档缺键默认 0）
+    s.push_str(&format!("adw={}\n", m.ad_watched));
     s.push_str(&format!("music={} sfx={}\n", m.music as i32, m.sfx as i32));
     if let Some(n) = &m.neme {
         s.push_str(&format!("neme={} {} {}\n", n.title, n.name, n.realm));
@@ -220,6 +222,8 @@ fn parse_save(text: &str) -> Meta {
                         .clamp(0, crate::data::NPC_FAV_MAX);
                 }
             }
+            // v1.7.0：广告次数（旧档缺键默认 0）
+            "adw" => m.ad_watched = v.parse().unwrap_or(0),
             "music" => m.music = v.trim().split(' ').next().map_or(true, |x| x == "1"),
             "sfx" => m.sfx = v.trim().split(' ').nth(1).map_or(true, |x| x == "1"),
             "neme" => {

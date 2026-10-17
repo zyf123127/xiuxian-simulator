@@ -48,7 +48,20 @@ fn draw_npc_page(g: &mut Game, l: &Life) {
         let cost = crate::npc::gift_cost(fav);
         draw_rectangle(160.0, y, 960.0, 160.0, Color::from_rgba(30, 24, 50, 210));
         draw_rectangle_lines(160.0, y, 960.0, 160.0, 2.0, C_GOLD_D);
-        draw_texture(&crate::art::art().icon_yun, 184.0, y + 18.0, WHITE);
+        // v1.7.0：有 AI 覆盖立绘则替代云纹小图标（4:5 等比收进 48×60）
+        match crate::art::art().npc_ovr[i].as_ref() {
+            Some(t) => draw_texture_ex(
+                t,
+                182.0,
+                y + 14.0,
+                WHITE,
+                DrawTextureParams {
+                    dest_size: Some(vec2(48.0, 60.0)),
+                    ..Default::default()
+                },
+            ),
+            None => draw_texture(&crate::art::art().icon_yun, 184.0, y + 18.0, WHITE),
+        }
         txt(NPC_NAMES[i], 230.0, y + 22.0, 20, C_GOLD);
         txt_c(crate::npc::tier_name(fav), 420.0, y + 24.0, 15, C_PURPLE);
         txt(

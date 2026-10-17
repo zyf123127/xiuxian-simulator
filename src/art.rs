@@ -16,6 +16,10 @@ pub struct Art {
     // v1.6.0 C：map_bg 移除固定字段——改 map_bg_for(region, seed) 按主题参数化 + 缓存
     pub map_icons: [Texture2D; 6],
     pub portraits: [Texture2D; 4], // v1.5.0：立绘四档（0凡人 1道基 2紫府 3真仙），portrait = portraits[0]
+    // v1.7.0 AI 立绘覆盖：assets/portraits/ 下有对应 PNG 则用之，缺失回退像素立绘
+    // （portrait_0..3=境界四档；npc_ovr: 0=玄诚长老 1=胡掌柜。wasm 恒回退）
+    pub portrait_ovr: [Option<Texture2D>; 4],
+    pub npc_ovr: [Option<Texture2D>; 2],
 }
 
 static ART: std::sync::OnceLock<Art> = std::sync::OnceLock::new();
@@ -26,6 +30,15 @@ pub fn init_art() {
 
 pub fn art() -> &'static Art {
     ART.get().expect("art 未初始化")
+}
+
+// v1.7.0：尝试加载 AI 立绘覆盖（文件缺失静默回退；仅桌面）
+#[cfg(not(target_arch = "wasm32"))]
+fn try_load_ovr(name: &str) -> Option<Texture2D> {
+    let bytes = std::fs::read(format!("assets/portraits/{}.png", name)).ok()?;
+    let t = Texture2D::from_file_with_format(&bytes, None);
+    t.set_filter(FilterMode::Linear);
+    Some(t)
 }
 
 // v1.6.0 C 仇敌换图：地图底图缓存（region, seed) → Texture2D，容量 8 上限淘汰最旧。
@@ -55,7 +68,7 @@ pub fn build_art() -> Art {
     let icon_sword = build_icon_sword();
     let bg = build_bg();
     let map_icons = std::array::from_fn(build_map_icon);
-    Art {
+    let mut a = Art {
         portrait: portraits[0].clone(),
         icon_stone,
         icon_yun,
@@ -64,7 +77,18 @@ pub fn build_art() -> Art {
         bg,
         map_icons,
         portraits,
+        portrait_ovr: [None, None, None, None],
+        npc_ovr: [None, None],
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        for (i, o) in a.portrait_ovr.iter_mut().enumerate() {
+            *o = try_load_ovr(&format!("portrait_{}", i));
+        }
+        a.npc_ovr[0] = try_load_ovr("npc_elder");
+        a.npc_ovr[1] = try_load_ovr("npc_merchant");
     }
+    a
 }
 
 // v1.5.0 立绘四档：0凡人 1道基（金冠）2紫府（金冠+霜鬓+袖口金纹）3真仙（金冠+白发披肩）
@@ -597,16 +621,18 @@ pub fn draw_cultivator(
         0.0,
         Color::new(0.0, 0.0, 0.0, 0.35),
     );
-    // 本体 32×36 放大
-    let pw = 32.0 * 5.0 * s;
-    let ph = 36.0 * 5.0 * s;
+    // 本体 32×36 放大；AI 覆盖立绘（4:5）按原框高度等比收进
     let bob = if meditating {
         (t * 2.0).sin() * 3.0
     } else {
         0.0
     };
+    let (tex, pw, ph) = match art.portrait_ovr[tier].as_ref() {
+        Some(t) => (t, 144.0 * s, 180.0 * s),
+        None => (&art.portraits[tier], 160.0 * s, 180.0 * s),
+    };
     draw_texture_ex(
-        &art.portraits[tier],
+        tex,
         cx - pw * 0.5,
         cy - ph * 0.52 + bob,
         WHITE,
