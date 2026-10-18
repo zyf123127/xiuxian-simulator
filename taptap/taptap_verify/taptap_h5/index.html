@@ -77,8 +77,8 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.8.7";</script>
-    <script src="mq_js_bundle.js?v=1.8.7"></script>
+    <script>var GAME_VER = "1.8.8";</script>
+    <script src="mq_js_bundle.js?v=1.8.8"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -235,19 +235,27 @@
             // "点按钮没反应"的最终根因）。setTimeout 前台 ~16ms ≈ 60fps，
             // 且不受可见性挂起影响。单帧源、零逻辑改动。
             (function () {
-                // v1.8.7 帧时钟三级自动切换：容器把页面标记为不可见时会挂起 rAF、
-                // 钳制定时器，甚至静默禁用 blob Worker（K80 Pro 实测多种表现）。
-                // 时钟候选按可靠性排序，看门狗 2.5 秒实测帧率不足就自动切换：
-                // 1) MessageChannel 自循环（Chromium 系 hidden 页面不节流 port 消息）
-                // 2) Web Worker 定时器  3) setTimeout（最差 1fps 但绝不冻结）
+                // v1.8.8 帧驱动 v2：多时钟共存 + 全局帧门闩 + 停摆自愈。
+                // 背景：TapTap 容器对不可见页面会挂起 rAF、钳制定时器、静默禁用
+                // blob Worker——任何单一时钟都可能停摆（实测：启动 53fps 后定格）。
+                // 现在所有时钟同时启动，帧率由全局门闩统一限制（~60fps）：
+                // 任一时钟被挂起，其余自动补位；全部停摆超过 800ms 时重建
+                // MessageChannel 通道自愈。输入处理见 pointer/touch/mouse 接管段。
                 var el = document.getElementById("errlog");
                 var cb = null;
                 var frames = 0;
-                var framesAt = 0;
-                var mode = "none";
-                var modeIdx = 0;
                 var last = 0;
+                var lastFrameAt = 0;
+                var rebuilt = 0;
+                window.requestAnimationFrame = function (f) {
+                    cb = f;
+                    return 0;
+                };
+                window.cancelAnimationFrame = function () {};
                 var tick = function (now) {
+                    if (now - last < 14) return; // 全局帧门闩：~60fps 上限，多时钟共存不叠加
+                    last = now;
+                    lastFrameAt = now;
                     frames += 1;
                     var f = cb;
                     if (!f) return;
@@ -258,62 +266,61 @@
                         cb = null;
                     }
                 };
-                window.requestAnimationFrame = function (f) {
-                    cb = f;
-                    return 0;
-                };
-                window.cancelAnimationFrame = function () {};
-                var drivers = [
-                    function () {
+                // 时钟 1：MessageChannel 自循环（hidden 不节流）
+                var chan = null;
+                function buildChan() {
+                    try {
                         var ch = new MessageChannel();
                         ch.port1.onmessage = function () {
-                            var now = performance.now();
-                            if (now - last >= 14) {
-                                last = now;
-                                tick(now);
+                            tick(performance.now());
+                            // 4ms 心跳投递：port 消息不受可见性节流，帧率由 tick 门闩限制
+                            if (chan === ch) {
+                                setTimeout(function () {
+                                    if (chan === ch) ch.port2.postMessage(0);
+                                }, 4);
                             }
-                            ch.port2.postMessage(0);
                         };
                         ch.port2.postMessage(0);
-                        return "message-channel";
-                    },
-                    function () {
+                        chan = ch;
+                        return true;
+                    } catch (e) {
+                        return false;
+                    }
+                }
+                // 时钟 2：Worker 定时器（worker 端不受可见性节流）
+                var worker = null;
+                function buildWorker() {
+                    try {
                         var wcode = "setInterval(function(){postMessage(0)},16);";
-                        var worker = new Worker(
+                        worker = new Worker(
                             URL.createObjectURL(new Blob([wcode], { type: "application/javascript" })),
                         );
                         worker.onmessage = function () { tick(performance.now()); };
-                        return "worker";
-                    },
-                    function () {
-                        setInterval(function () { tick(performance.now()); }, 16);
-                        return "timer";
-                    },
-                ];
-                function startNext() {
-                    if (modeIdx >= drivers.length) {
-                        mode = "none";
-                        if (el) el.textContent += "[诊断] 无可用帧时钟";
-                        return;
-                    }
-                    try {
-                        mode = drivers[modeIdx++]();
+                        return true;
                     } catch (e) {
-                        startNext();
-                        return;
+                        return false;
                     }
-                    setTimeout(function () {
-                        var dur = performance.now() - framesAt;
-                        var fps = dur > 0 ? Math.round((frames * 1000) / dur) : 0;
-                        if (fps < 4 && modeIdx < drivers.length) {
-                            if (el) el.textContent += "[诊断] " + mode + " 仅 " + fps + "fps，切换备选帧时钟";
-                            startNext();
-                        } else {
-                            if (el) el.textContent += "[诊断] 帧驱动 " + mode + " 实测 " + fps + "fps";
-                        }
-                    }, 2500);
                 }
-                startNext();
+                // 时钟 3：setTimeout 循环（兜底，hidden 被钳 1fps 但绝不冻结）
+                setInterval(function () { tick(performance.now()); }, 16);
+                buildChan();
+                buildWorker();
+                // 停摆看门狗：>800ms 无帧 → 重建 MessageChannel 并重发 rAF 循环
+                setInterval(function () {
+                    if (!window.wasm_exports) return;
+                    var since = performance.now() - lastFrameAt;
+                    if (since > 800 && rebuilt < 6) {
+                        rebuilt += 1;
+                        if (chan) {
+                            chan.port1.onmessage = null;
+                            chan = null;
+                        }
+                        buildChan();
+                        if (el && rebuilt === 1) {
+                            el.textContent += "[诊断] 帧驱动停摆，已自动重建时钟";
+                        }
+                    }
+                }, 500);
             })();
             xx_stage("编译游戏引擎…");
             try {
@@ -443,23 +450,11 @@
                 // pointer 兜底：个别内核只派发 pointer 事件不发 compat mouse
                 var POINTER = { pointerdown: 0, pointermove: -1, pointerup: 0 };
                 Object.keys(POINTER).forEach(function (type) {
-                    var dbgCount = 0;
                     canvas.addEventListener(type, function (e) {
                         if (e.pointerType === "touch") return; // 触摸走上面通道
                         mark("pointer");
-                        var dbgP = rotationAware(e);
-                        if (dbgCount < 3 && dbgP) {
-                            dbgCount += 1;
-                            el.textContent += "[DBG] " + type + " v=(" + e.clientX + "," + e.clientY +
-                                ") backing=(" + (dbgP.x | 0) + "," + (dbgP.y | 0) +
-                                ") canvas=" + canvas.width + "x" + canvas.height + " rect=" +
-                                Math.round(canvas.getBoundingClientRect().width) + "x" +
-                                Math.round(canvas.getBoundingClientRect().height) + " \n";
-                        }
                         var p = rotationAware(e);
                         if (!p) return;
-                        // down/up 前必须先更新光标位置：容器不发 mousemove 时
-                        // 游戏的光标停在旧位置，按下也点不中按钮
                         E.mouse_move(p.x | 0, p.y | 0);
                         if (type === "pointermove") return;
                         if (type === "pointerdown") E.mouse_down(p.x | 0, p.y | 0, 0);
