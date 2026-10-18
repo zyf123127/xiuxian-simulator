@@ -77,8 +77,8 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.8.3";</script>
-    <script src="mq_js_bundle.js?v=1.8.3"></script>
+    <script>var GAME_VER = "1.8.4";</script>
+    <script src="mq_js_bundle.js?v=1.8.4"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -163,6 +163,7 @@
             };
         })();
 
+
         // 打不开诊断：无 WebGL / 无 WebAssembly 时给出可见提示，而不是无限白屏
         function xx_gpu_report() {
             var el = document.getElementById("errlog");
@@ -228,6 +229,17 @@
             glcanvas.addEventListener("webglcontextrestored", function () {
                 location.reload();
             }, false);
+            // v1.8.4 关键修复：把帧循环的 requestAnimationFrame 底座换成
+            // setTimeout——TapTap 容器会把页面标记为不可见从而挂起 rAF，
+            // 主循环停摆后画面定格、所有点击无人消费（红米 K80 Pro 实测
+            // "点按钮没反应"的最终根因）。setTimeout 前台 ~16ms ≈ 60fps，
+            // 且不受可见性挂起影响。单帧源、零逻辑改动。
+            (function () {
+                window.requestAnimationFrame = function (cb) {
+                    return setTimeout(function () { cb(performance.now()); }, 16);
+                };
+                window.cancelAnimationFrame = function (id) { clearTimeout(id); };
+            })();
             xx_stage("编译游戏引擎…");
             try {
                 load("xiuxian.wasm?v=" + GAME_VER);
@@ -322,6 +334,14 @@
                 };
                 // 触摸：bundle 用 addEventListener（无法覆盖属性），在 document
                 // 捕获阶段拦下并直接调 wasm_exports.touch，坐标同样实测换算。
+                var el = document.getElementById("errlog");
+                var seen = false;
+                var mark = function (kind) {
+                    if (!seen) {
+                        seen = true;
+                        if (el) el.textContent += "[诊断] 已收到输入事件（" + kind + "）\n";
+                    }
+                };
                 var TOUCH = { touchstart: 10, touchmove: 11, touchend: 12, touchcancel: 13 };
                 Object.keys(TOUCH).forEach(function (type) {
                     document.addEventListener(
@@ -330,6 +350,7 @@
                             if (e.target !== canvas) return;
                             e.preventDefault();
                             e.stopImmediatePropagation();
+                            mark("touch");
                             for (var i = 0; i < e.changedTouches.length; i++) {
                                 var t = e.changedTouches[i];
                                 var p = rotationAware(t);
@@ -339,6 +360,35 @@
                         true,
                     );
                 });
+                // pointer 兜底：个别内核只派发 pointer 事件不发 compat mouse
+                var POINTER = { pointerdown: 0, pointermove: -1, pointerup: 0 };
+                Object.keys(POINTER).forEach(function (type) {
+                    canvas.addEventListener(type, function (e) {
+                        if (e.pointerType === "touch") return; // 触摸走上面通道
+                        mark("pointer");
+                        var p = rotationAware(e);
+                        if (!p) return;
+                        if (type === "pointermove") E.mouse_move(p.x | 0, p.y | 0);
+                        else if (type === "pointerdown") E.mouse_down(p.x | 0, p.y | 0, 0);
+                        else E.mouse_up(p.x | 0, p.y | 0, 0);
+                    });
+                });
+                // 兼容 mouse 首达诊断
+                canvas.onmousemove = (function (orig) {
+                    return function (e) {
+                        mark("mouse");
+                        var p = rotationAware(e);
+                        if (p) E.mouse_move(p.x | 0, p.y | 0);
+                    };
+                })();
+                canvas.onmousedown = function (e) {
+                    var p = rotationAware(e);
+                    if (p) E.mouse_down(p.x | 0, p.y | 0, btn(e.button));
+                };
+                canvas.onmouseup = function (e) {
+                    var p = rotationAware(e);
+                    if (p) E.mouse_up(p.x | 0, p.y | 0, btn(e.button));
+                };
             };
             setInterval(takeOver, 500);
             // dpr/backing 失步自愈：backing 与 CSS×dpr 不一致时合成 resize 让
