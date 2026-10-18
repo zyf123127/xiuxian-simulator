@@ -77,8 +77,8 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.8.6";</script>
-    <script src="mq_js_bundle.js?v=1.8.6"></script>
+    <script>var GAME_VER = "1.8.7";</script>
+    <script src="mq_js_bundle.js?v=1.8.7"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -235,26 +235,26 @@
             // "点按钮没反应"的最终根因）。setTimeout 前台 ~16ms ≈ 60fps，
             // 且不受可见性挂起影响。单帧源、零逻辑改动。
             (function () {
-                // v1.8.6 关键修复：帧时钟直驱。v1.8.5 的 Worker 唤醒仍把帧排在
-                // setTimeout(16) 里——被 TapTap 容器标记为不可见的页面会将该
-                // 定时器钳到 1 秒/次，游戏以约 1fps 运行（K80 Pro 二测"点按钮
-                // 有很大延迟"的根因）。现在 Worker 每 16ms 消息**直接同步执行**
-                // 帧回调，热路径上不存在任何可被节流的定时器；
-                // Worker 不可用/被 CSP 拦截时回退 setInterval（最差 1fps 不冻结），
-                // 并在 errlog 输出实测帧率供真机诊断。
+                // v1.8.7 帧时钟三级自动切换：容器把页面标记为不可见时会挂起 rAF、
+                // 钳制定时器，甚至静默禁用 blob Worker（K80 Pro 实测多种表现）。
+                // 时钟候选按可靠性排序，看门狗 2.5 秒实测帧率不足就自动切换：
+                // 1) MessageChannel 自循环（Chromium 系 hidden 页面不节流 port 消息）
+                // 2) Web Worker 定时器  3) setTimeout（最差 1fps 但绝不冻结）
                 var el = document.getElementById("errlog");
                 var cb = null;
                 var frames = 0;
                 var framesAt = 0;
-                var mode = "?";
+                var mode = "none";
+                var modeIdx = 0;
+                var last = 0;
                 var tick = function (now) {
+                    frames += 1;
                     var f = cb;
                     if (!f) return;
                     try {
                         f(now);
-                        frames += 1;
                     } catch (err) {
-                        el.textContent += "[ERR] 帧执行异常 " + String(err).slice(0, 120);
+                        el.textContent += "[ERR] frame " + String(err).slice(0, 120);
                         cb = null;
                     }
                 };
@@ -263,27 +263,57 @@
                     return 0;
                 };
                 window.cancelAnimationFrame = function () {};
-                var worker = null;
-                try {
-                    var wcode = "setInterval(function(){postMessage(0)},16);";
-                    worker = new Worker(
-                        URL.createObjectURL(new Blob([wcode], { type: "application/javascript" })),
-                    );
-                    worker.onmessage = function () { tick(performance.now()); };
-                    worker.onerror = function () { worker = null; };
-                    mode = "worker";
-                } catch (e) {
-                    worker = null;
+                var drivers = [
+                    function () {
+                        var ch = new MessageChannel();
+                        ch.port1.onmessage = function () {
+                            var now = performance.now();
+                            if (now - last >= 14) {
+                                last = now;
+                                tick(now);
+                            }
+                            ch.port2.postMessage(0);
+                        };
+                        ch.port2.postMessage(0);
+                        return "message-channel";
+                    },
+                    function () {
+                        var wcode = "setInterval(function(){postMessage(0)},16);";
+                        var worker = new Worker(
+                            URL.createObjectURL(new Blob([wcode], { type: "application/javascript" })),
+                        );
+                        worker.onmessage = function () { tick(performance.now()); };
+                        return "worker";
+                    },
+                    function () {
+                        setInterval(function () { tick(performance.now()); }, 16);
+                        return "timer";
+                    },
+                ];
+                function startNext() {
+                    if (modeIdx >= drivers.length) {
+                        mode = "none";
+                        if (el) el.textContent += "[诊断] 无可用帧时钟";
+                        return;
+                    }
+                    try {
+                        mode = drivers[modeIdx++]();
+                    } catch (e) {
+                        startNext();
+                        return;
+                    }
+                    setTimeout(function () {
+                        var dur = performance.now() - framesAt;
+                        var fps = dur > 0 ? Math.round((frames * 1000) / dur) : 0;
+                        if (fps < 4 && modeIdx < drivers.length) {
+                            if (el) el.textContent += "[诊断] " + mode + " 仅 " + fps + "fps，切换备选帧时钟";
+                            startNext();
+                        } else {
+                            if (el) el.textContent += "[诊断] 帧驱动 " + mode + " 实测 " + fps + "fps";
+                        }
+                    }, 2500);
                 }
-                if (!worker) {
-                    mode = "timer";
-                    setInterval(function () { tick(performance.now()); }, 16);
-                }
-                framesAt = performance.now();
-                setTimeout(function () {
-                    var fps = Math.round((frames * 1000) / (performance.now() - framesAt));
-                    el.textContent += "[诊断] 帧驱动 " + mode + " 实测 " + fps + "fps\n";
-                }, 4000);
+                startNext();
             })();
             xx_stage("编译游戏引擎…");
             try {
@@ -424,8 +454,7 @@
                                 ") backing=(" + (dbgP.x | 0) + "," + (dbgP.y | 0) +
                                 ") canvas=" + canvas.width + "x" + canvas.height + " rect=" +
                                 Math.round(canvas.getBoundingClientRect().width) + "x" +
-                                Math.round(canvas.getBoundingClientRect().height) + "
-";
+                                Math.round(canvas.getBoundingClientRect().height) + " \n";
                         }
                         var p = rotationAware(e);
                         if (!p) return;
