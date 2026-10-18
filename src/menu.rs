@@ -17,6 +17,7 @@ use macroquad::prelude::*;
 pub enum Sub {
     Cult,         // 修炼组：闭关苦修 / 冲击破境 / 返回
     MapGo(usize), // 山河图：前往(赶路) / 查看详情 / 取消
+    Atlas,        // v1.8.0 C3：区域图鉴（五域机制一览，纯展示）
 }
 
 // 统一置位入口：置位同时打「开帧门闩」——同帧后执行的 draw_sub 屏蔽行按钮点击
@@ -33,6 +34,10 @@ pub fn close_sub(g: &mut Game) {
 
 // 数字键 1..=n；submenu 为 None 时 no-op（Sim 场景 1/2/3 是调速，该场景 submenu 恒 None）
 pub fn sub_hotkey(g: &mut Game, n: usize) {
+    // v1.8.0 B4：好感事件卡独占期，弹层热键失效（防 Cult 弹层与 rmodal 并存穿透）
+    if g.rmodal.is_some() {
+        return;
+    }
     let Some(sub) = g.submenu else {
         return;
     };
@@ -58,6 +63,7 @@ pub fn sub_hotkey(g: &mut Game, n: usize) {
             2 | 3 => close_sub(g),
             _ => {}
         },
+        Sub::Atlas => {} // v1.8.0 C3：图鉴纯展示无热键（B4 守卫在前，正常不到达）
     }
 }
 
@@ -69,6 +75,13 @@ pub fn draw_sub(g: &mut Game) {
     let Some(sub) = g.submenu else {
         return;
     };
+    // v1.8.0 C3：区域图鉴自成分支（纯展示，不走通用行模板）
+    // 注：前置 if-let-return 不豁免其后 match 的穷尽性检查（rustc E0004 实证），
+    // 故 rows match 仍须补 `Sub::Atlas => unreachable!` 臂——运行时先命中上方分流，不可达。
+    if let Sub::Atlas = sub {
+        draw_atlas(g);
+        return;
+    }
     // 行数据先行构建（&g 只读借用在此结束），动作编码：
     // 0 闭关苦修 1 冲击破境 2 前往赶路 3 查看详情(仅关) 4 取消/返回(仅关)
     let (title, rows, has_back) = match sub {
@@ -107,6 +120,8 @@ pub fn draw_sub(g: &mut Game) {
                 false,
             )
         }
+        // v1.8.0 C3：已于函数头分流，编译期穷尽性占位（运行时不可达）
+        Sub::Atlas => unreachable!("draw_atlas 已于函数头分流"),
     };
     let mut act: Option<u8> = None;
     {
@@ -142,5 +157,50 @@ pub fn draw_sub(g: &mut Game) {
         }
         Some(_) => close_sub(g),
         None => {}
+    }
+}
+
+// v1.8.0 C3：区域图鉴弹层（纯展示）——五域主题、专属机制、到访状态与初至奖励。
+// panel_card(340,100,600,520)：标题/已解锁 y=130｜分隔线 y=160｜5 行 y=170+i*78（行高 70）｜
+// 返回钮 (490,566,300,42)——唯一需开帧门闩的钮。
+pub fn draw_atlas(g: &mut Game) {
+    let responsive = !g.sub_fresh;
+    panel_card(340.0, 100.0, 600.0, 520.0);
+    let unlocked = g.meta.region_visited.iter().filter(|&&v| v).count();
+    txt_c("区 域 图 鉴", 640.0, 130.0, 24, C_GOLD);
+    txt_r(
+        &format!("已解锁 {}/5", unlocked),
+        920.0,
+        132.0,
+        15,
+        C_CYAN,
+    );
+    draw_rectangle(370.0, 160.0, 540.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    for i in 0..5usize {
+        let y = 170.0 + i as f32 * 78.0;
+        if i % 2 == 0 {
+            draw_rectangle(370.0, y, 540.0, 70.0, Color::from_rgba(255, 255, 255, 6));
+        }
+        let visited = g.meta.region_visited[i]; // i 本身 0..5，直接索引安全
+        txt(MAP_THEMES[i].name, 386.0, y + 10.0, 17, C_GOLD);
+        txt_r(
+            if visited { "已至" } else { "未至" },
+            894.0,
+            y + 12.0,
+            14,
+            if visited { C_GREEN } else { C_DIM },
+        );
+        txt(REGION_MECH[i].desc, 386.0, y + 34.0, 14, C_TEXT);
+        let (dy, st) = REGION_VISIT_REWARD[i % REGION_VISIT_REWARD.len()];
+        txt(
+            &format!("初至：道韵+{} · 灵石+{}", fmt_int(dy), fmt_int(st)),
+            386.0,
+            y + 52.0,
+            14,
+            C_CYAN,
+        );
+    }
+    if button(490.0, 566.0, 300.0, 42.0, "返 回", None, true) && responsive {
+        close_sub(g);
     }
 }

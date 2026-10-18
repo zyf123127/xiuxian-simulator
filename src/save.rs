@@ -81,8 +81,12 @@ pub fn save_text(m: &Meta) -> String {
     // v1.6.0 山河万象：地图种子与地区（缺键回退默认 = 主题 0，旧档像素级等价）
     s.push_str(&format!("mseed={}\n", m.map_seed));
     s.push_str(&format!("mreg={}\n", m.map_region));
+    // v1.8.0 C5：五域到访记录（bool → 0/1 整数数组；旧档缺键 → 按 mreg 迁移，见 parse）
+    s.push_str(&format!("mvis={:?}\n", m.region_visited.map(|b| b as i32)));
     // v1.6.0 D：NPC 好感（跨世持久）
     s.push_str(&format!("nf={:?}\n", m.npc_fav));
+    // v1.8.0 D2：好感专属事件已抉择标记（bool → 0/1；旧档缺键 → 全 false）
+    s.push_str(&format!("nfe={:?}\n", m.npc_ev.map(|b| b as i32)));
     // v1.7.0：累计观看幻境广告次数（旧档缺键默认 0）
     s.push_str(&format!("adw={}\n", m.ad_watched));
     s.push_str(&format!("music={} sfx={}\n", m.music as i32, m.sfx as i32));
@@ -126,6 +130,8 @@ fn life_text(l: &Life) -> String {
     s.push_str(&format!("Lloc={}\n", l.loc));
     s.push_str(&format!("Lcfav={}\n", l.comp_fav)); // v1.6.0 D：道侣好感
     s.push_str(&format!("Lequip={:?}\n", l.equipped));
+    // v1.8.0 E：法宝灵纹等级（旧档缺键 → 全 0）
+    s.push_str(&format!("Lrlv={:?}\n", l.relic_lv));
     s.push_str(&format!("Lslot={}\n", l.slot));
     s.push_str(&format!("Lweather={}\n", l.weather));
     s
@@ -145,6 +151,7 @@ fn parse_save(text: &str) -> Meta {
     let mut in_life = false;
     let mut life = Life::default();
     let mut has_lequip = false; // v1.5.0：区分「缺键」（旧档→迁移）与「显式卸光」
+    let mut has_mvis = false; // v1.8.0 C5：区分 mvis 缺键（旧档→按 mreg 迁移）与显式记录
     let mut neme_title = String::new();
     let mut neme_name = String::new();
     let mut neme_realm = 0usize;
@@ -214,12 +221,31 @@ fn parse_save(text: &str) -> Meta {
             "mreg" => {
                 m.map_region = v.trim().parse::<u64>().unwrap_or(0) as u32;
             }
-            // v1.6.0 D：NPC 好感（缺键 → 全 0；越界 clamp 0..=100）
+            // v1.8.0 C5：五域到访（0/1 整数数组；越界位丢弃，缺键由尾块迁移）
+            "mvis" => {
+                let a = nums(v);
+                for (i, &x) in a.iter().enumerate() {
+                    if i < m.region_visited.len() {
+                        m.region_visited[i] = x != 0.0;
+                    }
+                }
+                has_mvis = true;
+            }
+            // v1.6.0 D：NPC 好感（缺键 → 全 0；越界 clamp 0..=100；v1.8.0 扩四短数组补零）
             "nf" => {
                 let a = nums(v);
-                for i in 0..2 {
+                for i in 0..4 {
                     m.npc_fav[i] = (a.get(i).copied().unwrap_or(0.0) as i32)
                         .clamp(0, crate::data::NPC_FAV_MAX);
+                }
+            }
+            // v1.8.0 D2：好感事件已抉择（0/1 整数数组；缺键 → 全 false——置位在抉择时）
+            "nfe" => {
+                let a = nums(v);
+                for (i, &x) in a.iter().enumerate() {
+                    if i < m.npc_ev.len() {
+                        m.npc_ev[i] = x != 0.0;
+                    }
                 }
             }
             // v1.7.0：广告次数（旧档缺键默认 0）
@@ -276,6 +302,14 @@ fn parse_save(text: &str) -> Meta {
                 life.equipped = nums(v).iter().map(|&x| x as usize).collect();
                 has_lequip = true;
             }
+            // v1.8.0 E：法宝灵纹等级（缺键 → 全 0；越界 clamp 0..=REFINE_MAX）
+            "Lrlv" => {
+                let a = nums(v);
+                for i in 0..8 {
+                    life.relic_lv[i] = (a.get(i).copied().unwrap_or(0.0) as i32)
+                        .clamp(0, crate::data::REFINE_MAX);
+                }
+            }
             "Lslot" => {
                 life.slot = v.trim().parse::<i64>().unwrap_or(0).clamp(0, 3) as u8;
             }
@@ -313,6 +347,12 @@ fn parse_save(text: &str) -> Meta {
     // v1.5.0：佩戴称号值域限定 {-1, 0..=14, 15}，越界一律回退自动跟随
     if !(-1..=15).contains(&m.worn_title) {
         m.worn_title = -1;
+    }
+    // v1.8.0 C5：mvis 缺键（v1.7.x 旧档）迁移——仅当前区域补记为已至，不补发奖励
+    //（奖励发放由运行时 visit_region 兜底；索引取模与 region_mech 同口径）
+    if !has_mvis {
+        let t = (m.map_region as usize) % m.region_visited.len();
+        m.region_visited[t] = true;
     }
     if in_life {
         // v1.5.0 迁移与清洗（顺序不可变）：先清 relics → 迁移 equipped → 再清 equipped
@@ -409,40 +449,70 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
         assert_eq!(m2.map_region, 0);
     }
 
-    // v1.6.0 D：好感键迁移规则（缺键全 0；越界 clamp 0..=100）
+    // v1.6.0 D：好感键迁移规则（缺键全 0；越界 clamp 0..=100）；v1.8.0：扩四短数组补零
     #[test]
     fn npc_fav_defaults_and_clamp() {
         let m = parse_save(OLD_BASE); // 旧档缺 nf/Lcfav
-        assert_eq!(m.npc_fav, [0, 0]);
+        assert_eq!(m.npc_fav, [0, 0, 0, 0]);
         assert_eq!(m.life.unwrap().comp_fav, 0);
         let t = format!("{}nf=[120, -5]\nLcfav=99\n", OLD_BASE);
         let m2 = parse_save(&t);
-        assert_eq!(m2.npc_fav, [100, 0]); // 上溢夹 100 / 负值夹 0
+        assert_eq!(m2.npc_fav, [100, 0, 0, 0]); // 上溢夹 100 / 负值夹 0 / 短数组补零
         assert_eq!(m2.life.unwrap().comp_fav, 99); // 合法值保留
+    }
+
+    // v1.8.0 C5：mvis 缺键迁移——仅当前区域（mreg%5）补记，不补发
+    #[test]
+    fn mvis_missing_derives_current_region() {
+        let m = parse_save(OLD_BASE); // 缺 mreg → 主题 0
+        assert_eq!(m.region_visited, [true, false, false, false, false]);
+        let t = format!("{}mreg=7\n", OLD_BASE); // 7 % 5 = 2
+        let m2 = parse_save(&t);
+        assert_eq!(m2.region_visited, [false, false, true, false, false]);
+    }
+
+    // v1.8.0 E：Lrlv 缺键全 0；越界 clamp 0..=REFINE_MAX
+    #[test]
+    fn lrlv_missing_zero_and_clamp() {
+        let m = parse_save(OLD_BASE);
+        assert_eq!(m.life.unwrap().relic_lv, [0; 8]);
+        let t = format!("{}Lrlv=[1, 2, 3, 9, -1]\n", OLD_BASE);
+        let m2 = parse_save(&t);
+        assert_eq!(m2.life.unwrap().relic_lv, [1, 2, 3, 3, 0, 0, 0, 0]);
     }
 
     // v1.6.0 H5 存档桥一致性：save_text → parse_save 写读回环。
     // 双端（桌面 std::fs / wasm localStorage 插件）写入的是同一段 save_text 文本、
-    // 走同一个 parse_save 解析，介质差异不影响键与格式；此测试锁死四新键的对称性。
+    // 走同一个 parse_save 解析，介质差异不影响键与格式；此测试锁死新旧键的对称性。
     #[test]
     fn roundtrip_new_keys_save_text_parse() {
         let mut m = Meta::default();
         m.map_seed = 31415926;
         m.map_region = 7;
-        m.npc_fav = [70, 25];
+        m.npc_fav = [70, 25, 40, 10];
+        m.npc_ev = [false, true, false, false];
+        m.region_visited = [false, false, true, false, false];
         let mut l = Life::default();
         l.comp_fav = 35;
+        l.relic_lv = [0, 2, 0, 0, 0, 0, 0, 3];
         m.life = Some(l);
         let text = save_text(&m);
         // 新键确实落盘（wasm localStorage 与桌面文件内容一致的前提）
         assert!(text.contains("mseed=31415926\n"));
         assert!(text.contains("mreg=7\n"));
-        assert!(text.contains("nf=[70, 25]\n"));
+        assert!(text.contains("nf=[70, 25, 40, 10]\n"));
+        assert!(text.contains("nfe=[0, 1, 0, 0]\n"));
+        assert!(text.contains("mvis=[0, 0, 1, 0, 0]\n"));
         assert!(text.contains("Lcfav=35\n"));
+        assert!(text.contains("Lrlv=[0, 2, 0, 0, 0, 0, 0, 3]\n"));
         let m2 = parse_save(&text);
         assert_eq!(m2.map_seed, 31415926);
         assert_eq!(m2.map_region, 7);
-        assert_eq!(m2.npc_fav, [70, 25]);
-        assert_eq!(m2.life.unwrap().comp_fav, 35);
+        assert_eq!(m2.npc_fav, [70, 25, 40, 10]);
+        assert_eq!(m2.npc_ev, [false, true, false, false]); // 逐位相等
+        assert_eq!(m2.region_visited, [false, false, true, false, false]); // 逐位相等
+        let l2 = m2.life.unwrap();
+        assert_eq!(l2.comp_fav, 35);
+        assert_eq!(l2.relic_lv, [0, 2, 0, 0, 0, 0, 0, 3]);
     }
 }

@@ -1812,6 +1812,19 @@ pub fn portrait_tier(realm: usize) -> usize {
 pub const RELIC_EQUIP_MAX: usize = 3;
 pub const RELIC_UNEQUIP_FRAC: f64 = 0.3;
 
+// ================= v1.8.0 E 百炼乾坤：法宝炼化 =================
+// 献祭一件法宝为材料，为目标法宝提升灵纹等级（0..=3）。
+pub const REFINE_MAX: i32 = 3;
+pub const REFINE_STEP: f64 = 0.08;
+// 炼化后战力加成：pow × (1 + 0.08×lv)
+pub fn relic_pow_at(idx: usize, lv: i32) -> f64 {
+    RELICS[idx].pow * (1.0 + REFINE_STEP * lv.clamp(0, REFINE_MAX) as f64)
+}
+// 炼化后修炼灵性：1 + (cult-1) × (1 + 0.08×lv)——cult=1.0 的纯攻法宝不虚增修炼
+pub fn relic_cult_at(idx: usize, lv: i32) -> f64 {
+    1.0 + (RELICS[idx].cult - 1.0) * (1.0 + REFINE_STEP * lv.clamp(0, REFINE_MAX) as f64)
+}
+
 // 洞府经营：聚灵阵 / 灵田 / 丹房，各 0..=3 级
 pub const DONGFU_FACS: [&str; 3] = ["聚灵阵", "灵田", "丹房"];
 pub const DONGFU_FAC_DESC: [&str; 3] = [
@@ -1945,6 +1958,81 @@ pub fn theme_of(region: u32) -> &'static MapTheme {
     &MAP_THEMES[(region as usize) % MAP_THEMES.len()]
 }
 
+// ================= v1.8.0 百炼乾坤：区域专属机制 =================
+// 五域各一机制：顶栏短标 + 一行说明；宗门任务/远征/现实闭关/模拟善缘四处挂钩。
+pub struct RegionMech {
+    pub mech: &'static str, // 机制短名（顶栏标签）
+    pub desc: &'static str, // 一行说明（≤18 字，图鉴/卡片）
+    pub quest_mult: f64,    // 宗门任务贡献与灵石
+    pub exped_mult: f64,    // 远征收益
+    pub exped_risk: f32,    // 远征成功率减益（正=更险）
+    pub cult_mult: f64,     // 现实闭关效率
+    pub event_mult: f64,    // 模拟善缘事件权重
+}
+pub const REGION_MECH: [RegionMech; 5] = [
+    // 0 东境青云：宗门兴望
+    RegionMech {
+        mech: "宗门兴望",
+        desc: "宗门兴旺，任务报偿更丰",
+        quest_mult: 1.20,
+        exped_mult: 1.00,
+        exped_risk: 0.0,
+        cult_mult: 1.00,
+        event_mult: 1.00,
+    },
+    // 1 西漠黄沙：大漠秘藏
+    RegionMech {
+        mech: "大漠秘藏",
+        desc: "大漠埋藏上古秘藏，远征收获更丰",
+        quest_mult: 1.00,
+        exped_mult: 1.25,
+        exped_risk: 0.0,
+        cult_mult: 1.00,
+        event_mult: 1.00,
+    },
+    // 2 南疆瘴林：瘴惑灵芽
+    RegionMech {
+        mech: "瘴惑灵芽",
+        desc: "瘴气惑人，远征更险而灵药更丰",
+        quest_mult: 1.00,
+        exped_mult: 1.20,
+        exped_risk: 0.08,
+        cult_mult: 1.00,
+        event_mult: 1.00,
+    },
+    // 3 北境冰原：冰心澄神
+    RegionMech {
+        mech: "冰心澄神",
+        desc: "冰原澄神定魄，现实闭关效率更高",
+        quest_mult: 1.00,
+        exped_mult: 1.00,
+        exped_risk: 0.0,
+        cult_mult: 1.15,
+        event_mult: 1.00,
+    },
+    // 4 东海仙屿：仙屿潮音
+    RegionMech {
+        mech: "仙屿潮音",
+        desc: "潮音涤心，镜像世界善缘奇遇更多",
+        quest_mult: 1.00,
+        exped_mult: 1.00,
+        exped_risk: 0.0,
+        cult_mult: 1.00,
+        event_mult: 1.20,
+    },
+];
+pub fn region_mech(region: u32) -> &'static RegionMech {
+    &REGION_MECH[(region as usize) % REGION_MECH.len()]
+}
+// 初至奖励表（道韵, 灵石）——visit_region 按 (map_region % 5) 索引
+pub const REGION_VISIT_REWARD: [(i64, i64); 5] = [
+    (30, 2000),
+    (60, 5000),
+    (100, 12000),
+    (160, 30000),
+    (260, 80000),
+];
+
 // 节点屏幕系坐标（画布 1264×480）：LOCATIONS 基准 + 主题抖动，clamp 画布安全边
 // （地图绘制/点击命中/林木规避三处共用，坐标单一来源）
 pub fn node_xy(i: usize, region: u32) -> (f32, f32) {
@@ -1958,11 +2046,23 @@ pub fn node_xy(i: usize, region: u32) -> (f32, f32) {
 
 // ================= v1.6.0 D 好感度 NPC 关系系统 =================
 
-// NPC 名与卡面描述（0 长老 1 商人；与 npc.rs NPC_ELDER/NPC_MERCHANT 对应）
-pub const NPC_NAMES: [&str; 2] = ["玄诚长老", "胡掌柜"];
-pub const NPC_DESC: [&str; 2] = [
+// NPC 名与卡面描述（v1.8.0 D1 扩四人：0长老 1商人 2宁清霜 3醉道人；
+// 与 npc.rs NPC_ELDER/NPC_MERCHANT/NPC_SENIOR/NPC_DRUNK 对应）
+pub const NPC_NAMES: [&str; 4] = ["玄诚长老", "胡掌柜", "宁清霜", "醉道人"];
+// 卡面长描述（人物页 v1.8.0 D1 版面改用一行 NPC_BRIEF；此表保留为图鉴/未来扩展数据）
+#[allow(dead_code)]
+pub const NPC_DESC: [&str; 4] = [
     "青云宗执事长老，掌外门杂役与任务分派。交情深厚者，所托任务常有厚报。",
     "临仙坊市万宝楼的胡姓掌柜，眼光毒辣。熟客购丹，向来给足面子。",
+    "青云宗大师姐，剑心通明。交情深厚者，破境之际愿以剑意相护。",
+    "来历不明的散修酒友，醉话里常藏真机。酒逢知己，修炼事半功倍。",
+];
+// 人物页卡面一行简介（单行 ≤26 字；v1.8.0 D1 新增）
+pub const NPC_BRIEF: [&str; 4] = [
+    "宗门任务的靠山，好感愈深报偿愈丰。",
+    "万宝楼掌柜，购丹价格随交情打折。",
+    "大师姐剑意护持，跨境破境更稳。",
+    "酒友真言入耳，每载修为水涨船高。",
 ];
 
 // 好感档次阈值与名称（fav ≥ 阈值即入档）
@@ -1979,6 +2079,12 @@ pub const NPC_TIER_NAMES: [&str; 5] = [
 pub const ELDER_QUEST_MULT: [f64; 5] = [1.00, 1.05, 1.10, 1.18, 1.25]; // 宗门任务收益
 pub const MERCHANT_DISC: [f64; 5] = [1.00, 0.97, 0.94, 0.90, 0.85]; // 坊市丹价乘数
 pub const COMPANION_CULT_MULT: [f64; 5] = [1.00, 1.20, 1.25, 1.30, 1.35]; // 道侣双修倍率
+// v1.8.0 D1 新 NPC 增益曲线
+pub const SENIOR_BREAK_ADD: [f32; 5] = [0.00, 0.01, 0.02, 0.03, 0.05]; // 大师姐：现实跨境破境加成
+pub const DRUNK_CULT_MULT: [f64; 5] = [1.00, 1.03, 1.06, 1.10, 1.15]; // 酒友：每载修炼效率
+
+// v1.8.0 D2：好感专属事件触发阈值（第三档「相谈甚欢」）
+pub const NPC_EVENT_FAV: i32 = 70;
 
 pub const NPC_FAV_MAX: i32 = 100;
 pub const NPC_GIFT_BASE: i64 = 500; // 赠礼基础价（×(1+档位)）

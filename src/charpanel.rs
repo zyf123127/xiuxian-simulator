@@ -40,60 +40,98 @@ pub fn draw_char_panel(g: &mut Game) {
     }
 }
 
-// ---------- 页 3：人物（v1.6.0 D 好感度：长老 / 商人 / 道侣 三卡 + 赠礼） ----------
+// ---------- 页 3：人物（v1.6.0 D 好感度；v1.8.0 D1：四 NPC 2×2 卡 + 道侣卡 + 赠礼） ----------
 fn draw_npc_page(g: &mut Game, l: &Life) {
-    for i in 0..2usize {
-        let y = 120.0 + i as f32 * 170.0; // 卡 960×160 @y=120/290
+    // 2×2 卡阵：卡 470×160 @ (160,120)/(646,120)/(160,290)/(646,290)，相对坐标
+    for i in 0..crate::npc::NPC_COUNT {
+        let (x, y) = match i {
+            0 => (160.0f32, 120.0f32),
+            1 => (646.0, 120.0),
+            2 => (160.0, 290.0),
+            _ => (646.0, 290.0),
+        };
         let fav = g.meta.npc_fav[i];
         let cost = crate::npc::gift_cost(fav);
-        draw_rectangle(160.0, y, 960.0, 160.0, Color::from_rgba(30, 24, 50, 210));
-        draw_rectangle_lines(160.0, y, 960.0, 160.0, 2.0, C_GOLD_D);
-        // v1.7.2：有 AI 覆盖立绘（全身像）则按宽高比 contain 收进 48×60、底边对齐；
-        // 无则用云纹小图标
+        draw_rectangle(x, y, 470.0, 160.0, Color::from_rgba(30, 24, 50, 210));
+        draw_rectangle_lines(x, y, 470.0, 160.0, 2.0, C_GOLD_D);
+        // 立绘：AI 覆盖（全身像）按宽高比 contain 收进 52×84、底边对齐；无则云纹小图标
         match crate::art::art().npc_ovr[i].as_ref() {
             Some(t) => {
                 let ar = t.width() / t.height().max(1.0);
-                let h = 60.0;
-                let w = (h * ar).min(48.0);
+                let h = 84.0;
+                let w = (h * ar).min(52.0);
                 let hh = w / ar;
                 draw_texture_ex(
                     t,
-                    182.0 + (48.0 - w) * 0.5,
-                    y + 14.0 + (60.0 - hh),
+                    x + 18.0 + (52.0 - w) * 0.5,
+                    y + 12.0 + (84.0 - hh),
                     WHITE,
                     DrawTextureParams {
                         dest_size: Some(vec2(w, hh)),
                         ..Default::default()
                     },
-                )
+                );
             }
-            None => draw_texture(&crate::art::art().icon_yun, 184.0, y + 18.0, WHITE),
+            None => draw_texture(&crate::art::art().icon_yun, x + 24.0, y + 18.0, WHITE),
         }
-        txt(NPC_NAMES[i], 230.0, y + 22.0, 20, C_GOLD);
-        txt_c(crate::npc::tier_name(fav), 420.0, y + 24.0, 15, C_PURPLE);
+        // 文本列 x+84
+        txt(NPC_NAMES[i], x + 84.0, y + 16.0, 18, C_GOLD);
+        txt_c(
+            crate::npc::tier_name(fav),
+            x + 210.0,
+            y + 20.0,
+            14,
+            C_PURPLE,
+        );
         txt(
             &format!("好感 {}/{}", fav, NPC_FAV_MAX),
-            500.0,
-            y + 24.0,
-            15,
+            x + 210.0,
+            y + 42.0,
+            14,
             C_TEXT,
         );
-        bar(230.0, y + 56.0, 340.0, 14.0, fav as f32 / NPC_FAV_MAX as f32, C_PURPLE);
-        // 档次刻度
+        bar(
+            x + 84.0,
+            y + 84.0,
+            230.0,
+            12.0,
+            fav as f32 / NPC_FAV_MAX as f32,
+            C_PURPLE,
+        );
+        // 档次刻度（A3 样式迁移：3px / (188,168,224,235) / 高 20；右缘 x+314 < 赠礼钮 x+320）
         for &th in NPC_FAV_TIERS.iter() {
-            let tx = 230.0 + th as f32 / NPC_FAV_MAX as f32 * 340.0;
-            draw_rectangle(tx - 1.0, y + 54.0, 2.0, 18.0, Color::from_rgba(96, 76, 130, 200));
+            let tx = x + 84.0 + th as f32 / NPC_FAV_MAX as f32 * 230.0;
+            draw_rectangle(tx - 1.5, y + 80.0, 3.0, 20.0, Color::from_rgba(188, 168, 224, 235));
         }
-        wrap_draw(NPC_DESC[i], 230.0, y + 86.0, 14, 600.0, 22.0, C_DIM);
-        // 增益一行
-        let eff = if i == crate::npc::NPC_ELDER {
-            format!("当前：宗门任务收益 ×{:.2}", crate::npc::elder_quest_mult(fav))
-        } else {
-            format!("当前：坊市丹价 ×{:.2}", crate::npc::merchant_disc(fav))
+        // 增益行（按 NPC 各表取值）
+        let eff = match i {
+            crate::npc::NPC_ELDER => {
+                format!("当前：宗门任务收益 ×{:.2}", crate::npc::elder_quest_mult(fav))
+            }
+            crate::npc::NPC_MERCHANT => {
+                format!("当前：坊市丹价 ×{:.2}", crate::npc::merchant_disc(fav))
+            }
+            crate::npc::NPC_SENIOR => format!(
+                "当前：跨境破境率 +{:.0}%",
+                crate::npc::senior_break_add(fav) * 100.0
+            ),
+            _ => format!(
+                "当前：每载修炼 ×{:.2}",
+                crate::npc::drunk_cult_mult(fav)
+            ),
         };
-        txt(&eff, 230.0, y + 134.0, 14, C_CYAN);
-        if button(920.0, y + 60.0, 150.0, 56.0, "赠礼", Some(&format!("{} 灵石", fmt_int(cost))), l.stones >= cost)
-        {
+        txt(&eff, x + 84.0, y + 108.0, 14, C_CYAN);
+        wrap_draw(NPC_BRIEF[i], x + 84.0, y + 132.0, 14, 372.0, 18.0, C_DIM);
+        // 赠礼钮（y+92..y+144，右缘 x+456 ⊂ 卡内）
+        if button(
+            x + 320.0,
+            y + 92.0,
+            136.0,
+            52.0,
+            "赠礼",
+            Some(&format!("{} 灵石", fmt_int(cost))),
+            l.stones >= cost,
+        ) {
             crate::npc::gift_npc(g, i);
             return;
         }
@@ -113,13 +151,13 @@ fn draw_npc_page(g: &mut Game, l: &Life) {
     match comp_ovr {
         Some(t) => {
             let ar = t.width() / t.height().max(1.0);
-            let h = 60.0;
-            let w = (h * ar).min(48.0);
+            let h = 84.0;
+            let w = (h * ar).min(46.0);
             let hh = w / ar;
             draw_texture_ex(
                 t,
-                182.0 + (48.0 - w) * 0.5,
-                y + 14.0 + (60.0 - hh),
+                182.0 + (46.0 - w) * 0.5,
+                y + 12.0 + (84.0 - hh),
                 WHITE,
                 DrawTextureParams {
                     dest_size: Some(vec2(w, hh)),
@@ -457,6 +495,11 @@ fn draw_relic_page(g: &mut Game, l: &Life) {
         if filled {
             draw_texture(&crate::art::art().icon_sword, 196.0, y + 18.0, WHITE);
             txt(&format!("【{}】", RELICS[r].name), 228.0, y + 14.0, 17, C_GOLD);
+            // v1.8.0 E3：灵纹等级徽标
+            let lv = g.life.as_ref().map(|x| x.relic_lv[r.min(7)]).unwrap_or(0);
+            if lv > 0 {
+                txt(&format!("+{}", lv), 352.0, y + 16.0, 15, C_PURPLE);
+            }
             txt(RELICS[r].desc, 228.0, y + 40.0, 13, C_TEXT);
             txt_c("卸下", 510.0, y + 24.0, 14, C_RED);
         } else {
@@ -532,6 +575,11 @@ fn draw_relic_page(g: &mut Game, l: &Life) {
             16,
             if owned { C_GOLD } else { C_DIM },
         );
+        // v1.8.0 E3：灵纹等级徽标
+        let lv = l.relic_lv[k.min(7)];
+        if lv > 0 {
+            txt(&format!("+{}", lv), 734.0, y + 8.0, 15, C_PURPLE);
+        }
         txt(
             rl.desc,
             780.0,
@@ -587,7 +635,7 @@ fn draw_ach_title_page(g: &mut Game, l: &Life) {
             if done { C_GOLD } else { C_DIM },
         );
         if let Some((cur, goal)) = g.ach_progress(i) {
-            txt_r(&format!("{}/{}", cur, goal), x + 272.0, y, 11, C_DIM);
+            txt_r(&format!("{}/{}", cur, goal), x + 272.0, y, 14, C_DIM); // v1.8.0 A8：11→14 字号下限
         }
     }
 
@@ -652,7 +700,7 @@ fn draw_ach_title_page(g: &mut Game, l: &Life) {
             },
             x + 56.0,
             y + 40.0,
-            12,
+            14, // v1.8.0 A8：12→14 字号下限
             if is_worn {
                 C_GOLD
             } else if earned {

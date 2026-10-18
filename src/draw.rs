@@ -39,7 +39,8 @@ pub fn button(
         if enabled {
             C_GOLD_D
         } else {
-            Color::from_rgba(66, 56, 88, 255)
+            // v1.8.0 A6：禁用描边提亮（66,56,88→96,82,124），弱可用态一眼可辨
+            Color::from_rgba(96, 82, 124, 255)
         },
     );
     if let Some(s) = sub {
@@ -48,7 +49,12 @@ pub fn button(
             x + w * 0.5,
             y + h * 0.5 - 17.0,
             20,
-            if enabled { C_TEXT } else { C_DIM },
+            // v1.8.0 A6：禁用主标 C_DIM→(184,178,196)，与可用态层级拉开
+            if enabled {
+                C_TEXT
+            } else {
+                Color::from_rgba(184, 178, 196, 255)
+            },
         );
         txt_c(
             s,
@@ -58,7 +64,8 @@ pub fn button(
             if enabled {
                 C_DIM
             } else {
-                Color::from_rgba(152, 148, 168, 255) // v1.6.0：对比度提升（110,104,120→）
+                // v1.8.0 A6：禁用副标提亮（152,148,168→178,172,192）
+                Color::from_rgba(178, 172, 192, 255)
             },
         );
     } else {
@@ -67,7 +74,12 @@ pub fn button(
             x + w * 0.5,
             y + h * 0.5 - 11.0,
             18,
-            if enabled { C_TEXT } else { C_DIM },
+            // v1.8.0 A6：禁用主标同上
+            if enabled {
+                C_TEXT
+            } else {
+                Color::from_rgba(184, 178, 196, 255)
+            },
         );
     }
     hot && enabled && is_mouse_button_pressed(MouseButton::Left)
@@ -270,21 +282,27 @@ pub fn draw_banner(g: &Game) {
         let scale = 1.0 + 0.35 * (1.0 - (k * 4.0).min(1.0));
         let size = (54.0 * scale) as u16;
         let w = measure(text, size);
+        // v1.8.0 A7：横幅带收窄为文字宽+240（原全屏横带金线横穿左栏法宝区），
+        // 居中绘制，装饰线端点随 bx 收拢
+        let bw = (w + 240.0).min(V_W - 32.0);
+        let bx = (V_W - bw) * 0.5;
         // 半透明底带提升可读性
         draw_rectangle(
-            0.0,
+            bx,
             236.0,
-            V_W,
+            bw,
             86.0,
             Color::new(0.02, 0.01, 0.05, 0.45 * a),
         );
-        draw_rectangle(0.0, 236.0, V_W, 2.0, Color::new(c.r, c.g, c.b, 0.5 * a));
-        draw_rectangle(0.0, 320.0, V_W, 2.0, Color::new(c.r, c.g, c.b, 0.5 * a));
-        // 描边底
+        draw_rectangle(bx, 236.0, bw, 2.0, Color::new(c.r, c.g, c.b, 0.5 * a));
+        draw_rectangle(bx, 320.0, bw, 2.0, Color::new(c.r, c.g, c.b, 0.5 * a));
+        // 描边底（v1.8.0 R1 修：txt_c 为中心定位，原 `V_W*0.5 - w*0.5` 再被 txt_c 减半宽，
+        // w/2 被双重应用——横幅整体左移 w/2，长标题首字被裁出左缘（既有缺陷，A7 收窄后显形）。
+        // measure 与实际墨宽一致（shot_007 实测 512 ≈ w=518），直接以屏幕中心为锚）
         for (dx, dy) in [(-2.0, 0.0), (2.0, 0.0), (0.0, -2.0), (0.0, 2.0)] {
             txt_c(
                 text,
-                V_W * 0.5 - w * 0.5 + dx,
+                V_W * 0.5 + dx,
                 250.0 + dy,
                 size,
                 Color::new(0.05, 0.02, 0.1, 0.9 * a),
@@ -292,27 +310,27 @@ pub fn draw_banner(g: &Game) {
         }
         txt_c(
             text,
-            V_W * 0.5 - w * 0.5,
+            V_W * 0.5,
             250.0,
             size,
             Color::new(c.r, c.g, c.b, a),
         );
-        // 两侧装饰线
+        // 两侧装饰线（v1.8.0 A7：端点随 bx 收拢，不再横穿左栏）
         let ly = 250.0 + size as f32 * 0.5;
-        let lw = (V_W - w) * 0.5 - 60.0;
+        let lw = (bw - w) * 0.5 - 20.0;
         if lw > 40.0 {
             draw_line(
-                60.0,
+                bx + 20.0,
                 ly,
-                60.0 + lw,
+                bx + 20.0 + lw,
                 ly,
                 2.0,
                 Color::new(c.r, c.g, c.b, 0.5 * a),
             );
             draw_line(
-                V_W - 60.0,
+                bx + bw - 20.0,
                 ly,
-                V_W - 60.0 - lw,
+                bx + bw - 20.0 - lw,
                 ly,
                 2.0,
                 Color::new(c.r, c.g, c.b, 0.5 * a),
@@ -449,6 +467,9 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
             g.play(crate::sounds::Which::Click);
             g.life = g.meta.life.clone(); // 还原现实主角（缺失则 draw_reality 黑屏）
             g.panel = 0;
+            // v1.8.0 C5：承接旧档补记当前区域到访（旧档缺 mvis 键已由 save 层迁移；
+            // 此处兜底显式已至但未记的区域——已置位则为 no-op）
+            g.visit_region(true);
             g.scene = Scene::Reality;
             g.log("轮回镜微亮，前缘未了。", C_TEXT);
         }
@@ -513,6 +534,13 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     // v1.7.0：幻境广告浮层独占输入（模态期间不画不响应其余界面）
     if g.ad.is_some() {
         draw_ad_overlay(g);
+        return;
+    }
+    // v1.8.0 D2：现实侧好感事件卡——模态独占输入（罩层在 draw_modal_card 内）
+    if g.rmodal.is_some() {
+        draw_bg(art);
+        draw_modal_card(g);
+        version_mark();
         return;
     }
     draw_bg(art);
@@ -797,22 +825,24 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
         Color::from_rgba(10, 8, 20, 255),
     );
     txt_c(&qlabel, cx, 276.0, 14, C_TEXT);
-    let mut y = 312.0;
+    // v1.8.0 A1：起点 312→298、步进 30→28——法宝值行收进 501..517，
+    // 与宿敌卡顶 540（下方 ny）净空 23px，修左栏末行被宿敌卡叠压
+    let mut y = 298.0;
     // 属性区交替行底色
     for k in 0..8 {
         if k % 2 == 0 {
             draw_rectangle(
                 20.0,
-                306.0 + k as f32 * 30.0,
+                298.0 + k as f32 * 28.0,
                 LEFT_W - 24.0,
-                30.0,
+                28.0,
                 Color::from_rgba(255, 255, 255, 6),
             );
         }
     }
     let row = |label: &str, y: f32| -> f32 {
         txt(label, 30.0, y, 16, C_DIM);
-        y + 30.0
+        y + 28.0
     };
     y = row("灵根", y);
     let rc = root_color(l.root);
@@ -1193,39 +1223,52 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
         }
     }
     // 事件弹窗（v1.6.0 B：卡面加高、选项纵排带机制摘要副标签）
-    if g.modal.is_some() {
-        let (title, text, opts) = {
-            let card = g.modal.as_ref().unwrap();
-            (
-                card.title.clone(),
-                card.text.clone(),
-                card.opts.clone(), // 保留 Eff 以生成副标签
-            )
-        };
-        draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.5));
-        panel_card(340.0, 160.0, 600.0, 400.0);
-        txt_c(&title, V_W * 0.5, 188.0, 24, C_GOLD);
-        draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
-        wrap_draw(&text, 380.0, 224.0, 17, 520.0, 28.0, C_TEXT);
-        for (i, (label, eff)) in opts.iter().enumerate() {
-            let desc = eff.eff_desc();
-            if button(
-                380.0,
-                316.0 + i as f32 * 74.0,
-                520.0,
-                62.0,
-                label,
-                Some(&desc),
-                true,
-            ) {
-                g.play(crate::sounds::Which::Click);
-                g.choose_option(i);
-            }
-        }
-    }
+    // v1.8.0 D2：抽取为 draw_modal_card（模拟侧 modal 与现实侧 rmodal 共用卡面）
+    draw_modal_card(g);
     draw_banner(g);
     draw_toast(g);
     version_mark();
+}
+
+// v1.8.0 D2：模态事件卡（modal=模拟侧事件 / rmodal=现实侧好感事件）共用绘制与回调分派：
+// Scene::Sim → choose_option（模拟侧结算），否则 → npc::choose_roption（现实侧结算）。
+pub fn draw_modal_card(g: &mut Game) {
+    if g.modal.is_none() && g.rmodal.is_none() {
+        return;
+    }
+    // rmodal 优先：现实侧事件分支（rmodal.is_some 早退位）即使残留旧 modal 也不被其顶替
+    let (title, text, opts) = {
+        let card = g.rmodal.as_ref().or(g.modal.as_ref()).unwrap();
+        (
+            card.title.clone(),
+            card.text.clone(),
+            card.opts.clone(), // 保留 Eff 以生成副标签
+        )
+    };
+    draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.5));
+    panel_card(340.0, 160.0, 600.0, 400.0);
+    txt_c(&title, V_W * 0.5, 188.0, 24, C_GOLD);
+    draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    wrap_draw(&text, 380.0, 224.0, 17, 520.0, 28.0, C_TEXT);
+    for (i, (label, eff)) in opts.iter().enumerate() {
+        let desc = eff.eff_desc();
+        if button(
+            380.0,
+            316.0 + i as f32 * 74.0,
+            520.0,
+            62.0,
+            label,
+            Some(&desc),
+            true,
+        ) {
+            g.play(crate::sounds::Which::Click);
+            if g.scene == Scene::Sim {
+                g.choose_option(i);
+            } else {
+                crate::npc::choose_roption(g, i);
+            }
+        }
+    }
 }
 
 // ================= 继承结算 =================
@@ -1398,6 +1441,7 @@ fn draw_shop(g: &mut Game, l: &Life) {
     txt(&fmt_int(l.stones), 902.0, 92.0, 20, C_CYAN);
     if button(1064.0, 74.0, 44.0, 36.0, "×", None, true) {
         g.panel = 0;
+        g.buy_pending = None; // v1.8.0 B3：关坊市清求购确认态
         g.play(crate::sounds::Which::Page);
         return;
     }
@@ -1407,6 +1451,7 @@ fn draw_shop(g: &mut Game, l: &Life) {
         let x = 300.0 + i as f32 * 170.0;
         if button(x, 74.0, 150.0, 34.0, t, None, true) {
             g.shop_tab = i as u8;
+            g.buy_pending = None; // v1.8.0 B3：切页签清求购确认态
             g.play(crate::sounds::Which::Page);
         }
         if g.shop_tab == i as u8 {
@@ -1414,34 +1459,68 @@ fn draw_shop(g: &mut Game, l: &Life) {
         }
     }
     if g.shop_tab == 2 {
-        // 点数兑换（自丹药页移入独立页签）
+        // 点数兑换（v1.8.0 A4：信息行盒加高 + 大兑换钮垂直居中 + 三行说明收编原散点提示）
         let cost = g.exchange_cost();
-        draw_rectangle(160.0, 150.0, 960.0, 46.0, Color::from_rgba(44, 30, 66, 220));
-        txt("模拟点数", 176.0, 162.0, 17, C_PURPLE);
+        draw_rectangle(160.0, 150.0, 960.0, 80.0, Color::from_rgba(44, 30, 66, 220));
+        draw_rectangle_lines(160.0, 150.0, 960.0, 80.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+        txt("模拟点数", 176.0, 170.0, 17, C_PURPLE);
         txt(
             &format!("●{}", g.meta.sim_points),
             280.0,
-            162.0,
+            170.0,
             17,
             C_PURPLE,
         );
-        txt("轮回镜以灵石为引，可无限推演", 360.0, 162.0, 14, C_DIM);
         txt_r(
-            &format!("{} 灵石 / 1点", fmt_int(cost)),
-            990.0,
-            162.0,
+            &format!("当前价 {} 灵石 / 1 点", fmt_int(cost)),
+            840.0,
+            170.0,
             15,
             C_CYAN,
         );
-        if button(1010.0, 156.0, 94.0, 36.0, "兑换", None, l.stones >= cost) {
+        // 大兑换钮（158..226 ⊂ 盒 150..230，上下各余 8px 垂直居中）
+        if button(
+            860.0,
+            158.0,
+            240.0,
+            64.0,
+            "兑换 1 点",
+            Some("灵石→模拟点"),
+            l.stones >= cost,
+        ) {
             g.play(crate::sounds::Which::Coin);
             g.exchange_points();
             return;
         }
         txt(
-            "（境界越高兑换越贵；模拟中反杀宿敌亦可得点数）",
+            "轮回镜以灵石为引——点数推演一世，死后造化归身，可无限轮回。",
             176.0,
-            216.0,
+            260.0,
+            15,
+            C_TEXT,
+        );
+        txt(
+            "兑换价随境界水涨船高；模拟中反杀宿敌亦可白得点数。",
+            176.0,
+            294.0,
+            15,
+            C_TEXT,
+        );
+        txt(
+            &format!(
+                "山穷水尽（无点无石无法宝）时，「开始模拟」将引你观看幻境，看完得 {} 点。",
+                crate::data::AD_REWARD
+            ),
+            176.0,
+            328.0,
+            15,
+            C_TEXT,
+        );
+        draw_rectangle(176.0, 380.0, 928.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+        txt(
+            "点数跨世持久（随轮回烙印存档），身死不清零——攒点推演，方是长生正途。",
+            176.0,
+            398.0,
             14,
             C_DIM,
         );
@@ -1521,12 +1600,28 @@ fn draw_shop(g: &mut Game, l: &Life) {
                     1030.0,
                     y + 6.0,
                     15,
-                    C_CYAN,
+                    // v1.8.0 A6：买不起的价格标红，与可购青色区分
+                    if l.stones >= price { C_CYAN } else { C_RED },
                 );
-                if button(1040.0, y - 8.0, 80.0, 40.0, "求购", None, l.stones >= price) {
-                    g.play(crate::sounds::Which::Coin);
-                    g.buy_tech(idx);
-                    return;
+                // v1.8.0 B3：藏经阁「求购」二次确认（仿行囊献祭 sac_pending 范式）
+                // 常态钮 80×40 @1040（不遮价格）；确认态钮 150×40 @970（盖住价格短暂可接受）
+                let confirming = g.buy_pending == Some(idx);
+                if confirming {
+                    if button(970.0, y - 8.0, 150.0, 40.0, "确认求购?", None, l.stones >= price) {
+                        g.buy_pending = None;
+                        g.buy_tech(idx);
+                        return;
+                    } else if (crate::cam::mouse().0 < 964.0
+                        || crate::cam::mouse().0 > 1126.0
+                        || crate::cam::mouse().1 < y - 10.0
+                        || crate::cam::mouse().1 > y + 42.0)
+                        && is_mouse_button_pressed(MouseButton::Left)
+                    {
+                        g.buy_pending = None; // 点外取消
+                    }
+                } else if button(1040.0, y - 8.0, 80.0, 40.0, "求购", None, l.stones >= price) {
+                    g.buy_pending = Some(idx);
+                    g.play(crate::sounds::Which::Click);
                 }
             }
         }
@@ -1584,6 +1679,7 @@ fn draw_bag(g: &mut Game, l: &Life) {
     if button(1064.0, 86.0, 44.0, 36.0, "×", None, true) {
         g.panel = 0;
         g.sac_pending = None; // v1.7.0：关行囊清献祭确认态
+        g.refine_pending = None; // v1.8.0 E3：关行囊清炼化选材态
         g.play(crate::sounds::Which::Page);
         return;
     }
@@ -1624,12 +1720,28 @@ fn draw_bag(g: &mut Game, l: &Life) {
             }
         }
     } else if g.bag_tab == 1 {
-        // 法宝行式列表：装备/卸下钮 110×40 @x=1000
-        txt("法宝（未装备仍保有 30% 灵性）", 180.0, 158.0, 16, C_DIM);
+        // 法宝行式列表：装备/卸下钮 110×40 @x=1000；献祭钮 120×40 @x=866；
+        // v1.8.0 E3：炼化钮 120×40 @x=736——点置选材态，再点取消
+        let refining = g.refine_pending;
+        if let Some(t) = refining {
+            txt(
+                &format!(
+                    "炼化中：为【{}】选一件法宝作材料（再点「炼化」取消）",
+                    RELICS[t.min(RELICS.len() - 1)].name
+                ),
+                180.0,
+                158.0,
+                16,
+                C_PURPLE,
+            );
+        } else {
+            txt("法宝（未装备仍保有 30% 灵性）", 180.0, 158.0, 16, C_DIM);
+        }
         for (k, rl) in RELICS.iter().enumerate() {
             let y = 190.0 + k as f32 * 54.0;
             let owned = l.relics.contains(&k);
             let on = l.equipped.contains(&k);
+            let lv = l.relic_lv[k.min(7)];
             draw_rectangle(
                 160.0,
                 y - 8.0,
@@ -1651,6 +1763,10 @@ fn draw_bag(g: &mut Game, l: &Life) {
                 16,
                 if owned { C_GOLD } else { C_DIM },
             );
+            // v1.8.0 E3：灵纹等级徽标
+            if lv > 0 {
+                txt(&format!("+{}", lv), 318.0, y + 2.0, 15, C_PURPLE);
+            }
             txt(
                 rl.desc,
                 360.0,
@@ -1674,30 +1790,58 @@ fn draw_bag(g: &mut Game, l: &Life) {
             } else {
                 txt_c("未得", 1055.0, y + 6.0, 14, C_DIM);
             }
-            // v1.7.0：献祭换模拟点（二次确认；点别行自动取消）
+            // v1.8.0 E3：炼化钮（owned 行）——置/清选材态（与献祭互斥）
             if owned {
-                let confirming = g.sac_pending == Some(k);
-                let lbl = if confirming {
-                    "确认献祭?".to_string()
-                } else {
-                    format!("献祭+{}", rl.pt)
-                };
-                if button(866.0, y - 4.0, 120.0, 40.0, &lbl, None, true) {
-                    if confirming {
-                        g.sac_pending = None;
-                        g.sacrifice_relic(k);
-                        return;
+                let is_target = refining == Some(k);
+                let rlbl = if is_target { "取消炼化" } else { "炼化" };
+                if button(736.0, y - 4.0, 120.0, 40.0, rlbl, None, true) {
+                    if is_target {
+                        g.refine_pending = None;
+                    } else {
+                        g.refine_pending = Some(k);
+                        g.sac_pending = None; // 互斥：置炼化清献祭
                     }
-                    g.sac_pending = Some(k);
                     g.play(crate::sounds::Which::Click);
-                } else if confirming
-                    && (crate::cam::mouse().0 < 860.0
-                        || crate::cam::mouse().0 > 990.0
-                        || crate::cam::mouse().1 < y - 10.0
-                        || crate::cam::mouse().1 > y + 42.0)
-                    && is_mouse_button_pressed(MouseButton::Left)
-                {
-                    g.sac_pending = None;
+                }
+            }
+            // v1.7.0：献祭换模拟点（二次确认；点别行自动取消）
+            // v1.8.0 E3：选材态下，其余 owned 行此钮位变「选为材料」
+            if owned {
+                if let Some(t) = refining {
+                    if t != k {
+                        if button(866.0, y - 4.0, 120.0, 40.0, "选为材料", None, true) {
+                            g.refine_pending = None;
+                            g.sac_pending = None;
+                            g.refine_relic(t, k);
+                            return;
+                        }
+                    }
+                } else {
+                    let confirming = g.sac_pending == Some(k);
+                    let lbl = if confirming {
+                        "确认献祭?".to_string()
+                    } else {
+                        format!("献祭+{}", rl.pt)
+                    };
+                    if button(866.0, y - 4.0, 120.0, 40.0, &lbl, None, true) {
+                        if confirming {
+                            g.sac_pending = None;
+                            g.refine_pending = None;
+                            g.sacrifice_relic(k);
+                            return;
+                        }
+                        g.sac_pending = Some(k);
+                        g.refine_pending = None; // 互斥：置献祭清炼化
+                        g.play(crate::sounds::Which::Click);
+                    } else if confirming
+                        && (crate::cam::mouse().0 < 860.0
+                            || crate::cam::mouse().0 > 990.0
+                            || crate::cam::mouse().1 < y - 10.0
+                            || crate::cam::mouse().1 > y + 42.0)
+                        && is_mouse_button_pressed(MouseButton::Left)
+                    {
+                        g.sac_pending = None;
+                    }
                 }
             }
         }
@@ -1749,6 +1893,8 @@ fn draw_bag(g: &mut Game, l: &Life) {
 }
 
 // ================= 轮回烙印 =================
+// v1.8.0 B1：十项烙印 5+5 页签化（复用 g.tab，零新字段）。
+// 布局（面板 200,80,880,560）：96..132 标题｜150..190 页签｜216..548 行带（5×72）｜592/614 页脚
 fn draw_upgrade_panel(g: &mut Game) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
     panel_card(200.0, 80.0, 880.0, 560.0);
@@ -1761,10 +1907,64 @@ fn draw_upgrade_panel(g: &mut Game) {
         return;
     }
     draw_rectangle(210.0, 132.0, 840.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    // 页签（原面板头两行说明文字让位给页签，motto 移入页脚）
+    let tabs = ["根骨·气数", "机缘·造化"];
+    g.tab = g.tab.min(1);
+    for (i, t) in tabs.iter().enumerate() {
+        let x = 230.0 + i as f32 * 200.0;
+        if button(x, 150.0, 190.0, 40.0, t, None, true) {
+            g.tab = i as u8;
+            g.play(crate::sounds::Which::Page);
+        }
+        if g.tab == i as u8 {
+            draw_rectangle(x, 188.0, 190.0, 3.0, C_GOLD);
+        }
+    }
+    // 行带：每页 5 行 ×72（原 10 行 ×42 一屏摊不下 72 大行，分页后行距翻近一倍）
+    let base = if g.tab == 0 { 0usize } else { 5usize };
+    for j in 0..5usize {
+        let i = base + j;
+        if i >= UPGRADES.len() {
+            break;
+        }
+        let y = 216.0 + j as f32 * 72.0;
+        let u = &UPGRADES[i];
+        let lv = g.meta.upg[i];
+        let maxed = lv >= u.max;
+        let cost = upg_cost(i, lv);
+        txt(u.name, 230.0, y + 12.0, 17, C_GOLD);
+        txt(&format!("{}/{}", lv, u.max), 350.0, y + 14.0, 15, C_TEXT);
+        txt(u.desc, 420.0, y + 14.0, 15, C_TEXT);
+        if maxed {
+            txt("圆满", 950.0, y + 14.0, 15, C_DIM);
+        } else {
+            txt_r(
+                &format!("{} 道韵", fmt_int(cost)),
+                930.0,
+                y + 14.0,
+                14,
+                C_CYAN,
+            );
+            if button(
+                946.0,
+                y + 14.0,
+                100.0,
+                44.0,
+                "顿悟",
+                None,
+                g.meta.dao_yun >= cost,
+            ) {
+                g.play(crate::sounds::Which::Ascend);
+                g.buy_upgrade(i);
+                return;
+            }
+        }
+    }
+    // 页脚（原头部说明收编：motto 归位 + 轮回总计）
     txt(
         "道韵不灭，烙印永随——纵使身死道消，来世仍享此泽。",
         230.0,
-        156.0,
+        592.0,
         14,
         C_DIM,
     );
@@ -1777,47 +1977,14 @@ fn draw_upgrade_panel(g: &mut Game) {
             fmt_num(g.meta.best_age)
         ),
         230.0,
-        176.0,
+        614.0,
         14,
         C_CYAN,
     );
-    for i in 0..UPGRADES.len() {
-        let y = 202.0 + i as f32 * 42.0;
-        let u = &UPGRADES[i];
-        let lv = g.meta.upg[i];
-        let maxed = lv >= u.max;
-        let cost = upg_cost(i, lv);
-        txt(u.name, 230.0, y + 6.0, 17, C_GOLD);
-        txt(&format!("{}/{}", lv, u.max), 350.0, y + 6.0, 15, C_TEXT);
-        txt(u.desc, 420.0, y + 6.0, 15, C_TEXT);
-        if maxed {
-            txt("圆满", 950.0, y + 6.0, 15, C_DIM);
-        } else {
-            txt_r(
-                &format!("{} 道韵", fmt_int(cost)),
-                930.0,
-                y + 6.0,
-                14,
-                C_CYAN,
-            );
-            if button(
-                940.0,
-                y - 2.0,
-                84.0,
-                36.0,
-                "顿悟",
-                None,
-                g.meta.dao_yun >= cost,
-            ) {
-                g.play(crate::sounds::Which::Ascend);
-                g.buy_upgrade(i);
-                return;
-            }
-        }
-    }
 }
 
 // ================= 帮助 =================
+// v1.8.0 B2：两页签「玩法」/「操作·技巧」，行距 41→52、字号 16→17（8 行 ×52 起点 200 底 616 < 650）
 fn draw_help_panel(g: &mut Game) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
     panel_card(140.0, 70.0, 1000.0, 580.0);
@@ -1827,7 +1994,20 @@ fn draw_help_panel(g: &mut Game) {
         g.play(crate::sounds::Which::Page);
         return;
     }
-    let lines: [&str; 12] = [
+    // 页签 @y=134 190×38
+    let tabs = ["玩法", "操作·技巧"];
+    g.help_tab = g.help_tab.min(1);
+    for (i, t) in tabs.iter().enumerate() {
+        let x = 170.0 + i as f32 * 200.0;
+        if button(x, 134.0, 190.0, 38.0, t, None, true) {
+            g.help_tab = i as u8;
+            g.play(crate::sounds::Which::Page);
+        }
+        if g.help_tab == i as u8 {
+            draw_rectangle(x, 170.0, 190.0, 3.0, C_GOLD);
+        }
+    }
+    let lines: [&str; 14] = [
         "【轮回镜】耗 1 枚模拟点数，推演“可能的你”的一生，直至死亡。",
         "【模拟前】3 选 1 天赋（仅此一梦生效）；模拟中自动修炼、游历、闭关、突破。",
         "【模拟毕】随机给出数项“造化”，选一项带回现实：修为、功法、法宝、丹药……",
@@ -1840,9 +2020,15 @@ fn draw_help_panel(g: &mut Game) {
         "【轮回烙印】道韵购买永久强化：属性下限、继承选项数、点数返还……",
         "【操作】M 键打开山河图（世界地图），C 键查看角色面板；模拟中空格暂停、数字键调速。",
         "此身虽微，万世可期。道友，请开始你的第一次模拟。",
+        // v1.8.0 B2：操作·技巧页新增两行
+        "【区域】山河图志五大区域各有专属机制：宗门兴望、大漠秘藏、瘴惑灵芽、冰心澄神、仙屿潮音——初至区域，图鉴有赏。",
+        "【炼化】行囊·法宝页可「炼化」：献祭一件法宝为材料，为另一件提升灵纹（攻效与灵性再上一层，至多 +3 级）。",
     ];
-    for (i, s) in lines.iter().enumerate() {
-        let c = if i == 0 { C_GOLD } else { C_TEXT };
-        wrap_draw(s, 180.0, 136.0 + i as f32 * 41.0, 16, 920.0, 24.0, c);
+    let base = if g.help_tab == 0 { 0usize } else { 6usize };
+    let count = if g.help_tab == 0 { 6usize } else { 8usize };
+    for j in 0..count {
+        let i = base + j;
+        let c = if j == 0 { C_GOLD } else { C_TEXT };
+        wrap_draw(lines[i], 180.0, 200.0 + j as f32 * 52.0, 17, 920.0, 30.0, c);
     }
 }

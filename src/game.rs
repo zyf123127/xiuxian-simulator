@@ -69,6 +69,8 @@ pub struct Eff {
 
     pub dy: i64,
 
+    pub contrib: u32, // v1.8.0 D2：宗门贡献（仅现实侧 apply_reff 消费；模拟侧 apply_eff 忽略）
+
     pub injure: bool,
 
     pub sect: bool,
@@ -106,6 +108,8 @@ impl Eff {
             pill: None,
 
             dy: 0,
+
+            contrib: 0,
 
             injure: false,
 
@@ -159,6 +163,9 @@ impl Eff {
         }
         if self.dy != 0 {
             parts.push(format!("道韵+{}", fmt_int(self.dy)));
+        }
+        if self.contrib > 0 {
+            parts.push(format!("贡献+{}", fmt_int(self.contrib as i64)));
         }
         if self.injure {
             parts.push("可能重伤".to_string());
@@ -293,6 +300,8 @@ pub struct Life {
 
     pub equipped: Vec<usize>, // 已装备法宝（RELICS 索引，⊆ relics，至多 RELIC_EQUIP_MAX 件；v1.5.0）
 
+    pub relic_lv: [i32; 8], // v1.8.0 E：法宝灵纹等级 0..=REFINE_MAX（按 RELICS 下标；随世持久）
+
     pub slot: u8,    // 时段 0..=3（晨/昼/昏/夜，随推岁流转；v1.5.0）
 
     pub weather: u8, // 天气 0..=4（WEATHERS 索引，随推岁演化；v1.5.0）
@@ -368,6 +377,8 @@ impl Default for Life {
             loc: NODE_START,
 
             equipped: Vec::new(),
+
+            relic_lv: [0; 8],
 
             slot: 0,
 
@@ -450,7 +461,11 @@ pub struct Meta {
 
     pub ad_watched: i32, // v1.7.0：累计观看幻境广告次数（也用于广告创意轮换）
 
-    pub npc_fav: [i32; 2], // v1.6.0 D：NPC 好感 0长老 1商人（跨世持久，0..=100）
+    pub npc_fav: [i32; 4], // v1.6.0 D：NPC 好感（v1.8.0 扩四：0长老 1商人 2宁清霜 3醉道人；跨世持久，0..=100）
+
+    pub npc_ev: [bool; 4], // v1.8.0 D2：NPC 好感专属事件已抉择标记（抉择即消耗，跨世持久）
+
+    pub region_visited: [bool; 5], // v1.8.0 C5：五域到访记录（按 map_region%5 置位，跨世持久）
 }
 
 impl Default for Meta {
@@ -504,7 +519,11 @@ impl Default for Meta {
 
             ad_watched: 0,
 
-            npc_fav: [0, 0],
+            npc_fav: [0; 4],
+
+            npc_ev: [false; 4],
+
+            region_visited: [false; 5],
         }
     }
 }
@@ -628,6 +647,16 @@ pub struct Game {
     pub char_tab: u8, // 角色面板页签 0总览 1法宝 2成就·称号（v1.5.0）
 
     pub tab: u8,
+
+    pub help_tab: u8, // v1.8.0 B2：帮助面板页签（0玩法 1操作·技巧；会话态不进存档）
+
+    pub buy_pending: Option<usize>, // v1.8.0 B3：坊市藏经阁求购二次确认（TECHS 下标；不进存档）
+
+    pub rmodal: Option<EventCard>, // v1.8.0 B4/D2：现实侧好感事件卡（模态独占输入；不进存档）
+
+    pub rmodal_npc: Option<usize>, // v1.8.0 D2：悬空事件归属 NPC（与 rmodal 同生共死；不进存档）
+
+    pub refine_pending: Option<usize>, // v1.8.0 E3：行囊法宝炼化选材态（目标法宝下标；不进存档；Esc 清理点已随 B4 前置建立）
 
     pub shop_tab: u8,
 
@@ -777,11 +806,12 @@ pub fn relic_cult(l: &Life) -> f64 {
     let mut c = 1.0;
 
     // v1.5.0 装备态：已装备法宝全额生效，未装备按 RELIC_UNEQUIP_FRAC 计三成灵性
+    // v1.8.0 E：灵纹等级经 relic_cult_at 计入
     for &r in &l.relics {
         let m = if l.equipped.contains(&r) {
-            RELICS[r].cult
+            relic_cult_at(r, l.relic_lv[r.min(7)])
         } else {
-            1.0 + (RELICS[r].cult - 1.0) * RELIC_UNEQUIP_FRAC
+            1.0 + (relic_cult_at(r, l.relic_lv[r.min(7)]) - 1.0) * RELIC_UNEQUIP_FRAC
         };
 
         c *= m;
@@ -897,12 +927,13 @@ pub fn power(l: &Life) -> f64 {
         * teff(l).power_mult.max(1.0);
 
     // v1.5.0 装备态：已装备法宝全额生效，未装备按 RELIC_UNEQUIP_FRAC 计三成灵性
+    // v1.8.0 E：灵纹等级经 relic_pow_at 计入
     for &r in &l.relics {
         p *= 1.0
             + if l.equipped.contains(&r) {
-                RELICS[r].pow
+                relic_pow_at(r, l.relic_lv[r.min(7)])
             } else {
-                RELICS[r].pow * RELIC_UNEQUIP_FRAC
+                relic_pow_at(r, l.relic_lv[r.min(7)]) * RELIC_UNEQUIP_FRAC
             };
     }
 
@@ -989,6 +1020,16 @@ impl Game {
             char_tab: 0,
 
             tab: 0,
+
+            help_tab: 0,
+
+            buy_pending: None,
+
+            rmodal: None,
+
+            rmodal_npc: None,
+
+            refine_pending: None,
 
             shop_tab: 0,
 
@@ -1198,6 +1239,9 @@ impl Game {
         );
 
         self.check_ach_all();
+
+        // v1.8.0 C5：新世开局即处当前区域（新档为东境青云）——补记到访
+        self.visit_region(true);
 
         self.sync_save();
     }
@@ -2234,6 +2278,44 @@ impl Game {
             C_GOLD,
         );
         self.show_banner(&format!("山 河 换 幕 · {}", t.name), C_GOLD);
+        // v1.8.0 C5：换幕即踏入新境——置位到访并发放初至奖励。
+        //（advance_map 为现实寻仇与模拟反杀共用口：模拟反杀亦解锁新境、奖励入现实行囊，
+        //  toast 弹于模拟界面——两路径语义一致，不加场景分支）
+        self.visit_region(true);
+    }
+
+    // v1.8.0 C5：区域到访记录——首次踏入某主题区置位；grant=true 发放初至奖励。
+    // 索引取模写死：map_region 为 wrapping u32、存档允许任意值（parse 不 clamp），
+    // 与 region_mech（data.rs）同款口径。
+    pub fn visit_region(&mut self, grant: bool) {
+        let t = (self.meta.map_region as usize) % REGION_MECH.len();
+        if self.meta.region_visited[t] {
+            return;
+        }
+        self.meta.region_visited[t] = true;
+        let tname = theme_of(self.meta.map_region).name;
+        if grant {
+            let (dy, stones) = REGION_VISIT_REWARD[t];
+            self.meta.dao_yun += dy;
+            {
+                if let Some(l) = self.life.as_mut() {
+                    l.stones += stones;
+                }
+            }
+            self.log(
+                format!(
+                    "初至【{}】，山河图志录下你的足迹：道韵+{}，灵石+{}。",
+                    tname,
+                    fmt_int(dy),
+                    fmt_int(stones)
+                ),
+                C_GOLD,
+            );
+            self.toast(format!("初至 {} · 图鉴有赏", tname), C_GOLD);
+            self.play(crate::sounds::Which::Coin);
+        } else {
+            self.log(format!("初至【{}】，山河图志录下你的足迹。", tname), C_GOLD);
+        }
     }
 
     pub fn sim_event(&mut self) {
@@ -2258,6 +2340,9 @@ impl Game {
 
             if good {
                 ww *= (1.0 + (luck - 40.0) / 120.0).max(0.4);
+                // v1.8.0 C2：区域机制「仙屿潮音」（模拟善缘事件权重；
+                // 镜像世界与现世同循山河机制——同一 map_region 口径）
+                ww *= region_mech(self.meta.map_region).event_mult as f32;
             } else {
                 ww *= (1.0 - (luck - 40.0) / 160.0).max(0.4);
             }
@@ -3858,6 +3943,10 @@ impl Game {
         // v1.5.0 四时洞天：聚灵阵层级 + 天气×所在地收益
         r *= JUELING_MULT[self.meta.dongfu[0].clamp(0, 3) as usize];
         r *= weather_loc_mult(l.weather as usize, l.loc);
+        // v1.8.0 C2：区域机制「冰心澄神」（现实闭关效率）
+        r *= region_mech(self.meta.map_region).cult_mult;
+        // v1.8.0 D1：醉道人「酒中真言」——每载修炼效率随好感档提升（不挂 cult_rate，模拟侧不受益）
+        r *= crate::npc::drunk_cult_mult(self.meta.npc_fav[crate::npc::NPC_DRUNK]);
         r * 4.0
     }
 
@@ -4255,6 +4344,10 @@ impl Game {
 
                 big_break_p(l, target)
             };
+            // v1.8.0 D1：大师姐「剑意点拨」——仅现实跨境破境加成（同境分支、渡劫分支不加；
+            // big_break_p 函数体不动，模拟侧不受影响）
+            let p = (p + crate::npc::senior_break_add(self.meta.npc_fav[crate::npc::NPC_SENIOR]))
+                .clamp(0.05, 0.95);
 
             let rd = &REALMS[target];
 
@@ -4415,23 +4508,71 @@ impl Game {
     }
 
     /// 献祭法宝换模拟点（永久失去；已装备的一并卸下）
+    /// v1.8.0 E：被献祭件带灵纹时，灵纹随之消散（lv 清零，再得重新算）
     pub fn sacrifice_relic(&mut self, k: usize) {
-        let (gain, name) = {
+        let (gain, name, refined) = {
             let Some(l) = self.life.as_mut() else { return };
             let Some(pos) = l.relics.iter().position(|&r| r == k) else {
                 return;
             };
             l.relics.remove(pos);
             l.equipped.retain(|&r| r != k);
-            (RELICS[k].pt, RELICS[k].name)
+            let refined = l.relic_lv[k.min(7)];
+            l.relic_lv[k.min(7)] = 0;
+            (RELICS[k].pt, RELICS[k].name, refined)
         };
         self.meta.sim_points += gain;
         self.log(
             format!("献祭【{}】，轮回镜折算 {} 枚模拟点数。", name, gain),
             C_CYAN,
         );
+        if refined > 0 {
+            self.log("其上灵纹随之消散。", C_DIM);
+        }
         self.play(crate::sounds::Which::Coin);
         self.check_ach_all();
+        self.sync_save();
+    }
+
+    /// v1.8.0 E：炼化——以 material 为引，为目标法宝提升一级灵纹（至多 REFINE_MAX）。
+    /// 卫语句：双方均须拥有、目标≠材料、目标未满级（满级 toast「此宝灵纹已臻圆满」）。
+    /// 材料若在装备栏，消耗时自动卸下（同献祭 retain），保住 equipped ⊆ relics 不变量。
+    pub fn refine_relic(&mut self, target: usize, material: usize) {
+        let (t_owned, m_owned, t_lv, t_name, m_name) = match self.life.as_ref() {
+            Some(l) => (
+                l.relics.contains(&target),
+                l.relics.contains(&material),
+                l.relic_lv[target.min(7)],
+                RELICS[target.min(RELICS.len() - 1)].name,
+                RELICS[material.min(RELICS.len() - 1)].name,
+            ),
+            None => return,
+        };
+        if !t_owned || !m_owned || target == material {
+            return;
+        }
+        if t_lv >= REFINE_MAX {
+            self.toast("此宝灵纹已臻圆满", C_DIM);
+            return;
+        }
+        let new_lv = {
+            let Some(l) = self.life.as_mut() else { return };
+            let Some(pos) = l.relics.iter().position(|&r| r == material) else {
+                return;
+            };
+            l.relics.remove(pos);
+            l.equipped.retain(|&r| r != material);
+            l.relic_lv[target.min(7)] += 1;
+            l.relic_lv[target.min(7)]
+        };
+        self.log(
+            format!(
+                "以【{}】为引炼化【{}】，灵纹进境 +{} 级。",
+                m_name, t_name, new_lv
+            ),
+            C_GOLD,
+        );
+        self.play(crate::sounds::Which::Ascend);
         self.sync_save();
     }
 

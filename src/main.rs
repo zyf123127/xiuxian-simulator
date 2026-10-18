@@ -35,7 +35,9 @@ fn window_conf() -> Conf {
 async fn main() {
     // v1.5.0 GF_CLEAN：净版截图模式——删档保证从头开始（必须在读档之前）；
     // 无版本水印见 draw.rs version_mark
-    if std::env::var("GF_CLEAN").is_ok() {
+    // v1.8.0：GF_DEBUG 冒烟同样删档——冒烟会直置 npc_fav 等元数据并存档，
+    // 若载入上次冒烟的存档，好感 ≥70 会在跑图途中误触好感事件模态，破坏确定性
+    if std::env::var("GF_CLEAN").is_ok() || std::env::var("GF_DEBUG").is_ok() {
         let _ = std::fs::remove_file(save::PATH);
     }
     ui::init_font();
@@ -90,18 +92,27 @@ async fn main() {
         }
         if is_key_pressed(KeyCode::Escape) {
             // v1.6.0 B：弹层优先关闭
-            if g.submenu.take().is_some() {
+            // v1.8.0 B4：好感事件卡独占期 Esc 被吞——事件必须抉择，不得绕开
+            if g.rmodal.is_some() {
+                // 吞掉：事件必须抉择
+            } else if g.submenu.take().is_some() {
                 g.play(crate::sounds::Which::Page);
             } else if g.panel != 0 {
                 g.panel = 0;
                 g.char_tab = 0; // 与角色面板 × 行为一致：关面板同时归零页签
+                // v1.8.0 B3/E3：关面板统一清各面板的挂起确认态（顺手修复既有缺陷：
+                // Esc 关行囊后 sac_pending 残留，重开仍处确认态）
+                g.sac_pending = None;
+                g.buy_pending = None;
+                g.refine_pending = None;
             } else if g.scene == Scene::World {
                 crate::world::close_world(&mut g); // 远征中有卫语句拒绝离场
             }
         }
         if g.scene == Scene::Reality {
             // v1.6.0 B：弹层打开时 C/M 暂避让，防误触穿透
-            if g.submenu.is_none() {
+            // v1.8.0 B4：好感事件卡独占期一并避让
+            if g.submenu.is_none() && g.rmodal.is_none() {
                 if is_key_pressed(KeyCode::C) {
                     g.panel = if g.panel == 5 { 0 } else { 5 };
                 }
@@ -143,12 +154,12 @@ async fn main() {
 
 // 自动驾驶：自动玩几个轮回并截图，用于无人冒烟验收
 fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
-    if frame % 120 == 30 && *shots < 56 {
+    if frame % 120 == 30 && *shots < 63 {
         let img = get_screen_data();
         let path = format!("shots/shot_{:03}.png", *shots);
         img.export_png(&path);
         *shots += 1;
-        if *shots >= 56 {
+        if *shots >= 63 {
             g.sync_save();
             std::process::exit(0);
         }
@@ -209,6 +220,7 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
         return;
     }
     // v1.7.0 死档→广告→献祭链路（51..54 置场，对应截图 052..055；frame%120 错开截图帧）
+    // v1.8.0：链路后追加扩镜 56..59（056 行囊炼化 / 057 人物页四卡 / 058 区域图鉴 / 059 帮助页签）
     if *shots >= 51 && *shots <= 54 {
         if frame % 120 == 0 {
             match *shots {
@@ -240,6 +252,82 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
                         }
                     }
                     g.sacrifice_relic(5);
+                }
+                _ => {}
+            }
+        }
+        return;
+    }
+    // v1.8.0 百炼乾坤扩镜（56..62 置场，对应截图 056..062；frame%120 单发，同死档链范式）
+    // （R1 验收补镜：060 轮回烙印页签 / 061 藏经阁求购确认态 / 062 好感事件卡 rmodal；
+    //   B4 键盘守卫链截图法不可验，保持静态代码审查口径）
+    if *shots >= 56 && *shots <= 62 {
+        if frame % 120 == 0 {
+            match *shots {
+                // 56：行囊法宝页+炼化选材态——relic_lv[0]=2 徽标入镜、row0 取消炼化 / row1 选为材料
+                56 => {
+                    g.scene = Scene::Reality;
+                    g.sim = None;
+                    g.modal = None; // 清模拟尾段可能残留的事件卡（draw_modal_card 双通道保险）
+                    g.rmodal = None;
+                    g.rmodal_npc = None;
+                    g.panel = 2;
+                    g.bag_tab = 1;
+                    g.submenu = None;
+                    if let Some(l) = g.life.as_mut() {
+                        if !l.relics.contains(&0) {
+                            l.relics.push(0);
+                        }
+                        if !l.relics.contains(&1) {
+                            l.relics.push(1);
+                        }
+                        l.relic_lv[0] = 2; // 冒烟专用：灵纹等级徽标（正式玩法不由此入账）
+                    }
+                    g.refine_pending = Some(0);
+                }
+                // 57：人物页四卡（npc_fav 直置不经 add_fav——不触发 rmodal 好感事件）
+                57 => {
+                    g.panel = 5;
+                    g.char_tab = 3;
+                    g.submenu = None;
+                    g.refine_pending = None;
+                    g.meta.npc_fav = [72, 45, 80, 20];
+                }
+                // 58：山河图志+区域图鉴弹层（顶栏机制短标一并入镜）
+                58 => {
+                    g.panel = 0;
+                    g.char_tab = 0;
+                    crate::world::open_world(g);
+                    crate::menu::open_sub(g, crate::menu::Sub::Atlas);
+                }
+                // 59：帮助面板·操作·技巧页签（清掉 58 遗留的图鉴弹层——冒烟直置不经 Esc 链）
+                59 => {
+                    g.submenu = None;
+                    crate::world::close_world(g);
+                    g.panel = 4;
+                    g.help_tab = 1;
+                }
+                // 60（R1 补镜）：轮回烙印第 2 页签「机缘·造化」（B1 行带 5..9 入镜）
+                60 => {
+                    g.panel = 3;
+                    g.tab = 1;
+                    g.play(crate::sounds::Which::Page);
+                }
+                // 61（R1 补镜）：坊市藏经阁 + 求购二次确认态（B3「确认求购?」150px 钮入镜）
+                61 => {
+                    g.panel = 1;
+                    g.shop_tab = 1;
+                    g.buy_pending = Some(1); // 冒烟直置确认态（正式玩法由求购钮置位）
+                }
+                // 62（R1 补镜）：现实侧好感事件卡（D2 rmodal 模态通道入镜；直置不经 add_fav）
+                62 => {
+                    g.panel = 0;
+                    g.buy_pending = None;
+                    g.meta.npc_fav[crate::npc::NPC_SENIOR] = 80; // 与卡面归属一致（不触发 add_fav 链）
+                    if let Some(card) = crate::npc::npc_event_card(crate::npc::NPC_SENIOR) {
+                        g.rmodal = Some(card);
+                        g.rmodal_npc = Some(crate::npc::NPC_SENIOR);
+                    }
                 }
                 _ => {}
             }

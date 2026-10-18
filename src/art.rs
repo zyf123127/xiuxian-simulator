@@ -17,9 +17,9 @@ pub struct Art {
     pub map_icons: [Texture2D; 6],
     pub portraits: [Texture2D; 4], // v1.5.0：立绘四档（0凡人 1道基 2紫府 3真仙），portrait = portraits[0]
     // v1.7.0 AI 立绘覆盖：assets/portraits/ 下有对应 PNG 则用之，缺失回退像素立绘
-    // （portrait_0..3=境界四档；npc_ovr: 0=玄诚长老 1=胡掌柜。wasm 恒回退）
+    // （portrait_0..3=境界四档；v1.8.0 npc_ovr 扩四：0玄诚长老 1胡掌柜 2宁清霜 3醉道人。wasm 恒回退）
     pub portrait_ovr: [Option<Texture2D>; 4],
-    pub npc_ovr: [Option<Texture2D>; 2],
+    pub npc_ovr: [Option<Texture2D>; 4],
     // v1.7.1 女道侣立绘：comp_0..9 与 COMPANION_NAMES 顺序一一对应（缺失回退丹药图标）
     pub comp_ovr: [Option<Texture2D>; 10],
 }
@@ -80,7 +80,7 @@ pub fn build_art() -> Art {
         map_icons,
         portraits,
         portrait_ovr: [None, None, None, None],
-        npc_ovr: [None, None],
+        npc_ovr: [None, None, None, None],
         comp_ovr: [None, None, None, None, None, None, None, None, None, None],
     };
     #[cfg(not(target_arch = "wasm32"))]
@@ -90,6 +90,9 @@ pub fn build_art() -> Art {
         }
         a.npc_ovr[0] = try_load_ovr("npc_elder");
         a.npc_ovr[1] = try_load_ovr("npc_merchant");
+        // v1.8.0 D1：新 NPC 立绘槽（缺失静默回退像素图标）
+        a.npc_ovr[2] = try_load_ovr("npc_senior");
+        a.npc_ovr[3] = try_load_ovr("npc_drunk");
         for (i, o) in a.comp_ovr.iter_mut().enumerate() {
             *o = try_load_ovr(&format!("comp_{}", i));
         }

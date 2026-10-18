@@ -148,22 +148,24 @@ pub fn sect_quest(g: &mut Game) {
     }
     let (realm, stones) = {
         let l = g.life.as_ref().unwrap();
-        // v1.5.0：宗门任务收益随天气起伏（青云宗列）；v1.6.0 D：长老好感加成
+        // v1.5.0：宗门任务收益随天气起伏（青云宗列）；v1.6.0 D：长老好感加成；
+        // v1.8.0 C2：区域机制「宗门兴望」加成
         (
             l.realm,
             (quest_stones(l.realm) as f64
                 * weather_loc_mult(l.weather as usize, NODE_SECT)
-                * crate::npc::elder_quest_mult(g.meta.npc_fav[crate::npc::NPC_ELDER]))
-                as i64,
+                * crate::npc::elder_quest_mult(g.meta.npc_fav[crate::npc::NPC_ELDER])
+                * region_mech(g.meta.map_region).quest_mult) as i64,
         )
     };
-    // v1.5.0：贡献同样随天气起伏；v1.6.0 D：长老好感加成
+    // v1.5.0：贡献同样随天气起伏；v1.6.0 D：长老好感加成；v1.8.0 C2：区域机制加成
     let contrib = (quest_contrib(realm) as f64
         * weather_loc_mult(
             g.life.as_ref().map(|l| l.weather as usize).unwrap_or(0),
             NODE_SECT,
         )
-        * crate::npc::elder_quest_mult(g.meta.npc_fav[crate::npc::NPC_ELDER])) as u32;
+        * crate::npc::elder_quest_mult(g.meta.npc_fav[crate::npc::NPC_ELDER])
+        * region_mech(g.meta.map_region).quest_mult) as u32;
     {
         let l = g.life.as_mut().unwrap();
         l.stones += stones;
@@ -329,6 +331,8 @@ pub fn exp_choose(g: &mut Game, i: usize) {
         .map(|l| l.weather as usize)
         .unwrap_or(0);
     let wxm = weather_loc_mult(wx, NODE_RUINS);
+    // v1.8.0 C2：区域机制（大漠秘藏/瘴惑灵芽影响远征收益与风险）
+    let rm = region_mech(g.meta.map_region);
     let p = {
         let l = g.life.as_ref().unwrap();
         let base = match kind {
@@ -341,7 +345,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
             2 => 0.50 + l.dao / 400.0,
             _ => 0.85 + l.dao / 600.0,
         };
-        (base + padj).clamp(0.05, 0.95)
+        (base + padj - rm.exped_risk).clamp(0.05, 0.95)
     };
     let ok = gen_range(0.0, 1.0f32) < p;
     let cur = g.world.exp.as_ref().unwrap().cur;
@@ -360,7 +364,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
             0 => {
                 // 战：灵石 + 25% 掉宝（查重，已有则折算——先例 game.rs take_inherit 法宝）
                 let scale = g.stone_scale(realm);
-                let s = (EXPED_STONE * scale * mult as f64 * wxm) as i64;
+                let s = (EXPED_STONE * scale * mult as f64 * wxm * rm.exped_mult) as i64;
                 {
                     let l = g.life.as_mut().unwrap();
                     l.stones += s;
@@ -393,7 +397,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
                 // 药：聚气丹+1 培元丹+1 + 修为
                 let gain = {
                     let l = g.life.as_ref().unwrap();
-                    qi_need(l) * EXPED_HERB_QI * mult as f64
+                    qi_need(l) * EXPED_HERB_QI * mult as f64 * rm.exped_mult
                 };
                 {
                     let l = g.life.as_mut().unwrap();
@@ -408,14 +412,14 @@ pub fn exp_choose(g: &mut Game, i: usize) {
                 // 宝：50% 灵石 / 50% 贡献
                 if gen_range(0.0, 1.0f32) < 0.5 {
                     let scale = g.stone_scale(realm);
-                    let s = (EXPED_STONE_BONE * scale * mult as f64 * wxm) as i64;
+                    let s = (EXPED_STONE_BONE * scale * mult as f64 * wxm * rm.exped_mult) as i64;
                     {
                         let l = g.life.as_mut().unwrap();
                         l.stones += s;
                     }
                     push_loot(g, format!("破禁得宝，折算灵石 {}", fmt_int(s)));
                 } else {
-                    let c = (EXPED_CONTRIB as f32 * mult) as u32;
+                    let c = (EXPED_CONTRIB as f32 * mult * rm.exped_mult as f32) as u32;
                     g.meta.sect_contrib += c;
                     push_loot(g, format!("得宗门信物，贡献+{}", c));
                 }
@@ -425,7 +429,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
                 // 奇：修为
                 let gain = {
                     let l = g.life.as_ref().unwrap();
-                    qi_need(l) * EXPED_QI_PCT * mult as f64
+                    qi_need(l) * EXPED_QI_PCT * mult as f64 * rm.exped_mult
                 };
                 {
                     let l = g.life.as_mut().unwrap();
@@ -515,6 +519,13 @@ pub fn draw_world(g: &mut Game, art: &Art) {
         g.scene = Scene::Menu;
         return;
     };
+    // v1.8.0 D2：好感事件卡模态（世界场景亦独占输入，罩层在 draw_modal_card 内）
+    if g.rmodal.is_some() {
+        draw_bg(art);
+        crate::draw::draw_modal_card(g);
+        version_mark();
+        return;
+    }
     // 覆盖层门控（P5 四处一致的总闸；v1.5.0 增洞府经营；v1.6.0 增山河弹层）
     let gate = g.world.exp.is_none() && !g.world.shop && !g.world.dev && g.submenu.is_none();
     draw_bg(art);
@@ -721,13 +732,21 @@ pub fn draw_world(g: &mut Game, art: &Art) {
         15,
         C_GOLD_D,
     );
-    // v1.5.0 四时：顶栏时段·天气
+    // v1.8.0 C4：顶栏追加区域机制短标（时段/天气、「所在」相应右移让位）
+    txt(
+        region_mech(g.meta.map_region).mech,
+        320.0,
+        17.0,
+        14,
+        C_CYAN,
+    );
+    // v1.5.0 四时：顶栏时段·天气（v1.8.0 C4：340→430）
     txt(
         &format!(
             "{}·{}",
             SLOTS[l.slot.min(3) as usize], WEATHERS[l.weather.min(4) as usize]
         ),
-        340.0,
+        430.0,
         16.0,
         15,
         C_CYAN,
@@ -737,7 +756,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             "所在：{}",
             LOCATIONS[l.loc.min(LOCATIONS.len() - 1)].name
         ),
-        440.0,
+        530.0,
         15.0,
         16,
         C_TEXT,
@@ -755,10 +774,22 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     panel_card(16.0, 552.0, 900.0, 156.0);
     let nd = &LOCATIONS[sel];
     txt(nd.name, 36.0, 564.0, 20, C_GOLD);
+    // v1.8.0 C4：行右上机制短标·说明（区域专属机制一眼可读）
+    {
+        let mech = region_mech(g.meta.map_region);
+        txt_r(
+            &format!("{} · {}", mech.mech, mech.desc),
+            900.0,
+            566.0,
+            14,
+            C_CYAN,
+        );
+    }
     if sel == l.loc {
         txt("当前所在", 140.0, 564.0, 13, C_DIM);
     } else {
-        txt("尚未抵达", 140.0, 564.0, 13, C_RED);
+        // v1.8.0 A8：13→14 字号下限
+        txt("尚未抵达", 140.0, 564.0, 14, C_RED);
     }
     wrap_draw(nd.desc, 36.0, 592.0, 14, 560.0, 24.0, C_DIM); // v1.6.0：行距 20→24（desc 3 行预算内）
     txt("可做", 36.0, 664.0, 14, C_DIM);
@@ -766,8 +797,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     // 点节点即弹 Sub::MapGo 确认，主卡只保留原地动作）
     if gate {
         if sel == l.loc {
-            match sel {
-                NODE_SECT => {
+            match sel {                NODE_SECT => {
                     if button(
                         100.0,
                         640.0,
@@ -899,10 +929,24 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                         "※ 渡劫台：冲击大境界时每重雷劫存活+2%",
                         340.0,
                         664.0,
-                        13,
+                        14, // v1.8.0 A8：13→14 字号下限
                         C_CYAN,
                     );
                 }
+            }
+        } else {
+            // v1.8.0 A5：异地主卡不再空置——一键弹「前往确认」层（与点节点同路径）
+            if button(
+                100.0,
+                640.0,
+                220.0,
+                56.0,
+                "前往此地",
+                Some("寿元-1载 · 弹层确认"),
+                true,
+            ) {
+                g.play(crate::sounds::Which::Page);
+                crate::menu::open_sub(g, crate::menu::Sub::MapGo(sel));
             }
         }
     } else if g.world.exp.is_some() {
@@ -920,16 +964,29 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     }
     // ---------- 右下卡（归返） ----------
     panel_card(928.0, 552.0, 336.0, 132.0);
-    if button(952.0, 566.0, 288.0, 48.0, "返回现实", None, gate) {
+    // v1.8.0 C3：返回现实钮 48→44 高，为区域图鉴钮（618..662）让位
+    if button(952.0, 566.0, 288.0, 44.0, "返回现实", None, gate) {
         g.play(crate::sounds::Which::Page);
         close_world(g);
     }
+    // v1.8.0 C3：区域图鉴入口（gate 已含 exp.is_none()——远征中为禁用态，仍绘制）
+    if button(
+        952.0,
+        618.0,
+        288.0,
+        44.0,
+        "区域图鉴",
+        Some("五域机制 · 初至有赏"),
+        gate,
+    ) {
+        g.play(crate::sounds::Which::Page);
+        crate::menu::open_sub(g, crate::menu::Sub::Atlas);
+    }
+    // v1.8.0 C3+A8：提示两行合并单行 y=666（否则被图鉴钮矩形下缘叠压），字号 13→14
     if g.world.exp.is_some() {
-        txt("远征未竟，不可中途离场。", 952.0, 632.0, 13, C_RED);
-        txt("完成全部步骤或就此收手后方可归返。", 952.0, 652.0, 13, C_DIM);
+        txt("远征未竟，完成或收手后方可归返。", 952.0, 666.0, 14, C_RED);
     } else {
-        txt("提示：Esc 亦可归返，M 键再临山河。", 952.0, 632.0, 13, C_DIM);
-        txt("点击地图节点可选定目的地。", 952.0, 652.0, 13, C_DIM);
+        txt("Esc 归返 · M 再临 · 点节点选定目的地。", 952.0, 666.0, 14, C_DIM);
     }
     // ---------- 商店覆盖层 ----------
     if g.world.shop {
