@@ -43,6 +43,57 @@ fn try_load_ovr(name: &str) -> Option<Texture2D> {
     Some(t)
 }
 
+// v1.8.1 wasm 内嵌立绘：H5 没有 std::fs，走 include_bytes（须先跑
+// tools/process_portraits.py 抠图压缩——内嵌的是处理后的透明小图，约 10MB）。
+// 桌面版优先读 assets/portraits/ 文件夹（换图免重编译），此表仅 wasm 兜底。
+// 注意：npc_senior / npc_drunk 尚无立绘文件，未列入——补图后各加一行 include_bytes 即可。
+#[cfg(target_arch = "wasm32")]
+fn try_load_ovr(name: &str) -> Option<Texture2D> {
+    const EMBED: &[(&str, &[u8])] = &[
+        (
+            "portrait_0",
+            include_bytes!("../assets/portraits/portrait_0.png"),
+        ),
+        (
+            "portrait_1",
+            include_bytes!("../assets/portraits/portrait_1.png"),
+        ),
+        (
+            "portrait_2",
+            include_bytes!("../assets/portraits/portrait_2.png"),
+        ),
+        (
+            "portrait_3",
+            include_bytes!("../assets/portraits/portrait_3.png"),
+        ),
+        (
+            "npc_elder",
+            include_bytes!("../assets/portraits/npc_elder.png"),
+        ),
+        (
+            "npc_merchant",
+            include_bytes!("../assets/portraits/npc_merchant.png"),
+        ),
+        ("comp_0", include_bytes!("../assets/portraits/comp_0.png")),
+        ("comp_1", include_bytes!("../assets/portraits/comp_1.png")),
+        ("comp_2", include_bytes!("../assets/portraits/comp_2.png")),
+        ("comp_3", include_bytes!("../assets/portraits/comp_3.png")),
+        ("comp_4", include_bytes!("../assets/portraits/comp_4.png")),
+        ("comp_5", include_bytes!("../assets/portraits/comp_5.png")),
+        ("comp_6", include_bytes!("../assets/portraits/comp_6.png")),
+        ("comp_7", include_bytes!("../assets/portraits/comp_7.png")),
+        ("comp_8", include_bytes!("../assets/portraits/comp_8.png")),
+        ("comp_9", include_bytes!("../assets/portraits/comp_9.png")),
+    ];
+    let bytes = EMBED
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, b)| *b)?;
+    let t = Texture2D::from_file_with_format(bytes, None);
+    t.set_filter(FilterMode::Linear);
+    Some(t)
+}
+
 // v1.6.0 C 仇敌换图：地图底图缓存（region, seed) → Texture2D，容量 8 上限淘汰最旧。
 // 主题 0/默认种子会命中 v1.5.0 逐值路径（像素级等价），仅换幕后重建。
 static MAP_BG_CACHE: Mutex<Vec<(u32, u32, Texture2D)>> = Mutex::new(Vec::new());
@@ -93,6 +144,19 @@ pub fn build_art() -> Art {
         // v1.8.0 D1：新 NPC 立绘槽（缺失静默回退像素图标）
         a.npc_ovr[2] = try_load_ovr("npc_senior");
         a.npc_ovr[3] = try_load_ovr("npc_drunk");
+        for (i, o) in a.comp_ovr.iter_mut().enumerate() {
+            *o = try_load_ovr(&format!("comp_{}", i));
+        }
+    }
+    // v1.8.1：wasm 走 include_bytes 内嵌立绘（见 try_load_ovr wasm 版）
+    #[cfg(target_arch = "wasm32")]
+    {
+        for (i, o) in a.portrait_ovr.iter_mut().enumerate() {
+            *o = try_load_ovr(&format!("portrait_{}", i));
+        }
+        a.npc_ovr[0] = try_load_ovr("npc_elder");
+        a.npc_ovr[1] = try_load_ovr("npc_merchant");
+        // npc_senior / npc_drunk 未内嵌（无文件）→ 回退像素图标
         for (i, o) in a.comp_ovr.iter_mut().enumerate() {
             *o = try_load_ovr(&format!("comp_{}", i));
         }
