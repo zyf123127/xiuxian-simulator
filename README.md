@@ -39,6 +39,7 @@ Rust + macroquad 开发的**模拟器流修仙游戏**：主角是获得【轮�
 ## 版本历史
 
 - **v1.8.7**：帧时钟三级自动切换（K80 Pro "卡在加载中"根因）——TapTap 容器对不可见页面会同时挂起 rAF、钳制定时器、甚至静默禁用 blob Worker（v1.8.6 的 Worker 时钟在该环境不运行且无回退）；改为三级时钟候选按可靠性排序（MessageChannel 自循环 → Web Worker → setTimeout），看门狗 2.5 秒实测帧率不足自动切换，errlog 输出实际模式与帧率；MessageChannel 的 port 消息在 Chromium 系 hidden 页面不被节流，实测 53fps。
+- **v1.9.0**：发行物自带 AI 立绘——立绘查找改为三通道（CWD/assets/portraits → exe 同级/assets/portraits → **内嵌**），内嵌集与 TapTap 包同源（640px 量化版 0.88MB）：**单独下载的 exe 开箱即显示立绘**（此前发行版 exe 无 assets 文件夹只能看到像素立绘）；开发换图仍走文件夹（优先级最高、免重编译）；wasm 恒用内嵌。
 - **v1.8.8**：帧驱动 v2 多时钟共存——v1.8.7 发现三级时钟启动后仍会停摆（MessageChannel 循环在某类容器遮挡下整体死亡），改为**所有时钟同时启动**（原生 rAF + MessageChannel 心跳 + Worker 定时器 + setTimeout 兜底），帧率由全局门闩统一限制 ~60fps（多时钟不叠加）；停摆看门狗：>800ms 无帧自动重建 MessageChannel 通道。
 - **v1.8.6**：触控延迟二次修复——v1.8.5 的 Worker 唤醒虽恢复消息源，但帧仍排在 setTimeout(16) 里，被 TapTap 容器标记为不可见的页面会将该定时器钳到 1 秒/次（游戏 ~1fps，K80 Pro 二测"点按钮有很大延迟"根因）；改为 Worker postMessage **直接同步执行**帧回调（热路径无任何可被节流的定时器），Worker 不可用时回退 setInterval 并在 errlog 输出实测帧率；指针通道补光标位置同步（容器不发 mousemove 时按下也能命中）与 pointer 事件兜底、输入首达诊断标记。
 - **v1.8.5**：触控延迟修复——帧时钟搬进 Web Worker（Worker 内定时器不受页面可见性钳制），postMessage 唤醒主线程排帧；Worker 不可用环境回退定时器驱动。

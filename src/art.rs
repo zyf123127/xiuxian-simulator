@@ -37,18 +37,34 @@ pub fn art() -> &'static Art {
 // v1.7.0：尝试加载 AI 立绘覆盖（文件缺失静默回退；仅桌面）
 #[cfg(not(target_arch = "wasm32"))]
 fn try_load_ovr(name: &str) -> Option<Texture2D> {
-    let bytes = std::fs::read(format!("assets/portraits/{}.png", name)).ok()?;
-    let t = Texture2D::from_file_with_format(&bytes, None);
-    t.set_filter(FilterMode::Linear);
-    Some(t)
+    // v1.8.9：查找顺序 CWD/assets/portraits → exe 同级 assets/portraits → 内嵌
+    //（内嵌与 TapTap 包同源，发布版单独 exe 也自带立绘）
+    let rel = format!("assets/portraits/{}.png", name);
+    let mut paths = vec![rel.clone()];
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            paths.push(dir.join(&rel).to_string_lossy().to_string());
+        }
+    }
+    for p in paths {
+        if let Ok(bytes) = std::fs::read(&p) {
+            return Some(tex_from_bytes(&bytes));
+        }
+    }
+    embedded_bytes(name).map(tex_from_bytes)
 }
 
-// v1.8.1 wasm 内嵌立绘：H5 没有 std::fs，走 include_bytes（须先跑
-// tools/process_portraits.py 抠图压缩——内嵌的是处理后的透明小图，约 10MB）。
-// 桌面版优先读 assets/portraits/ 文件夹（换图免重编译），此表仅 wasm 兜底。
+fn tex_from_bytes(bytes: &[u8]) -> Texture2D {
+    let t = Texture2D::from_file_with_format(bytes, None);
+    t.set_filter(FilterMode::Linear);
+    t
+}
+
+// v1.8.9 内嵌立绘表：与 TapTap 包同源（assets/portraits_wasm，640px 量化版）。
+// 三通道查找：桌面 = 文件夹（CWD/exe 同级，换图免重编译）→ 内嵌兜底（发布版
+// 单独 exe 自带立绘）；wasm 恒用内嵌。
 // 注意：npc_senior / npc_drunk 尚无立绘文件，未列入——补图后各加一行 include_bytes 即可。
-#[cfg(target_arch = "wasm32")]
-fn try_load_ovr(name: &str) -> Option<Texture2D> {
+fn embedded_bytes(name: &str) -> Option<&'static [u8]> {
     const EMBED: &[(&str, &[u8])] = &[
         (
             "portrait_0",
@@ -85,13 +101,15 @@ fn try_load_ovr(name: &str) -> Option<Texture2D> {
         ("comp_8", include_bytes!("../assets/portraits_wasm/comp_8.png")),
         ("comp_9", include_bytes!("../assets/portraits_wasm/comp_9.png")),
     ];
-    let bytes = EMBED
+    EMBED
         .iter()
         .find(|(n, _)| *n == name)
-        .map(|(_, b)| *b)?;
-    let t = Texture2D::from_file_with_format(bytes, None);
-    t.set_filter(FilterMode::Linear);
-    Some(t)
+        .map(|(_, b)| *b)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn try_load_ovr(name: &str) -> Option<Texture2D> {
+    embedded_bytes(name).map(tex_from_bytes)
 }
 
 // v1.6.0 C 仇敌换图：地图底图缓存（region, seed) → Texture2D，容量 8 上限淘汰最旧。
