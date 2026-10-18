@@ -77,8 +77,8 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.8.4";</script>
-    <script src="mq_js_bundle.js?v=1.8.4"></script>
+    <script>var GAME_VER = "1.8.5";</script>
+    <script src="mq_js_bundle.js?v=1.8.5"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -235,10 +235,37 @@
             // "点按钮没反应"的最终根因）。setTimeout 前台 ~16ms ≈ 60fps，
             // 且不受可见性挂起影响。单帧源、零逻辑改动。
             (function () {
-                window.requestAnimationFrame = function (cb) {
-                    return setTimeout(function () { cb(performance.now()); }, 16);
+                var cb = null;
+                var pending = 0;
+                var schedule = function () {
+                    if (pending) return;
+                    pending = setTimeout(function () {
+                        pending = 0;
+                        if (cb) cb(performance.now());
+                    }, 16);
                 };
-                window.cancelAnimationFrame = function (id) { clearTimeout(id); };
+                window.requestAnimationFrame = function (f) {
+                    cb = f;
+                    schedule();
+                    return 0;
+                };
+                window.cancelAnimationFrame = function (id) {
+                    if (pending) { clearTimeout(pending); pending = 0; }
+                };
+                // v1.8.5 关键修复：帧时钟搬进 Web Worker。被 TapTap 容器标记为
+                // 不可见的页面里，主线程 setTimeout 会被钳到 1 秒/次——游戏以
+                // 1fps 运行（K80 Pro 二测"很大延迟、按好几下才进去"的根因）。
+                // Worker 内定时器不受可见性节流，postMessage 每 16ms 唤醒主线程
+                // 排帧；Worker 创建失败时回退 setTimeout（最差 1fps 不冻结）。
+                try {
+                    var wcode = "setInterval(function(){postMessage(0)},16);";
+                    var worker = new Worker(
+                        URL.createObjectURL(new Blob([wcode], { type: "application/javascript" })),
+                    );
+                    worker.onmessage = schedule;
+                } catch (e) {
+                    setInterval(schedule, 16);
+                }
             })();
             xx_stage("编译游戏引擎…");
             try {
