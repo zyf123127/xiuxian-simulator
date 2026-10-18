@@ -38,6 +38,7 @@ Rust + macroquad 开发的**模拟器流修仙游戏**：主角是获得【轮�
 
 ## 版本历史
 
+- **v1.9.2**：坐标偏移真修——v1.9.1 的 backing 重同步挂在固定 1 秒定时器与"backing≠CSS×dpr"差异检测上，手机上 wasm 10~40 秒才就绪（定时器空跑）、dpr 又稳定（检测永不触发），screen_size 依旧停留初始 1280×720，激活点仍在按钮左上方。改为**wasm 就绪钩子**（pollFirstFrame 检测到 exports 即无条件强制重同步，+2s 兜底一次）；加载层与诊断区显示版本号（防真机吃旧缓存误判）。
 - **v1.9.1**：TapTap 真机"无法进入游戏、点击没反应"最终根因修复——macroquad 模板遗留的 `window.load` 监听器在文档资源就绪时就把加载层 `display:none`（**不等待 wasm**，fetch 不阻塞 load 事件），加载层在打开约 1 秒即被撤掉，手机上此后 10~40 秒下载+编译期间是纯黑画布：12s/30s 分阶段提示与 45s 重试看门狗全部被废，点哪都没反应。修复：删除该监听器，加载层只由 pollFirstFrame（wasm_exports 就绪）负责隐藏；加载提示统一走 ld_msg 消息节点（不再覆盖掉进度条），并叠加"已等待 N 秒"活体反馈。
 - **v1.8.7**：帧时钟三级自动切换（K80 Pro "卡在加载中"根因）——TapTap 容器对不可见页面会同时挂起 rAF、钳制定时器、甚至静默禁用 blob Worker（v1.8.6 的 Worker 时钟在该环境不运行且无回退）；改为三级时钟候选按可靠性排序（MessageChannel 自循环 → Web Worker → setTimeout），看门狗 2.5 秒实测帧率不足自动切换，errlog 输出实际模式与帧率；MessageChannel 的 port 消息在 Chromium 系 hidden 页面不被节流，实测 53fps。
 - **v1.9.0**：发行物自带 AI 立绘——立绘查找改为三通道（CWD/assets/portraits → exe 同级/assets/portraits → **内嵌**），内嵌集与 TapTap 包同源（640px 量化版 0.88MB）：**单独下载的 exe 开箱即显示立绘**（此前发行版 exe 无 assets 文件夹只能看到像素立绘）；开发换图仍走文件夹（优先级最高、免重编译）；wasm 恒用内嵌。

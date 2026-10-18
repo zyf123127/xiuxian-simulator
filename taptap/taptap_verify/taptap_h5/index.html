@@ -77,8 +77,8 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.1";</script>
-    <script src="mq_js_bundle.js?v=1.9.1"></script>
+    <script>var GAME_VER = "1.9.2";</script>
+    <script src="mq_js_bundle.js?v=1.9.2"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -197,7 +197,8 @@
         function xx_paint_stage() {
             if (xxMsg && xxLoading && !xxLoading.classList.contains("hidden")) {
                 var s = Math.round((performance.now() - xxLoadStart) / 1000);
-                xxMsg.textContent = "凡人修仙 · " + xxStageMsg + "（已等待 " + s + " 秒）";
+                xxMsg.textContent =
+                    "凡人修仙 v" + GAME_VER + " · " + xxStageMsg + "（已等待 " + s + " 秒）";
             }
         }
         function xx_stage(msg) {
@@ -205,6 +206,23 @@
             xx_paint_stage();
         }
         setInterval(xx_paint_stage, 1000);
+        // 诊断区盖上版本号：真机反馈时一眼确认跑的是哪版（防"上传了但设备吃旧缓存"）
+        errlog.textContent = "v" + GAME_VER + (errlog.textContent ? "\n" + errlog.textContent : "");
+
+        // v1.9.2：backing 强制重同步（提升到块级作用域——pollFirstFrame 的 wasm
+        // 就绪钩子也要用）。置 0 后 dispatch resize，强制 bundle 的 resize() 走
+        // "变化"分支、必然回调 wasm_exports.resize(backing)——screen_size 与
+        // canvas.width 严格同步，渲染与输入回到同一坐标系。
+        // 背景：bundle 的 resize() 仅在 canvas.width 与重算值不同时才通知 wasm，
+        // 启动期 setup_canvas_size 静默设好 backing 且不通知 → wasm 的 screen_size
+        // 停留初始 1280×720 → 信箱相机 fit 失真 → 游戏收到的虚拟坐标整体偏移
+        // （按钮激活点跑到左上方），渲染被 GL 拉伸再被 CSS 缩回（不变形但降质）。
+        window.resyncBacking = function () {
+            var cv = document.getElementById("glcanvas");
+            cv.width = 0;
+            cv.height = 0;
+            window.dispatchEvent(new Event("resize"));
+        };
         window.onerror = function (msg, src, line, col, err) {
             errlog.textContent += "ERR: " + msg + " @" + (src || "") + ":" + line + "\n" +
                 (err && err.stack ? err.stack : "") + "\n";
@@ -370,11 +388,24 @@
         // 提前撤掉加载层，玩家面对黑屏点击（点按钮没反应的第一诱因）。
         (function pollFirstFrame() {
             var loading = document.getElementById("loading");
+            var synced = false;
+            function onReady() {
+                if (synced) return;
+                synced = true;
+                loading.classList.add("hidden");
+                // v1.9.2 关键修复：wasm 就绪那一刻无条件强制重同步 backing。
+                // v1.9.1 的重同步只挂在固定 1 秒定时器与"backing ≠ CSS×dpr"差异
+                // 检测上：手机上 wasm 10~40 秒后才就绪（1 秒定时器早已空跑），
+                // dpr 又稳定（差异检测永不触发）——setup_canvas_size 静默设置的
+                // backing 始终没通知 wasm，screen_size 停留初始 1280×720，虚拟
+                // 坐标整体偏移（激活点在按钮左上方）依旧。就绪钩子保证任何设备、
+                // 任何时序下，backing 与 wasm screen_size 必然同步一次；此后
+                // 尺寸再变化走 bundle 的 resize（带 wasm 通知）+ 差异检测兜底。
+                window.resyncBacking();
+                setTimeout(window.resyncBacking, 2000); // 兜底：就绪初期容器布局抖动
+            }
             var timer = setInterval(function () {
-                if (window.wasm_exports) {
-                    clearInterval(timer);
-                    loading.classList.add("hidden");
-                }
+                if (window.wasm_exports) onReady();
             }, 250);
         })();
         // v1.8.2 指针自愈（两条）：
@@ -486,21 +517,10 @@
                 };
             };
             setInterval(takeOver, 500);
-            // v1.9.1 backing/screen 强制重同步（TapTap"点击命中点偏移到按钮左上方"的根因）：
-            // bundle 的 resize() 仅在 canvas.width 与重算值不同时才通知 wasm——启动期
-            // setup_canvas_size 已按当时 dpr 设好 backing 且不通知 wasm，随后容器缩放
-            // /dpr 漂移，即使 dispatch resize 让 bundle 重算，若结果与 stale 值巧合相等
-            // 也永不通知 → wasm 侧 screen_size 永久停留初始 1280×720，而 canvas.width
-            // 是真实 backing → 信箱相机 fit 失真 → 游戏收到的虚拟坐标整体放大
-            // （IAB 实测 ×1.5，按钮激活点跑到左上方；渲染被 GL 拉伸再被 CSS 缩回，
-            // 画面不变形但隐性降质）。修复：dispatch 前先把 backing 置 0，强制 bundle
-            // 走"变化"分支、必然回调 wasm_exports.resize(backing)——screen_size 与
-            // canvas.width 严格同步，渲染与输入回到同一坐标系。
-            function resyncBacking() {
-                canvas.width = 0;
-                canvas.height = 0;
-                window.dispatchEvent(new Event("resize"));
-            }
+            // v1.9.2 差异检测维持同步：容器缩放/dpr 漂移导致 backing ≠ CSS×dpr 时
+            // 重新强制同步（resyncBacking 定义见上方块级作用域；置 0 保证 wasm 必然
+            // 收到 resize 通知）。注意这只覆盖"dpr 漂移"场景——dpr 稳定的手机上
+            // 该检测永不触发，启动期的静默失步由 pollFirstFrame 的就绪钩子负责。
             var heals = 0;
             setInterval(function () {
                 if (!window.wasm_exports) return;
@@ -509,14 +529,9 @@
                 var h = Math.floor(canvas.clientHeight * dpr);
                 if ((canvas.width !== w || canvas.height !== h) && heals < 30) {
                     heals += 1;
-                    resyncBacking();
+                    window.resyncBacking();
                 }
             }, 1500);
-            // 启动同步：wasm 就绪 1 秒后无条件做一次——覆盖"启动期 dpr 漂移后
-            // stale 值与新值巧合相等、差异检测永不触发"的窗口
-            setTimeout(function () {
-                if (window.wasm_exports) resyncBacking();
-            }, 1000);
             // 竖持提示：横版游戏竖持时世界两侧出屏、按钮不可见——给出引导而不是
             // 让玩家以为"点了没反应"
             var rot = document.createElement("div");
