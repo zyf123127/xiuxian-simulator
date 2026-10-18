@@ -52,38 +52,38 @@ fn try_load_ovr(name: &str) -> Option<Texture2D> {
     const EMBED: &[(&str, &[u8])] = &[
         (
             "portrait_0",
-            include_bytes!("../assets/portraits/portrait_0.png"),
+            include_bytes!("../assets/portraits_wasm/portrait_0.png"),
         ),
         (
             "portrait_1",
-            include_bytes!("../assets/portraits/portrait_1.png"),
+            include_bytes!("../assets/portraits_wasm/portrait_1.png"),
         ),
         (
             "portrait_2",
-            include_bytes!("../assets/portraits/portrait_2.png"),
+            include_bytes!("../assets/portraits_wasm/portrait_2.png"),
         ),
         (
             "portrait_3",
-            include_bytes!("../assets/portraits/portrait_3.png"),
+            include_bytes!("../assets/portraits_wasm/portrait_3.png"),
         ),
         (
             "npc_elder",
-            include_bytes!("../assets/portraits/npc_elder.png"),
+            include_bytes!("../assets/portraits_wasm/npc_elder.png"),
         ),
         (
             "npc_merchant",
-            include_bytes!("../assets/portraits/npc_merchant.png"),
+            include_bytes!("../assets/portraits_wasm/npc_merchant.png"),
         ),
-        ("comp_0", include_bytes!("../assets/portraits/comp_0.png")),
-        ("comp_1", include_bytes!("../assets/portraits/comp_1.png")),
-        ("comp_2", include_bytes!("../assets/portraits/comp_2.png")),
-        ("comp_3", include_bytes!("../assets/portraits/comp_3.png")),
-        ("comp_4", include_bytes!("../assets/portraits/comp_4.png")),
-        ("comp_5", include_bytes!("../assets/portraits/comp_5.png")),
-        ("comp_6", include_bytes!("../assets/portraits/comp_6.png")),
-        ("comp_7", include_bytes!("../assets/portraits/comp_7.png")),
-        ("comp_8", include_bytes!("../assets/portraits/comp_8.png")),
-        ("comp_9", include_bytes!("../assets/portraits/comp_9.png")),
+        ("comp_0", include_bytes!("../assets/portraits_wasm/comp_0.png")),
+        ("comp_1", include_bytes!("../assets/portraits_wasm/comp_1.png")),
+        ("comp_2", include_bytes!("../assets/portraits_wasm/comp_2.png")),
+        ("comp_3", include_bytes!("../assets/portraits_wasm/comp_3.png")),
+        ("comp_4", include_bytes!("../assets/portraits_wasm/comp_4.png")),
+        ("comp_5", include_bytes!("../assets/portraits_wasm/comp_5.png")),
+        ("comp_6", include_bytes!("../assets/portraits_wasm/comp_6.png")),
+        ("comp_7", include_bytes!("../assets/portraits_wasm/comp_7.png")),
+        ("comp_8", include_bytes!("../assets/portraits_wasm/comp_8.png")),
+        ("comp_9", include_bytes!("../assets/portraits_wasm/comp_9.png")),
     ];
     let bytes = EMBED
         .iter()

@@ -1,17 +1,21 @@
-# 立绘预处理：抠背景(边连通域) → 裁人物包围盒 → 等比缩放到统一高度 → PNG 优化
-# 用法：python tools/process_portraits.py [目标高度，默认 1024]
-# 原图在 git 历史中（v1.8.0 提交），本脚本就地覆盖 assets/portraits/*.png
+# 立绘预处理：抠背景(边连通域) → 裁人物包围盒 → 等比缩放 → PNG 优化
+# 用法：python tools/process_portraits.py [桌面集高度，默认 1024]
+# 就地覆盖 assets/portraits/*.png（原始大图在 git 历史 v1.8.0 提交可找回）；
+# 并同步生成 assets/portraits_wasm/（640px 高 + 256 色量化，供 wasm 内嵌，体积约 1/3）
 import glob
+import os
 import sys
 
 import numpy as np
 from PIL import Image, ImageFilter
 
 TARGET_H = int(sys.argv[1]) if len(sys.argv) > 1 else 1024
+WASM_DIR = "assets/portraits_wasm"
+WASM_H = 640
 T_DIST = 34  # 与背景色的 RGB 距离和阈值：低于视为背景
 
 
-def process(path: str) -> tuple[str, int, int]:
+def process(path: str) -> tuple[str, int, int, int, int]:
     im = Image.open(path).convert("RGBA")
     w, h = im.size
     a = np.asarray(im).astype(np.int16)
@@ -57,6 +61,13 @@ def process(path: str) -> tuple[str, int, int]:
     scale = TARGET_H / im3.height
     im3 = im3.resize((max(1, round(im3.width * scale)), TARGET_H), Image.LANCZOS)
     im3.save(path, "PNG", optimize=True)
+    # wasm 内嵌集：再降到 640px 高 + 256 色量化（游戏内最大显示高度 ~270 物理像素，
+    # 640 仍有 2.4 倍冗余；量化后单张 ~200KB，16 张约 3.5MB）
+    os.makedirs(WASM_DIR, exist_ok=True)
+    ws = os.path.join(WASM_DIR, os.path.basename(path))
+    scale2 = WASM_H / im3.height
+    imw = im3.resize((max(1, round(im3.width * scale2)), WASM_H), Image.LANCZOS)
+    imw.quantize(colors=256, method=Image.FASTOCTREE).save(ws, "PNG", optimize=True)
     return (path, im.size, im3.size)
 
 

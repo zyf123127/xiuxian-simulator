@@ -77,8 +77,8 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.8.1";</script>
-    <script src="mq_js_bundle.js?v=1.8.1"></script>
+    <script>var GAME_VER = "1.8.2";</script>
+    <script src="mq_js_bundle.js?v=1.8.2"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -140,8 +140,28 @@
             register_plugin: function (importObject) {
                 importObject.env.gf_max_texture_size = function () { return xx_probe_max_tex() | 0; };
             },
+            // v1.8.2 注意：on_init 是无参调用（bundle: e[t].on_init()），拿不到
+            // exports；就绪信号改由下方 WebAssembly.instantiate 钩子赋值。
             on_init: function () {}
         });
+
+        // v1.8.2 关键修复：加载层"就绪"信号。此前 window.wasm_exports 从未被
+        // 任何人赋值——12 秒看门狗必然把加载层变成"加载失败·点击重试"覆盖层
+        //（pointer-events:auto + reload），玩家一点就无限重载：手机上表现为
+        // "点按钮没反应/再也加载不进去"。这里包装 WebAssembly.instantiate，
+        // 实例化完成即把 exports 挂到 window（bundle 的 load 走 compileStreaming
+        // + WebAssembly.instantiate 两步，本钩子先于 bundle 的 then 执行）。
+        (function () {
+            var _inst = WebAssembly.instantiate;
+            WebAssembly.instantiate = function () {
+                return _inst.apply(this, arguments).then(function (res) {
+                    if (res && res.instance && res.instance.exports) {
+                        window.wasm_exports = res.instance.exports;
+                    }
+                    return res;
+                });
+            };
+        })();
 
         // 打不开诊断：无 WebGL / 无 WebAssembly 时给出可见提示，而不是无限白屏
         function xx_gpu_report() {
@@ -214,8 +234,24 @@
             } catch (e) {
                 errlog.textContent += "load() threw: " + (e && e.message ? e.message : e) + "\n";
             }
-            // 加载看门狗：12 秒仍未启动（无 WebGL/无 WASM/网络失败都会卡在
-            // 白屏加载层）则把加载层变成可点的重试按钮，不再无限等待
+            // 加载分阶段提示：游戏包含内嵌立绘、体积较大，手机上首次下载+编译
+            // 需要 10~40 秒——中途给状态文字，避免玩家以为卡死
+            var ld0 = document.getElementById("loading");
+            var stageTimers = [
+                [12, "游戏包较大，首次加载约需 10~40 秒，请稍候…"],
+                [30, "仍在编译游戏引擎（低端设备会慢一些），请继续等待…"],
+            ];
+            stageTimers.forEach(function (st) {
+                setTimeout(function () {
+                    if (!window.wasm_exports && ld0 && !ld0.classList.contains("hidden")) {
+                        ld0.textContent = st[1];
+                    }
+                }, st[0] * 1000);
+            });
+            // 加载看门狗：45 秒仍未就绪（无 WebGL/无 WASM/网络失败都会卡在
+            // 白屏加载层）才把加载层变成可点的重试按钮。
+            // v1.8.2 前此值为 12 秒且 window.wasm_exports 恒为 undefined，
+            // 手机上必触发"加载失败→点击→reload"无限循环（玩家实测反馈）。
             setTimeout(function () {
                 if (!window.wasm_exports) {
                     var ld = document.getElementById("loading");
@@ -225,26 +261,107 @@
                         ld.onclick = function () { location.reload(); };
                     }
                 }
-            }, 12000);
+            }, 45000);
         }
-        // 首帧检测：wasm 导出就绪即隐藏加载覆盖层（就绪后约一帧内出画面）。
-        // 用 setInterval 而非 rAF 驱动：rAF 在页面不可见时会被浏览器挂起；
-        // 保留 8 秒兜底防异常。
+        // 首帧检测：wasm 导出就绪（on_init 里 window.wasm_exports 被赋值）即隐藏
+        // 加载覆盖层。用 setInterval 而非 rAF：页面不可见时 rAF 会被挂起。
+        // v1.8.2：删除旧的"8 秒无条件隐藏"兜底——它会在 12MB 包还在编译时
+        // 提前撤掉加载层，玩家面对黑屏点击（点按钮没反应的第一诱因）。
         (function pollFirstFrame() {
             var loading = document.getElementById("loading");
-            var started = performance.now();
-            var timer = null;
-            function hide() {
-                if (timer) { clearInterval(timer); timer = null; }
-                loading.classList.add("hidden");
-            }
-            timer = setInterval(function () {
+            var timer = setInterval(function () {
                 if (window.wasm_exports) {
-                    hide();
-                } else if (performance.now() - started >= 8000) {
-                    hide();
+                    clearInterval(timer);
+                    loading.classList.add("hidden");
                 }
             }, 250);
+        })();
+        // v1.8.2 指针自愈（两条）：
+        // 1) dpr/backing 失步自愈——miniquad 只在 resize 事件重算 backing，若
+        //    devicePixelRatio 在实例化前后发生变化（浏览器缩放/分屏/机型切换），
+        //    backing 与指针缩放系数脱钩，所有点击错位。检测到失步就合成一次
+        //    resize（bundle 的 window.onresize 会重算双方），免重载自愈。
+        // 2) 竖屏旋转点击映射——orientFix 把整页 rotate(90deg) 后，视觉坐标系
+        //    与页面坐标系相差一个旋转，miniquad 的线性换算全部错位（竖持手机
+        //    点按钮没反应的第二诱因）。在 canvas 捕获阶段拦截鼠标/触摸事件，
+        //    旋转时先 stopImmediatePropagation 再派发"换算后的同型事件"
+        //    （clientX/clientY 对调并翻转），bundle 原处理逻辑零改动。
+        (function pointerSelfHeal() {
+            var canvas = document.getElementById("glcanvas");
+            var heals = 0;
+            setInterval(function () {
+                if (!window.wasm_exports) return;
+                var dpr = window.high_dpi ? window.devicePixelRatio || 1 : 1;
+                var w = Math.floor(canvas.clientWidth * dpr);
+                var h = Math.floor(canvas.clientHeight * dpr);
+                if (canvas.width !== w || canvas.height !== h) {
+                    // 旋转态下宽高天然互换，属于合法差异，不算失步
+                    var rotated = window.innerHeight > window.innerWidth;
+                    var ok = rotated ? canvas.width === h && canvas.height === w : false;
+                    if (!ok && heals < 5) {
+                        heals += 1;
+                        window.dispatchEvent(new Event("resize"));
+                    }
+                }
+            }, 1500);
+            function rotated() {
+                return window.innerHeight > window.innerWidth;
+            }
+            // 旋转态：视觉点 (vx,vy) 对应页面点 (u,v) = (vy, innerWidth-vx)
+            //（rotate(90deg)+translate(0,-100%) 的逆变换）。必须挂在 document
+            // 捕获阶段：canvas 上的 bundle 处理器注册更早，同级拦截抢不到先手；
+            // stopImmediatePropagation 后在 canvas 上派发改写坐标的同型事件，
+            // bundle 原处理逻辑零改动。
+            function intercept(type, Ctor) {
+                document.addEventListener(
+                    type,
+                    function (e) {
+                        if (!rotated() || e.target !== canvas || e.__rot_fixed) return;
+                        e.stopImmediatePropagation();
+                        // 旋转态逆变换：页面 u = 视觉 vy，页面 v = innerWidth - 视觉 vx
+                        var fx = function (x) { return window.innerWidth - x; };  // v = W - vx
+                        var fy = function (y) { return y; };                      // u = vy
+                        var init = {
+                            bubbles: e.bubbles,
+                            cancelable: e.cancelable,
+                            clientX: fy(e.clientY),
+                            clientY: fx(e.clientX),
+                            button: e.button,
+                            buttons: e.buttons,
+                        };
+                        if (Ctor === TouchEvent) {
+                            var tl = function (list) {
+                                var arr = [];
+                                for (var i = 0; i < list.length; i++) {
+                                    var t = list[i];
+                                    arr.push(
+                                        new Touch({
+                                            identifier: t.identifier,
+                                            target: canvas,
+                                            clientX: fy(t.clientY),
+                                            clientY: fx(t.clientX),
+                                        }),
+                                    );
+                                }
+                                return arr;
+                            };
+                            init.touches = tl(e.touches);
+                            init.targetTouches = tl(e.targetTouches);
+                            init.changedTouches = tl(e.changedTouches);
+                        }
+                        var fixed = new Ctor(type, init);
+                        fixed.__rot_fixed = true;
+                        canvas.dispatchEvent(fixed);
+                    },
+                    true,
+                );
+            }
+            intercept("mousemove", MouseEvent);
+            intercept("mousedown", MouseEvent);
+            intercept("mouseup", MouseEvent);
+            intercept("touchstart", TouchEvent);
+            intercept("touchmove", TouchEvent);
+            intercept("touchend", TouchEvent);
         })();
         // 手机竖持时强制横屏视野：整页旋转 90°（TapTap/X5 内核横屏不旋转页面的标准解法）。
         // 缩放交由 Rust 侧信箱相机（src/cam.rs）等比适配，此处原样 JS 零缩放。
