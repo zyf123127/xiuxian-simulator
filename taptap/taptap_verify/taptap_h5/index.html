@@ -77,8 +77,8 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.8.2";</script>
-    <script src="mq_js_bundle.js?v=1.8.2"></script>
+    <script>var GAME_VER = "1.8.3";</script>
+    <script src="mq_js_bundle.js?v=1.8.3"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -286,8 +286,63 @@
         //    点按钮没反应的第二诱因）。在 canvas 捕获阶段拦截鼠标/触摸事件，
         //    旋转时先 stopImmediatePropagation 再派发"换算后的同型事件"
         //    （clientX/clientY 对调并翻转），bundle 原处理逻辑零改动。
-        (function pointerSelfHeal() {
+        (function pointerSetup() {
             var canvas = document.getElementById("glcanvas");
+            // v1.8.3 指针映射彻底接管：不再依赖 miniquad 基于 devicePixelRatio 的
+            // 线性换算（TapTap 容器缩放/顶部横幅占位/dpr 漂移都会让它失准，手机
+            // 实测点按钮没反应），改用 getBoundingClientRect 实测比例直接驱动
+            // wasm 导出。竖屏旋转（orientFix 的 90° 页面旋转）用归一坐标旋转逆
+            // 映射：(nx,ny) → (ny, 1-nx)。
+            var rotationAware = function (e) {
+                var r = canvas.getBoundingClientRect();
+                if (r.width < 1 || r.height < 1) return null;
+                var nx = (e.clientX - r.left) / r.width;
+                var ny = (e.clientY - r.top) / r.height;
+                if (!(nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1)) return null;
+                var portrait = window.innerHeight > window.innerWidth;
+                if (!portrait) return { x: nx * canvas.width, y: ny * canvas.height };
+                return { x: ny * canvas.width, y: (1 - nx) * canvas.height };
+            };
+            var btn = function (b) { return b === 1 ? 2 : b === 2 ? 1 : b | 0; };
+            var takeOver = function () {
+                if (!window.wasm_exports || canvas.__ptr_taken) return;
+                canvas.__ptr_taken = true;
+                var E = window.wasm_exports;
+                canvas.onmousemove = function (e) {
+                    var p = rotationAware(e);
+                    if (p) E.mouse_move(p.x | 0, p.y | 0);
+                };
+                canvas.onmousedown = function (e) {
+                    var p = rotationAware(e);
+                    if (p) E.mouse_down(p.x | 0, p.y | 0, btn(e.button));
+                };
+                canvas.onmouseup = function (e) {
+                    var p = rotationAware(e);
+                    if (p) E.mouse_up(p.x | 0, p.y | 0, btn(e.button));
+                };
+                // 触摸：bundle 用 addEventListener（无法覆盖属性），在 document
+                // 捕获阶段拦下并直接调 wasm_exports.touch，坐标同样实测换算。
+                var TOUCH = { touchstart: 10, touchmove: 11, touchend: 12, touchcancel: 13 };
+                Object.keys(TOUCH).forEach(function (type) {
+                    document.addEventListener(
+                        type,
+                        function (e) {
+                            if (e.target !== canvas) return;
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            for (var i = 0; i < e.changedTouches.length; i++) {
+                                var t = e.changedTouches[i];
+                                var p = rotationAware(t);
+                                if (p) E.touch(TOUCH[type], t.identifier, p.x, p.y);
+                            }
+                        },
+                        true,
+                    );
+                });
+            };
+            setInterval(takeOver, 500);
+            // dpr/backing 失步自愈：backing 与 CSS×dpr 不一致时合成 resize 让
+            // miniquad 重算（相机 letterbox 依赖 screen_width 一致）
             var heals = 0;
             setInterval(function () {
                 if (!window.wasm_exports) return;
@@ -295,7 +350,6 @@
                 var w = Math.floor(canvas.clientWidth * dpr);
                 var h = Math.floor(canvas.clientHeight * dpr);
                 if (canvas.width !== w || canvas.height !== h) {
-                    // 旋转态下宽高天然互换，属于合法差异，不算失步
                     var rotated = window.innerHeight > window.innerWidth;
                     var ok = rotated ? canvas.width === h && canvas.height === w : false;
                     if (!ok && heals < 5) {
@@ -304,64 +358,22 @@
                     }
                 }
             }, 1500);
-            function rotated() {
-                return window.innerHeight > window.innerWidth;
+            // 竖持提示：横版游戏竖持时世界两侧出屏、按钮不可见——给出引导而不是
+            // 让玩家以为"点了没反应"
+            var rot = document.createElement("div");
+            rot.id = "rot_hint";
+            rot.textContent = "请横持设备游玩";
+            rot.style.cssText =
+                "position:fixed;left:0;top:0;width:100%;height:100%;display:none;" +
+                "align-items:center;justify-content:center;background:#141024;color:#d8c48a;" +
+                "font:24px sans-serif;z-index:50;pointer-events:none;";
+            document.body.appendChild(rot);
+            function rotHint() {
+                rot.style.display =
+                    window.innerHeight > window.innerWidth && window.wasm_exports ? "flex" : "none";
             }
-            // 旋转态：视觉点 (vx,vy) 对应页面点 (u,v) = (vy, innerWidth-vx)
-            //（rotate(90deg)+translate(0,-100%) 的逆变换）。必须挂在 document
-            // 捕获阶段：canvas 上的 bundle 处理器注册更早，同级拦截抢不到先手；
-            // stopImmediatePropagation 后在 canvas 上派发改写坐标的同型事件，
-            // bundle 原处理逻辑零改动。
-            function intercept(type, Ctor) {
-                document.addEventListener(
-                    type,
-                    function (e) {
-                        if (!rotated() || e.target !== canvas || e.__rot_fixed) return;
-                        e.stopImmediatePropagation();
-                        // 旋转态逆变换：页面 u = 视觉 vy，页面 v = innerWidth - 视觉 vx
-                        var fx = function (x) { return window.innerWidth - x; };  // v = W - vx
-                        var fy = function (y) { return y; };                      // u = vy
-                        var init = {
-                            bubbles: e.bubbles,
-                            cancelable: e.cancelable,
-                            clientX: fy(e.clientY),
-                            clientY: fx(e.clientX),
-                            button: e.button,
-                            buttons: e.buttons,
-                        };
-                        if (Ctor === TouchEvent) {
-                            var tl = function (list) {
-                                var arr = [];
-                                for (var i = 0; i < list.length; i++) {
-                                    var t = list[i];
-                                    arr.push(
-                                        new Touch({
-                                            identifier: t.identifier,
-                                            target: canvas,
-                                            clientX: fy(t.clientY),
-                                            clientY: fx(t.clientX),
-                                        }),
-                                    );
-                                }
-                                return arr;
-                            };
-                            init.touches = tl(e.touches);
-                            init.targetTouches = tl(e.targetTouches);
-                            init.changedTouches = tl(e.changedTouches);
-                        }
-                        var fixed = new Ctor(type, init);
-                        fixed.__rot_fixed = true;
-                        canvas.dispatchEvent(fixed);
-                    },
-                    true,
-                );
-            }
-            intercept("mousemove", MouseEvent);
-            intercept("mousedown", MouseEvent);
-            intercept("mouseup", MouseEvent);
-            intercept("touchstart", TouchEvent);
-            intercept("touchmove", TouchEvent);
-            intercept("touchend", TouchEvent);
+            window.addEventListener("resize", rotHint, true);
+            setInterval(rotHint, 800);
         })();
         // 手机竖持时强制横屏视野：整页旋转 90°（TapTap/X5 内核横屏不旋转页面的标准解法）。
         // 缩放交由 Rust 侧信箱相机（src/cam.rs）等比适配，此处原样 JS 零缩放。
