@@ -38,6 +38,8 @@ Rust + macroquad 开发的**模拟器流修仙游戏**：主角是获得【轮�
 
 ## 版本历史
 
+- **v1.8.6**：触控延迟二次修复——v1.8.5 的 Worker 唤醒虽恢复消息源，但帧仍排在 setTimeout(16) 里，被 TapTap 容器标记为不可见的页面会将该定时器钳到 1 秒/次（游戏 ~1fps，K80 Pro 二测"点按钮有很大延迟"根因）；改为 Worker postMessage **直接同步执行**帧回调（热路径无任何可被节流的定时器），Worker 不可用时回退 setInterval 并在 errlog 输出实测帧率；指针通道补光标位置同步（容器不发 mousemove 时按下也能命中）与 pointer 事件兜底、输入首达诊断标记。
+- **v1.8.5**：触控延迟修复——帧时钟搬进 Web Worker（Worker 内定时器不受页面可见性钳制），postMessage 唤醒主线程排帧；Worker 不可用环境回退定时器驱动。
 - **v1.8.4**：手机端"点击无响应"终极修复（红米 K80 Pro 实测 v1.8.3 仍无响应）——最终根因是 TapTap 容器把页面标记为不可见从而挂起 requestAnimationFrame，miniquad 的 rAF 帧循环停摆后画面定格、所有输入无人消费（此前两轮修复的坐标映射均正确，但帧循环死了输入自然无效）；修复：把帧循环底座从 rAF 换成 setTimeout（前台 ~16ms≈60fps，不受可见性挂起影响，单帧源零逻辑改动）；辅以输入首达诊断标记（errlog 可见"已收到输入事件"供真机排查）与 pointer 事件兜底。
 - **v1.8.3**：触控接管修复——指针映射放弃 miniquad 基于 devicePixelRatio 的线性换算（TapTap 容器缩放/顶部横幅占位不设防），index.html 用 getBoundingClientRect 实测比例直接驱动 wasm_exports 鼠标/触摸导出，竖屏旋转归一坐标逆映射；新增竖持"请横持设备游玩"提示层。
 - **v1.8.3**：触控接管修复（手机 TapTap 实测"点击开始没反应"）——指针映射彻底接管：放弃 miniquad 基于 devicePixelRatio 的线性换算（对 TapTap 容器缩放/顶部横幅占位/dpr 漂移不设防），index.html 用 getBoundingClientRect 实测比例直接驱动 wasm_exports.mouse_move/down/up 与 touch 导出（触摸走 document 捕获阶段 stopImmediatePropagation 接管），竖屏旋转用归一坐标逆映射 (nx,ny)→(ny,1-nx)；新增竖持"请横持设备游玩"提示层；v1.8.2 的就绪信号/看门狗/包体修复全部保留。
