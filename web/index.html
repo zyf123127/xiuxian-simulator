@@ -69,7 +69,7 @@
 </head>
 <body>
     <div id="loading">
-        <div>凡人修仙 · 加载中…</div>
+        <div id="ld_msg">凡人修仙 · 加载中…</div>
         <div class="bar"><i></i></div>
         <div style="font-size:12px;color:#b8a8e0;">首次加载需要数秒，请稍候</div>
     </div>
@@ -77,8 +77,8 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.0";</script>
-    <script src="mq_js_bundle.js?v=1.9.0"></script>
+    <script>var GAME_VER = "1.9.1";</script>
+    <script src="mq_js_bundle.js?v=1.9.1"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -178,21 +178,33 @@
             }
             if (msgs) {
                 el.textContent += msgs;
-                var ld = document.getElementById("loading");
-                if (ld) ld.textContent = "设备不支持，无法运行（详见页面诊断信息）";
+                var m = document.getElementById("ld_msg");
+                if (m) m.textContent = "设备不支持，无法运行（详见页面诊断信息）";
             }
         }
         xx_gpu_report();
     </script>
     <script>
         var errlog = document.getElementById("errlog");
-        // 加载阶段标记：写在加载层上，真机"打不开"时能看出卡在哪一步
+        // 加载阶段标记：写在加载层的消息节点上，真机"打不开"时能看出卡在哪一步。
+        // v1.9.1：所有阶段提示统一走 ld_msg 节点（此前直接覆盖 #loading 的
+        // textContent 会连进度条一起抹掉），并叠加"已等待 N 秒"——手机上大包
+        // 首次下载+编译要 10~40 秒，让玩家确认页面没死、不再乱点黑屏。
         var xxLoading = document.getElementById("loading");
-        function xx_stage(msg) {
-            if (xxLoading && !xxLoading.classList.contains("hidden")) {
-                xxLoading.textContent = "凡人修仙 · " + msg;
+        var xxMsg = document.getElementById("ld_msg");
+        var xxStageMsg = "加载中…";
+        var xxLoadStart = performance.now();
+        function xx_paint_stage() {
+            if (xxMsg && xxLoading && !xxLoading.classList.contains("hidden")) {
+                var s = Math.round((performance.now() - xxLoadStart) / 1000);
+                xxMsg.textContent = "凡人修仙 · " + xxStageMsg + "（已等待 " + s + " 秒）";
             }
         }
+        function xx_stage(msg) {
+            xxStageMsg = msg;
+            xx_paint_stage();
+        }
+        setInterval(xx_paint_stage, 1000);
         window.onerror = function (msg, src, line, col, err) {
             errlog.textContent += "ERR: " + msg + " @" + (src || "") + ":" + line + "\n" +
                 (err && err.stack ? err.stack : "") + "\n";
@@ -330,16 +342,13 @@
             }
             // 加载分阶段提示：游戏包含内嵌立绘、体积较大，手机上首次下载+编译
             // 需要 10~40 秒——中途给状态文字，避免玩家以为卡死
-            var ld0 = document.getElementById("loading");
             var stageTimers = [
                 [12, "游戏包较大，首次加载约需 10~40 秒，请稍候…"],
                 [30, "仍在编译游戏引擎（低端设备会慢一些），请继续等待…"],
             ];
             stageTimers.forEach(function (st) {
                 setTimeout(function () {
-                    if (!window.wasm_exports && ld0 && !ld0.classList.contains("hidden")) {
-                        ld0.textContent = st[1];
-                    }
+                    if (!window.wasm_exports) xx_stage(st[1]);
                 }, st[0] * 1000);
             });
             // 加载看门狗：45 秒仍未就绪（无 WebGL/无 WASM/网络失败都会卡在
@@ -347,13 +356,11 @@
             // v1.8.2 前此值为 12 秒且 window.wasm_exports 恒为 undefined，
             // 手机上必触发"加载失败→点击→reload"无限循环（玩家实测反馈）。
             setTimeout(function () {
-                if (!window.wasm_exports) {
-                    var ld = document.getElementById("loading");
-                    if (ld && !ld.classList.contains("hidden")) {
-                        ld.textContent = "加载失败或超时，点击此处重试";
-                        ld.style.pointerEvents = "auto";
-                        ld.onclick = function () { location.reload(); };
-                    }
+                if (!window.wasm_exports && xxLoading &&
+                    !xxLoading.classList.contains("hidden")) {
+                    xx_stage("加载失败或超时，点击此处重试");
+                    xxLoading.style.pointerEvents = "auto";
+                    xxLoading.onclick = function () { location.reload(); };
                 }
             }, 45000);
         }
@@ -479,23 +486,37 @@
                 };
             };
             setInterval(takeOver, 500);
-            // dpr/backing 失步自愈：backing 与 CSS×dpr 不一致时合成 resize 让
-            // miniquad 重算（相机 letterbox 依赖 screen_width 一致）
+            // v1.9.1 backing/screen 强制重同步（TapTap"点击命中点偏移到按钮左上方"的根因）：
+            // bundle 的 resize() 仅在 canvas.width 与重算值不同时才通知 wasm——启动期
+            // setup_canvas_size 已按当时 dpr 设好 backing 且不通知 wasm，随后容器缩放
+            // /dpr 漂移，即使 dispatch resize 让 bundle 重算，若结果与 stale 值巧合相等
+            // 也永不通知 → wasm 侧 screen_size 永久停留初始 1280×720，而 canvas.width
+            // 是真实 backing → 信箱相机 fit 失真 → 游戏收到的虚拟坐标整体放大
+            // （IAB 实测 ×1.5，按钮激活点跑到左上方；渲染被 GL 拉伸再被 CSS 缩回，
+            // 画面不变形但隐性降质）。修复：dispatch 前先把 backing 置 0，强制 bundle
+            // 走"变化"分支、必然回调 wasm_exports.resize(backing)——screen_size 与
+            // canvas.width 严格同步，渲染与输入回到同一坐标系。
+            function resyncBacking() {
+                canvas.width = 0;
+                canvas.height = 0;
+                window.dispatchEvent(new Event("resize"));
+            }
             var heals = 0;
             setInterval(function () {
                 if (!window.wasm_exports) return;
                 var dpr = window.high_dpi ? window.devicePixelRatio || 1 : 1;
                 var w = Math.floor(canvas.clientWidth * dpr);
                 var h = Math.floor(canvas.clientHeight * dpr);
-                if (canvas.width !== w || canvas.height !== h) {
-                    var rotated = window.innerHeight > window.innerWidth;
-                    var ok = rotated ? canvas.width === h && canvas.height === w : false;
-                    if (!ok && heals < 5) {
-                        heals += 1;
-                        window.dispatchEvent(new Event("resize"));
-                    }
+                if ((canvas.width !== w || canvas.height !== h) && heals < 30) {
+                    heals += 1;
+                    resyncBacking();
                 }
             }, 1500);
+            // 启动同步：wasm 就绪 1 秒后无条件做一次——覆盖"启动期 dpr 漂移后
+            // stale 值与新值巧合相等、差异检测永不触发"的窗口
+            setTimeout(function () {
+                if (window.wasm_exports) resyncBacking();
+            }, 1000);
             // 竖持提示：横版游戏竖持时世界两侧出屏、按钮不可见——给出引导而不是
             // 让玩家以为"点了没反应"
             var rot = document.createElement("div");
@@ -536,11 +557,12 @@
         window.addEventListener("resize", orientFix);
         window.addEventListener("orientationchange", function () { setTimeout(orientFix, 120); });
         window.addEventListener("load", orientFix);
-        // 加载完成后隐藏 loading 提示（file:// 时不隐藏，保留提示文字）
-        window.addEventListener("load", function () {
-            var el = document.getElementById("loading");
-            if (el && !isFile) el.style.display = "none";
-        });
+        // v1.9.1 关键修复：删除 macroquad 模板遗留的"load 事件隐藏加载层"。
+        // window.load 只等文档资源就绪，不等 wasm（fetch 不阻塞 load）——加载层
+        // 在页面打开约 1 秒内就被 display:none 撤掉，之后手机上 wasm 下载+编译的
+        // 10~40 秒里玩家面对纯黑画布：分阶段提示与 45s 重试看门狗全部被废，
+        // 点哪都没反应（TapTap 真机"无法进入游戏、点击没反应"的最终根因）。
+        // 加载层的隐藏只由 pollFirstFrame 负责：window.wasm_exports 就绪才撤。
 
     </script>
 </body>
