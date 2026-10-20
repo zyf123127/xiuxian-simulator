@@ -139,6 +139,22 @@ async fn main() {
             Scene::Settle => draw::draw_settle(&mut g, art::art()),
             Scene::World => crate::world::draw_world(&mut g, art::art()),
         }
+        // v1.9.3 触摸诊断（仅 wasm）：在"游戏认为手指所在"的虚拟坐标画半透明红圈
+        // + 坐标数字。真机"触摸已到达但按钮无响应"时，一张截图即可量化偏差：
+        // 红圈相对按钮的位置与偏移比例就是 screen_size/canvas 失步的直接证据。
+        #[cfg(target_arch = "wasm32")]
+        {
+            let (mx, my) = crate::cam::mouse();
+            draw_circle(mx, my, 16.0, Color::new(1.0, 0.25, 0.2, 0.25));
+            draw_circle(mx, my, 3.5, Color::new(1.0, 0.25, 0.2, 0.9));
+            draw_text(
+                &format!("{:.0},{:.0}", mx, my),
+                mx + 20.0,
+                my - 16.0,
+                22.0,
+                Color::new(1.0, 0.25, 0.2, 0.95),
+            );
+        }
         set_default_camera();
         // 音效冲刷
         if let Some(w) = g.sfx_ok.take() {

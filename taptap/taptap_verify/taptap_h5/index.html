@@ -77,8 +77,8 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.3";</script>
-    <script src="mq_js_bundle.js?v=1.9.3"></script>
+    <script>var GAME_VER = "1.9.4";</script>
+    <script src="mq_js_bundle.js?v=1.9.4"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -223,6 +223,54 @@
             cv.height = 0;
             window.dispatchEvent(new Event("resize"));
         };
+
+        // v1.9.4 直通同步：不再绕 bundle 的 resize()（其"值未变不通知"的短路在
+        // 真机上被证实仍会漏），直接调 wasm_exports.resize(backing)——miniquad
+        // 的 resize 导入就是 wasm 侧 screen_size 的唯一写入者，直调即强同步。
+        // 触摸处理器在每次映射前也会调用：保证输入瞬间 screen_size == canvas。
+        var __xxSentW = -1, __xxSentH = -1;
+        window.xxSyncScreen = function () {
+            if (!window.wasm_exports) return false;
+            var cv = document.getElementById("glcanvas");
+            var w = cv.width | 0, h = cv.height | 0;
+            if (w === __xxSentW && h === __xxSentH) return false;
+            __xxSentW = w;
+            __xxSentH = h;
+            try { window.wasm_exports.resize(w, h); } catch (e) { /* 实例化竞态 */ }
+            return true;
+        };
+
+        // v1.9.4 左下角调试面板：真机一张截图即可拿到全部坐标系关键数字
+        // （视口/dpr/backing/CSS/已发送 screen/fit/最近一次触摸的映射）。
+        var __xxDbg = document.createElement("div");
+        __xxDbg.style.cssText =
+            "position:fixed;left:2px;bottom:2px;z-index:98;color:#7f7;" +
+            "background:rgba(0,0,0,.55);font:10px/1.35 Consolas,monospace;" +
+            "white-space:pre;pointer-events:none;padding:2px;";
+        document.body.appendChild(__xxDbg);
+        var __xxLastTouch = null;
+        window.xxPaintDbg = function () {
+            if (!window.wasm_exports) return;
+            var cv = document.getElementById("glcanvas");
+            var env = window.importObject && window.importObject.env ? window.importObject.env : null;
+            var lines = [
+                "v" + GAME_VER,
+                "inner " + window.innerWidth + "x" + window.innerHeight +
+                    " dpr " + (window.devicePixelRatio || 1).toFixed(2) +
+                    " hdp=" + (window.high_dpi ? 1 : 0) +
+                    " env=" + (env ? env.dpi_scale().toFixed(2) : "?"),
+                "cv " + cv.width + "x" + cv.height +
+                    " css " + cv.clientWidth + "x" + cv.clientHeight +
+                    " sent " + __xxSentW + "x" + __xxSentH,
+                "fit " + Math.min(cv.width / 1280, cv.height / 720).toFixed(3)
+            ];
+            if (__xxLastTouch) {
+                lines.push("t c(" + __xxLastTouch[0] + "," + __xxLastTouch[1] + ")->m(" +
+                    __xxLastTouch[2] + "," + __xxLastTouch[3] + ")");
+            }
+            __xxDbg.textContent = lines.join("\n");
+        };
+        setInterval(window.xxPaintDbg, 1000);
         window.onerror = function (msg, src, line, col, err) {
             errlog.textContent += "ERR: " + msg + " @" + (src || "") + ":" + line + "\n" +
                 (err && err.stack ? err.stack : "") + "\n";
@@ -393,16 +441,9 @@
                 if (synced) return;
                 synced = true;
                 loading.classList.add("hidden");
-                // v1.9.2 关键修复：wasm 就绪那一刻无条件强制重同步 backing。
-                // v1.9.1 的重同步只挂在固定 1 秒定时器与"backing ≠ CSS×dpr"差异
-                // 检测上：手机上 wasm 10~40 秒后才就绪（1 秒定时器早已空跑），
-                // dpr 又稳定（差异检测永不触发）——setup_canvas_size 静默设置的
-                // backing 始终没通知 wasm，screen_size 停留初始 1280×720，虚拟
-                // 坐标整体偏移（激活点在按钮左上方）依旧。就绪钩子保证任何设备、
-                // 任何时序下，backing 与 wasm screen_size 必然同步一次；此后
-                // 尺寸再变化走 bundle 的 resize（带 wasm 通知）+ 差异检测兜底。
                 window.resyncBacking();
-                setTimeout(window.resyncBacking, 2000); // 兜底：就绪初期容器布局抖动
+                window.xxSyncScreen();
+                setTimeout(function () { window.resyncBacking(); window.xxSyncScreen(); }, 2000);
             }
             var timer = setInterval(function () {
                 if (window.wasm_exports) onReady();
@@ -481,9 +522,12 @@
                             e.preventDefault();
                             e.stopImmediatePropagation();
                             mark("touch");
+                            window.xxSyncScreen(); // 触摸瞬间强同步 screen_size == canvas
                             for (var j = 0; j < pts.length; j++) {
                                 var t = pts[j][0];
                                 var p2 = pts[j][1];
+                                __xxLastTouch = [Math.round(t.clientX), Math.round(t.clientY), p2.x | 0, p2.y | 0];
+                                window.xxPaintDbg();
                                 E.touch(TOUCH[type], t.identifier, p2.x, p2.y);
                                 // 同步鼠标状态：游戏按钮判定走鼠标通路
                                 E.mouse_move(p2.x | 0, p2.y | 0);
@@ -533,6 +577,7 @@
             var heals = 0;
             setInterval(function () {
                 if (!window.wasm_exports) return;
+                window.xxSyncScreen(); // 周期直通同步（值未变时内部短路，零开销）
                 var dpr = window.high_dpi ? window.devicePixelRatio || 1 : 1;
                 var w = Math.floor(canvas.clientWidth * dpr);
                 var h = Math.floor(canvas.clientHeight * dpr);
