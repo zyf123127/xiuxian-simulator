@@ -77,8 +77,8 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.2";</script>
-    <script src="mq_js_bundle.js?v=1.9.2"></script>
+    <script>var GAME_VER = "1.9.3";</script>
+    <script src="mq_js_bundle.js?v=1.9.3"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -452,34 +452,43 @@
                     var p = rotationAware(e);
                     if (p) E.mouse_up(p.x | 0, p.y | 0, btn(e.button));
                 };
-                // 触摸：bundle 用 addEventListener（无法覆盖属性），在 document
-                // 捕获阶段拦下并直接调 wasm_exports.touch，坐标同样实测换算。
+                // 触摸：容器内核用 addEventListener（无法覆盖属性），在 window
+                // 捕获阶段拦下并直接调 wasm_exports.touch，坐标实测换算。
+                // v1.9.3 触控加固：真机容器（TapTap/X5）可能把触摸派发给 body
+                // 或注入的包装层而非 canvas——旧代码 e.target!==canvas 直接丢弃，
+                // 表现为"手机上按钮全部失效、桌面鼠标路径正常"。改为 window 捕获
+                // （先于 document 触发，防页面级拦截）+ 只按坐标过滤：触点落在
+                // 画布区域内一律接管；区域外（如诊断日志）放行不 preventDefault。
                 var el = document.getElementById("errlog");
-                var seen = false;
+                var seenKinds = {};
                 var mark = function (kind) {
-                    if (!seen) {
-                        seen = true;
+                    if (!seenKinds[kind]) {
+                        seenKinds[kind] = true;
                         if (el) el.textContent += "[诊断] 已收到输入事件（" + kind + "）\n";
                     }
                 };
                 var TOUCH = { touchstart: 10, touchmove: 11, touchend: 12, touchcancel: 13 };
                 Object.keys(TOUCH).forEach(function (type) {
-                    document.addEventListener(
+                    window.addEventListener(
                         type,
                         function (e) {
-                            if (e.target !== canvas) return;
+                            var pts = [];
+                            for (var i = 0; i < e.changedTouches.length; i++) {
+                                var p = rotationAware(e.changedTouches[i]);
+                                if (p) pts.push([e.changedTouches[i], p]);
+                            }
+                            if (!pts.length) return; // 触点不在画布内：放行页面默认行为
                             e.preventDefault();
                             e.stopImmediatePropagation();
                             mark("touch");
-                            for (var i = 0; i < e.changedTouches.length; i++) {
-                                var t = e.changedTouches[i];
-                                var p = rotationAware(t);
-                                if (!p) continue;
-                                E.touch(TOUCH[type], t.identifier, p.x, p.y);
+                            for (var j = 0; j < pts.length; j++) {
+                                var t = pts[j][0];
+                                var p2 = pts[j][1];
+                                E.touch(TOUCH[type], t.identifier, p2.x, p2.y);
                                 // 同步鼠标状态：游戏按钮判定走鼠标通路
-                                E.mouse_move(p.x | 0, p.y | 0);
-                                if (type === "touchstart") E.mouse_down(p.x | 0, p.y | 0, 0);
-                                if (type === "touchend" || type === "touchcancel") E.mouse_up(p.x | 0, p.y | 0, 0);
+                                E.mouse_move(p2.x | 0, p2.y | 0);
+                                if (type === "touchstart") E.mouse_down(p2.x | 0, p2.y | 0, 0);
+                                if (type === "touchend" || type === "touchcancel") E.mouse_up(p2.x | 0, p2.y | 0, 0);
                             }
                         },
                         true,
