@@ -168,9 +168,11 @@ async fn main() {
                 Some((x, y)) => format!("{:.0},{:.0}", x, y),
                 None => "-".to_string(),
             };
+            // F: = 帧号。真机截图若两秒内 F 不涨 = 帧时钟停摆（冻帧：画面是
+            // 最后一帧的残影，输入永远无人轮询）——配合 JS 触摸帧泵定位。
             draw_text(
-                &format!("clicks:{} last:{}", xx_clicks, last_str),
-                900.0,
+                &format!("clicks:{} F:{} last:{}", xx_clicks, frame, last_str),
+                830.0,
                 40.0,
                 26.0,
                 Color::new(1.0, 0.9, 0.2, 1.0),
