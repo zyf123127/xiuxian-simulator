@@ -63,6 +63,11 @@ async fn main() {
     }
     let mut frame = 0u32;
     let mut shots = 0u32;
+    // v1.9.5 真机输入诊断（仅 wasm）：点击计数 + 最近点击的虚拟坐标常驻右上角。
+    // 配合 JS 侧大号十字光标：一张真机截图即可区分"事件没到 Rust"（clicks 恒 0）
+    // 与"到了但按钮判定不吃"（clicks 增长且十字在按钮上）。
+    #[cfg(target_arch = "wasm32")]
+    let (mut xx_clicks, mut xx_last): (u32, Option<(f32, f32)>) = (0, None);
     loop {
         let dt = get_frame_time().min(1.0 / 20.0);
         // v1.6.0 B：开帧门闩清零（置位发生于上一帧绘制阶段、本帧输入/绘制前清零，时序闭合）
@@ -139,21 +144,40 @@ async fn main() {
             Scene::Settle => draw::draw_settle(&mut g, art::art()),
             Scene::World => crate::world::draw_world(&mut g, art::art()),
         }
-        // v1.9.3 触摸诊断（仅 wasm）：在"游戏认为手指所在"的虚拟坐标画半透明红圈
-        // + 坐标数字。真机"触摸已到达但按钮无响应"时，一张截图即可量化偏差：
-        // 红圈相对按钮的位置与偏移比例就是 screen_size/canvas 失步的直接证据。
+        // v1.9.3 触摸诊断（仅 wasm）：大号红色十字 = 游戏认为的指针位置（初始
+        // 在左上角 0,0——若十字一直钉在角上，说明 Rust 从未收到指针移动）。
+        // 右上角 clicks 计数 = Rust 实际收到的鼠标按下次数。
         #[cfg(target_arch = "wasm32")]
         {
+            if is_mouse_button_pressed(MouseButton::Left) {
+                xx_clicks += 1;
+                xx_last = Some(crate::cam::mouse());
+            }
             let (mx, my) = crate::cam::mouse();
-            draw_circle(mx, my, 16.0, Color::new(1.0, 0.25, 0.2, 0.25));
-            draw_circle(mx, my, 3.5, Color::new(1.0, 0.25, 0.2, 0.9));
+            draw_line(mx - 40.0, my, mx + 40.0, my, 3.0, Color::new(1.0, 0.1, 0.1, 0.9));
+            draw_line(mx, my - 40.0, mx, my + 40.0, 3.0, Color::new(1.0, 0.1, 0.1, 0.9));
+            draw_circle(mx, my, 4.0, Color::new(1.0, 0.1, 0.1, 1.0));
             draw_text(
                 &format!("{:.0},{:.0}", mx, my),
-                mx + 20.0,
-                my - 16.0,
-                22.0,
-                Color::new(1.0, 0.25, 0.2, 0.95),
+                mx + 24.0,
+                my - 20.0,
+                26.0,
+                Color::new(1.0, 0.1, 0.1, 1.0),
             );
+            let last_str = match xx_last {
+                Some((x, y)) => format!("{:.0},{:.0}", x, y),
+                None => "-".to_string(),
+            };
+            draw_text(
+                &format!("clicks:{} last:{}", xx_clicks, last_str),
+                900.0,
+                40.0,
+                26.0,
+                Color::new(1.0, 0.9, 0.2, 1.0),
+            );
+            if let Some((x, y)) = xx_last {
+                draw_circle(x, y, 9.0, Color::new(1.0, 0.9, 0.2, 0.95));
+            }
         }
         set_default_camera();
         // 音效冲刷
