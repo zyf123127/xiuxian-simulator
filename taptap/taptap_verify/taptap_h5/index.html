@@ -77,8 +77,8 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.7";</script>
-    <script src="mq_js_bundle.js?v=1.9.7"></script>
+    <script>var GAME_VER = "1.9.8";</script>
+    <script src="mq_js_bundle.js?v=1.9.8"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -533,9 +533,10 @@
                                 var p2 = pts[j][1];
                                 __xxLastTouch = [Math.round(t.clientX), Math.round(t.clientY), p2.x | 0, p2.y | 0];
                                 window.xxPaintDbg();
-                                // v1.9.5：不再调用 E.touch——桌面验证过的正常路径是纯
-                                // 鼠标注入，touch 通道（macroquad 触摸模拟）只剩在真机
-                                // 上产生重复/干扰事件的嫌疑，手机路径与桌面完全等价。
+                                // v1.9.8 恢复 E.touch：cam::mouse()（wasm）改为优先读
+                                // macroquad 的 touches 表（原样存储、零 dpi 参与），
+                                // 必须把触摸位置喂进去；E.mouse_* 保留作点击判定。
+                                E.touch(TOUCH[type], t.identifier, p2.x, p2.y);
                                 // 同步鼠标状态：游戏按钮判定走鼠标通路
                                 E.mouse_move(p2.x | 0, p2.y | 0);
                                 if (type === "touchstart") E.mouse_down(p2.x | 0, p2.y | 0, 0);

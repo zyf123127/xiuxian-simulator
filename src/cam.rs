@@ -28,14 +28,30 @@ pub fn view_cam() -> Camera2D {
 
 // 虚拟坐标鼠标：纯矩阵运算，每帧 ~5 次调用，无需缓存
 pub fn mouse() -> (f32, f32) {
-    // v1.7.0 wasm high_dpi 坐标系对齐：screen_width() 返回 backing 像素（CSS×dpr），
-    // 而 macroquad mouse_position() 内部已除以 dpi_scale 返回 CSS 像素——先乘回再换算
-    // （桌面端 screen_width 与 mouse_position 同为逻辑像素，恒等不乘）
-    #[cfg(target_arch = "wasm32")]
-    let s = macroquad::miniquad::window::dpi_scale();
-    #[cfg(not(target_arch = "wasm32"))]
-    let s = 1.0;
-    let p = vec2(mouse_position().0 * s, mouse_position().1 * s);
+    let p = {
+        // v1.9.8 触摸优先（仅 wasm）：macroquad 对 touch_event 注入的位置原样
+        // 存储、无任何 dpi 参与——与 JS 注入值逐位一致，除以信箱 fit 即精确虚拟
+        // 坐标。此前的鼠标通路补偿（×dpi_scale）在真机上不可靠：wasm 侧记录的
+        // dpi 是启动瞬间抓取的，X5 实例化后 dpr 才涨到 3.25，native 恒 1.0 而时
+        // 钟补偿用实时值 → 虚拟坐标整体 ×3.25（真机 clicks 39 全部打在 4475,139
+        // 这类屏幕外坐标）。桌面 IAB 的 dpr 恒 ≈1，两种写法等价——历轮本地测试
+        // 测不出的原因。无触摸时（桌面浏览器纯鼠标）退回鼠标通路并按
+        // 同源 dpi_scale 乘回（与 macroquad 的除法同源，数学上精确抵消）。
+        #[cfg(target_arch = "wasm32")]
+        {
+            let ts = touches();
+            if let Some(t) = ts.last() {
+                t.position
+            } else {
+                let s = macroquad::miniquad::window::dpi_scale();
+                vec2(mouse_position().0 * s, mouse_position().1 * s)
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            vec2(mouse_position().0, mouse_position().1)
+        }
+    };
     let w = view_cam().screen_to_world(p);
     (w.x, w.y)
 }
