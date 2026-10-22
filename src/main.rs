@@ -22,11 +22,16 @@ fn window_conf() -> Conf {
         window_width: 1280,
         window_height: 720,
         // v1.6.0 B 清晰度：high_dpi 恒开。桌面端 miniquad 调 SetProcessDPIAware()，
-        // 窗口按物理像素开窗 + 字形按 dpr 原生栅格；wasm 端 backing store = CSS×dpr
-        // 1:1 物理像素，dpr>1 设备上文字按原生分辨率栅格（此前 1× 位图被非整数倍
-        // 放大发虚）。图集爆量风险已由 vendor/macroquad 封顶补丁护持（Cargo.toml
-        // [patch.crates-io]，atlas 按 JS 探测的 MAX_TEXTURE_SIZE 动态封顶）。
-        high_dpi: true,
+        // 窗口按物理像素开窗 + 字形按 dpr 原生栅格。
+        // v1.9.9 wasm 回退 dpr=1 制（像素风坐标制）：wasm 开 high_dpi 后，X5 真机
+        // 上坐标在 wasm 内部被乘 dpr(3.25)（注入 1036→记录 3367，v1.9.8 真机数据），
+        // 且 canvas/backing/JS 三处 dpr 捕获时点不一致（启动瞬间 vs 实时）无法对账；
+        // 像素风版本（v1.5.x，wasm 未开 high_dpi）在该真机上验证可玩。本版 wasm
+        // 关闭 high_dpi：JS dpi_scale() 恒 1，canvas=backing=CSS 三位一体，一切
+        // dpi 乘除退化为空操作——本地 dpr=1 环境与手机从构造上同构（本地过=手机
+        // 过）。代价：H5 手机端文字按 CSS 分辨率栅格再由 GPU 放大（与像素风版相
+        // 同的观感，可接受；桌面端不受影响）。图集封顶补丁护持不变。
+        high_dpi: !cfg!(target_arch = "wasm32"),
         ..Default::default()
     }
 }
@@ -168,13 +173,30 @@ async fn main() {
                 Some((x, y)) => format!("{:.0},{:.0}", x, y),
                 None => "-".to_string(),
             };
-            // F: = 帧号。真机截图若两秒内 F 不涨 = 帧时钟停摆（冻帧：画面是
-            // 最后一帧的残影，输入永远无人轮询）——配合 JS 触摸帧泵定位。
+            // 全链路诊断：D=wasm 缓存 dpi，S=wasm 屏幕尺寸，T=触摸数+原始位置，
+            // M=mouse_position 原始值。dpr=1 制下应恒为 D:1.00 T/M=注入原值。
+            let (mpx, mpy) = mouse_position();
+            let ts = touches();
+            let t_str = match ts.last() {
+                Some(t) => format!("{}@{:.0},{:.0}", ts.len(), t.position.x, t.position.y),
+                None => "0".to_string(),
+            };
             draw_text(
-                &format!("clicks:{} F:{} last:{}", xx_clicks, frame, last_str),
-                830.0,
+                &format!(
+                    "c:{} F:{} l:{} D:{:.2} S:{:.0}x{:.0} T:{} M:{:.0},{:.0}",
+                    xx_clicks,
+                    frame,
+                    last_str,
+                    macroquad::miniquad::window::dpi_scale(),
+                    screen_width(),
+                    screen_height(),
+                    t_str,
+                    mpx,
+                    mpy
+                ),
+                700.0,
                 40.0,
-                26.0,
+                22.0,
                 Color::new(1.0, 0.9, 0.2, 1.0),
             );
             if let Some((x, y)) = xx_last {

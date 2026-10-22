@@ -38,6 +38,7 @@ Rust + macroquad 开发的**模拟器流修仙游戏**：主角是获得【轮�
 
 ## 版本历史
 
+- **v1.9.9**：回退像素风坐标制（wasm 关 high_dpi）——v1.9.8 真机数据定案：JS 注入 1036 → 游戏记录 3367（恰 ×3.25=dpr），坐标在 wasm 内部被乘 dpr；而像素风版本（v1.5.x，wasm 未开 high_dpi）在同一真机验证可玩——"像素风能进、立绘版进不去"的真因是 v1.6.0 起 wasm 开 high_dpi 引入的 dpr 依赖（用户首测恰在立绘版本，时间巧合）。修复：wasm 端 high_dpi=false（桌面不变），JS dpi_scale() 恒 1，canvas=backing=CSS 三位一体，一切 dpi 乘除退化为空操作——本地 dpr=1 环境与手机从构造上同构（本地过=手机过）；cam.rs 移除全部 dpi 补偿；内嵌立绘 640→480px（0.88MB→616KB，wasm 2.7→2.5MB，加载提速）；游戏内诊断升级为全链路（D:dpi/S:屏幕/T:触摸/M:鼠标原始值）。代价：H5 手机端文字按 CSS 分辨率栅格（像素风版观感）。
 - **v1.9.8**：坐标 ×dpr 根修——真机 v1.9.7 的 clicks:39 证明帧与输入桥全通，但点击虚拟坐标 = 注入值 ×3.25（dpr）：macroquad 读取鼠标按 wasm 侧记录的 dpi_scale 相除，而该值是启动瞬间抓取的（X5 实例化后 dpr 才涨到 3.25，wasm 侧恒 1.0，除法无效），cam.rs 又乘实时值 → 双重补偿放大 3.25 倍；本地 IAB dpr 恒 ≈1 两种写法等价，历轮本地测试全部测不出。修复：cam::mouse()（wasm）**优先读 macroquad touches 表**——touch 注入位置原样存储、零 dpi 参与，与 JS 注入值逐位一致，除以信箱 fit 即精确虚拟坐标（任何 dpr/失联状态成立）；无触摸时退回鼠标通路（同源 dpi 乘回，数学精确抵消）；JS 恢复 E.touch 注入。
 - **v1.9.7**：冻帧根修——真机 v1.9.6 的 F:28（启动后 ~2 秒冻结）锁定元凶是就绪钩子的 `canvas.width=0` 清零式重同步在 X5 上杀死 WebGL 帧回调（本地 Chromium 无恙，历轮本地测试测不出）。整体删除该手术（screen 同步由直调 wasm_exports.resize 独立承担）；tick 只在真正执行 wasm 帧后刷新帧时刻（回调死亡时空转不再冒充新帧、触摸帧泵保持有效）；帧回调丢失时从 bundle 顶层 `window.animation` 自动复活；帧异常日志限 3 条防刷屏。
 - **v1.9.4**：直通同步 + 触摸可视化诊断——真机 v1.9.3 证实触摸已到达但按钮仍无响应，锁定 screen_size 同步链在 X5 上仍失效。改为 **JS 直调 `wasm_exports.resize(backing)`**（miniquad 的 resize 导入是 wasm 侧 screen_size 的唯一写入者，直调即强同步，绕过 bundle"值未变不通知"的短路），就绪钩子/1.5s 周期/每次触摸前三处触发；游戏内（wasm）在虚拟坐标画触摸红圈+数值，页面左下角调试面板输出视口/dpr/backing/已发送 screen/fit/最近触摸映射——真机一张截图即可量化偏差。

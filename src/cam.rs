@@ -28,23 +28,22 @@ pub fn view_cam() -> Camera2D {
 
 // 虚拟坐标鼠标：纯矩阵运算，每帧 ~5 次调用，无需缓存
 pub fn mouse() -> (f32, f32) {
+    // v1.9.9 像素风坐标制：wasm 端 high_dpi 已关（window_conf），JS dpi_scale()
+    // 恒 1 → canvas=backing=CSS 三位一体，所有 dpi 乘/除都是空操作。此制在真机
+    // （红米 K80 Pro/X5）上被像素风版本（v1.5.x）验证可玩；v1.6.0 起 wasm 开
+    // high_dpi 后手机 dpr=3.25 使坐标在 wasm 内部被放大 3.25 倍（v1.9.8 真机
+    // 数据：注入 1036→记录 3367），本地 IAB dpr≈1 永测不出——本版整体回退到
+    // dpr=1 制，本地与手机从构造上同构。桌面端逻辑像素本就无 dpi 参与。
     let p = {
-        // v1.9.8 触摸优先（仅 wasm）：macroquad 对 touch_event 注入的位置原样
-        // 存储、无任何 dpi 参与——与 JS 注入值逐位一致，除以信箱 fit 即精确虚拟
-        // 坐标。此前的鼠标通路补偿（×dpi_scale）在真机上不可靠：wasm 侧记录的
-        // dpi 是启动瞬间抓取的，X5 实例化后 dpr 才涨到 3.25，native 恒 1.0 而时
-        // 钟补偿用实时值 → 虚拟坐标整体 ×3.25（真机 clicks 39 全部打在 4475,139
-        // 这类屏幕外坐标）。桌面 IAB 的 dpr 恒 ≈1，两种写法等价——历轮本地测试
-        // 测不出的原因。无触摸时（桌面浏览器纯鼠标）退回鼠标通路并按
-        // 同源 dpi_scale 乘回（与 macroquad 的除法同源，数学上精确抵消）。
+        // wasm 触摸优先：touch 注入位置原样存储，语义与鼠标注入完全一致（dpr=1
+        // 下两条通路数值恒等，此处仅是防御性优先级）
         #[cfg(target_arch = "wasm32")]
         {
             let ts = touches();
             if let Some(t) = ts.last() {
                 t.position
             } else {
-                let s = macroquad::miniquad::window::dpi_scale();
-                vec2(mouse_position().0 * s, mouse_position().1 * s)
+                vec2(mouse_position().0, mouse_position().1)
             }
         }
         #[cfg(not(target_arch = "wasm32"))]

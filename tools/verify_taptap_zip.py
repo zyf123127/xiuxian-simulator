@@ -21,7 +21,7 @@ with zipfile.ZipFile(ZIP) as z:
     wasm = z.read("taptap_h5/xiuxian.wasm")
     idx = z.read("taptap_h5/index.html").decode("utf-8")
 assert b"xx_storage" in wasm, "wasm 内未见 xx_storage 导出符号"
-for token in ('GAME_VER = "1.9.8"', "mq_js_bundle.js?v=1.9.8", "miniquad_add_plugin", "xx_storage"):
+for token in ('GAME_VER = "1.9.9"', "mq_js_bundle.js?v=1.9.9", "miniquad_add_plugin", "xx_storage"):
     assert token in idx, f"包内 index.html 缺: {token}"
-print("OK: 恰 3 条目、/ 分隔、根层仅一层 taptap_h5/；wasm 含 xx_storage；index.html 含 ?v=1.9.8 与存档插件")
+print("OK: 恰 3 条目、/ 分隔、根层仅一层 taptap_h5/；wasm 含 xx_storage；index.html 含 ?v=1.9.9 与存档插件")
 sys.exit(0)
