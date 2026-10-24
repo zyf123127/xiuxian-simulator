@@ -1,0 +1,251 @@
+[20261024:19:36:51:381][T-0] Information: [17620] registerCallback
+[20261024:19:36:51:386][T-0] Information: [17620] Api server start
+[20261024:19:36:51:386][T-0] Information: [17620] [RPC] NamedRPCApiServer start uuid: 5B79A793-41A3-4C0F-B035-FCCB9274F5F4 target: 34909a66-cf9f-11f1-8d57-bcfce74afb49[api]
+[20261024:19:36:51:386][T-0] Information: [17620] [RPC] Successfully start rpc server, name NemuHttpRPCApid_96261173d1edd703419c44604039fa22
+[20261024:19:36:51:386][T-0] Information: [17620] [RPC] Server started, name: NemuHttpRPCApid_96261173d1edd703419c44604039fa22
+[20261024:19:36:51:386][T-0] Information: [17620] Pipe Api server start
+[20261024:19:36:51:386][T-0] Information: [17620] Scan mainnx player
+[20261024:19:36:51:386][T-0] Information: [17620] NxPlayer trace caller:scanPlayer detail: root: serverPort:10117 is_connected:0 is_connecting:0 stopping:0
+[20261024:19:36:51:386][T-0] Information: [17620] registerCallbackEx
+[20261024:19:36:51:386][T-0] Information: [17620] Scan mainnx player
+[20261024:19:36:51:386][T-0] Information: [17620] NxPlayer trace caller:scanPlayer detail: root: serverPort:10117 is_connected:0 is_connecting:0 stopping:0
+[20261024:19:36:51:386][T-0] Information: [17620] [ConfigUtil::getConfigJson] path: E:\Program Files\Netease\MuMu\configs\main\install_config.json
+[20261024:19:36:51:386][T-0] Information: [17620] [ConfigJson::load] load json: E:\Program Files\Netease\MuMu\configs\main\install_config.json
+[20261024:19:36:51:386][T-0] Information: [30924] NxPlayer trace caller:scanPlayer.worker detail: root: serverPort:10117 is_connected:0 is_connecting:0 stopping:0
+[20261024:19:36:51:386][T-0] Information: [30924] [ConfigUtil::getConfigJson] path: configs\main\install_config.json
+[20261024:19:36:51:386][T-0] Information: [30924] [ConfigJson::load] load json: configs\main\install_config.json
+[20261024:19:36:51:386][T-0] Information: [30924] [ConfigJson::load] poco exception code: 3, message: configs\main\install_config.json, displayText: Path not found: configs\main\install_config.json
+[20261024:19:36:51:386][T-0] Information: [30924] NxPlayer trace caller:scanPlayer.worker detail:waitConnected running=true root: serverPort:10117 is_connected:0 is_connecting:0 stopping:0
+[20261024:19:36:51:387][T-0] Information: [30924] checkIsInstalled: false
+[20261024:19:36:51:387][T-0] Information: [17620] NxApiPresenter init product version:6.8.8.0 useNx:1 root:E:\Program Files\Netease\MuMu\
+[20261024:19:36:51:387][T-0] Information: [17620] mainnx setRootPath E:\Program Files\Netease\MuMu\
+[20261024:19:36:51:387][T-0] Information: [17620] registerCallback
+[20261024:19:36:51:387][T-0] Information: [17620] Scan mainnx player
+[20261024:19:36:51:387][T-0] Information: [17620] NxPlayer trace caller:scanPlayer detail: root:E:\Program Files\Netease\MuMu\ serverPort:10117 is_connected:0 is_connecting:0 stopping:0
+[20261024:19:36:51:387][T-0] Information: [17620] registerCallbackEx
+[20261024:19:36:51:387][T-0] Information: [17620] Scan mainnx player
+[20261024:19:36:51:387][T-0] Information: [17620] NxPlayer trace caller:scanPlayer detail: root:E:\Program Files\Netease\MuMu\ serverPort:10117 is_connected:0 is_connecting:0 stopping:0
+[20261024:19:36:51:387][T-0] Information: [17620] connectPlayer index:1
+[20261024:19:36:51:387][T-0] Information: [17620] NxPlayer trace caller:connectPlayer detail:connect root:E:\Program Files\Netease\MuMu\ serverPort:10117 is_connected:0 is_connecting:0 stopping:0
+[20261024:19:36:51:387][T-0] Information: [17620] [ConfigUtil::getConfigJson] path: E:\Program Files\Netease\MuMu\nx_main\nx_main.json
+[20261024:19:36:51:387][T-0] Information: [17620] [ConfigJson::load] load json: E:\Program Files\Netease\MuMu\nx_main\nx_main.json
+[20261024:19:36:51:387][T-0] Information: [17620] [ConfigJson::load] load json: E:\Program Files\Netease\MuMu\nx_main\nx_main.json
+[20261024:19:36:51:387][T-0] Information: [14324] onEventMainStatusChanged status: 1, pid: 0, privilege: 0
+[20261024:19:36:51:387][T-0] Information: [17620] [ConfigUtil::getConfigJson] path: E:\Program Files\Netease\MuMu\overlay\features.json
+[20261024:19:36:51:387][T-0] Information: [17620] [ConfigJson::load] load json: E:\Program Files\Netease\MuMu\overlay\features.json
+[20261024:19:36:51:387][T-0] Information: [17620] [ConfigJson::load] poco exception code: 2, message: E:\Program Files\Netease\MuMu\overlay\features.json, displayText: File not found: E:\Program Files\Netease\MuMu\overlay\features.json
+[20261024:19:36:51:387][T-0] Information: [17620] Connect mainnx request target:MuMuPlayer[main] url:http://127.0.0.1:11198/player body:{
+  "action": "connect",
+  "id": "349139f8-cf9f-11f1-b192-bcfce74afb49",
+  "params": {
+    "host": "127.0.0.1",
+    "port": 10117,
+    "target": "34909a66-cf9f-11f1-8d57-bcfce74afb49[api]",
+    "uuid": "5B79A793-41A3-4C0F-B035-FCCB9274F5F4"
+  }
+}
+[20261024:19:36:51:387][T-0] Information: [17620] [RPCClient::sendRequest] target:MuMuPlayer[main] body:{
+  "action": "connect",
+  "id": "349139f8-cf9f-11f1-b192-bcfce74afb49",
+  "params": {
+    "host": "127.0.0.1",
+    "port": 10117,
+    "target": "34909a66-cf9f-11f1-8d57-bcfce74afb49[api]",
+    "uuid": "5B79A793-41A3-4C0F-B035-FCCB9274F5F4"
+  }
+}
+[20261024:19:36:51:387][T-0] Information: [17620] [RPC] RPCApiClient start
+[20261024:19:36:51:387][T-0] Information: [17620] [RPC] client create
+[20261024:19:36:51:387][T-0] Information: [17620] NxPlayer trace caller:connectPlayer detail:waitConnected running=true root:E:\Program Files\Netease\MuMu\ serverPort:10117 is_connected:0 is_connecting:1 stopping:0
+[20261024:19:36:51:387][T-0] Information: [17620] NxPlayer trace caller:waitConnected:connectPlayer detail:connect root:E:\Program Files\Netease\MuMu\ serverPort:10117 is_connected:0 is_connecting:1 stopping:0
+[20261024:19:36:51:387][T-0] Information: [17620] [ConfigJson::load] load json: E:\Program Files\Netease\MuMu\nx_main\nx_main.json
+[20261024:19:36:51:387][T-0] Information: [23248] [RPC] RPCApiClient clientWorker
+[20261024:19:36:51:387][T-0] Information: [17620] mainnx connect skip: already connecting, serverPort:10117, mainnxPort:11198
+[20261024:19:36:51:387][T-0] Information: [23248] [RPC] RPCApiClient will try to connect target: MuMuPlayer[main]
+[20261024:19:36:51:387][T-0] Information: [23248] [RPC] RPCApiClient connect url: nemutarget://23998f30177e8eb3f54523931a2080d8, uuid: D46354F5-19D3-499C-85D3-94DE5ED0FF3B
+[20261024:19:36:51:387][T-0] Information: [23248] [RPC] connect pipe begin, name: NemuHttpRPCApid_853a36b5a394edfdbcd926e90724ac79
+[20261024:19:36:51:387][T-0] Information: [23248] [RPC] Successfully start rpc client, name NemuHttpRPCApid_853a36b5a394edfdbcd926e90724ac79
+[20261024:19:36:51:387][T-0] Information: [23248] [RPC] connect pipe success, name: NemuHttpRPCApid_853a36b5a394edfdbcd926e90724ac79
+[20261024:19:36:51:388][T-0] Information: [23248] [RPCClient::sendRequest] errorCode:200 content:{"errcode":0,"id":"349139f8-cf9f-11f1-b192-bcfce74afb49","message":"OK"}
+[20261024:19:36:51:388][T-0] Information: [23248] Connect mainnx result errorCode:200 content:{"errcode":0,"id":"349139f8-cf9f-11f1-b192-bcfce74afb49","message":"OK"}
+[20261024:19:36:51:388][T-0] Information: [17620] waitConnected connected after wait caller:connectPlayer waitCount:1 serverPort:10117
+[20261024:19:36:51:388][T-0] Information: [17620] Create mainnx player: 1, 10117
+[20261024:19:36:51:388][T-0] Information: [1152] NxPlayer threadWorker start, index:1
+[20261024:19:36:51:389][T-0] Information: [17620] unregisterCallback
+[20261024:19:36:51:389][T-0] Information: [17620] NxApiPresenter unregisterCallback cleanup begin
+[20261024:19:36:51:389][T-0] Information: [17620] unregisterCallback
+[20261024:19:36:51:389][T-0] Information: [17620] NxApiPresenter unregisterCallback cleanup finish duration_ms:0
+[20261024:19:36:51:389][T-0] Information: [17620] NxApiPresenter api server stop cleanup begin
+[20261024:19:36:51:389][T-0] Information: [23248] onEventMainStatusChanged status: 2, pid: 0, privilege: 0
+[20261024:19:36:51:389][T-0] Information: [14324] Create mainnx player: 0, 10117
+[20261024:19:36:51:389][T-0] Information: [30152] [RPCClient::sendRequestSync] target:MuMuPlayer[main] body:
+[20261024:19:36:51:389][T-0] Information: [14324] onEventPlayerStatusChanged index: 0, status: 1
+[20261024:19:36:51:389][T-0] Information: [14324] onEventPlayerStatusChanged index: 0, status: 2
+[20261024:19:36:51:389][T-0] Information: [14324] Get player state index:0
+[20261024:19:36:51:389][T-0] Information: [14324] NxPlayer trace caller:getPlayerState detail:launchMainNxIfNeed root:E:\Program Files\Netease\MuMu\ serverPort:10117 is_connected:1 is_connecting:0 stopping:0
+[20261024:19:36:51:389][T-0] Information: [14324] NxPlayer trace caller:launchMainNxIfNeed:getPlayerState detail:waitConnected running=true root:E:\Program Files\Netease\MuMu\ serverPort:10117 is_connected:1 is_connecting:0 stopping:0
+[20261024:19:36:51:389][T-0] Information: [14324] waitConnected reuse connected mainnx caller:launchMainNxIfNeed:getPlayerState serverPort:10117
+[20261024:19:36:51:389][T-0] Information: [14324] launchMainNxIfNeed result caller:getPlayerState ret:0
+[20261024:19:36:51:389][T-0] Information: [35364] [RPCClient::sendRequestSync] target:MuMuPlayer[main] body:
+[20261024:19:36:51:389][T-0] Information: [35364] [RPC] RPCApiClient start
+[20261024:19:36:51:389][T-0] Information: [35364] [RPC] client create
+[20261024:19:36:51:389][T-0] Information: [14324] [RPCClient::sendRequest] target:MuMuPlayer[main] body:
+[20261024:19:36:51:389][T-0] Information: [14324] [RPC] RPCApiClient start
+[20261024:19:36:51:389][T-0] Information: [24376] NxPlayer threadWorker start, index:0
+[20261024:19:36:51:389][T-0] Information: [24376] mainnx configPlayerCustomAction index:0
+[20261024:19:36:51:389][T-0] Information: [14324] [RPC] client create
+[20261024:19:36:51:389][T-0] Information: [24376] NxPlayer trace caller:configPlayerCustomAction detail:launchMainNxIfNeed root:E:\Program Files\Netease\MuMu\ serverPort:10117 is_connected:1 is_connecting:0 stopping:0
+[20261024:19:36:51:389][T-0] Information: [14324] mainnx getPlayerState index:0, code:0, msg:
+[20261024:19:36:51:389][T-0] Information: [24376] NxPlayer trace caller:launchMainNxIfNeed:configPlayerCustomAction detail:waitConnected running=true root:E:\Program Files\Netease\MuMu\ serverPort:10117 is_connected:1 is_connecting:0 stopping:0
+[20261024:19:36:51:389][T-0] Information: [17440] [RPC] RPCApiClient clientWorker
+[20261024:19:36:51:389][T-0] Information: [17440] [RPC] RPCApiClient will try to connect target: MuMuPlayer[main]
+[20261024:19:36:51:389][T-0] Information: [17440] [RPC] RPCApiClient connect url: nemutarget://23998f30177e8eb3f54523931a2080d8, uuid: D46354F5-19D3-499C-85D3-94DE5ED0FF3B
+[20261024:19:36:51:389][T-0] Information: [24376] waitConnected reuse connected mainnx caller:launchMainNxIfNeed:configPlayerCustomAction serverPort:10117
+[20261024:19:36:51:389][T-0] Information: [17440] [RPC] connect pipe begin, name: NemuHttpRPCApid_853a36b5a394edfdbcd926e90724ac79
+[20261024:19:36:51:389][T-0] Information: [17440] [RPC] connect pipe success, name: NemuHttpRPCApid_853a36b5a394edfdbcd926e90724ac79
+[20261024:19:36:51:390][T-0] Information: [14324] [RPC] RPCApiClient start
+[20261024:19:36:51:390][T-0] Information: [24376] launchMainNxIfNeed result caller:configPlayerCustomAction ret:0
+[20261024:19:36:51:390][T-0] Information: [14324] [RPC] client create
+[20261024:19:36:51:390][T-0] Information: [29796] [RPC] RPCApiClient clientWorker
+[20261024:19:36:51:390][T-0] Information: [29796] [RPC] RPCApiClient will try to connect target: MuMuPlayer[main]
+[20261024:19:36:51:390][T-0] Information: [29796] [RPC] RPCApiClient connect url: nemutarget://23998f30177e8eb3f54523931a2080d8, uuid: D46354F5-19D3-499C-85D3-94DE5ED0FF3B
+[20261024:19:36:51:390][T-0] Information: [29796] [RPC] connect pipe begin, name: NemuHttpRPCApid_853a36b5a394edfdbcd926e90724ac79
+[20261024:19:36:51:390][T-0] Information: [29796] [RPC] connect pipe success, name: NemuHttpRPCApid_853a36b5a394edfdbcd926e90724ac79
+[20261024:19:36:51:390][T-0] Information: [30620] [RPC] RPCApiClient clientWorker
+[20261024:19:36:51:390][T-0] Information: [30620] [RPC] RPCApiClient will try to connect target: MuMuPlayer[main]
+[20261024:19:36:51:390][T-0] Information: [24376] [RPCClient::sendRequest] target:MuMuPlayer[main] body:{
+  "action": "config",
+  "id": "3491b19e-cf9f-11f1-813b-bcfce74afb49",
+  "params": {
+    "android_version": "12.0",
+    "index": 0
+  }
+}
+[20261024:19:36:51:390][T-0] Information: [30620] [RPC] RPCApiClient connect url: nemutarget://23998f30177e8eb3f54523931a2080d8, uuid: D46354F5-19D3-499C-85D3-94DE5ED0FF3B
+[20261024:19:36:51:390][T-0] Information: [30620] [RPC] connect pipe begin, name: NemuHttpRPCApid_853a36b5a394edfdbcd926e90724ac79
+[20261024:19:36:51:390][T-0] Information: [30620] [RPC] connect pipe success, name: NemuHttpRPCApid_853a36b5a394edfdbcd926e90724ac79
+[20261024:19:36:51:390][T-0] Information: [24376] [RPC] RPCApiClient start
+[20261024:19:36:51:390][T-0] Information: [24376] [RPC] client create
+[20261024:19:36:51:390][T-0] Information: [24376] mainnx configPlayerCustomAction index:0, code:0, msg:
+[20261024:19:36:51:390][T-0] Information: [10072] [RPC] RPCApiClient clientWorker
+[20261024:19:36:51:390][T-0] Information: [10072] [RPC] RPCApiClient will try to connect target: MuMuPlayer[main]
+[20261024:19:36:51:390][T-0] Information: [10072] [RPC] RPCApiClient connect url: nemutarget://23998f30177e8eb3f54523931a2080d8, uuid: D46354F5-19D3-499C-85D3-94DE5ED0FF3B
+[20261024:19:36:51:390][T-0] Information: [10072] [RPC] connect pipe begin, name: NemuHttpRPCApid_853a36b5a394edfdbcd926e90724ac79
+[20261024:19:36:51:390][T-0] Information: [10072] [RPC] connect pipe success, name: NemuHttpRPCApid_853a36b5a394edfdbcd926e90724ac79
+[20261024:19:36:51:390][T-0] Information: [10072] [RPCClient::sendRequest] errorCode:200 content:{"errcode":0,"id":"3491b19e-cf9f-11f1-813b-bcfce74afb49","message":"OK"}
+[20261024:19:36:51:391][T-0] Information: [33352] [RPC] task client start: 36552
+[20261024:19:36:51:401][T-0] Information: [30152] [RPCClient::sendRequestSync] errorCode:200 content:{"errcode":0,"message":"OK","return":{"_main_pid_":"28316"}}
+[20261024:19:36:51:401][T-0] Information: [30152] mainnx requestMainProcess index:_main_pid_, code:0, msg:OK
+[20261024:19:36:51:401][T-0] Information: [30152] Get mainnx state errcode:0, value:28316
+[20261024:19:36:51:401][T-0] Information: [30152] onEventMainLaunch pid: 28316, privilege: 0
+[20261024:19:36:51:401][T-0] Information: [30152] onEventMainStatusChanged status: 2, pid: 28316, privilege: 0
+[20261024:19:36:51:401][T-0] Information: [34628] [RPC] ProcessWatcher::monitorThread: 28316, start
+[20261024:19:36:51:402][T-0] Information: [35364] [RPCClient::sendRequestSync] errorCode:200 content:{"errcode":0,"message":"OK","return":{"_device_pid_:0":"2920"}}
+[20261024:19:36:51:402][T-0] Information: [35364] mainnx requestDeviceProcess index:_device_pid_:0, code:0, msg:OK
+[20261024:19:36:51:402][T-0] Information: [35364] Get mainnx state errcode:0, value:2920
+[20261024:19:36:51:402][T-0] Information: [5464] [RPC] ProcessWatcher::monitorThread: 2920, start
+[20261024:19:36:51:412][T-0] Information: [29796] [RPCClient::sendRequest] errorCode:200 content:{"errcode":0,"message":"OK","return":{"launch_code":0,"launch_msg":"","launch_time":223674,"renderer_ginstance":"ginstance1401213438763327600","state":"start_finished"}}
+[20261024:19:36:51:412][T-0] Information: [29796] NxPlayerModel getPlayerState response index:0 errorCode:200 response_content:{"errcode":0,"message":"OK","return":{"launch_code":0,"launch_msg":"","launch_time":223674,"renderer_ginstance":"ginstance1401213438763327600","state":"start_finished"}}
+[20261024:19:36:51:412][T-0] Information: [29796] NxPlayerModel setPlayerRendererInstance index:0 renderer_ginstance:ginstance1401213438763327600
+[20261024:19:36:51:412][T-0] Information: [29796] playerRomReady index: 0
+[20261024:19:36:51:412][T-0] Information: [29796] onEventPlayerStatusChanged index: 0, status: 3
+[20261024:19:36:51:489][T-0] Information: [17620] ApiHttpServer retained stop handle
+[20261024:19:36:51:489][T-0] Information: [17620] Api server stop timeout
+[20261024:19:36:51:489][T-0] Information: [17620] ApiHttpServer retained stop handle
+[20261024:19:36:51:489][T-0] Information: [17620] Pipe Api server stop timeout
+[20261024:19:36:51:489][T-0] Information: [17620] NxApiPresenter api server stop callback gate wait timeout
+[20261024:19:36:51:489][T-0] Information: [17620] NxApiPresenter api server stop cleanup finish duration_ms:99
+[20261024:19:36:51:489][T-0] Information: [17620] NxApiPresenter model uninit cleanup begin
+[20261024:19:36:51:489][T-0] Information: [17620] mainnx uninit
+[20261024:19:36:51:489][T-0] Information: [17620] NxPlayerModel polling thread join timeout, keep thread ownership
+[20261024:19:36:51:489][T-0] Information: [17620] mainnx pollingTimer_ stop finish
+[20261024:19:36:51:489][T-0] Information: [17620] NxPlayerModel player worker stop task wait timeout
+[20261024:19:36:51:489][T-0] Information: [17620] NxPlayerModel player worker stop task wait timeout
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] NamedRPCApiServer stop
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] task client stop: 36552
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] task client stop finished: 36552
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] Stop rpc client
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] Stop rpc client finish
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] Stop rpc server
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] RpcMgmtStopServerListening...
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] RpcMgmtWaitServerListen...
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] Unregistering RPC interface...
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] Unregistering RPC endpoints...
+[20261024:19:36:51:489][T-0] Information: [25464] NxPlayer stopWorker, index:1
+[20261024:19:36:51:489][T-0] Information: [1152] threadWorker not running, break
+[20261024:19:36:51:489][T-0] Information: [1152] NxPlayer threadWorker end, index:1
+[20261024:19:36:51:489][T-0] Information: [18436] NxPlayer stopWorker, index:0
+[20261024:19:36:51:489][T-0] Information: [24376] threadWorker not running, break
+[20261024:19:36:51:489][T-0] Information: [24376] NxPlayer threadWorker end, index:0
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] Freeing protocol sequence/endpoint bindings...
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] Freeing binding handle 0
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] Freeing RpcBindingVectorFree...
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] Stop rpc server finish
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] Server stopped, name: NemuHttpRPCApid_96261173d1edd703419c44604039fa22
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] NamedRPCApiServer stop finish
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] Server stopped, name: NemuHttpRPCApid_96261173d1edd703419c44604039fa22
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] NamedRPCApiServer stop
+[20261024:19:36:51:489][T-0] Information: [34172] [RPC] NamedRPCApiServer stop finish
+[20261024:19:36:51:489][T-0] Information: [25464] NxPlayer stopWorker finished, index:1
+[20261024:19:36:51:489][T-0] Information: [18436] NxPlayer stopWorker finished, index:0
+[20261024:19:36:51:492][T-0] Information: [17620] NxPlayerModel process watcher stop task wait timeout
+[20261024:19:36:51:492][T-0] Information: [8836] [RPC] ProcessWatcher::stop: 28316
+[20261024:19:36:51:492][T-0] Information: [34628] [RPC] ProcessWatcher::monitorThread: 28316, exited
+[20261024:19:36:51:492][T-0] Information: [8836] [RPC] ProcessWatcher join timeout, defer join until thread exits
+[20261024:19:36:51:492][T-0] Information: [8836] [RPC] ProcessWatcher retained watcher thread handle
+[20261024:19:36:51:492][T-0] Information: [8836] [RPC] ProcessWatcher::stop: 0, finished
+[20261024:19:36:51:492][T-0] Information: [29228] [RPC] ProcessWatcher::stop: 2920
+[20261024:19:36:51:492][T-0] Information: [5464] [RPC] ProcessWatcher::monitorThread: 2920, exited
+[20261024:19:36:51:492][T-0] Information: [29228] [RPC] ProcessWatcher join timeout, defer join until thread exits
+[20261024:19:36:51:492][T-0] Information: [29228] [RPC] ProcessWatcher retained watcher thread handle
+[20261024:19:36:51:492][T-0] Information: [29228] [RPC] ProcessWatcher::stop: 0, finished
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] NamedRPCApiClient stop
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient stop
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient join timeout, defer join until thread exits
+[20261024:19:36:51:499][T-0] Information: [23248] [RPC] RPCApiClient not running, break
+[20261024:19:36:51:499][T-0] Information: [23248] [RPC] RPCApiClient clientWorker exited
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient retained unjoined thread handle after deferred join setup failure
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient stop finish
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient stop
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient join timeout, defer join until thread exits
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient retained unjoined thread handle after deferred join setup failure
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient stop finish
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient stop
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient join timeout, defer join until thread exits
+[20261024:19:36:51:499][T-0] Information: [17440] [RPC] RPCApiClient not running, break
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient retained unjoined thread handle after deferred join setup failure
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient stop finish
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient stop
+[20261024:19:36:51:499][T-0] Information: [17440] [RPC] RPCApiClient clientWorker exited
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient join timeout, defer join until thread exits
+[20261024:19:36:51:499][T-0] Information: [29796] [RPC] RPCApiClient not running, break
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient retained unjoined thread handle after deferred join setup failure
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient stop finish
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient stop
+[20261024:19:36:51:499][T-0] Information: [29796] [RPC] RPCApiClient clientWorker exited
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient join timeout, defer join until thread exits
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient retained unjoined thread handle after deferred join setup failure
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] RPCApiClient stop finish
+[20261024:19:36:51:499][T-0] Information: [30620] [RPC] RPCApiClient not running, break
+[20261024:19:36:51:499][T-0] Information: [17620] [RPC] NamedRPCApiClient stop finish
+[20261024:19:36:51:499][T-0] Information: [10072] [RPC] RPCApiClient not running, break
+[20261024:19:36:51:499][T-0] Information: [10072] [RPC] RPCApiClient clientWorker exited
+[20261024:19:36:51:499][T-0] Information: [30620] [RPC] RPCApiClient clientWorker exited
+[20261024:19:36:51:499][T-0] Information: [17620] HttpClient worker join timeout
+[20261024:19:36:51:509][T-0] Information: [17620] HttpClient worker retained unjoined worker handle
+[20261024:19:36:51:509][T-0] Information: [17620] [RPC] ProcessWatcher::stop: 0
+[20261024:19:36:51:509][T-0] Information: [17620] [RPC] ProcessWatcher::stop: 0, finished
+[20261024:19:36:51:509][T-0] Information: [17620] [RPC] ProcessWatcher::stop: 0
+[20261024:19:36:51:509][T-0] Information: [17620] [RPC] ProcessWatcher::stop: 0, finished
+[20261024:19:36:51:509][T-0] Information: [17620] NxApiPresenter model uninit cleanup finish duration_ms:20
+[20261024:19:36:51:509][T-0] Information: [17620] NxApiPresenter release components cleanup begin
+[20261024:19:36:51:509][T-0] Information: [17620] NxApiPresenter release components cleanup finish duration_ms:0
+[20261024:19:36:51:509][T-0] Information: [17620] NxApiPresenter async callback worker cleanup begin
+[20261024:19:36:51:509][T-0] Information: [17620] NxApiPresenter async callback worker join timeout
+[20261024:19:36:51:511][T-0] Information: [17620] NxApiPresenter async callback worker retained unjoined callback worker handle
+[20261024:19:36:51:511][T-0] Information: [17620] NxApiPresenter async callback worker cleanup finish duration_ms:1
+[20261024:19:36:51:511][T-0] Information: [17620] NxApiPresenter async callback tasks cleanup begin
+[20261024:19:36:51:511][T-0] Information: [17620] NxApiPresenter async callback tasks cleanup finish duration_ms:0
+[20261024:19:36:51:511][T-0] Information: [17620] NxApiPresenter data report shutdown cleanup begin
+[20261024:19:36:51:511][T-0] Information: [17620] NxApiPresenter data report shutdown cleanup finish duration_ms:0
+[20261024:19:36:51:511][T-0] Information: [17620] NxApiPresenter uninitLog cleanup begin
