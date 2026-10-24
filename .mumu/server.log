@@ -14,3 +14,16 @@
 127.0.0.1 - - [24/Oct/2026 20:15:56] "GET /?wedge=1 HTTP/1.1" 304 -
 127.0.0.1 - - [24/Oct/2026 20:17:06] "GET /?landscape=1 HTTP/1.1" 304 -
 127.0.0.1 - - [24/Oct/2026 20:18:06] "GET /?landscape=1 HTTP/1.1" 304 -
+127.0.0.1 - - [24/Oct/2026 20:21:19] code 404, message File not found
+127.0.0.1 - - [24/Oct/2026 20:21:19] "GET /%3Flandscape%3D1%26n%3D17 HTTP/1.1" 404 -
+127.0.0.1 - - [24/Oct/2026 20:21:19] code 404, message File not found
+127.0.0.1 - - [24/Oct/2026 20:21:19] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [24/Oct/2026 20:21:58] code 404, message File not found
+127.0.0.1 - - [24/Oct/2026 20:21:58] "GET /%3Flandscape%3D1%26n%3D17 HTTP/1.1" 404 -
+127.0.0.1 - - [24/Oct/2026 20:21:58] code 404, message File not found
+127.0.0.1 - - [24/Oct/2026 20:21:58] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [24/Oct/2026 20:23:01] "GET /?wedge=1%26landscape=1%26n=18 HTTP/1.1" 200 -
+127.0.0.1 - - [24/Oct/2026 20:23:01] "GET /mq_js_bundle.js?v=1.9.17 HTTP/1.1" 200 -
+127.0.0.1 - - [24/Oct/2026 20:23:02] "GET /xiuxian.wasm?v=1.9.17 HTTP/1.1" 200 -
+127.0.0.1 - - [24/Oct/2026 20:32:02] "GET /?wedge=1%26landscape=1%26n=20 HTTP/1.1" 200 -
+127.0.0.1 - - [24/Oct/2026 20:32:04] "GET /xiuxian.wasm?v=1.9.17 HTTP/1.1" 304 -

@@ -813,9 +813,22 @@
                         }));
                     } catch (e) {}
                 }
+                // v1.9.17 重载预算：URL 参数为主（?xxrl=1）+ sessionStorage 为辅。
+                // 实测夸克（MuMu）的 sessionStorage 在 location.reload() 后丢失
+                // ——预算标记一丢，wedge 页重载后又把自己冻结→循环死→又重载，
+                // 无限重载循环（用户看到"很卡进不去"的就是这个循环）。URL 参数
+                // 跨重载绝不丢失，任何内核都可靠。
+                function xxRlUsed() {
+                    if (/[?&]xxrl=1/.test(location.search)) return true;
+                    try { return !!sessionStorage.getItem("xxrl"); } catch (e) { return false; }
+                }
                 function xxReload(reason) {
                     xxPostmortem(reason);
                     try { sessionStorage.setItem("xxrl", "1"); } catch (e) {}
+                    if (!/[?&]xxrl=1/.test(location.search)) {
+                        location.href = location.href + (location.search ? "&" : "?") + "xxrl=1";
+                        return;
+                    }
                     location.reload();
                 }
                 // v1.9.17 wedge 低帧率自动重载：MuMu+夸克模拟器实证游戏代码在
@@ -841,9 +854,7 @@
                     window.__xxFpsWin = { t: now, n: a.n };
                     try { errlog.textContent += "[诊断] wedge 评估：" + fps.toFixed(1) + "fps\n"; } catch (e0) {}
                     if (fps >= 15) return; // <15fps 体验即"卡"，重载换满帧
-                    var used = false;
-                    try { used = !!sessionStorage.getItem("xxrl"); } catch (e2) {}
-                    if (used) return; // 重载预算已用：车夫保底，不再折腾
+                    if (xxRlUsed()) return; // 重载预算已用：车夫保底，不再折腾
                     try { errlog.textContent += "[诊断] wedge 态帧率仅 " + fps.toFixed(1) + "fps，自动重载恢复满帧\n"; } catch (e3) {}
                     xxReload("wedge-lowfps");
                 };
@@ -965,7 +976,7 @@
                         }
                         try { errlog.textContent += "[诊断] 循环心跳停止于第 " + window.__xxAlive.n + " 帧（future wedged），自动重载\n"; } catch (e) {}
                         try {
-                            if (!sessionStorage.getItem("xxrl")) { xxReload("loop"); return; }
+                            if (!xxRlUsed()) { xxReload("loop"); return; }
                         } catch (e2) {}
                         // 自动重载预算已用：仍无心跳 → 弹大旗（按钮走 ② 的样式）
                         if (!banner) xxShowBanner();
@@ -985,13 +996,10 @@
                     // 帧率极低——直接自动重载换满帧（重载后必好是三次实测
                     // 铁律），弹旗等人点按钮只会让玩家以为游戏坏了
                     if (window.__xxWedged) {
-                        var usedB = false;
-                        try { usedB = !!sessionStorage.getItem("xxrl"); } catch (eB) {}
-                        if (!usedB) {
-                            try { errlog.textContent += "[诊断] wedge 心跳停滞，弹旗改为直接重载\n"; } catch (eC) {}
-                            xxReload("wedge-banner");
-                            return;
-                        }
+                        if (xxRlUsed()) return; // 预算已用：保底可玩，不再折腾
+                        try { errlog.textContent += "[诊断] wedge 心跳停滞，弹旗改为直接重载\n"; } catch (eC) {}
+                        xxReload("wedge-banner");
+                        return;
                     }
                     banner = document.createElement("div");
                     banner.style.cssText =
@@ -1177,9 +1185,7 @@
                     if (!window.wasm_exports || wedged0) return;
                     // 重载过一次就不再冻结：对齐真机"重载后必好"（循环存活），
                     // 让模拟器剧本能看到 卡→重载→满帧 的完整闭环
-                    var relaoded = false;
-                    try { relaoded = !!sessionStorage.getItem("xxrl"); } catch (e) {}
-                    if (relaoded) {
+                    if (xxRlUsed()) {
                         wedged0 = true;
                         log("[SIM] wedge：已重载过，本次不再冻结（模拟真机重载后循环存活）");
                         return;
