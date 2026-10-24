@@ -77,7 +77,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.11";</script>
+    <script>var GAME_VER = "1.9.12";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -123,7 +123,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.9.11"></script>
+    <script src="mq_js_bundle.js?v=1.9.12"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -222,6 +222,19 @@
                 };
                 importObject.env.xx_state = function (code) {
                     window.__xxState = code | 0;
+                };
+                // v1.9.12 三通道（Rust xx_dbg 模块声明，须成对）：
+                // xx_click：Rust 每消费一次点击上报计数（桥看门狗数据源）
+                // xx_js_fr：JS 帧时钟心跳年龄 ms（Rust 画进菜单自检面板）
+                // xx_js_touches：JS 侧累计触摸组数（同上）
+                importObject.env.xx_click = function (n) {
+                    window.__xxClicksSeen = n | 0;
+                };
+                importObject.env.xx_js_fr = function () {
+                    return Math.min(999999, Math.round(performance.now() - (window.__xxFrameAt || 0)));
+                };
+                importObject.env.xx_js_touches = function () {
+                    return window.__xxTouches || 0;
                 };
             },
             on_init: function () {}
@@ -338,8 +351,10 @@
                     " sent " + __xxSentW + "x" + __xxSentH,
                 "fit " + Math.min(cv.width / 1280, cv.height / 720).toFixed(3) +
                     // fr：距上次成功 wasm 帧的毫秒数（>200 即帧停摆，混沌仿真/真机判读用）
+                    // t/k：JS 触摸组数 / Rust 已消费点击数（t 涨 k 不涨 = 输入桥断开）
                     " fr" + Math.round(performance.now() - (window.__xxFrameAt || 0)) +
-                    "ms st" + window.__xxState
+                    "ms st" + window.__xxState +
+                    " t" + (window.__xxTouches || 0) + " k" + (window.__xxClicksSeen || 0)
             ];
             if (__xxLastTouch) {
                 lines.push("t c(" + __xxLastTouch[0] + "," + __xxLastTouch[1] + ")->m(" +
@@ -649,6 +664,7 @@
                             e.preventDefault();
                             e.stopImmediatePropagation();
                             mark("touch");
+                            window.__xxTouches = (window.__xxTouches || 0) + 1;
                             window.xxSyncScreen(); // 触摸瞬间强同步 screen_size == canvas
                             for (var j = 0; j < pts.length; j++) {
                                 var t = pts[j][0];
@@ -709,6 +725,53 @@
                 };
             };
             setInterval(takeOver, 500);
+            // v1.9.12 输入桥看门狗：真机两次实测（v1.9.10/1.9.11）均为"触摸到达
+            // 页面（t 行更新）但 Rust 从未消费（c 恒 0）、F 冻在首次点击时刻、
+            // 无任何 [PANIC]/[ERR]"。本看门狗用纯 DOM 层检测这一状态（不依赖
+            // 游戏循环活着）：触摸 ≥2 次且 4 秒内 Rust 消费计数零增长 → 弹大旗
+            // 给出结论与重载按钮，10 秒后自动重载（每会话最多一次，防循环）。
+            (function xxWatch() {
+                var lastSeen = -1, starved = 0, banner = null, reloadTimer = null;
+                setInterval(function () {
+                    if (!window.wasm_exports) return;
+                    var seen = window.__xxClicksSeen || 0;
+                    var tch = window.__xxTouches || 0;
+                    if (seen !== lastSeen) { lastSeen = seen; starved = 0; return; }
+                    if (tch < 2) return; // 玩家没点过，不算故障
+                    starved += 1;
+                    if (starved < 2 || banner) return; // 连续 2 轮（≥4s）零消费才定性
+                    banner = document.createElement("div");
+                    banner.style.cssText =
+                        "position:fixed;left:8%;right:8%;top:38%;z-index:200;" +
+                        "background:rgba(120,10,10,.94);color:#fff;border:2px solid #f66;" +
+                        "border-radius:10px;padding:14px 18px;font:15px/1.5 sans-serif;" +
+                        "text-align:center;pointer-events:auto;";
+                    banner.innerHTML =
+                        "⚠ 检测到触摸已到达页面，但游戏引擎未响应（已点 " + tch + " 次，引擎消费 " + seen + " 次）<br>" +
+                        "10 秒后自动重载修复；或点下方按钮立即重载。";
+                    var btn = document.createElement("button");
+                    btn.textContent = "立即重载游戏";
+                    btn.style.cssText =
+                        "margin-top:8px;padding:8px 22px;font:16px sans-serif;" +
+                        "background:#f66;color:#fff;border:0;border-radius:6px;";
+                    btn.onclick = function () { location.reload(); };
+                    banner.appendChild(btn);
+                    document.body.appendChild(banner);
+                    try { errlog.textContent += "[诊断] 输入桥断开：触摸到页未达引擎，即将重载\n"; } catch (e) {}
+                    if (!sessionStorage.getItem("xxrl")) {
+                        sessionStorage.setItem("xxrl", "1");
+                        reloadTimer = setTimeout(function () { location.reload(); }, 10000);
+                    }
+                }, 2000);
+                // 看到消费计数恢复增长即撤旗（玩家自行重载后/瞬时抖动恢复）
+                setInterval(function () {
+                    if (banner && (window.__xxClicksSeen || 0) > 0) {
+                        if (reloadTimer) clearTimeout(reloadTimer);
+                        banner.remove && banner.remove();
+                        banner = null; starved = 0;
+                    }
+                }, 1000);
+            })();
             // v1.9.7 差异检测：backing ≠ CSS×dpr（容器缩放/dpr 漂移）时直接把
             // backing 写正并直通同步 wasm——不清零画布（X5 上清零会杀死帧回调，
             // v1.9.6 真机冻帧实锤）、不派发 resize 事件。

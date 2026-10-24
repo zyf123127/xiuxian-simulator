@@ -4484,6 +4484,19 @@ impl Game {
         self.play(crate::sounds::Which::Click);
     }
 
+    /// v1.9.12 菜单自检面板用的场景短名（中文，仅 wasm 诊断显示）
+    pub fn scene_xx_name(&self) -> &'static str {
+        match self.scene {
+            Scene::Menu => "菜单",
+            Scene::Reality => "现实",
+            Scene::Draft => "选天赋",
+            Scene::Sim => "模拟",
+            Scene::Inherit => "继承",
+            Scene::Settle => "结算",
+            Scene::World => "地图",
+        }
+    }
+
     /// 每帧推进广告倒计时（真实秒；归 0 后钳住，等待领取）
     pub fn tick_ad(&mut self, dt: f32) {
         if let Some(t) = self.ad.as_mut() {

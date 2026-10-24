@@ -26,6 +26,16 @@ mod xx_dbg {
     unsafe extern "C" {
         fn xx_panic(ptr: *const u8, len: i32);
         fn xx_state(code: i32);
+        // v1.9.12 菜单自检三通道（与 index.html xx_dbg 插件成对出现）：
+        // xx_click：Rust 每消费一次点击上报计数——JS 看门狗据此检测
+        //   "触摸到达页面但游戏引擎未消费"（输入桥断开，v1.9.10/1.9.11 真机
+        //   F 冻在 ~100/101 的现象层）并弹 DOM 大旗 + 自动重载。
+        // xx_js_fr / xx_js_touches：Rust 反向读取 JS 帧时钟心跳年龄与 JS 侧
+        //   累计触摸数，画进菜单自检面板——一张截图同时呈现 JS 视角与 Rust
+        //   视角，桥断/时钟停摆/循环死亡一眼分辨。
+        fn xx_click(n: i32);
+        fn xx_js_fr() -> i32;
+        fn xx_js_touches() -> i32;
     }
 
     /// wasm 陷阱可见化：panic 原文写入 errlog（[PANIC] 前缀）。须最先安装。
@@ -38,6 +48,18 @@ mod xx_dbg {
 
     pub fn state(code: i32) {
         unsafe { xx_state(code) };
+    }
+
+    pub fn click(n: i32) {
+        unsafe { xx_click(n) };
+    }
+
+    pub fn js_fr() -> i32 {
+        unsafe { xx_js_fr() }
+    }
+
+    pub fn js_touches() -> i32 {
+        unsafe { xx_js_touches() }
     }
 }
 
@@ -107,6 +129,11 @@ async fn main() {
     let (mut xx_clicks, mut xx_last): (u32, Option<(f32, f32)>) = (0, None);
     #[cfg(target_arch = "wasm32")]
     let mut xx_clicks_handled: u32 = 0;
+    // v1.9.12 菜单自动进入倒计时（仅 wasm）：真机"点按钮无效"的终极保险——
+    // 倒计时归零直接 begin_mortal，零输入依赖；循环活着就必然进入，循环死了
+    // 冻结的倒计时数字本身就是诊断（配合 JS 看门狗大旗分层定位）。
+    #[cfg(target_arch = "wasm32")]
+    let mut xx_auto: f32 = 8.0;
     // v1.9.10 场景变化回传（wasm）：JS 侧 __xxState 断言"点按钮→进游戏"；
     // 0=Menu 1=Reality 2=Draft 3=Sim 4=Inherit 5=Settle 6=World
     #[cfg(target_arch = "wasm32")]
@@ -208,6 +235,7 @@ async fn main() {
             if is_mouse_button_pressed(MouseButton::Left) {
                 xx_clicks += 1;
                 xx_last = Some(crate::cam::mouse());
+                xx_dbg::click(xx_clicks as i32);
             }
             let (mx, my) = crate::cam::mouse();
             draw_line(mx - 40.0, my, mx + 40.0, my, 3.0, Color::new(1.0, 0.1, 0.1, 0.9));
@@ -268,6 +296,51 @@ async fn main() {
                             g.begin_mortal();
                         }
                     }
+                }
+            }
+            // v1.9.12 菜单自检面板（用户要求：开始界面直接显示调试）。
+            // 同屏呈现 JS 视角（时钟心跳/触摸数）与 Rust 视角（已消费点击/帧数/
+            // 场景）——真机 F 冻结 + fr 新鲜的"悖论"从此肉眼可判：
+            //   触达涨/已收不涨 = 输入桥断（JS 看门狗同时会弹大旗+自动重载）；
+            //   帧号/倒计时冻结  = 游戏循环死（时钟行仍跳 = JS 活着）；
+            //   全部正常仍菜单  = 逻辑层（兜底与倒计时强制进入）。
+            if g.scene == Scene::Menu {
+                let fr = xx_dbg::js_fr();
+                let tch = xx_dbg::js_touches();
+                // 放右上角（黄色诊断行正下方），不遮标题/按钮/底部状态栏
+                draw_rectangle(
+                    646.0,
+                    84.0,
+                    620.0,
+                    96.0,
+                    Color::new(0.0, 0.0, 0.0, 0.62),
+                );
+                draw_text(
+                    &format!(
+                        "自检 触达:{} 已收:{} 帧:{} 时钟:{}ms 场景:{}",
+                        tch, xx_clicks, frame, fr, g.scene_xx_name(),
+                    ),
+                    662.0,
+                    118.0,
+                    22.0,
+                    Color::new(0.5, 1.0, 0.7, 1.0),
+                );
+                draw_text(
+                    &format!(
+                        "{} 秒后自动进入 · 点「开始新的人生」立即开始",
+                        xx_auto.max(0.0) as i32
+                    ),
+                    662.0,
+                    152.0,
+                    21.0,
+                    Color::new(1.0, 0.9, 0.4, 1.0),
+                );
+                // 倒计时：菜单停留 8 秒直接进入（零输入依赖的终极保险）。
+                // dt 累减；任何途径离开菜单后本块不再执行，天然停摆。
+                xx_auto -= dt;
+                if xx_auto <= 0.0 {
+                    g.play(crate::sounds::Which::Click);
+                    g.begin_mortal();
                 }
             }
         }
