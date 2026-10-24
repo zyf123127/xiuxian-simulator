@@ -77,7 +77,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.15";</script>
+    <script>var GAME_VER = "1.9.16";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -123,7 +123,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.9.15"></script>
+    <script src="mq_js_bundle.js?v=1.9.16"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -468,6 +468,11 @@
                         // v1.9.7 只在真正执行了 wasm 帧后才刷新帧时刻——回调死亡时
                         // tick 空转不再冒充"刚出过帧"，触摸帧泵保持有效。
                         window.__xxFrameAt = now;
+                        // v1.9.16 __xxTickAt：仅 tick（真 rAF/时钟链）出帧时刷新。
+                        // 车夫让路判据专用——触摸同步帧也刷 __xxFrameAt（v1.9.15
+                        // 真机实锤：频繁触摸会把车夫的 200ms 让路窗口无限重置，
+                        // 车夫从不补帧，帧率只剩触摸驱动 ~2fps，画面一卡一卡）。
+                        window.__xxTickAt = now;
                     } catch (err) {
                         if (frames < 100 || frames % 120 === 0) { // 限流防刷屏
                             el.textContent += "[ERR] frame " + String(err).slice(0, 120);
@@ -833,9 +838,15 @@
                     window.__xxCoach = 1;
                     try { errlog.textContent += "[诊断] 帧车夫接管（" + why + "）：1s 补帧维持\n"; } catch (e) {}
                     setInterval(function () {
-                        if (window.__xxClockGate) return; // ?chaos=1 仿真豁免
-                        if (performance.now() - (window.__xxFrameAt || 0) < 200) return; // tick 活着，让路
-                        for (var i = 0; i < 8; i++) {
+                        // v1.9.16 三处加固（v1.9.15 真机"一卡一卡"+大旗误弹的教训）：
+                        // ①让路判据改用 __xxTickAt——只有 tick 真出帧才让路，触摸
+                        //   同步帧不再屏蔽车夫（旧判据 __xxFrameAt 被触摸反复刷新，
+                        //   频繁点击时车夫永远在让路，帧率只剩触摸驱动 ~2fps）；
+                        // ②每拍 8→24 发：wedge 态维持 ~24fps 底血（文字游戏流畅线）；
+                        // ③gate 豁免删除：车夫是供血机制不是仿真对象，冻结仿真下
+                        //   也应补帧（chaos 回归断言的是点击被消费与解冻恢复，兼容）。
+                        if (performance.now() - (window.__xxTickAt || 0) < 300) return; // tick 活着，让路
+                        for (var i = 0; i < 24; i++) {
                             try { window.wasm_exports.frame(); } catch (e) { break; }
                         }
                         try { window.__xxFrameAt = performance.now(); } catch (e) {}
@@ -922,6 +933,10 @@
                     // v1.9.14 复活静默期：唤醒/复活成功后 4 秒内不弹旗（v1.9.13
                     // 真机实锤：复活成功后触摸桥 starved 判定仍弹旗造成误报）
                     if (window.__xxRevivedAt && performance.now() - window.__xxRevivedAt < 4000) return;
+                    // v1.9.16 车夫供血中不弹旗：车夫模式下帧号在推进（心跳上报
+                    // 只是 8 帧粒度、上报间隔可能拖长），画面活着，弹"引擎无响应"
+                    // 纯属误导（v1.9.15 真机又弹了一次，用户被误导点重载）
+                    if (window.__xxCoach) return;
                     banner = document.createElement("div");
                     banner.style.cssText =
                         "position:fixed;left:8%;right:8%;top:36%;z-index:200;" +
@@ -953,7 +968,9 @@
                     // 弹旗——旧条件在"点过一次后挂机 4s"的健康页面也会弹（一次
                     // tap = start+end 计 2 次触摸，之后无新点击即 starved≥2）。
                     // 真机 v1.9.13/14 的"引擎无响应"大旗有一部分就是它误报的。
-                    if (window.__xxAlive && performance.now() - window.__xxAlive.at < 2500) { starved = 0; return; }
+                    // v1.9.16 死线 2.5s→5s：心跳 8 帧粒度在低帧率下上报间隔
+                    // 可达 3-4s，5s 死线只拦真正的心跳停滞。
+                    if (window.__xxAlive && performance.now() - window.__xxAlive.at < 5000) { starved = 0; return; }
                     starved += 1;
                     if (starved < 2) return; // 连续 2 轮（≥4s）零消费才弹旗
                     xxShowBanner();
