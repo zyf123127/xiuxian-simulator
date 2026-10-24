@@ -83,7 +83,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.17";</script>
+    <script>var GAME_VER = "1.9.18";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -129,7 +129,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.9.17"></script>
+    <script src="mq_js_bundle.js?v=1.9.18"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -847,7 +847,8 @@
                 // ——预算标记一丢，wedge 页重载后又把自己冻结→循环死→又重载，
                 // 无限重载循环（用户看到"很卡进不去"的就是这个循环）。URL 参数
                 // 跨重载绝不丢失，任何内核都可靠。
-                function xxRlUsed() {
+                // 挂 window：xxSim（另一 IIFE）的 wedge 分支也要查预算
+                window.xxRlUsed = function () {
                     if (/[?&]xxrl=1/.test(location.search)) return true;
                     try { return !!sessionStorage.getItem("xxrl"); } catch (e) { return false; }
                 }
@@ -860,6 +861,28 @@
                     }
                     location.reload();
                 }
+                // v1.9.18 首开卡顿根治：真机实锤 v1.9.17 全链工作（首开卡→
+                // 游戏内 20 秒评估→自动重载→满帧），但用户要的是首开就流畅。
+                // 根基规律（三次实测）：首开加载慢（wasm 下载+编译）被容器钳制
+                // 一切定时器；重载后缓存热秒开、循环存活满帧。把这个规律用在
+                // 最早时机——wasm 就绪后 2 秒起 3 秒窗口统计帧增量：<45 帧
+                // （<15fps）即 wedge 实锤，不等用户点击/进游戏，立即热身重载。
+                // 用户感受：打开→加载→画面一闪（自动刷新）→秒开满帧菜单；
+                // 首开卡顿窗口从 ~20 秒压缩到 ~5 秒。慢设备（≥20fps）不误
+                // 触发；重载后 xxrl 标记在，不再折腾。
+                setTimeout(function () {
+                    if (!window.wasm_exports || !window.__xxAlive) return;
+                    if (xxRlUsed()) return; // 已重载过：信任热身，交给现有兜底
+                    var n1 = window.__xxAlive.n;
+                    setTimeout(function () {
+                        if (!window.__xxAlive) return;
+                        var inc = window.__xxAlive.n - n1; // 3 秒窗口增量
+                        if (inc < 45) {
+                            try { errlog.textContent += "[诊断] 首开卡顿（3 秒 +" + inc + " 帧），热身重载换满帧\n"; } catch (e) {}
+                            xxReload("coldstart");
+                        }
+                    }, 3000);
+                }, 2000);
                 // v1.9.17 wedge 低帧率自动重载：MuMu+夸克模拟器实证游戏代码在
                 // 正常浏览器一击即进+满帧零噪音——"很卡"的唯一来源是 X5 容器
                 // 钳死一切定时器（v1.9.16 真机日志实锤：车夫 setInterval(1000)
@@ -1222,8 +1245,8 @@
                     wedged0 = true;
                     window.__xxClockGate = true; // 三时钟死
                     window.__xxSimWedge = 1; // 车夫禁启
-                    log("[SIM] wedge：永久冻结三时钟+车夫禁启（模拟 X5 容器钳制）");
-                }, 5000);
+                    log("[SIM] wedge：2 秒起冻结三时钟+车夫禁启（模拟 X5 首开即钳制）");
+                }, 2000);
             }
             if (q.get("tap")) {
                 setInterval(function () {
