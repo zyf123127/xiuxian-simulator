@@ -16,6 +16,31 @@ mod world;
 use game::{Game, Scene};
 use macroquad::prelude::*;
 
+// v1.9.10 诊断出口（仅 wasm）：panic 消息与场景变化经 index.html 注册的
+// xx_dbg 插件回传 JS——wasm 陷阱在真机上此前完全不可见（F 冻结但 errlog 无
+// 任何记录，无法区分"时钟停摆"与"Rust 陷阱/互斥锁中毒"），现在一张截图即可
+// 读到 panic 原文；xx_state 供 ?tap= 自动回归断言"点按钮→进游戏"。
+#[cfg(target_arch = "wasm32")]
+mod xx_dbg {
+    #[link(wasm_import_module = "env")]
+    unsafe extern "C" {
+        fn xx_panic(ptr: *const u8, len: i32);
+        fn xx_state(code: i32);
+    }
+
+    /// wasm 陷阱可见化：panic 原文写入 errlog（[PANIC] 前缀）。须最先安装。
+    pub fn install() {
+        std::panic::set_hook(Box::new(|info| {
+            let msg = format!("panic: {info}");
+            unsafe { xx_panic(msg.as_ptr(), msg.len() as i32) };
+        }));
+    }
+
+    pub fn state(code: i32) {
+        unsafe { xx_state(code) };
+    }
+}
+
 fn window_conf() -> Conf {
     Conf {
         window_title: "凡人修仙·轮回模拟器".to_owned(),
@@ -27,10 +52,14 @@ fn window_conf() -> Conf {
         // 上坐标在 wasm 内部被乘 dpr(3.25)（注入 1036→记录 3367，v1.9.8 真机数据），
         // 且 canvas/backing/JS 三处 dpr 捕获时点不一致（启动瞬间 vs 实时）无法对账；
         // 像素风版本（v1.5.x，wasm 未开 high_dpi）在该真机上验证可玩。本版 wasm
-        // 关闭 high_dpi：JS dpi_scale() 恒 1，canvas=backing=CSS 三位一体，一切
-        // dpi 乘除退化为空操作——本地 dpr=1 环境与手机从构造上同构（本地过=手机
-        // 过）。代价：H5 手机端文字按 CSS 分辨率栅格再由 GPU 放大（与像素风版相
-        // 同的观感，可接受；桌面端不受影响）。图集封顶补丁护持不变。
+        // 关闭 high_dpi：JS dpi_scale() 恒 1，一切 dpi 乘除退化为空操作——本地 dpr=1
+        // 环境与手机从构造上同构（本地过=手机过）。
+        // v1.9.10 清晰度回补：dpr=1 制下手机端按 CSS 分辨率栅格被 GPU 放大 3.25×，
+        // 真机反馈"画质变模糊"。由 index.html 在 bundle 加载前把 canvas 的
+        // clientWidth/clientHeight getter 覆盖为真实 CSS 尺寸 ×SS（固定 3，确定性
+        // 常数而非 devicePixelRatio，不破坏同构性）——miniquad 自身的启动路径据此
+        // 把 backing 开到 CSS×3（与 v1.9.8 真机跑通过的 2772x1280 同一代码路径），
+        // Rust 侧零 dpi 除法、cam.rs 零改动，坐标仍在唯一坐标系（backing）里。
         high_dpi: !cfg!(target_arch = "wasm32"),
         ..Default::default()
     }
@@ -38,6 +67,9 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    // v1.9.10 wasm 陷阱可见化：越早装越好（后续任何 panic 都会回传 errlog）
+    #[cfg(target_arch = "wasm32")]
+    xx_dbg::install();
     // v1.5.0 GF_CLEAN：净版截图模式——删档保证从头开始（必须在读档之前）；
     // 无版本水印见 draw.rs version_mark
     // v1.8.0：GF_DEBUG 冒烟同样删档——冒烟会直置 npc_fav 等元数据并存档，
@@ -73,8 +105,25 @@ async fn main() {
     // 与"到了但按钮判定不吃"（clicks 增长且十字在按钮上）。
     #[cfg(target_arch = "wasm32")]
     let (mut xx_clicks, mut xx_last): (u32, Option<(f32, f32)>) = (0, None);
+    // v1.9.10 场景变化回传（wasm）：JS 侧 __xxState 断言"点按钮→进游戏"；
+    // 0=Menu 1=Reality 2=Draft 3=Sim 4=Inherit 5=Settle 6=World
+    #[cfg(target_arch = "wasm32")]
+    let mut xx_scene_prev = Scene::World; // 与初始 Menu 不同，保证首帧上报 0
     loop {
         let dt = get_frame_time().min(1.0 / 20.0);
+        #[cfg(target_arch = "wasm32")]
+        if g.scene != xx_scene_prev {
+            xx_scene_prev = g.scene;
+            xx_dbg::state(match g.scene {
+                Scene::Menu => 0,
+                Scene::Reality => 1,
+                Scene::Draft => 2,
+                Scene::Sim => 3,
+                Scene::Inherit => 4,
+                Scene::Settle => 5,
+                Scene::World => 6,
+            });
+        }
         // v1.6.0 B：开帧门闩清零（置位发生于上一帧绘制阶段、本帧输入/绘制前清零，时序闭合）
         g.sub_fresh = false;
         // v1.7.0：幻境广告倒计时按真实秒推进（与场景无关）

@@ -77,8 +77,53 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.9";</script>
-    <script src="mq_js_bundle.js?v=1.9.9"></script>
+    <script>var GAME_VER = "1.9.10";</script>
+    <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
+         的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
+         覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
+         miniquad 自己的启动/resize 路径（setup_canvas_size→resize() 里
+         clientWidth×dpi_scale()）据此把 backing 开到 CSS×3：与 v1.9.8 真机跑通
+         的 2772x1280 完全同一条代码路径（X5 已验证 60fps），且发生在 GL 建上下文
+         之后的常规初始化阶段，无运行中 canvas 手术（v1.9.6 冻帧教训）。
+         SS 是确定性常数而非 devicePixelRatio：本地与手机同构不被破坏；
+         Rust 侧零 dpi 乘除、cam.rs 零改动，坐标仍在唯一坐标系（backing）。
+         ?ss=1 可临时回到 v1.9.9 观感做 A/B（本地回归用）。 -->
+    <script>
+        var XX_SS = 3;
+        try {
+            var __ssq = new URLSearchParams(location.search).get("ss");
+            if (__ssq) XX_SS = Math.max(1, Math.min(4, parseInt(__ssq, 10) || 1));
+        } catch (e) {}
+        (function () {
+            try {
+                var c = document.getElementById("glcanvas");
+                var cap = function (v) { return Math.min(4096, Math.max(1, Math.round(v))); };
+                // clientWidth/clientHeight 定义在 Element.prototype（部分内核在更
+                // 深层）——沿原型链找原生 getter，找不到则维持 v1.9.9 尺寸不硬来
+                var findGetter = function (name) {
+                    var p = c;
+                    while (p) {
+                        var d = Object.getOwnPropertyDescriptor(p, name);
+                        if (d && d.get) return d.get;
+                        p = Object.getPrototypeOf(p);
+                    }
+                    return null;
+                };
+                var gw = findGetter("clientWidth");
+                var gh = findGetter("clientHeight");
+                if (!gw || !gh) return;
+                Object.defineProperty(c, "clientWidth", {
+                    get: function () { return cap(gw.call(c) * XX_SS); },
+                    configurable: true
+                });
+                Object.defineProperty(c, "clientHeight", {
+                    get: function () { return cap(gh.call(c) * XX_SS); },
+                    configurable: true
+                });
+            } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
+        })();
+    </script>
+    <script src="mq_js_bundle.js?v=1.9.10"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -142,6 +187,43 @@
             },
             // v1.8.2 注意：on_init 是无参调用（bundle: e[t].on_init()），拿不到
             // exports；就绪信号改由下方 WebAssembly.instantiate 钩子赋值。
+            on_init: function () {}
+        });
+
+        // v1.9.10 wasm 陷阱可见化 + 回归断言信号（Rust 侧 main.rs xx_dbg 模块声明
+        // 了这两个 env 导入——wasm 实例化会校验导入存在，二者必须成对出现）：
+        // xx_panic：Rust panic hook 把 panic 原文写入 errlog（[PANIC] 前缀）并改
+        //   document.title——此前 wasm 陷阱在真机上完全静默（F 冻结但 errlog 无记录，
+        //   无法区分"容器时钟停摆"与"Rust 陷阱/互斥锁中毒"，十轮真机排查的盲区）。
+        // xx_state：场景变化上报（0=Menu 1=Reality 2=Draft 3=Sim …），供 ?tap=
+        //   自动回归断言"点按钮 → __xxState 离开 0（进游戏）"。
+        window.__xxState = -1;
+        window.miniquad_add_plugin({
+            name: "xx_dbg",
+            version: 1,
+            register_plugin: function (importObject) {
+                importObject.env.xx_panic = function (ptr, len) {
+                    try {
+                        var mem =
+                            window.wasm_memory && window.wasm_memory.buffer
+                                ? window.wasm_memory.buffer
+                                : window.wasm_exports && window.wasm_exports.memory
+                                  ? window.wasm_exports.memory.buffer
+                                  : null;
+                        if (mem) {
+                            var msg = new TextDecoder("utf-8", { fatal: false }).decode(
+                                new Uint8Array(mem, ptr, Math.min(len | 0, 512)),
+                            );
+                            var el = document.getElementById("errlog");
+                            if (el) el.textContent += "[PANIC] " + msg + "\n";
+                            try { document.title = "PANIC " + msg.slice(0, 60); } catch (e2) {}
+                        }
+                    } catch (e) {}
+                };
+                importObject.env.xx_state = function (code) {
+                    window.__xxState = code | 0;
+                };
+            },
             on_init: function () {}
         });
 
@@ -243,17 +325,21 @@
         window.xxPaintDbg = function () {
             if (!window.wasm_exports) return;
             var cv = document.getElementById("glcanvas");
+            var rect = cv.getBoundingClientRect();
             var env = window.importObject && window.importObject.env ? window.importObject.env : null;
             var lines = [
-                "v" + GAME_VER,
+                "v" + GAME_VER + " ss" + XX_SS,
                 "inner " + window.innerWidth + "x" + window.innerHeight +
                     " dpr " + (window.devicePixelRatio || 1).toFixed(2) +
                     " hdp=" + (window.high_dpi ? 1 : 0) +
                     " env=" + (env ? env.dpi_scale().toFixed(2) : "?"),
                 "cv " + cv.width + "x" + cv.height +
-                    " css " + cv.clientWidth + "x" + cv.clientHeight +
+                    " css " + Math.round(rect.width) + "x" + Math.round(rect.height) +
                     " sent " + __xxSentW + "x" + __xxSentH,
-                "fit " + Math.min(cv.width / 1280, cv.height / 720).toFixed(3)
+                "fit " + Math.min(cv.width / 1280, cv.height / 720).toFixed(3) +
+                    // fr：距上次成功 wasm 帧的毫秒数（>200 即帧停摆，混沌仿真/真机判读用）
+                    " fr" + Math.round(performance.now() - (window.__xxFrameAt || 0)) +
+                    "ms st" + window.__xxState
             ];
             if (__xxLastTouch) {
                 lines.push("t c(" + __xxLastTouch[0] + "," + __xxLastTouch[1] + ")->m(" +
@@ -322,6 +408,7 @@
                 };
                 window.cancelAnimationFrame = function () {};
                 var tick = function (now) {
+                    if (window.__xxClockGate) return; // ?chaos=1 仿真：人为冻结全部时钟
                     if (now - last < 14) return; // 全局帧门闩：~60fps 上限，多时钟共存不叠加
                     last = now;
                     lastFrameAt = now;
@@ -333,6 +420,13 @@
                     // wasm_exports 之前抛 TypeError（本地实测启动噪音）。
                     if (!f && window.animation && window.wasm_exports) {
                         f = window.animation;
+                        cb = f;
+                    }
+                    // v1.9.10 最后生路：bundle 顶层 animation 也不可用（加载残缺/
+                    // 极端容器）时直调 wasm frame 导出——绕开一切 JS 中间层，只要
+                    // wasm 实例活着帧就不断。
+                    if (!f && window.wasm_exports) {
+                        f = window.wasm_exports.frame;
                         cb = f;
                     }
                     if (!f) return;
@@ -486,17 +580,45 @@
                 if (!window.wasm_exports || canvas.__ptr_taken) return;
                 canvas.__ptr_taken = true;
                 var E = window.wasm_exports;
+                // v1.9.10 导出调用可见化：wasm 陷阱（panic/互斥锁中毒）会让后续每次
+                // 导出调用抛 RuntimeError——旧代码要么让异常裸奔（onerror 记录淹没在
+                // 堆栈里）、要么静默吞掉，真机十轮排查都拿不到失败原文。现在首例
+                // 异常按导出名记入 errlog（[ERR] mouse_move: unreachable …），之后
+                // 吞掉继续跑：单点坏死不再阻断同组后续调用与触摸帧泵。
+                var __xE = {};
+                var xxSafe = function (name) {
+                    var fn = E[name];
+                    return function () {
+                        try {
+                            fn.apply(null, arguments);
+                        } catch (err) {
+                            if (!__xE[name]) {
+                                __xE[name] = 1;
+                                var el2 = document.getElementById("errlog");
+                                if (el2)
+                                    el2.textContent +=
+                                        "[ERR] " + name + ": " +
+                                        String(err && err.message ? err.message : err).slice(0, 90) + "\n";
+                            }
+                        }
+                    };
+                };
+                var S_move = xxSafe("mouse_move");
+                var S_down = xxSafe("mouse_down");
+                var S_up = xxSafe("mouse_up");
+                var S_touch = xxSafe("touch");
+                var S_frame = xxSafe("frame");
                 canvas.onmousemove = function (e) {
                     var p = rotationAware(e);
-                    if (p) E.mouse_move(p.x | 0, p.y | 0);
+                    if (p) S_move(p.x | 0, p.y | 0);
                 };
                 canvas.onmousedown = function (e) {
                     var p = rotationAware(e);
-                    if (p) E.mouse_down(p.x | 0, p.y | 0, btn(e.button));
+                    if (p) S_down(p.x | 0, p.y | 0, btn(e.button));
                 };
                 canvas.onmouseup = function (e) {
                     var p = rotationAware(e);
-                    if (p) E.mouse_up(p.x | 0, p.y | 0, btn(e.button));
+                    if (p) S_up(p.x | 0, p.y | 0, btn(e.button));
                 };
                 // 触摸：容器内核用 addEventListener（无法覆盖属性），在 window
                 // 捕获阶段拦下并直接调 wasm_exports.touch，坐标实测换算。
@@ -536,11 +658,11 @@
                                 // v1.9.8 恢复 E.touch：cam::mouse()（wasm）改为优先读
                                 // macroquad 的 touches 表（原样存储、零 dpi 参与），
                                 // 必须把触摸位置喂进去；E.mouse_* 保留作点击判定。
-                                E.touch(TOUCH[type], t.identifier, p2.x, p2.y);
+                                S_touch(TOUCH[type], t.identifier, p2.x, p2.y);
                                 // 同步鼠标状态：游戏按钮判定走鼠标通路
-                                E.mouse_move(p2.x | 0, p2.y | 0);
-                                if (type === "touchstart") E.mouse_down(p2.x | 0, p2.y | 0, 0);
-                                if (type === "touchend" || type === "touchcancel") E.mouse_up(p2.x | 0, p2.y | 0, 0);
+                                S_move(p2.x | 0, p2.y | 0);
+                                if (type === "touchstart") S_down(p2.x | 0, p2.y | 0, 0);
+                                if (type === "touchend" || type === "touchcancel") S_up(p2.x | 0, p2.y | 0, 0);
                             }
                             // v1.9.6 帧泵：真机容器对页面的可见性钳制可冻结全部四种
                             // 帧时钟（v1.9.5 真机数据：clicks 恒 0、画面为最后一帧残影
@@ -549,7 +671,7 @@
                             // __xxFrameAt 距今 <120ms，此泵空转不重复出帧。
                             if (performance.now() - (window.__xxFrameAt || 0) > 120) {
                                 window.__xxFrameAt = performance.now();
-                                try { window.wasm_exports.frame(); } catch (e) { /* 竞态兜底 */ }
+                                S_frame();
                             }
                         },
                         true,
@@ -563,10 +685,10 @@
                         mark("pointer");
                         var p = rotationAware(e);
                         if (!p) return;
-                        E.mouse_move(p.x | 0, p.y | 0);
+                        S_move(p.x | 0, p.y | 0);
                         if (type === "pointermove") return;
-                        if (type === "pointerdown") E.mouse_down(p.x | 0, p.y | 0, 0);
-                        else E.mouse_up(p.x | 0, p.y | 0, 0);
+                        if (type === "pointerdown") S_down(p.x | 0, p.y | 0, 0);
+                        else S_up(p.x | 0, p.y | 0, 0);
                     });
                 });
                 // 兼容 mouse 首达诊断
@@ -574,16 +696,16 @@
                     return function (e) {
                         mark("mouse");
                         var p = rotationAware(e);
-                        if (p) E.mouse_move(p.x | 0, p.y | 0);
+                        if (p) S_move(p.x | 0, p.y | 0);
                     };
                 })();
                 canvas.onmousedown = function (e) {
                     var p = rotationAware(e);
-                    if (p) E.mouse_down(p.x | 0, p.y | 0, btn(e.button));
+                    if (p) S_down(p.x | 0, p.y | 0, btn(e.button));
                 };
                 canvas.onmouseup = function (e) {
                     var p = rotationAware(e);
-                    if (p) E.mouse_up(p.x | 0, p.y | 0, btn(e.button));
+                    if (p) S_up(p.x | 0, p.y | 0, btn(e.button));
                 };
             };
             setInterval(takeOver, 500);
@@ -643,6 +765,76 @@
         window.addEventListener("resize", orientFix);
         window.addEventListener("orientationchange", function () { setTimeout(orientFix, 120); });
         window.addEventListener("load", orientFix);
+
+        // ------------------------------------------------------------------
+        // v1.9.10 TapTap 容器仿真回归（?chaos=1 / ?tap=1 才激活，生产零影响）。
+        // 背景：本地 dpr=1 的 Chromium 与 X5 真机的差异已两次躲过全部本地测试
+        // （v1.9.5 时钟冻结、v1.9.8 dpr 乘 3.25）。此工具把两类真机毒环境在本地
+        // 复现成可回归的确定性场景：
+        //   chaos：每 6s 把三种帧时钟全部冻结 2.5s（等价 X5 可见性钳制/时钟停摆），
+        //          验证触摸帧泵 + tick 直调兜底能让游戏在冻结结束后照常进。
+        //   tap：每 3.5s 在「开始新的人生」按钮中心派发真实 TouchEvent（Touch
+        //        构造器 + 冒泡，与真机同路径），并断言 __xxState 离开 0（进游戏）。
+        // 世界→CSS 换算与 cam.rs view_cam 互逆（v1.9.9 本地注入 315→(469,547)
+        // 实测校准过）。
+        // ------------------------------------------------------------------
+        (function xxSim() {
+            var q;
+            try { q = new URLSearchParams(location.search); } catch (e) { return; }
+            if (!q.get("chaos") && !q.get("tap")) return;
+            var el = document.getElementById("errlog");
+            var log = function (s) { if (el) el.textContent += s + "\n"; };
+            if (q.get("chaos")) {
+                window.__xxClockGate = false;
+                setInterval(function () {
+                    if (!window.wasm_exports) return;
+                    window.__xxClockGate = true;
+                    log("[SIM] 冻结全部帧时钟 2.5s（模拟 X5 钳制）…");
+                    setTimeout(function () {
+                        window.__xxClockGate = false;
+                        log("[SIM] 解冻。fr=" + Math.round(performance.now() - (window.__xxFrameAt || 0)) + "ms");
+                    }, 2500);
+                }, 6000);
+            }
+            if (q.get("tap")) {
+                setInterval(function () {
+                    if (!window.wasm_exports || window.__xxClockGate) return;
+                    var c = document.getElementById("glcanvas");
+                    var r = c.getBoundingClientRect();
+                    if (r.width < 10 || r.height < 10) return;
+                    var fit = Math.min(r.width / 1280, r.height / 720);
+                    var dw = r.width / fit, dh = r.height / fit;
+                    var x = r.left + (470 - (640 - dw / 2)) * fit;
+                    var y = r.top + (549 - (360 - dh / 2)) * fit;
+                    if (window.__xxState !== 0 && window.__xxState !== -1) return; // 已进游戏，停止
+                    var id = Date.now() % 100000;
+                    var mk = function (phase) {
+                        var t;
+                        try {
+                            t = new Touch({ identifier: id, target: c, clientX: x, clientY: y });
+                        } catch (e2) {
+                            log("[SIM] Touch 构造器不可用，跳过");
+                            return null;
+                        }
+                        return new TouchEvent(phase, {
+                            cancelable: true, bubbles: true,
+                            changedTouches: [t], touches: phase === "touchend" ? [] : [t]
+                        });
+                    };
+                    var s0 = window.__xxState;
+                    var te = mk("touchstart");
+                    if (!te) return;
+                    c.dispatchEvent(te);
+                    setTimeout(function () { c.dispatchEvent(mk("touchend")); }, 90);
+                    setTimeout(function () {
+                        log("[SIM] tap @css(" + Math.round(x) + "," + Math.round(y) + ") st " +
+                            s0 + "→" + window.__xxState +
+                            (window.__xxState > 0 ? " ✓进游戏" : " ✗未进"));
+                    }, 800);
+                }, 3500);
+            }
+        })();
+
         // v1.9.1 关键修复：删除 macroquad 模板遗留的"load 事件隐藏加载层"。
         // window.load 只等文档资源就绪，不等 wasm（fetch 不阻塞 load）——加载层
         // 在页面打开约 1 秒内就被 display:none 撤掉，之后手机上 wasm 下载+编译的
