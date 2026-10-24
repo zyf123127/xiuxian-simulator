@@ -83,7 +83,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.18";</script>
+    <script>var GAME_VER = "1.9.19";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -129,7 +129,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.9.18"></script>
+    <script src="mq_js_bundle.js?v=1.9.19"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -732,25 +732,30 @@
                                 if (type === "touchstart") S_down(p2.x | 0, p2.y | 0, 0);
                                 if (type === "touchend" || type === "touchcancel") S_up(p2.x | 0, p2.y | 0, 0);
                             }
-                            // v1.9.15 触摸同步帧（wedge 态点击零延迟的根治）：
-                            // v1.9.14 真机实锤 wedge 态下三时钟（MessageChannel
-                            // 4ms/Worker 16ms/setTimeout 16ms）被容器钳到 ~1fps
-                            // 全部失效，而触摸事件与 ~1s 级 setInterval 照常跑、
-                            // burst 在回调内同步直调 frame() 每次都能推进 future
-                            // （日志反复"第1轮 +15 帧"）。旧帧泵走 setTimeout(0)
-                            // 在钳制下要等下一秒拍才执行——这正是"点按钮卡 ~1s
-                            // 才有反应"的直接原因。改为手势回调内同步出帧：输入
-                            // 刚注入就消费，当拍生效（v1.9.6 时代同步泵真机有效，
-                            // v1.9.13 的"手势栈内出帧有害"猜测被 v1.9.14 数据否掉）。
-                            // tick 活着时（__xxFrameAt <60ms）零开销跳过，不双驱。
-                            // ?wedge=1 仿真：同步帧禁用（真机死透态 frame() 直调
-                            // 单发无效、只有 burst 连发能推——保证快速唤醒会触发）
-                            if (performance.now() - (window.__xxFrameAt || 0) > 60 && window.wasm_exports && !window.__xxSimWedge) {
+                            // v1.9.19 触摸同步 burst（中期钳制点击卡 5 秒的根治）：
+                            // 真机视频定案：容器钳制不止首开——游戏中期（页面 idle
+                            // 一段时间后）再次钳制，"重载后必好"只在首开成立；
+                            // 点坊市卡 5 秒 = 同步 3 发推不动死透的 future、只能
+                            // 等看门狗 3 轮冲击后重载。burst 12 发做当拍唤醒。
+                            // v1.9.19 MuMu 实测修正：真实安卓 WebView 的手势回调
+                            // 栈内直调 frame() 推不动 future（本地 Chromium 有效、
+                            // 真机/模拟器无效——环境差异），必须 setTimeout(0)
+                            // 脱离手势栈再 burst（宏任务在钳制态可跑：v1.9.14
+                            // 真机 400ms 唤醒链实证）。两层都发：同步层兜本地，
+                            // 宏任务层保真机。tick 活着时（<60ms）零开销跳过。
+                            if (performance.now() - (window.__xxFrameAt || 0) > 60 && window.wasm_exports) {
                                 try {
-                                    // v1.9.17 1→3 发：wedge 态每次触摸多带 2 帧动画
-                                    for (var fi = 0; fi < 3; fi++) window.wasm_exports.frame();
+                                    for (var fi = 0; fi < 12; fi++) window.wasm_exports.frame();
                                     window.__xxFrameAt = performance.now();
                                 } catch (err) {}
+                                setTimeout(function () {
+                                    try {
+                                        for (var fj = 0; fj < 12; fj++) window.wasm_exports.frame();
+                                        window.__xxFrameAt = performance.now();
+                                        window.__xxRevivedAt = performance.now(); // burst 即复活：大旗静默
+                                        window.__xxWedged = 1; // 低帧率实锤，开启评估
+                                    } catch (e2) {}
+                                }, 0);
                             }
                             // v1.9.17 wedge 低帧率评估：触摸是 wedge 态唯一可靠
                             // 事件源，评估挂在这里最可靠（interval 可能同样被钳）
@@ -847,42 +852,56 @@
                 // ——预算标记一丢，wedge 页重载后又把自己冻结→循环死→又重载，
                 // 无限重载循环（用户看到"很卡进不去"的就是这个循环）。URL 参数
                 // 跨重载绝不丢失，任何内核都可靠。
-                // 挂 window：xxSim（另一 IIFE）的 wedge 分支也要查预算
+                // 挂 window：xxSim（另一 IIFE）的 wedge 分支也要查预算。
+                // v1.9.19 预算 60 秒化：真机视频定案"重载后必好"只在首开成立
+                // ——游戏中期（页面 idle 后）容器会再次钳制，"每会话一次"预算
+                // 导致第二次卡顿只能靠大旗兜底。改为 60 秒窗口（URL 时间戳
+                // xxrlt 为主 + sessionStorage 兜底）：既允许周期性换血，又防
+                // 循环重载。
                 window.xxRlUsed = function () {
-                    if (/[?&]xxrl=1/.test(location.search)) return true;
-                    try { return !!sessionStorage.getItem("xxrl"); } catch (e) { return false; }
-                }
+                    // 三层：URL 参数 / URL hash / sessionStorage（夸克实测会清
+                    // sessionStorage、个别内核规范化 query——hash 最稳）
+                    var m = location.search.match(/[?&]xxrlt=(\d+)/) || location.hash.match(/xxrlt=(\d+)/);
+                    if (m && Date.now() - parseInt(m[1], 10) < 60000) return true;
+                    try {
+                        var t = sessionStorage.getItem("xxrlAt");
+                        if (t && Date.now() - parseInt(t, 10) < 60000) return true;
+                    } catch (e) {}
+                    return false;
+                };
                 function xxReload(reason) {
                     xxPostmortem(reason);
-                    try { sessionStorage.setItem("xxrl", "1"); } catch (e) {}
-                    if (!/[?&]xxrl=1/.test(location.search)) {
-                        location.href = location.href + (location.search ? "&" : "?") + "xxrl=1";
-                        return;
-                    }
-                    location.reload();
+                    try { sessionStorage.setItem("xxrlAt", String(Date.now())); } catch (e) {}
+                    var t = Date.now();
+                    var href = location.href.replace(/[?&]xxrlt=\d+/, "").replace(/#.*$/, "");
+                    href += (href.indexOf("?") >= 0 ? "&" : "?") + "xxrlt=" + t + "#r" + t;
+                    location.href = href;
                 }
-                // v1.9.18 首开卡顿根治：真机实锤 v1.9.17 全链工作（首开卡→
-                // 游戏内 20 秒评估→自动重载→满帧），但用户要的是首开就流畅。
-                // 根基规律（三次实测）：首开加载慢（wasm 下载+编译）被容器钳制
-                // 一切定时器；重载后缓存热秒开、循环存活满帧。把这个规律用在
-                // 最早时机——wasm 就绪后 2 秒起 3 秒窗口统计帧增量：<45 帧
-                // （<15fps）即 wedge 实锤，不等用户点击/进游戏，立即热身重载。
-                // 用户感受：打开→加载→画面一闪（自动刷新）→秒开满帧菜单；
-                // 首开卡顿窗口从 ~20 秒压缩到 ~5 秒。慢设备（≥20fps）不误
-                // 触发；重载后 xxrl 标记在，不再折腾。
-                setTimeout(function () {
-                    if (!window.wasm_exports || !window.__xxAlive) return;
-                    if (xxRlUsed()) return; // 已重载过：信任热身，交给现有兜底
-                    var n1 = window.__xxAlive.n;
-                    setTimeout(function () {
-                        if (!window.__xxAlive) return;
-                        var inc = window.__xxAlive.n - n1; // 3 秒窗口增量
-                        if (inc < 45) {
-                            try { errlog.textContent += "[诊断] 首开卡顿（3 秒 +" + inc + " 帧），热身重载换满帧\n"; } catch (e) {}
-                            xxReload("coldstart");
+                // v1.9.18 首开卡顿根治 → v1.9.19 滚动采样版：真机实锤"首开被
+                // 容器钳制、重载后缓存热秒开循环存活"。旧版固定窗口（2s 基准
+                // +3s 增量）有盲区——钳制若落在窗口关闭后才发生（本地复现实锤）
+                // 增量混入正常帧而漏检。改为每秒采样帧号、盯最近 2 秒增量
+                // （<25 帧 = <12.5fps，慢设备 20fps 不误触发），持续盯 35 秒
+                // 冷启期，任一 2 秒窗口低帧即热身重载。timer 若也被钳则本
+                // 检测静默（不误重载），兜底交给触摸 burst+评估链。
+                (function () {
+                    var samples = [];
+                    var iv = setInterval(function () {
+                        if (!window.wasm_exports || !window.__xxAlive) return;
+                        if (xxRlUsed()) { clearInterval(iv); return; }
+                        samples.push(window.__xxAlive.n);
+                        if (samples.length > 6) samples.shift();
+                        if (samples.length >= 3) {
+                            var inc2 = samples[samples.length - 1] - samples[samples.length - 3];
+                            if (inc2 < 25) {
+                                clearInterval(iv);
+                                try { errlog.textContent += "[诊断] 首开卡顿（2 秒 +" + inc2 + " 帧），热身重载换满帧\n"; } catch (e) {}
+                                xxReload("coldstart");
+                            }
                         }
-                    }, 3000);
-                }, 2000);
+                    }, 1000);
+                    setTimeout(function () { clearInterval(iv); }, 35000);
+                })();
                 // v1.9.17 wedge 低帧率自动重载：MuMu+夸克模拟器实证游戏代码在
                 // 正常浏览器一击即进+满帧零噪音——"很卡"的唯一来源是 X5 容器
                 // 钳死一切定时器（v1.9.16 真机日志实锤：车夫 setInterval(1000)
@@ -1227,26 +1246,18 @@
                     }, 2500);
                 }, 6000);
             }
-            // v1.9.17 wedge 仿真：TapTap X5 容器"一切定时器被钳死、只有触摸
-            // 事件可靠"的持续态（真机 v1.9.16 日志实锤：车夫 setInterval(1000)
-            // 也被钳）。wasm 就绪 5 秒后永久冻结三时钟 + 车夫禁启。用于模拟器
-            // 复现"一卡一卡"并验证 v1.9.17 的检测→自动重载链。
+            // v1.9.17 wedge 仿真 → v1.9.19 周期性钳制：真机视频定案容器会反复
+            // 钳制（首开+游戏中期 idle 后），仿真在 60 秒重载预算解锁后再次
+            // 冻结——完整模拟"冻结→触摸 burst 当拍自救→评估重载→60 秒新鲜
+            // 期→再冻结"周期（每 5 秒轮询预算状态）。
             if (q.get("wedge")) {
-                var wedged0 = false;
                 setInterval(function () {
-                    if (!window.wasm_exports || wedged0) return;
-                    // 重载过一次就不再冻结：对齐真机"重载后必好"（循环存活），
-                    // 让模拟器剧本能看到 卡→重载→满帧 的完整闭环
-                    if (xxRlUsed()) {
-                        wedged0 = true;
-                        log("[SIM] wedge：已重载过，本次不再冻结（模拟真机重载后循环存活）");
-                        return;
-                    }
-                    wedged0 = true;
+                    if (!window.wasm_exports || window.__xxSimWedge) return;
+                    if (window.xxRlUsed && window.xxRlUsed()) return; // 预算内=重载后新鲜期
                     window.__xxClockGate = true; // 三时钟死
                     window.__xxSimWedge = 1; // 车夫禁启
-                    log("[SIM] wedge：2 秒起冻结三时钟+车夫禁启（模拟 X5 首开即钳制）");
-                }, 2000);
+                    log("[SIM] wedge：冻结三时钟+车夫禁启（模拟 X5 钳制）");
+                }, 5000);
             }
             if (q.get("tap")) {
                 setInterval(function () {
