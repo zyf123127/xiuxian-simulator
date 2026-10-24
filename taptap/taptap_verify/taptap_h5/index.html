@@ -83,7 +83,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.19";</script>
+    <script>var GAME_VER = "1.9.20";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -129,7 +129,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.9.19"></script>
+    <script src="mq_js_bundle.js?v=1.9.20"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -876,6 +876,34 @@
                     var href = location.href.replace(/[?&]xxrlt=\d+/, "").replace(/#.*$/, "");
                     href += (href.indexOf("?") >= 0 ? "&" : "?") + "xxrlt=" + t + "#r" + t;
                     location.href = href;
+                }
+                // v1.9.20 首开双加载（用户提议，比"检测到卡再重载"更直接）：
+                // 铁律"首次加载慢被容器钳制、第二次缓存热秒开循环存活"——
+                // 与其等滚动检测发现卡顿（用户已看到几秒卡）再重载，不如
+                // 第一次加载完成瞬间直接重载一次，让用户直接落在第二次的
+                // 好状态里，全程不见卡顿。触发条件：wasm 就绪耗时 >1.5 秒
+                // （下载慢=高钳制风险；缓存热的快加载跳过，无谓白闪）且
+                // URL 无 r2 标记。带 r2 的页面不再双加载；若 r2 页面仍被钳，
+                // 由下方滚动采样检测兜底热身重载。
+                if (!/[?&]r2=1/.test(location.search)) {
+                    var __t0 = performance.now();
+                    var iv2 = setInterval(function () {
+                        if (!window.wasm_exports) return;
+                        clearInterval(iv2);
+                        if (performance.now() - __t0 > 1500) {
+                            try { errlog.textContent += "[诊断] 首开慢加载，双加载换好状态\n"; } catch (e) {}
+                            var href2 = location.href.split("#")[0] + (location.search ? "&" : "?") + "r2=1";
+                            location.href = href2;
+                        }
+                    }, 200);
+                    setTimeout(function () { clearInterval(iv2); }, 30000);
+                } else {
+                    // r2 页面标记（真机/模拟器截图确认双加载已发生）
+                    var iv3 = setInterval(function () {
+                        if (!window.wasm_exports) return;
+                        clearInterval(iv3);
+                        try { errlog.textContent += "[诊断] r2 双加载就绪\n"; } catch (e) {}
+                    }, 200);
                 }
                 // v1.9.18 首开卡顿根治 → v1.9.19 滚动采样版：真机实锤"首开被
                 // 容器钳制、重载后缓存热秒开循环存活"。旧版固定窗口（2s 基准
