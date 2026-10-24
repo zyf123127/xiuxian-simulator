@@ -64,7 +64,13 @@
             font: 12px/1.4 Consolas, monospace;
             white-space: pre-wrap; z-index: 99; padding: 4px;
             max-width: 100%; max-height: 100%; overflow: auto;
+            transition: opacity 1.2s;
         }
+        /* v1.9.17 诊断日志自动淡化：满屏 [诊断]/[SIM] 红字对玩家就是"报错"——
+           加载 30 秒后淡至 0.12（正常游玩不被打扰，真机排障截图仍可辨读）；
+           一旦出现 [ERR]/[PANIC]/重载类关键行立刻恢复全显。 */
+        #errlog.xx-dim { opacity: 0.12; }
+        #errlog.xx-alert { opacity: 1; }
     </style>
 </head>
 <body>
@@ -309,6 +315,29 @@
         setInterval(xx_paint_stage, 1000);
         // 诊断区盖上版本号：真机反馈时一眼确认跑的是哪版（防"上传了但设备吃旧缓存"）
         errlog.textContent = "v" + GAME_VER + (errlog.textContent ? "\n" + errlog.textContent : "");
+        // v1.9.17 日志自动淡化 + 关键行唤醒（实现见 CSS .xx-dim/.xx-alert）
+        (function () {
+            var el = errlog;
+            var armed = false;
+            setInterval(function () {
+                if (armed) return;
+                if (performance.now() > 30000 && window.wasm_exports) {
+                    armed = true;
+                    el.classList.add("xx-dim");
+                }
+            }, 2000);
+            // 新日志若是关键行（错误/panic/重载）恢复全显，普通诊断不吵人
+            var orig = el.textContent;
+            setInterval(function () {
+                if (el.textContent !== orig) {
+                    orig = el.textContent;
+                    if (/\[ERR\]|\[PANIC\]|重载|WARN/.test(el.textContent.slice(-200))) {
+                        el.classList.remove("xx-dim");
+                        el.classList.add("xx-alert");
+                    }
+                }
+            }, 500);
+        })();
         // v1.9.13 死因穿越：上次会话若被自愈看门狗重载，这里把死因快照打出来
         // （一张截图即可读到"死于第几帧/触达几次/消费几次"），随后清除。
         try {
