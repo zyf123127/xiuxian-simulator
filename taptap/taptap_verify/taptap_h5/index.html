@@ -83,7 +83,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.21";</script>
+    <script>var GAME_VER = "1.9.22";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -129,7 +129,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.9.21"></script>
+    <script src="mq_js_bundle.js?v=1.9.22"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -909,11 +909,16 @@
                 // （<25 帧 = <12.5fps，慢设备 20fps 不误触发），持续盯 35 秒
                 // 冷启期，任一 2 秒窗口低帧即热身重载。timer 若也被钳则本
                 // 检测静默（不误重载），兜底交给触摸 burst+评估链。
+                // v1.9.22 游戏内即停：进游戏后（st>0）冷启检测终止——真机实锤
+                // "菜单→游戏内→重载→回菜单"的断流体验来自游戏内预防性重载
+                // （丢当前进度踢回菜单）；游戏内低帧率由触摸 burst 当拍自救，
+                // 预防性重载只允许发生在菜单阶段（无进度可丢）。
                 (function () {
                     var samples = [];
                     var iv = setInterval(function () {
                         if (!window.wasm_exports || !window.__xxAlive) return;
                         if (xxRlUsed()) { clearInterval(iv); return; }
+                        if ((window.__xxState || 0) > 0) { clearInterval(iv); return; } // 已进游戏：不打扰
                         samples.push(window.__xxAlive.n);
                         if (samples.length > 6) samples.shift();
                         if (samples.length >= 3) {
@@ -940,6 +945,10 @@
                     // gate 不豁免：chaos 仿真下触摸同步帧让点击被消费、快速唤醒
                     // 不触发、__xxWedged 不置位，本函数自然静默（标记即开关）
                     if (!window.__xxWedged) return;
+                    // v1.9.22 游戏内不评估：预防性重载会丢当前进度踢回菜单（真机
+                    // 实锤"菜单→游戏内→重载→回菜单"断流）；游戏内低帧率由触摸
+                    // burst 当拍自救，真死由主看门狗 xxReload("loop") 处理
+                    if ((window.__xxState || 0) > 0) return;
                     var now = performance.now();
                     var a = window.__xxAlive;
                     if (!a) return;
@@ -1088,15 +1097,10 @@
                     // 只是 8 帧粒度、上报间隔可能拖长），画面活着，弹"引擎无响应"
                     // 纯属误导（v1.9.15 真机又弹了一次，用户被误导点重载）
                     if (window.__xxCoach) return;
-                    // v1.9.17 弹旗前最后一搏：wedge 态心跳停滞到这个地步必是
-                    // 帧率极低——直接自动重载换满帧（重载后必好是三次实测
-                    // 铁律），弹旗等人点按钮只会让玩家以为游戏坏了
-                    if (window.__xxWedged) {
-                        if (xxRlUsed()) return; // 预算已用：保底可玩，不再折腾
-                        try { errlog.textContent += "[诊断] wedge 心跳停滞，弹旗改为直接重载\n"; } catch (eC) {}
-                        xxReload("wedge-banner");
-                        return;
-                    }
+                    // v1.9.22 删除"wedge 弹旗前直接重载"分支：游戏内预防性重载
+                    // 会丢当前进度踢回菜单（真机实锤断流体验）；走到这里的都是
+                    // 真死态，由主看门狗 xxReload("loop") 预算内自动处理，大旗
+                    // 仅作视觉提示兜底。
                     banner = document.createElement("div");
                     banner.style.cssText =
                         "position:fixed;left:8%;right:8%;top:36%;z-index:200;" +
