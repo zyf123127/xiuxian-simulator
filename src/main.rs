@@ -70,6 +70,23 @@ mod xx_dbg {
     pub fn alive(frame: i32) {
         unsafe { xx_alive(frame) };
     }
+
+    /// v1.9.23 调试信息开关（默认关）：红十字/黄点/诊断行/自检面板等一切
+    /// 排障绘制只在 ?dbg=1（JS 调 xx_set_debug）后出现；功能逻辑（点击计数、
+    /// 菜单兜底、自动进入倒计时）不受开关影响。心跳/状态/点击上报照常
+    /// （JS 侧看门狗依赖它们，与可见性无关）。
+    pub static DEBUG_UI: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+    pub fn debug_on() -> bool {
+        DEBUG_UI.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+/// JS → Rust 调试开关入口（?dbg=1 时 JS 在 wasm 就绪后调用）
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn xx_set_debug(on: i32) {
+    xx_dbg::DEBUG_UI.store(on != 0, std::sync::atomic::Ordering::Relaxed);
 }
 
 fn window_conf() -> Conf {
@@ -254,49 +271,52 @@ async fn main() {
                 xx_last = Some(crate::cam::mouse());
                 xx_dbg::click(xx_clicks as i32);
             }
-            let (mx, my) = crate::cam::mouse();
-            draw_line(mx - 40.0, my, mx + 40.0, my, 3.0, Color::new(1.0, 0.1, 0.1, 0.9));
-            draw_line(mx, my - 40.0, mx, my + 40.0, 3.0, Color::new(1.0, 0.1, 0.1, 0.9));
-            draw_circle(mx, my, 4.0, Color::new(1.0, 0.1, 0.1, 1.0));
-            draw_text(
-                &format!("{:.0},{:.0}", mx, my),
-                mx + 24.0,
-                my - 20.0,
-                26.0,
-                Color::new(1.0, 0.1, 0.1, 1.0),
-            );
-            let last_str = match xx_last {
-                Some((x, y)) => format!("{:.0},{:.0}", x, y),
-                None => "-".to_string(),
-            };
-            // 全链路诊断：D=wasm 缓存 dpi，S=wasm 屏幕尺寸，T=触摸数+原始位置，
-            // M=mouse_position 原始值。dpr=1 制下应恒为 D:1.00 T/M=注入原值。
-            let (mpx, mpy) = mouse_position();
-            let ts = touches();
-            let t_str = match ts.last() {
-                Some(t) => format!("{}@{:.0},{:.0}", ts.len(), t.position.x, t.position.y),
-                None => "0".to_string(),
-            };
-            draw_text(
-                &format!(
-                    "c:{} F:{} l:{} D:{:.2} S:{:.0}x{:.0} T:{} M:{:.0},{:.0}",
-                    xx_clicks,
-                    frame,
-                    last_str,
-                    macroquad::miniquad::window::dpi_scale(),
-                    screen_width(),
-                    screen_height(),
-                    t_str,
-                    mpx,
-                    mpy
-                ),
-                700.0,
-                40.0,
-                22.0,
-                Color::new(1.0, 0.9, 0.2, 1.0),
-            );
-            if let Some((x, y)) = xx_last {
-                draw_circle(x, y, 9.0, Color::new(1.0, 0.9, 0.2, 0.95));
+            // v1.9.23 调试开关：以下排障绘制默认关（?dbg=1 打开）
+            if xx_dbg::debug_on() {
+                let (mx, my) = crate::cam::mouse();
+                draw_line(mx - 40.0, my, mx + 40.0, my, 3.0, Color::new(1.0, 0.1, 0.1, 0.9));
+                draw_line(mx, my - 40.0, mx, my + 40.0, 3.0, Color::new(1.0, 0.1, 0.1, 0.9));
+                draw_circle(mx, my, 4.0, Color::new(1.0, 0.1, 0.1, 1.0));
+                draw_text(
+                    &format!("{:.0},{:.0}", mx, my),
+                    mx + 24.0,
+                    my - 20.0,
+                    26.0,
+                    Color::new(1.0, 0.1, 0.1, 1.0),
+                );
+                let last_str = match xx_last {
+                    Some((x, y)) => format!("{:.0},{:.0}", x, y),
+                    None => "-".to_string(),
+                };
+                // 全链路诊断：D=wasm 缓存 dpi，S=wasm 屏幕尺寸，T=触摸数+原始位置，
+                // M=mouse_position 原始值。dpr=1 制下应恒为 D:1.00 T/M=注入原值。
+                let (mpx, mpy) = mouse_position();
+                let ts = touches();
+                let t_str = match ts.last() {
+                    Some(t) => format!("{}@{:.0},{:.0}", ts.len(), t.position.x, t.position.y),
+                    None => "0".to_string(),
+                };
+                draw_text(
+                    &format!(
+                        "c:{} F:{} l:{} D:{:.2} S:{:.0}x{:.0} T:{} M:{:.0},{:.0}",
+                        xx_clicks,
+                        frame,
+                        last_str,
+                        macroquad::miniquad::window::dpi_scale(),
+                        screen_width(),
+                        screen_height(),
+                        t_str,
+                        mpx,
+                        mpy
+                    ),
+                    700.0,
+                    40.0,
+                    22.0,
+                    Color::new(1.0, 0.9, 0.2, 1.0),
+                );
+                if let Some((x, y)) = xx_last {
+                    draw_circle(x, y, 9.0, Color::new(1.0, 0.9, 0.2, 0.95));
+                }
             }
             // v1.9.11 菜单兜底（真机"进去过一次、重进后点开始无效"的保险丝）：
             // 每个被消费的点击只评估一次——若落在「开始新的人生」矩形外扩 30 内
@@ -315,45 +335,48 @@ async fn main() {
                     }
                 }
             }
-            // v1.9.12 菜单自检面板（用户要求：开始界面直接显示调试）。
+            // v1.9.12 菜单自检面板（v1.9.23 受调试开关控制，默认关）。
             // 同屏呈现 JS 视角（时钟心跳/触摸数）与 Rust 视角（已消费点击/帧数/
             // 场景）——真机 F 冻结 + fr 新鲜的"悖论"从此肉眼可判：
             //   触达涨/已收不涨 = 输入桥断（JS 看门狗同时会弹大旗+自动重载）；
             //   帧号/倒计时冻结  = 游戏循环死（时钟行仍跳 = JS 活着）；
             //   全部正常仍菜单  = 逻辑层（兜底与倒计时强制进入）。
             if g.scene == Scene::Menu {
-                let fr = xx_dbg::js_fr();
-                let tch = xx_dbg::js_touches();
-                // 放右上角（黄色诊断行正下方），不遮标题/按钮/底部状态栏
-                draw_rectangle(
-                    646.0,
-                    84.0,
-                    620.0,
-                    96.0,
-                    Color::new(0.0, 0.0, 0.0, 0.62),
-                );
-                draw_text(
-                    &format!(
-                        "自检 触达:{} 已收:{} 帧:{} 时钟:{}ms 场景:{}",
-                        tch, xx_clicks, frame, fr, g.scene_xx_name(),
-                    ),
-                    662.0,
-                    118.0,
-                    22.0,
-                    Color::new(0.5, 1.0, 0.7, 1.0),
-                );
-                draw_text(
-                    &format!(
-                        "{} 秒后自动进入 · 点「开始新的人生」立即开始",
-                        xx_auto.max(0.0) as i32
-                    ),
-                    662.0,
-                    152.0,
-                    21.0,
-                    Color::new(1.0, 0.9, 0.4, 1.0),
-                );
+                if xx_dbg::debug_on() {
+                    let fr = xx_dbg::js_fr();
+                    let tch = xx_dbg::js_touches();
+                    // 放右上角（黄色诊断行正下方），不遮标题/按钮/底部状态栏
+                    draw_rectangle(
+                        646.0,
+                        84.0,
+                        620.0,
+                        96.0,
+                        Color::new(0.0, 0.0, 0.0, 0.62),
+                    );
+                    draw_text(
+                        &format!(
+                            "自检 触达:{} 已收:{} 帧:{} 时钟:{}ms 场景:{}",
+                            tch, xx_clicks, frame, fr, g.scene_xx_name(),
+                        ),
+                        662.0,
+                        118.0,
+                        22.0,
+                        Color::new(0.5, 1.0, 0.7, 1.0),
+                    );
+                    draw_text(
+                        &format!(
+                            "{} 秒后自动进入 · 点「开始新的人生」立即开始",
+                            xx_auto.max(0.0) as i32
+                        ),
+                        662.0,
+                        152.0,
+                        21.0,
+                        Color::new(1.0, 0.9, 0.4, 1.0),
+                    );
+                }
                 // 倒计时：菜单停留 8 秒直接进入（零输入依赖的终极保险）。
                 // dt 累减；任何途径离开菜单后本块不再执行，天然停摆。
+                // （功能逻辑，不受调试开关控制）
                 xx_auto -= dt;
                 if xx_auto <= 0.0 {
                     g.play(crate::sounds::Which::Click);

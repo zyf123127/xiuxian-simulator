@@ -65,7 +65,10 @@
             white-space: pre-wrap; z-index: 99; padding: 4px;
             max-width: 100%; max-height: 100%; overflow: auto;
             transition: opacity 1.2s;
+            /* v1.9.23 调试开关：默认隐藏——?dbg=1 或真错误（[ERR]/[PANIC]）才显示 */
+            display: none;
         }
+        #errlog.xx-on { display: block; }
         /* v1.9.17 诊断日志自动淡化：满屏 [诊断]/[SIM] 红字对玩家就是"报错"——
            加载 30 秒后淡至 0.12（正常游玩不被打扰，真机排障截图仍可辨读）；
            一旦出现 [ERR]/[PANIC]/重载类关键行立刻恢复全显。 */
@@ -83,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.22";</script>
+    <script>var GAME_VER = "1.9.23";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -129,7 +132,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.9.22"></script>
+    <script src="mq_js_bundle.js?v=1.9.23"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -315,6 +318,10 @@
         setInterval(xx_paint_stage, 1000);
         // 诊断区盖上版本号：真机反馈时一眼确认跑的是哪版（防"上传了但设备吃旧缓存"）
         errlog.textContent = "v" + GAME_VER + (errlog.textContent ? "\n" + errlog.textContent : "");
+        // v1.9.23 调试开关：?dbg=1 才显示诊断区（默认隐藏，见 CSS display:none）；
+        // 真错误行出现时强制显示（排障信息不能被开关吞掉）
+        var XX_DBG = /[?&]dbg=1/.test(location.search);
+        if (XX_DBG) errlog.classList.add("xx-on");
         // v1.9.17 日志自动淡化 + 关键行唤醒（实现见 CSS .xx-dim/.xx-alert）
         (function () {
             var el = errlog;
@@ -326,7 +333,7 @@
                     el.classList.add("xx-dim");
                 }
             }, 2000);
-            // 新日志若是关键行（错误/panic/重载）恢复全显，普通诊断不吵人
+            // 新日志若是关键行（错误/panic/重载）恢复全显并强制可见，普通诊断不吵人
             var orig = el.textContent;
             setInterval(function () {
                 if (el.textContent !== orig) {
@@ -334,6 +341,7 @@
                     if (/\[ERR\]|\[PANIC\]|重载|WARN/.test(el.textContent.slice(-200))) {
                         el.classList.remove("xx-dim");
                         el.classList.add("xx-alert");
+                        el.classList.add("xx-on");
                     }
                 }
             }, 500);
@@ -375,11 +383,13 @@
 
         // v1.9.4 左下角调试面板：真机一张截图即可拿到全部坐标系关键数字
         // （视口/dpr/backing/CSS/已发送 screen/fit/最近一次触摸的映射）。
+        // v1.9.23 受调试开关控制：默认 display:none，?dbg=1 才显示。
         var __xxDbg = document.createElement("div");
         __xxDbg.style.cssText =
             "position:fixed;left:2px;bottom:2px;z-index:98;color:#7f7;" +
             "background:rgba(0,0,0,.55);font:10px/1.35 Consolas,monospace;" +
-            "white-space:pre;pointer-events:none;padding:2px;";
+            "white-space:pre;pointer-events:none;padding:2px;" +
+            (XX_DBG ? "" : "display:none;");
         document.body.appendChild(__xxDbg);
         var __xxLastTouch = null;
         window.xxPaintDbg = function () {
@@ -627,6 +637,16 @@
             var timer = setInterval(function () {
                 if (window.wasm_exports) onReady();
             }, 250);
+            // v1.9.23 调试开关（Rust 侧）：?dbg=1 时把十字/诊断行/自检面板打开
+            (function () {
+                var iv = setInterval(function () {
+                    if (!window.wasm_exports) return;
+                    clearInterval(iv);
+                    if (XX_DBG) {
+                        try { window.wasm_exports.xx_set_debug(1); } catch (e) {}
+                    }
+                }, 250);
+            })();
         })();
         // v1.8.2 指针自愈（两条）：
         // 1) dpr/backing 失步自愈——miniquad 只在 resize 事件重算 backing，若

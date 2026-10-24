@@ -557,6 +557,10 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         g.panel = 4;
         g.play(crate::sounds::Which::Page);
     }
+    // v1.9.23：返回开始界面（存档已落盘，菜单「承接前缘」可恢复）
+    if button(1222.0, 8.0, 58.0, 36.0, "主页", None, true) {
+        g.back_to_menu();
+    }
     render_left(g, &l, art, true);
 
     // 现实日志
@@ -1118,6 +1122,10 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
         if on {
             draw_rectangle(880.0 + i as f32 * 88.0, 44.0, 80.0, 3.0, C_GOLD);
         }
+    }
+    // v1.9.23：退出刷词条——未沉入/想重来时退回选天赋（点数已退还）
+    if button(1240.0, 8.0, 36.0, 36.0, "×", None, true) {
+        g.quit_sim_redraft();
     }
     // 日志流
     let area_y = 76.0;

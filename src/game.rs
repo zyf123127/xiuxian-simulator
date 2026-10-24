@@ -1246,6 +1246,30 @@ impl Game {
         self.sync_save();
     }
 
+    // v1.9.23：模拟未沉入/中途放弃时退出并重新刷词条（退还本次点数）。
+    // 真机场景：点了「开始模拟」但因任何原因没有沉入推演（输入未消费/
+    // 界面卡住），玩家需要一条确定性的退路——退出→重刷词条→再次进入。
+    pub fn quit_sim_redraft(&mut self) {
+        if self.scene != Scene::Sim {
+            return;
+        }
+        self.meta.sim_points += self.sim_cost();
+        self.sim = None;
+        self.modal = None;
+        self.log("轮回镜轻颤，此番推演未竟，点数已还。", C_CYAN);
+        self.start_draft();
+    }
+
+    // v1.9.23：返回开始界面（存档已落盘；菜单里「承接前缘」可恢复）
+    pub fn back_to_menu(&mut self) {
+        if self.scene != Scene::Reality {
+            return;
+        }
+        self.sync_save();
+        self.scene = Scene::Menu;
+        self.play(crate::sounds::Which::Page);
+    }
+
     // ================= 模拟：开始 =================
 
     pub fn sim_cost(&self) -> i32 {
