@@ -77,7 +77,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.13";</script>
+    <script>var GAME_VER = "1.9.14";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -123,7 +123,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.9.13"></script>
+    <script src="mq_js_bundle.js?v=1.9.14"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -713,6 +713,23 @@
                                     S_frame();
                                 }, 0);
                             }
+                            // v1.9.14 触摸驱动快速唤醒：v1.9.13 真机实证首触杀死
+                            // 主循环、且连续 frame() 叩击可唤醒（第 4 轮 +30 帧）。
+                            // 不再等 2.5s 看门狗——touchend 后 400ms 检查帧号是否
+                            // 前进（对比 touchstart 时刻），未前进立即进入连续叩击，
+                            // 唤醒后把用户这一击原坐标重放（第一击直接生效）。
+                            if (type === "touchstart" && window.__xxAlive && !window.__xxWaking) {
+                                var n0 = window.__xxAlive.n;
+                                var k0 = window.__xxClicksSeen || 0;
+                                var lt = __xxLastTouch;
+                                setTimeout(function () {
+                                    var a = window.__xxAlive;
+                                    if (!a || window.__xxWaking) return;
+                                    if ((window.__xxClicksSeen || 0) !== k0) return; // 已消费，循环活着
+                                    if (a.n > n0) return; // 帧号在涨，循环活着
+                                    window.__xxWakeReplay(lt);
+                                }, 400);
+                            }
                         },
                         true,
                     );
@@ -778,15 +795,62 @@
                 }
                 // ① 循环心跳：首见 xx_alive 后武装；>2.5s 停跳即死亡。
                 // 死亡处置三步（复现→定位→治疗，全部在设备现场执行）：
-                //   step1 复活冲击：连调 5 次 wasm frame 导出——若 async 主循环
+                //   step1 复活冲击：连调 wasm frame 导出——若 async 主循环
                 //        只是"调度断了"（future 还活着），帧号立即恢复，零感知
                 //        复活（无重载无闪烁）；无效则 future 已 wedged。
                 //   step2 重载自愈：死因快照存 sessionStorage → location.reload()
                 //        （用户实证重载后必好：缓存热、循环存活）。
                 //   step3 大旗兜底：重载预算用尽后仍死 → 弹旗 + 手动重载按钮。
+                // v1.9.14 快速唤醒（xxWakeReplay）：触摸后 400ms 帧号未动即启动
+                // 连续叩击（不等 2.5s 看门狗），唤醒后按 __xxLastTouch 原坐标重放
+                // 完整点击（touch+mouse_down+frame+mouse_up）——真机"首击杀死循环"
+                // 的场景下用户第一击直接生效，无需再点。唤醒期间置 __xxWaking
+                // 防重入；复活成功后 4 秒内大旗静默（v1.9.13 真机误弹实锤修复）。
+                window.__xxRevivedAt = 0;
+                window.__xxWakeReplay = function (lt) {
+                    if (window.__xxWaking || !window.wasm_exports) return;
+                    window.__xxWaking = true;
+                    var E = window.wasm_exports;
+                    var n0 = window.__xxAlive ? window.__xxAlive.n : -1;
+                    var bursts = 0;
+                    var log1 = false;
+                    (function burst() {
+                        if (window.__xxClockGate) { window.__xxWaking = false; return; }
+                        for (var i = 0; i < 12; i++) {
+                            try { E.frame(); } catch (e) { break; }
+                        }
+                        bursts += 1;
+                        var a = window.__xxAlive;
+                        if (a && a.n > n0) {
+                            // 唤醒成功：重放用户这一击（touch + 鼠标按下 → 出帧消费 → 抬起）
+                            window.__xxRevivedAt = performance.now();
+                            try { errlog.textContent += "[诊断] 快速唤醒成功（第" + bursts + "轮，+" + (a.n - n0) + " 帧），重放点击\n"; } catch (e) {}
+                            try {
+                                if (lt) {
+                                    E.touch(10, 999001, lt[2], lt[3]);
+                                    E.mouse_move(lt[2] | 0, lt[3] | 0);
+                                    E.mouse_down(lt[2] | 0, lt[3] | 0, 0);
+                                    E.frame(); // 消费按下
+                                    E.touch(12, 999001, lt[2], lt[3]);
+                                    E.mouse_up(lt[2] | 0, lt[3] | 0, 0);
+                                }
+                            } catch (e2) {}
+                            window.__xxWaking = false;
+                            return;
+                        }
+                        if (bursts < 12) {
+                            setTimeout(burst, 220); // 连续叩击，每轮 12 发
+                        } else {
+                            // 12 轮（约 2.6s）未醒——交回看门狗（重载兜底）
+                            try { errlog.textContent += "[诊断] 快速唤醒失败（12 轮），交由看门狗\n"; } catch (e) {}
+                            window.__xxWaking = false;
+                        }
+                    })();
+                };
                 var reviveTries = 0;
                 setInterval(function () {
                     if (window.__xxClockGate) return; // ?chaos=1 仿真冻结豁免
+                    if (window.__xxWaking) return; // 快速唤醒进行中，让路
                     if (!window.wasm_exports || !window.__xxAlive) return;
                     var stale = performance.now() - window.__xxAlive.at;
                     if (stale > 2500) {
@@ -796,6 +860,7 @@
                             try { window.wasm_exports.frame(); } catch (e) { break; }
                         }
                         if (window.__xxAlive.at > performance.now() - 1200 && window.__xxAlive.n > before) {
+                            window.__xxRevivedAt = performance.now();
                             try { errlog.textContent += "[诊断] 循环复活成功（冲击 +" + (window.__xxAlive.n - before) + " 帧）\n"; } catch (e) {}
                             reviveTries = 0; // 复活成功重置计数，允许下次再救
                             return;
@@ -816,6 +881,9 @@
                 // ② 触摸桥：点了但引擎零消费（心跳看门狗通常先一步处理）
                 function xxShowBanner() {
                     if (banner) return;
+                    // v1.9.14 复活静默期：唤醒/复活成功后 4 秒内不弹旗（v1.9.13
+                    // 真机实锤：复活成功后触摸桥 starved 判定仍弹旗造成误报）
+                    if (window.__xxRevivedAt && performance.now() - window.__xxRevivedAt < 4000) return;
                     banner = document.createElement("div");
                     banner.style.cssText =
                         "position:fixed;left:8%;right:8%;top:36%;z-index:200;" +

@@ -241,8 +241,10 @@ async fn main() {
         // 右上角 clicks 计数 = Rust 实际收到的鼠标按下次数。
         #[cfg(target_arch = "wasm32")]
         {
-            // v1.9.13 循环心跳：每 30 帧上报（JS 看门狗 2.5s 无心跳即自动重载）
-            if frame % 30 == 0 {
+            // v1.9.13 循环心跳：每 15 帧上报（JS 侧 400ms 快速唤醒检查的采样基础；
+            // v1.9.13 真机实证：死亡后连续 frame() 叩击可唤醒循环（第 4 轮 +30 帧），
+            // 上报越密，唤醒检测越快）
+            if frame % 15 == 0 {
                 xx_dbg::alive(frame as i32);
             }
             if is_mouse_button_pressed(MouseButton::Left) {
