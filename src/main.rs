@@ -105,6 +105,8 @@ async fn main() {
     // 与"到了但按钮判定不吃"（clicks 增长且十字在按钮上）。
     #[cfg(target_arch = "wasm32")]
     let (mut xx_clicks, mut xx_last): (u32, Option<(f32, f32)>) = (0, None);
+    #[cfg(target_arch = "wasm32")]
+    let mut xx_clicks_handled: u32 = 0;
     // v1.9.10 场景变化回传（wasm）：JS 侧 __xxState 断言"点按钮→进游戏"；
     // 0=Menu 1=Reality 2=Draft 3=Sim 4=Inherit 5=Settle 6=World
     #[cfg(target_arch = "wasm32")]
@@ -250,6 +252,23 @@ async fn main() {
             );
             if let Some((x, y)) = xx_last {
                 draw_circle(x, y, 9.0, Color::new(1.0, 0.9, 0.2, 0.95));
+            }
+            // v1.9.11 菜单兜底（真机"进去过一次、重进后点开始无效"的保险丝）：
+            // 每个被消费的点击只评估一次——若落在「开始新的人生」矩形外扩 30 内
+            // 而场景仍是 Menu（button() 因任何原因没吃到），强制 begin_mortal。
+            // button() 正常触发时场景已离开 Menu，天然不会二次进入。
+            if xx_clicks > xx_clicks_handled {
+                xx_clicks_handled = xx_clicks;
+                if g.scene == Scene::Menu {
+                    if let Some((x, y)) = xx_last {
+                        let (bx, by, bw, bh) = (320.0f32, 522.0f32, 300.0f32, 54.0f32);
+                        let m = 30.0;
+                        if x >= bx - m && x <= bx + bw + m && y >= by - m && y <= by + bh + m {
+                            g.play(crate::sounds::Which::Click);
+                            g.begin_mortal();
+                        }
+                    }
+                }
             }
         }
         set_default_camera();

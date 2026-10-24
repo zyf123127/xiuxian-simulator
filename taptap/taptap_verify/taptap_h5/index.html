@@ -77,7 +77,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.10";</script>
+    <script>var GAME_VER = "1.9.11";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -123,7 +123,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.9.10"></script>
+    <script src="mq_js_bundle.js?v=1.9.11"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -781,9 +781,45 @@
         (function xxSim() {
             var q;
             try { q = new URLSearchParams(location.search); } catch (e) { return; }
-            if (!q.get("chaos") && !q.get("tap")) return;
+            if (!q.get("chaos") && !q.get("tap") && !q.get("flow")) return;
             var el = document.getElementById("errlog");
             var log = function (s) { if (el) el.textContent += s + "\n"; };
+            // 世界坐标 -> 页面 CSS 坐标（与 cam.rs view_cam 互逆；v1.9.9 本地注入
+            // 315→(469,547) 实测校准）。canvas 满窗时 rect.left/top≈0。
+            var w2c = function (wx, wy) {
+                var c = document.getElementById("glcanvas");
+                var r = c.getBoundingClientRect();
+                var fit = Math.min(r.width / 1280, r.height / 720);
+                var dw = r.width / fit, dh = r.height / fit;
+                return [r.left + (wx - (640 - dw / 2)) * fit, r.top + (wy - (360 - dh / 2)) * fit];
+            };
+            // 真机同路径派发触摸；compat=true 时再补 X5 兼容鼠标事件
+            // （mousedown→mouseup→click，v1.9.10 真机 [诊断](mouse) 标记证实 X5 会发）
+            var fireTap = function (wx, wy, compat, cb) {
+                var c = document.getElementById("glcanvas");
+                var xy = w2c(wx, wy);
+                var id = Date.now() % 1000000;
+                try {
+                    var t = new Touch({ identifier: id, target: c, clientX: xy[0], clientY: xy[1] });
+                    c.dispatchEvent(new TouchEvent("touchstart", { cancelable: true, bubbles: true, changedTouches: [t], touches: [t] }));
+                    setTimeout(function () {
+                        c.dispatchEvent(new TouchEvent("touchend", { cancelable: true, bubbles: true, changedTouches: [t], touches: [] }));
+                        if (compat) {
+                            setTimeout(function () {
+                                var ev = { clientX: xy[0], clientY: xy[1], button: 0, bubbles: true, cancelable: true };
+                                try {
+                                    c.dispatchEvent(new MouseEvent("mousedown", ev));
+                                    c.dispatchEvent(new MouseEvent("mouseup", ev));
+                                    c.dispatchEvent(new MouseEvent("click", ev));
+                                } catch (e3) {}
+                            }, 120);
+                        }
+                        if (cb) cb(xy);
+                    }, 90);
+                } catch (e2) {
+                    log("[SIM] 事件派发失败: " + e2.message);
+                }
+            };
             if (q.get("chaos")) {
                 window.__xxClockGate = false;
                 setInterval(function () {
@@ -799,39 +835,45 @@
             if (q.get("tap")) {
                 setInterval(function () {
                     if (!window.wasm_exports || window.__xxClockGate) return;
-                    var c = document.getElementById("glcanvas");
-                    var r = c.getBoundingClientRect();
-                    if (r.width < 10 || r.height < 10) return;
-                    var fit = Math.min(r.width / 1280, r.height / 720);
-                    var dw = r.width / fit, dh = r.height / fit;
-                    var x = r.left + (470 - (640 - dw / 2)) * fit;
-                    var y = r.top + (549 - (360 - dh / 2)) * fit;
                     if (window.__xxState !== 0 && window.__xxState !== -1) return; // 已进游戏，停止
-                    var id = Date.now() % 100000;
-                    var mk = function (phase) {
-                        var t;
-                        try {
-                            t = new Touch({ identifier: id, target: c, clientX: x, clientY: y });
-                        } catch (e2) {
-                            log("[SIM] Touch 构造器不可用，跳过");
-                            return null;
-                        }
-                        return new TouchEvent(phase, {
-                            cancelable: true, bubbles: true,
-                            changedTouches: [t], touches: phase === "touchend" ? [] : [t]
-                        });
-                    };
                     var s0 = window.__xxState;
-                    var te = mk("touchstart");
-                    if (!te) return;
-                    c.dispatchEvent(te);
-                    setTimeout(function () { c.dispatchEvent(mk("touchend")); }, 90);
-                    setTimeout(function () {
-                        log("[SIM] tap @css(" + Math.round(x) + "," + Math.round(y) + ") st " +
-                            s0 + "→" + window.__xxState +
-                            (window.__xxState > 0 ? " ✓进游戏" : " ✗未进"));
-                    }, 800);
+                    fireTap(470, 549, false, function (xy) {
+                        setTimeout(function () {
+                            log("[SIM] tap @css(" + Math.round(xy[0]) + "," + Math.round(xy[1]) + ") st " +
+                                s0 + "→" + window.__xxState +
+                                (window.__xxState > 0 ? " ✓进游戏" : " ✗未进"));
+                        }, 800);
+                    });
                 }, 3500);
+            }
+            // v1.9.10 真机"进去过一次、重进页面后点开始无效"——入口自动回归：
+            // 菜单点「开始新的人生」→ Scene::Reality（begin_mortal 直达现实场景，
+            // Draft 是轮回镜选天赋屏、不在首命入口链上）。每步带 X5 兼容鼠标事件，
+            // early=1 模拟真机"一就绪就点"（用户实测在 F≈100 即点）。
+            if (q.get("flow")) {
+                var early = q.get("flow") === "early";
+                var fired = false, tries = 0;
+                var compat = q.get("compat") !== "0"; // 默认带兼容鼠标事件
+                var iv = setInterval(function () {
+                    if (!window.wasm_exports) return;
+                    tries++;
+                    var st = window.__xxState;
+                    if (st === 1) {
+                        clearInterval(iv);
+                        log("[FLOW] ✓✓ 进入 Reality（进游戏成功）compat=" + compat +
+                            (early ? " 早期时序" : "") + " 第" + tries + "次轮询确认");
+                    } else if (st > 1) {
+                        clearInterval(iv);
+                        log("[FLOW] ？意外场景 st" + st);
+                    } else if (tries === 3 && !fired) {
+                        fired = true;
+                        log("[FLOW] ①点「开始新的人生」(compat=" + compat + (early ? " 早期时序" : "") + ")");
+                        fireTap(470, 549, compat);
+                    } else if (tries > 200) {
+                        clearInterval(iv);
+                        log("[FLOW] ✗ 超时：点击后未进游戏，末态 st" + st);
+                    }
+                }, 300);
             }
         })();
 
