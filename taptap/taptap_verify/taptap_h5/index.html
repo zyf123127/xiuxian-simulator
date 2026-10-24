@@ -77,7 +77,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.12";</script>
+    <script>var GAME_VER = "1.9.13";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -123,7 +123,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.9.12"></script>
+    <script src="mq_js_bundle.js?v=1.9.13"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -236,6 +236,12 @@
                 importObject.env.xx_js_touches = function () {
                     return window.__xxTouches || 0;
                 };
+                // v1.9.13 循环心跳（Rust 每 30 帧上报帧号）——JS 看门狗据此
+                // 识别"循环死亡"（真机实证：首次真触摸杀死 async 主循环，
+                // frame() 照常返回、fr 恒新鲜，唯一死证是 Rust 帧号停止前进）
+                importObject.env.xx_alive = function (n) {
+                    window.__xxAlive = { n: n | 0, at: performance.now() };
+                };
             },
             on_init: function () {}
         });
@@ -303,6 +309,18 @@
         setInterval(xx_paint_stage, 1000);
         // 诊断区盖上版本号：真机反馈时一眼确认跑的是哪版（防"上传了但设备吃旧缓存"）
         errlog.textContent = "v" + GAME_VER + (errlog.textContent ? "\n" + errlog.textContent : "");
+        // v1.9.13 死因穿越：上次会话若被自愈看门狗重载，这里把死因快照打出来
+        // （一张截图即可读到"死于第几帧/触达几次/消费几次"），随后清除。
+        try {
+            var __post = sessionStorage.getItem("xxpost");
+            if (__post) {
+                sessionStorage.removeItem("xxpost");
+                var __pj = JSON.parse(__post);
+                errlog.textContent += "[上次] " + (__pj.reason === "manual" ? "手动" : "自动") +
+                    "重载：循环停于第" + __pj.frame + "帧 触达" + __pj.touches +
+                    " 已收" + __pj.clicks + " st" + __pj.st + "\n";
+            }
+        } catch (e) {}
 
         // v1.9.7：canvas 清零式重同步（resyncBacking）已整体移除——真机 X5 上
         // canvas.width=0 会杀死 WebGL 帧回调（v1.9.6 真机 F:28 冻帧实锤：启动后
@@ -683,11 +701,17 @@
                             // v1.9.6 帧泵：真机容器对页面的可见性钳制可冻结全部四种
                             // 帧时钟（v1.9.5 真机数据：clicks 恒 0、画面为最后一帧残影
                             // ——输入被置位却永远没有"下一帧"去轮询）。让触摸本身驱动
-                            // 一帧：事件已注入，同步执行一帧游戏即当场响应。时钟正常时
+                            // 一帧：事件已注入，执行一帧游戏即当场响应。时钟正常时
                             // __xxFrameAt 距今 <120ms，此泵空转不重复出帧。
+                            // v1.9.13 泵脱离触摸事件栈（setTimeout 0）：真机首触
+                            // 杀死主循环的嫌疑之一是"手势回调内同步出帧/上屏"被
+                            // X5 特殊处理——改为宏任务执行，语义不变（仍是事件后
+                            // 的下一帧），彻底脱离手势调用栈。
                             if (performance.now() - (window.__xxFrameAt || 0) > 120) {
-                                window.__xxFrameAt = performance.now();
-                                S_frame();
+                                setTimeout(function () {
+                                    window.__xxFrameAt = performance.now();
+                                    S_frame();
+                                }, 0);
                             }
                         },
                         true,
@@ -725,48 +749,108 @@
                 };
             };
             setInterval(takeOver, 500);
-            // v1.9.12 输入桥看门狗：真机两次实测（v1.9.10/1.9.11）均为"触摸到达
-            // 页面（t 行更新）但 Rust 从未消费（c 恒 0）、F 冻在首次点击时刻、
-            // 无任何 [PANIC]/[ERR]"。本看门狗用纯 DOM 层检测这一状态（不依赖
-            // 游戏循环活着）：触摸 ≥2 次且 4 秒内 Rust 消费计数零增长 → 弹大旗
-            // 给出结论与重载按钮，10 秒后自动重载（每会话最多一次，防循环）。
+            // v1.9.13 自愈看门狗（上接 v1.9.12 大旗实测数据：真机首次真触摸
+            // 杀死 async 主循环——F 冻在点击当帧（19/100/101 三次实测）、frame()
+            // 照常返回、fr 恒新鲜、无任何 [PANIC]/[ERR]；用户实证重载后必好：
+            // 缓存热秒开、循环存活）。两级处置：
+            //   ①循环心跳看门狗（主）：Rust 每 30 帧上报 xx_alive；>2.5s 无心跳
+            //     且 wasm 已就绪 = 循环死亡 → 立即静默自动重载（每会话一次），
+            //     死因快照存 sessionStorage 穿越到重载后的页面（errlog 首行可读）。
+            //   ②触摸桥看门狗（备）：心跳预算用尽或恢复后再次断桥时弹大旗 +
+            //     立即重载按钮（用户已实证手动重载有效）。
             (function xxWatch() {
-                var lastSeen = -1, starved = 0, banner = null, reloadTimer = null;
+                var lastSeen = -1, starved = 0, banner = null;
+                function xxPostmortem(reason) {
+                    try {
+                        sessionStorage.setItem("xxpost", JSON.stringify({
+                            v: window.GAME_VER, reason: reason,
+                            frame: window.__xxAlive ? window.__xxAlive.n : -1,
+                            touches: window.__xxTouches || 0,
+                            clicks: window.__xxClicksSeen || 0,
+                            st: window.__xxState
+                        }));
+                    } catch (e) {}
+                }
+                function xxReload(reason) {
+                    xxPostmortem(reason);
+                    try { sessionStorage.setItem("xxrl", "1"); } catch (e) {}
+                    location.reload();
+                }
+                // ① 循环心跳：首见 xx_alive 后武装；>2.5s 停跳即死亡。
+                // 死亡处置三步（复现→定位→治疗，全部在设备现场执行）：
+                //   step1 复活冲击：连调 5 次 wasm frame 导出——若 async 主循环
+                //        只是"调度断了"（future 还活着），帧号立即恢复，零感知
+                //        复活（无重载无闪烁）；无效则 future 已 wedged。
+                //   step2 重载自愈：死因快照存 sessionStorage → location.reload()
+                //        （用户实证重载后必好：缓存热、循环存活）。
+                //   step3 大旗兜底：重载预算用尽后仍死 → 弹旗 + 手动重载按钮。
+                var reviveTries = 0;
                 setInterval(function () {
-                    if (!window.wasm_exports) return;
-                    var seen = window.__xxClicksSeen || 0;
-                    var tch = window.__xxTouches || 0;
-                    if (seen !== lastSeen) { lastSeen = seen; starved = 0; return; }
-                    if (tch < 2) return; // 玩家没点过，不算故障
-                    starved += 1;
-                    if (starved < 2 || banner) return; // 连续 2 轮（≥4s）零消费才定性
+                    if (window.__xxClockGate) return; // ?chaos=1 仿真冻结豁免
+                    if (!window.wasm_exports || !window.__xxAlive) return;
+                    var stale = performance.now() - window.__xxAlive.at;
+                    if (stale > 2500) {
+                        // step1：复活冲击（直接驱动 frame 导出 5 次）
+                        var before = window.__xxAlive.n;
+                        for (var i = 0; i < 5; i++) {
+                            try { window.wasm_exports.frame(); } catch (e) { break; }
+                        }
+                        if (window.__xxAlive.at > performance.now() - 1200 && window.__xxAlive.n > before) {
+                            try { errlog.textContent += "[诊断] 循环复活成功（冲击 +" + (window.__xxAlive.n - before) + " 帧）\n"; } catch (e) {}
+                            reviveTries = 0; // 复活成功重置计数，允许下次再救
+                            return;
+                        }
+                        reviveTries += 1;
+                        if (reviveTries <= 3) {
+                            try { errlog.textContent += "[诊断] 复活冲击无效（第" + reviveTries + "次）\n"; } catch (e) {}
+                            return; // 等下一轮再试（共 3 轮）
+                        }
+                        try { errlog.textContent += "[诊断] 循环心跳停止于第 " + window.__xxAlive.n + " 帧（future wedged），自动重载\n"; } catch (e) {}
+                        try {
+                            if (!sessionStorage.getItem("xxrl")) { xxReload("loop"); return; }
+                        } catch (e2) {}
+                        // 自动重载预算已用：仍无心跳 → 弹大旗（按钮走 ② 的样式）
+                        if (!banner) xxShowBanner();
+                    }
+                }, 1000);
+                // ② 触摸桥：点了但引擎零消费（心跳看门狗通常先一步处理）
+                function xxShowBanner() {
+                    if (banner) return;
                     banner = document.createElement("div");
                     banner.style.cssText =
-                        "position:fixed;left:8%;right:8%;top:38%;z-index:200;" +
+                        "position:fixed;left:8%;right:8%;top:36%;z-index:200;" +
                         "background:rgba(120,10,10,.94);color:#fff;border:2px solid #f66;" +
                         "border-radius:10px;padding:14px 18px;font:15px/1.5 sans-serif;" +
                         "text-align:center;pointer-events:auto;";
                     banner.innerHTML =
-                        "⚠ 检测到触摸已到达页面，但游戏引擎未响应（已点 " + tch + " 次，引擎消费 " + seen + " 次）<br>" +
-                        "10 秒后自动重载修复；或点下方按钮立即重载。";
+                        "⚠ 游戏引擎已无响应（循环停于第 " + (window.__xxAlive ? window.__xxAlive.n : "?") +
+                        " 帧，已点 " + (window.__xxTouches || 0) + " 次）<br>" +
+                        "点下方按钮重载即可进入（已验证有效）。";
                     var btn = document.createElement("button");
                     btn.textContent = "立即重载游戏";
                     btn.style.cssText =
                         "margin-top:8px;padding:8px 22px;font:16px sans-serif;" +
                         "background:#f66;color:#fff;border:0;border-radius:6px;";
-                    btn.onclick = function () { location.reload(); };
+                    btn.onclick = function () { xxReload("manual"); };
                     banner.appendChild(btn);
                     document.body.appendChild(banner);
-                    try { errlog.textContent += "[诊断] 输入桥断开：触摸到页未达引擎，即将重载\n"; } catch (e) {}
-                    if (!sessionStorage.getItem("xxrl")) {
-                        sessionStorage.setItem("xxrl", "1");
-                        reloadTimer = setTimeout(function () { location.reload(); }, 10000);
-                    }
-                }, 2000);
-                // 看到消费计数恢复增长即撤旗（玩家自行重载后/瞬时抖动恢复）
+                    try { errlog.textContent += "[诊断] 引擎无响应，已弹重载大旗\n"; } catch (e) {}
+                }
                 setInterval(function () {
-                    if (banner && (window.__xxClicksSeen || 0) > 0) {
-                        if (reloadTimer) clearTimeout(reloadTimer);
+                    if (banner) return; // 大旗只由故障弹，不重复
+                    if (!window.wasm_exports) return;
+                    var seen = window.__xxClicksSeen || 0;
+                    var tch = window.__xxTouches || 0;
+                    if (seen !== lastSeen) { lastSeen = seen; starved = 0; return; }
+                    if (tch < 2) return;
+                    starved += 1;
+                    if (starved < 2) return; // 连续 2 轮（≥4s）零消费才弹旗
+                    xxShowBanner();
+                }, 2000);
+                // 消费恢复即撤旗（瞬时抖动自愈）
+                setInterval(function () {
+                    if (banner && (window.__xxClicksSeen || 0) > 0 &&
+                        window.__xxAlive && performance.now() - window.__xxAlive.at < 2500) {
                         banner.remove && banner.remove();
                         banner = null; starved = 0;
                     }

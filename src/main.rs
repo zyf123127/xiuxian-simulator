@@ -36,6 +36,7 @@ mod xx_dbg {
         fn xx_click(n: i32);
         fn xx_js_fr() -> i32;
         fn xx_js_touches() -> i32;
+        fn xx_alive(frame: i32);
     }
 
     /// wasm 陷阱可见化：panic 原文写入 errlog（[PANIC] 前缀）。须最先安装。
@@ -60,6 +61,14 @@ mod xx_dbg {
 
     pub fn js_touches() -> i32 {
         unsafe { xx_js_touches() }
+    }
+
+    /// 循环心跳：每 30 帧上报一次帧号。真机实证（v1.9.10/11/12 三张截图）：
+    /// 首次真触摸会杀死 async 主循环（F 冻在点击当帧），而 frame() 照常返回、
+    /// JS 心跳新鲜、无任何报错——JS 侧据此在 2.5 秒内识别死亡并自动重载
+    /// （用户实测重载后必好：缓存热、秒开、循环存活）。
+    pub fn alive(frame: i32) {
+        unsafe { xx_alive(frame) };
     }
 }
 
@@ -232,6 +241,10 @@ async fn main() {
         // 右上角 clicks 计数 = Rust 实际收到的鼠标按下次数。
         #[cfg(target_arch = "wasm32")]
         {
+            // v1.9.13 循环心跳：每 30 帧上报（JS 看门狗 2.5s 无心跳即自动重载）
+            if frame % 30 == 0 {
+                xx_dbg::alive(frame as i32);
+            }
             if is_mouse_button_pressed(MouseButton::Left) {
                 xx_clicks += 1;
                 xx_last = Some(crate::cam::mouse());
