@@ -18,6 +18,16 @@ pub(crate) mod atlas;
 
 use atlas::{Atlas, SpriteKey};
 
+/// PATCH(getfish): 字体缓存性能仪表（v1.9.25 卡顿修复验收用；Relaxed 单调计数，成本≈0）。
+/// GLYPH_RASTERS：新字形首栅格化次数（cache_glyph 真正 rasterize 才计）；
+/// ATLAS_UPLOADS：图集 dirty 后整图 texture_update 次数（atlas.rs 计）。
+/// 验收口径：banner 弹出 0.6s 动画期逐帧增量均应为 0（弹出前预热全档位 + pop 字号离散化）。
+pub static GLYPH_RASTERS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+pub static ATLAS_UPLOADS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
 #[derive(Debug, Clone)]
 pub(crate) struct CharacterInfo {
     pub offset_x: i32,
@@ -99,6 +109,9 @@ impl Font {
         if self.contains(character, size) {
             return;
         }
+
+        // PATCH(getfish): 新字形首栅格化计数（性能验收仪表）
+        GLYPH_RASTERS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         let (metrics, bitmap) = self.font.rasterize(character, size as f32);
 

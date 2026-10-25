@@ -122,6 +122,10 @@ impl Atlas {
         let ctx = get_quad_context();
         if self.dirty {
             self.dirty = false;
+
+            // PATCH(getfish): 整图集重上传计数（性能验收仪表）
+            crate::text::ATLAS_UPLOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
             let (texture_width, texture_height) = ctx.texture_size(self.texture);
             if texture_width != self.image.width as _ || texture_height != self.image.height as _ {
                 ctx.delete_texture(self.texture);
