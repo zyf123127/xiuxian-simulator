@@ -1,6 +1,6 @@
 [package]
 name = "xiuxian"
-version = "1.9.23"
+version = "1.9.24"
 edition = "2021"
 
 [dependencies]
@@ -14,5 +14,11 @@ macroquad = { version = "0.4", features = ["audio"] }
 [patch.crates-io]
 macroquad = { path = "vendor/macroquad" }
 
+# v1.9.24 内存/体积优化：LTO+单编译单元+去符号让 wasm 从 2.3MB 显著瘦身
+# （手机上下载/解析/编译的峰值内存同步下降）；strip 去符号不碍 panic 钩子输出。
 [profile.release]
 opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

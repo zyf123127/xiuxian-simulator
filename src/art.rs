@@ -18,10 +18,51 @@ pub struct Art {
     pub portraits: [Texture2D; 4], // v1.5.0：立绘四档（0凡人 1道基 2紫府 3真仙），portrait = portraits[0]
     // v1.7.0 AI 立绘覆盖：assets/portraits/ 下有对应 PNG 则用之，缺失回退像素立绘
     // （portrait_0..3=境界四档；v1.8.0 npc_ovr 扩四：0玄诚长老 1胡掌柜 2宁清霜 3醉道人。wasm 恒回退）
-    pub portrait_ovr: [Option<Texture2D>; 4],
-    pub npc_ovr: [Option<Texture2D>; 4],
+    // v1.9.24 懒加载：16 张覆盖图解码后约 7MB RGBA（桌面全量版更大），启动全量
+    // 解码既推高峰值内存又拖慢首帧——改为首用才解码，未出场的道侣/NPC 常驻零成本。
+    pub portrait_ovr: [LazyTex; 4],
+    pub npc_ovr: [LazyTex; 4],
     // v1.7.1 女道侣立绘：comp_0..9 与 COMPANION_NAMES 顺序一一对应（缺失回退丹药图标）
-    pub comp_ovr: [Option<Texture2D>; 10],
+    pub comp_ovr: [LazyTex; 10],
+}
+
+// v1.9.24 懒加载槽：名字在构造期定死（避免每帧 format!），首取时解码一次并
+// 缓存结果（含"缺图 None"也缓存，防止每帧重查文件系统/内嵌表）。
+// Texture2D 是 Arc 句柄，get() 返回克隆零拷贝。
+pub struct LazyTex {
+    name: &'static str,
+    cell: Mutex<Option<Option<Texture2D>>>,
+}
+
+impl LazyTex {
+    const fn new(name: &'static str) -> Self {
+        Self {
+            name,
+            cell: Mutex::new(None),
+        }
+    }
+    fn get(&self) -> Option<Texture2D> {
+        let mut g = self.cell.lock().unwrap();
+        if g.is_none() {
+            *g = Some(try_load_ovr(self.name));
+        }
+        g.as_ref().unwrap().clone()
+    }
+}
+
+impl Art {
+    /// 境界四档覆盖立绘（首用解码；缺图回退像素立绘由调用方兜底）
+    pub fn portrait_tex(&self, tier: usize) -> Option<Texture2D> {
+        self.portrait_ovr[tier.min(3)].get()
+    }
+    /// NPC 立绘（0玄诚长老 1胡掌柜 2宁清霜 3醉道人）
+    pub fn npc_tex(&self, i: usize) -> Option<Texture2D> {
+        self.npc_ovr[i.min(3)].get()
+    }
+    /// 女道侣立绘（comp_0..9）
+    pub fn comp_tex(&self, i: usize) -> Option<Texture2D> {
+        self.comp_ovr[i.min(9)].get()
+    }
 }
 
 static ART: std::sync::OnceLock<Art> = std::sync::OnceLock::new();
@@ -112,7 +153,9 @@ fn try_load_ovr(name: &str) -> Option<Texture2D> {
     embedded_bytes(name).map(tex_from_bytes)
 }
 
-// v1.6.0 C 仇敌换图：地图底图缓存（region, seed) → Texture2D，容量 8 上限淘汰最旧。
+// v1.6.0 C 仇敌换图：地图底图缓存（region, seed) → Texture2D。
+// v1.9.24 容量 8→3：每张 1264×480×4 ≈ 2.4MB，8 张上限即 ~19MB 常驻——
+// 手机上纯属浪费（同屏只见一张，3 张已覆盖「当前+刚离开」回切不重建）。
 // 主题 0/默认种子会命中 v1.5.0 逐值路径（像素级等价），仅换幕后重建。
 static MAP_BG_CACHE: Mutex<Vec<(u32, u32, Texture2D)>> = Mutex::new(Vec::new());
 
@@ -122,7 +165,7 @@ pub fn map_bg_for(region: u32, seed: u32) -> Texture2D {
         return t.clone();
     }
     let t = build_map_bg(region, seed);
-    if cache.len() >= 8 {
+    if cache.len() >= 3 {
         cache.remove(0);
     }
     cache.push((region, seed, t.clone()));
@@ -148,37 +191,33 @@ pub fn build_art() -> Art {
         bg,
         map_icons,
         portraits,
-        portrait_ovr: [None, None, None, None],
-        npc_ovr: [None, None, None, None],
-        comp_ovr: [None, None, None, None, None, None, None, None, None, None],
+        // v1.9.24：覆盖立绘全部懒加载（桌面/手机首帧前零解码，首用各自解码一次）。
+        // 名单与此前两段 eager 加载完全一致（npc_senior/npc_drunk 无文件→None 也缓存）。
+        portrait_ovr: [
+            LazyTex::new("portrait_0"),
+            LazyTex::new("portrait_1"),
+            LazyTex::new("portrait_2"),
+            LazyTex::new("portrait_3"),
+        ],
+        npc_ovr: [
+            LazyTex::new("npc_elder"),
+            LazyTex::new("npc_merchant"),
+            LazyTex::new("npc_senior"),
+            LazyTex::new("npc_drunk"),
+        ],
+        comp_ovr: [
+            LazyTex::new("comp_0"),
+            LazyTex::new("comp_1"),
+            LazyTex::new("comp_2"),
+            LazyTex::new("comp_3"),
+            LazyTex::new("comp_4"),
+            LazyTex::new("comp_5"),
+            LazyTex::new("comp_6"),
+            LazyTex::new("comp_7"),
+            LazyTex::new("comp_8"),
+            LazyTex::new("comp_9"),
+        ],
     };
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        for (i, o) in a.portrait_ovr.iter_mut().enumerate() {
-            *o = try_load_ovr(&format!("portrait_{}", i));
-        }
-        a.npc_ovr[0] = try_load_ovr("npc_elder");
-        a.npc_ovr[1] = try_load_ovr("npc_merchant");
-        // v1.8.0 D1：新 NPC 立绘槽（缺失静默回退像素图标）
-        a.npc_ovr[2] = try_load_ovr("npc_senior");
-        a.npc_ovr[3] = try_load_ovr("npc_drunk");
-        for (i, o) in a.comp_ovr.iter_mut().enumerate() {
-            *o = try_load_ovr(&format!("comp_{}", i));
-        }
-    }
-    // v1.8.1：wasm 走 include_bytes 内嵌立绘（见 try_load_ovr wasm 版）
-    #[cfg(target_arch = "wasm32")]
-    {
-        for (i, o) in a.portrait_ovr.iter_mut().enumerate() {
-            *o = try_load_ovr(&format!("portrait_{}", i));
-        }
-        a.npc_ovr[0] = try_load_ovr("npc_elder");
-        a.npc_ovr[1] = try_load_ovr("npc_merchant");
-        // npc_senior / npc_drunk 未内嵌（无文件）→ 回退像素图标
-        for (i, o) in a.comp_ovr.iter_mut().enumerate() {
-            *o = try_load_ovr(&format!("comp_{}", i));
-        }
-    }
     a
 }
 
@@ -719,7 +758,9 @@ pub fn draw_cultivator(
     } else {
         0.0
     };
-    let (tex, pw, ph) = match art.portrait_ovr[tier].as_ref() {
+    // v1.9.24：覆盖立绘懒加载（首帧起第一次绘制时解码，此后缓存命中零成本）
+    let ovr = art.portrait_tex(tier);
+    let (tex, pw, ph) = match ovr.as_ref() {
         Some(t) => {
             let ar = t.width() / t.height().max(1.0);
             let h = 180.0 * s;

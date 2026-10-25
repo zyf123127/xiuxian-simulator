@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.9.23";</script>
+    <script>var GAME_VER = "1.9.24";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -132,7 +132,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.9.23"></script>
+    <script src="mq_js_bundle.js?v=1.9.24"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -346,6 +346,15 @@
                 }
             }, 500);
         })();
+        // v1.9.24 诊断日志封顶：textContent += 是 O(n) 整串拷贝，长时间游玩诊断
+        // 行无限累积（内存与追加耗时双涨，手机更敏感）。8KB 触发、保底留最近 6KB。
+        setInterval(function () {
+            var s = errlog.textContent;
+            if (s.length > 8000) {
+                var cut = s.indexOf("\n", s.length - 6000);
+                errlog.textContent = cut > 0 ? s.slice(cut + 1) : s.slice(-6000);
+            }
+        }, 5000);
         // v1.9.13 死因穿越：上次会话若被自愈看门狗重载，这里把死因快照打出来
         // （一张截图即可读到"死于第几帧/触达几次/消费几次"），随后清除。
         try {

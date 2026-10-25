@@ -55,7 +55,9 @@ fn draw_npc_page(g: &mut Game, l: &Life) {
         draw_rectangle(x, y, 470.0, 160.0, Color::from_rgba(30, 24, 50, 210));
         draw_rectangle_lines(x, y, 470.0, 160.0, 2.0, C_GOLD_D);
         // 立绘：AI 覆盖（全身像）按宽高比 contain 收进 52×84、底边对齐；无则云纹小图标
-        match crate::art::art().npc_ovr[i].as_ref() {
+        // v1.9.24：懒加载（首用解码一次）
+        let ntex = crate::art::art().npc_tex(i);
+        match ntex.as_ref() {
             Some(t) => {
                 let ar = t.width() / t.height().max(1.0);
                 let h = 84.0;
@@ -147,7 +149,7 @@ fn draw_npc_page(g: &mut Game, l: &Life) {
         .companion
         .as_deref()
         .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn));
-    let comp_ovr = comp_idx.and_then(|i| crate::art::art().comp_ovr[i].as_ref());
+    let comp_ovr = comp_idx.and_then(|i| crate::art::art().comp_tex(i));
     match comp_ovr {
         Some(t) => {
             let ar = t.width() / t.height().max(1.0);
@@ -155,7 +157,7 @@ fn draw_npc_page(g: &mut Game, l: &Life) {
             let w = (h * ar).min(46.0);
             let hh = w / ar;
             draw_texture_ex(
-                t,
+                &t,
                 182.0 + (46.0 - w) * 0.5,
                 y + 12.0 + (84.0 - hh),
                 WHITE,
