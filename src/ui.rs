@@ -55,6 +55,11 @@ pub fn txt_r(s: &str, rx: f32, y: f32, size: u16, c: Color) {
 // banner 的 0.6s pop 动画若逐帧首见新字号，等于逐帧整图上传；show_banner 在弹出
 // 事件帧调用本函数把全部档位字形一次栅格化，动画帧零缓存 miss。
 pub fn prewarm_text(text: &str, sizes: &[u16]) {
+    // 无字体上下文（cargo test 单测环境未跑 init_font）安全跳过——运行时
+    // init_font 恒先于一切 UI，此分支仅防测试路径经 show_banner 触达 font() panic
+    if FONT.get().is_none() {
+        return;
+    }
     for ch in text.chars() {
         // v1.10.1：不再跳过空白——draw_text_ex 对空格同样走 cache_glyph（0×0 精灵
         // 也会置图集 dirty），跳过会让首条 banner 的 pop 期留 4 次/档 miss

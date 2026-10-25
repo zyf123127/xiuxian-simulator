@@ -14,25 +14,25 @@ pub struct RealmDef {
 }
 
 const L12: [&str; 12] = [
-    "一层",
-    "二层",
-    "三层",
-    "四层",
-    "五层",
-    "六层",
-    "七层",
-    "八层",
-    "九层",
-    "十层",
-    "十一层",
-    "十二层",
+    "一阶",
+    "二阶",
+    "三阶",
+    "四阶",
+    "五阶",
+    "六阶",
+    "七阶",
+    "八阶",
+    "九阶",
+    "十阶",
+    "十一阶",
+    "十二阶",
 ];
 const L4: [&str; 4] = ["初期", "中期", "后期", "大圆满"];
 const L1: [&str; 1] = ["凡躯"];
 
 pub const REALMS: [RealmDef; 15] = [
     RealmDef {
-        name: "凡人",
+        name: "白丁",
         layers: &L1,
         life: 75.0,
         qi: 30.0,
@@ -43,7 +43,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: false,
     },
     RealmDef {
-        name: "炼气",
+        name: "沁墨",
         layers: &L12,
         life: 130.0,
         qi: 60.0,
@@ -54,7 +54,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: false,
     },
     RealmDef {
-        name: "筑基",
+        name: "成行",
         layers: &L4,
         life: 260.0,
         qi: 4000.0,
@@ -65,7 +65,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: false,
     },
     RealmDef {
-        name: "金丹",
+        name: "洇章",
         layers: &L4,
         life: 550.0,
         qi: 16000.0,
@@ -76,7 +76,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: false,
     },
     RealmDef {
-        name: "元婴",
+        name: "立骨",
         layers: &L4,
         life: 1100.0,
         qi: 65000.0,
@@ -87,7 +87,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: false,
     },
     RealmDef {
-        name: "化神",
+        name: "生花",
         layers: &L4,
         life: 2200.0,
         qi: 260000.0,
@@ -98,7 +98,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: false,
     },
     RealmDef {
-        name: "炼虚",
+        name: "藏锋",
         layers: &L4,
         life: 4500.0,
         qi: 1_050_000.0,
@@ -109,7 +109,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: false,
     },
     RealmDef {
-        name: "合体",
+        name: "铁画",
         layers: &L4,
         life: 9000.0,
         qi: 4_200_000.0,
@@ -120,7 +120,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: false,
     },
     RealmDef {
-        name: "大乘",
+        name: "传世",
         layers: &L4,
         life: 18000.0,
         qi: 1.7e7,
@@ -131,7 +131,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: false,
     },
     RealmDef {
-        name: "渡劫",
+        name: "问笔",
         layers: &L4,
         life: 36000.0,
         qi: 6.5e7,
@@ -142,7 +142,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: false,
     },
     RealmDef {
-        name: "真仙",
+        name: "墨仙",
         layers: &L4,
         life: 150000.0,
         qi: 2.6e8,
@@ -153,7 +153,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: true,
     },
     RealmDef {
-        name: "金仙",
+        name: "砚尊",
         layers: &L4,
         life: 600000.0,
         qi: 1.0e9,
@@ -164,7 +164,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: true,
     },
     RealmDef {
-        name: "太乙",
+        name: "秉笔",
         layers: &L4,
         life: 2.4e6,
         qi: 4.0e9,
@@ -175,7 +175,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: true,
     },
     RealmDef {
-        name: "大罗",
+        name: "执卷",
         layers: &L4,
         life: 1.0e7,
         qi: 1.6e10,
@@ -186,7 +186,7 @@ pub const REALMS: [RealmDef; 15] = [
         immortal: true,
     },
     RealmDef {
-        name: "道祖",
+        name: "天笔",
         layers: &L4,
         life: 1.0e9,
         qi: 6.4e10,
@@ -268,52 +268,52 @@ pub struct TechDef {
 }
 pub const TECHS: [TechDef; 8] = [
     TechDef {
-        name: "长春功",
+        name: "养行篇",
         mult: 1.0,
         pow: 1.0,
-        desc: "入门吐纳之法，绵绵不绝",
+        desc: "入门养行之法，字缓行匀，绵绵不绝",
     },
     TechDef {
-        name: "聚灵诀",
+        name: "勾留诀",
         mult: 1.3,
         pow: 1.0,
-        desc: "聚天地灵气为己用",
+        desc: "勾留行间灵气，皆为己用",
     },
     TechDef {
-        name: "大衍诀",
+        name: "漏行书",
         mult: 1.6,
         pow: 1.0,
-        desc: "衍化万物，道法自然",
+        desc: "行间漏字，藏尽天机",
     },
     TechDef {
-        name: "青元剑诀",
+        name: "横行赋",
         mult: 2.0,
         pow: 1.2,
-        desc: "剑气纵横，攻伐无双",
+        desc: "一赋横行，笔锋攻伐无双",
     },
     TechDef {
-        name: "太玄真经",
+        name: "藏锋经",
         mult: 2.5,
         pow: 1.1,
-        desc: "玄之又玄，众妙之门",
+        desc: "锋藏笔中，深不可测",
     },
     TechDef {
-        name: "玄天七杀诀",
+        name: "断行七策",
         mult: 3.1,
         pow: 1.3,
-        desc: "杀伐决绝，七杀成阵",
+        desc: "七策断行，字字杀伐",
     },
     TechDef {
-        name: "太上忘情录",
+        name: "无行录",
         mult: 3.8,
         pow: 1.15,
-        desc: "忘情绝爱，道心不堕",
+        desc: "无行无列，道心不堕",
     },
     TechDef {
-        name: "混沌天帝诀",
+        name: "天笔遗墨",
         mult: 4.8,
         pow: 1.4,
-        desc: "传说中的开天之法",
+        desc: "天笔遗落的一滴墨，可开万卷",
     },
 ];
 
@@ -328,59 +328,59 @@ pub struct RelicDef {
 }
 pub const RELICS: [RelicDef; 8] = [
     RelicDef {
-        name: "青竹蜂云剑",
+        name: "呵霜毫",
         pow: 0.15,
         cult: 1.0,
-        desc: "七十二口飞剑，寒光凛冽",
+        desc: "笔毫呵气成霜，落笔生寒",
         pt: 3,
     },
     RelicDef {
-        name: "金雷竹剑",
+        name: "裁云笺",
         pow: 0.25,
         cult: 1.0,
-        desc: "金雷竹所炼，坚不可摧",
+        desc: "裁云作笺，笺缘利可裂金",
         pt: 4,
     },
     RelicDef {
-        name: "蕴灵葫芦",
+        name: "镇行钉",
         pow: 0.0,
         cult: 1.25,
-        desc: "蕴养灵气，修炼加速",
+        desc: "钉住书行，墨不散，笔愈疾",
         pt: 4,
     },
     RelicDef {
-        name: "玄天斩灵剑",
+        name: "墨骨伞",
         pow: 0.40,
         cult: 1.0,
-        desc: "一剑斩灵，锐不可当",
+        desc: "墨骨撑开，来墨皆挡于伞外",
         pt: 6,
     },
     RelicDef {
-        name: "聚灵鼎",
+        name: "曝书炉",
         pow: 0.0,
         cult: 1.40,
-        desc: "鼎中自成灵脉",
+        desc: "炉上曝书，墨香入骨自养人",
         pt: 7,
     },
     RelicDef {
-        name: "八灵尺",
+        name: "闲章",
         pow: 0.60,
         cult: 1.0,
-        desc: "上古异宝，镇压八方",
+        desc: "闲章盖处，一行即是一疆",
         pt: 9,
     },
     RelicDef {
-        name: "玄天如意刃",
+        name: "洗笔江",
         pow: 0.90,
         cult: 1.0,
-        desc: "心念所至，刃光所至",
+        desc: "一江洗笔，笔锋所指，江开路现",
         pt: 12,
     },
     RelicDef {
-        name: "掌天瓶",
+        name: "无字簿",
         pow: 1.50,
         cult: 1.30,
-        desc: "神秘小瓶，可催熟万物",
+        desc: "满簿无字，落笔皆成真",
         pt: 15,
     },
 ];
@@ -411,8 +411,8 @@ pub const PILLS: [PillDef; 6] = [
         edible: true,
     },
     PillDef {
-        name: "筑基丹",
-        desc: "冲击筑基时自动服用 +25%",
+        name: "成行丹",
+        desc: "冲击成行境时自动服用 +25%",
         edible: false,
     },
     PillDef {
@@ -432,7 +432,7 @@ pub const PILLS: [PillDef; 6] = [
     },
     PillDef {
         name: "护神丹",
-        desc: "渡劫时每重雷劫+10%存活",
+        desc: "问笔时每重雷劫+10%存活",
         edible: false,
     },
 ];
@@ -451,7 +451,7 @@ pub struct TEff {
     pub cult_mult: f64,  // 修炼倍率
     pub power_mult: f64, // 战力倍率
     pub break_add: f32,  // 大境界突破率+
-    pub trib_add: f32,   // 渡劫每重存活+
+    pub trib_add: f32,   // 问笔每重存活+
     pub event_mult: f32, // 奇遇(善缘)权重倍率
     pub pill_mult: f64,  // 丹药效果倍率
     pub relic: Option<usize>,
@@ -666,7 +666,7 @@ pub const TALENTS: [TalentDef; 33] = [
     },
     TalentDef {
         name: "命硬福厚",
-        desc: "渡劫存活 +4%/重",
+        desc: "问笔存活 +4%/重",
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -886,7 +886,7 @@ pub const TALENTS: [TalentDef; 33] = [
     },
     TalentDef {
         name: "九天雷体",
-        desc: "渡劫存活 +11%/重",
+        desc: "问笔存活 +11%/重",
         tier: 1,
         e: TEff {
             root: 0.0,
@@ -996,7 +996,7 @@ pub const TALENTS: [TalentDef; 33] = [
     },
     TalentDef {
         name: "家传法宝",
-        desc: "出生自带【蕴灵葫芦】",
+        desc: "出生自带【镇行钉】",
         tier: 1,
         e: TEff {
             root: 0.0,
@@ -1018,7 +1018,7 @@ pub const TALENTS: [TalentDef; 33] = [
     },
     TalentDef {
         name: "祖传经卷",
-        desc: "出生自带《大衍诀》",
+        desc: "出生自带《漏行书》",
         tier: 1,
         e: TEff {
             root: 0.0,
@@ -1084,7 +1084,7 @@ pub const TALENTS: [TalentDef; 33] = [
     },
     TalentDef {
         name: "雷帝转世",
-        desc: "渡劫存活 +20%/重",
+        desc: "问笔存活 +20%/重",
         tier: 2,
         e: TEff {
             root: 0.0,
@@ -1149,8 +1149,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "掌天瓶转世",
-        desc: "出生自带【掌天瓶】",
+        name: "无底砚转世",
+        desc: "出生自带【无字簿】，落笔皆成真",
         tier: 2,
         e: TEff {
             root: 0.0,
@@ -1290,48 +1290,48 @@ pub struct AchDef {
 }
 pub const ACHS: [AchDef; 30] = [
     AchDef {
-        name: "踏上仙途",
-        desc: "进入炼气期",
+        name: "踏上书途",
+        desc: "沁墨初成",
         reward: 10,
     },
     AchDef {
-        name: "筑基成功",
-        desc: "踏入筑基期",
+        name: "自成一行",
+        desc: "踏入成行境",
         reward: 30,
     },
     AchDef {
-        name: "金丹大道",
-        desc: "结成金丹",
+        name: "洇章成文",
+        desc: "凝成洇章",
         reward: 80,
     },
     AchDef {
-        name: "元婴老祖",
-        desc: "孕育元婴",
+        name: "字字立骨",
+        desc: "书中立骨",
         reward: 200,
     },
     AchDef {
-        name: "化神通天",
-        desc: "修至化神",
+        name: "妙笔生花",
+        desc: "修至生花",
         reward: 500,
     },
     AchDef {
-        name: "炼虚合道",
-        desc: "修至炼虚",
+        name: "藏锋守拙",
+        desc: "修至藏锋",
         reward: 1200,
     },
     AchDef {
-        name: "天人合一",
-        desc: "修至合体",
+        name: "书我合一",
+        desc: "修至铁画",
         reward: 3000,
     },
     AchDef {
-        name: "大乘至尊",
-        desc: "修至大乘",
+        name: "书成传世",
+        desc: "修至传世",
         reward: 8000,
     },
     AchDef {
-        name: "劫数临头",
-        desc: "进入渡劫期",
+        name: "问笔临头",
+        desc: "进入问笔境",
         reward: 20000,
     },
     AchDef {
@@ -1340,13 +1340,13 @@ pub const ACHS: [AchDef; 30] = [
         reward: 50000,
     },
     AchDef {
-        name: "位证金仙",
-        desc: "修至金仙",
+        name: "位证砚尊",
+        desc: "修至砚尊",
         reward: 200000,
     },
     AchDef {
-        name: "大罗至尊",
-        desc: "修至大罗",
+        name: "执卷至尊",
+        desc: "修至执卷",
         reward: 1000000,
     },
     AchDef {
@@ -1391,12 +1391,12 @@ pub const ACHS: [AchDef; 30] = [
     },
     AchDef {
         name: "宗门泰斗",
-        desc: "加入宗门并结成金丹",
+        desc: "加入宗门并凝成洇章",
         reward: 150,
     },
     AchDef {
         name: "一世长生",
-        desc: "自然坐化且曾达元婴",
+        desc: "自然坐化且曾立骨",
         reward: 500,
     },
     AchDef {
@@ -1426,7 +1426,7 @@ pub const ACHS: [AchDef; 30] = [
     },
     AchDef {
         name: "现实飞升",
-        desc: "现实中渡劫飞升",
+        desc: "现实中问笔飞升",
         reward: 100000,
     },
     AchDef {
@@ -1457,7 +1457,7 @@ pub const ORIGINS: [OriginDef; 6] = [
     },
     OriginDef {
         name: "修仙家族",
-        desc: "祖上曾出过筑基修士",
+        desc: "祖上曾出过成行修士",
     },
     OriginDef {
         name: "没落世家",
@@ -1474,7 +1474,7 @@ pub const ORIGINS: [OriginDef; 6] = [
 ];
 
 // ---------------- 游历事件表 (id, 权重, 最低境界, 是否善缘) ----------------
-pub const EVENTS: [(usize, i32, usize, bool); 30] = [
+pub const EVENTS: [(usize, i32, usize, bool); 31] = [
     (0, 12, 0, true),  // 灵草满坡
     (1, 11, 0, false), // 妖兽拦路
     (2, 6, 1, true),   // 上古洞府
@@ -1503,8 +1503,9 @@ pub const EVENTS: [(usize, i32, usize, bool); 30] = [
     (25, 5, 1, true),  // 商队护送
     (26, 2, 4, true),  // 仙人赠礼
     (27, 4, 1, true),  // 天机阁卜卦
-    (28, 5, 1, true),  // 良缘天定（道侣）
+    (28, 5, 1, true),  // 同页天成（同页人）
     (29, 4, 2, true),  // 宗门大比
+    (30, 5, 2, true),  // 空白行（天曹没写的一年，每稿至多一次）
 ];
 
 // ---------------- 功法价格（藏经阁，现实可购） ----------------
@@ -1513,21 +1514,21 @@ pub const TECH_PRICES: [i64; 8] = [0, 2000, 8000, 30000, 120000, 500000, 2000000
 // ---------------- 称号 ----------------
 pub fn realm_title(max_realm: usize) -> &'static str {
     match max_realm {
-        0 => "初入凡尘",
-        1 => "初入道途",
-        2 => "道基初成",
-        3 => "金丹大道",
-        4 => "元婴老祖",
-        5 => "化神通天",
-        6 => "炼虚合道",
-        7 => "天人合一",
-        8 => "大乘至尊",
-        9 => "天劫之子",
-        10 => "飞升真仙",
-        11 => "金仙无敌",
-        12 => "太乙真数",
-        13 => "大罗神仙",
-        _ => "万道之祖",
+        0 => "未开笔",
+        1 => "初沁墨",
+        2 => "一行自立",
+        3 => "章成洇然",
+        4 => "骨立不倒",
+        5 => "笔下生花",
+        6 => "锋藏不露",
+        7 => "铁画银钩",
+        8 => "书传人间",
+        9 => "对账之人",
+        10 => "墨行纸背",
+        11 => "一砚之尊",
+        12 => "秉笔者",
+        13 => "执卷者",
+        _ => "琅函天笔",
     }
 }
 
@@ -1544,18 +1545,18 @@ pub const MINOR_LINES: [&str; 10] = [
     "你在崖边远眺，云海翻涌如潮。",
 ];
 
-// ---------------- 道侣名（致敬凡人小说） ----------------
+// ---------------- 同页人十名（原创定稿 §11） ----------------
 pub const COMPANION_NAMES: [&str; 10] = [
-    "南宫婉",
-    "紫灵",
-    "陈巧倩",
-    "董萱儿",
-    "慕沛灵",
-    "严灵儿",
-    "白瑶怡",
-    "云芝",
-    "苏婉",
-    "月灵",
+    "闻人未晚",
+    "洛书遥",
+    "桑落",
+    "阮栖梧",
+    "姜稚鱼",
+    "谢迟",
+    "温衔雪",
+    "柏舟",
+    "孟拾遗",
+    "应梨白",
 ];
 
 // ================= v1.4.0 山河图志 =================
@@ -1617,7 +1618,7 @@ pub const LOCATIONS: [NodeDef; 6] = [
         name: "天雷峰",
         x: 780.0,
         y: 390.0,
-        desc: "直插云霄的孤峰，峰顶终年雷云不散。峰顶渡劫台引雷入体淬炼元神——冲击大境界时，每重雷劫存活+2%。",
+        desc: "直插云霄的孤峰，峰顶终年雷云不散。峰顶问笔台引雷入体淬炼元神——冲击大境界时，每重雷劫存活+2%。",
         acts: &["冲击境界"],
     },
 ];
@@ -1625,7 +1626,7 @@ pub const LOCATIONS: [NodeDef; 6] = [
 // 纯视觉连线；赶路支持任意两地直达
 pub const MAP_PATHS: [(usize, usize); 6] = [(0, 3), (0, 1), (1, 2), (1, 4), (4, 5), (2, 5)];
 
-// 宗门经济：quest_contrib(r)=20+8r → 炼气28 / 金丹44 / 渡劫92 / 道祖132
+// 宗门经济：quest_contrib(r)=20+8r → 沁墨28 / 洇章44 / 问笔92 / 天笔132
 pub fn quest_contrib(realm: usize) -> u32 {
     20 + 8 * realm as u32
 }
@@ -1676,14 +1677,14 @@ pub const SECT_GOODS: [SectGood; 6] = [
         kind: SectGoodKind::Life8,
     },
     SectGood {
-        name: "八灵尺",
-        desc: "镇派之宝拓影，战力+60%（需元婴期）",
+        name: "闲章",
+        desc: "镇派之宝拓影，战力+60%（需立骨境）",
         cost: 260,
         kind: SectGoodKind::Relic(5),
     },
     SectGood {
-        name: "混沌天帝诀",
-        desc: "镇派无上功法（需元婴期）",
+        name: "天笔遗墨",
+        desc: "镇派无上功法（需立骨境）",
         cost: 420,
         kind: SectGoodKind::Tech(7),
     },
@@ -1745,7 +1746,7 @@ pub const EXPED_STONE_BONE: f64 = 1400.0;
 pub const EXPED_CONTRIB: u32 = 15;
 pub const MARKET_PILL_DISC: f64 = 0.9;
 pub const DONGFU_CULT_MULT: f64 = 1.25;
-pub const PEAK_TRIB_BONUS: f32 = 0.02; // 生效前提：现实冲真仙走九重雷劫分支
+pub const PEAK_TRIB_BONUS: f32 = 0.02; // 生效前提：现实冲墨仙走九重雷劫分支
 
 // ================= v1.5.0 四时洞天 =================
 
@@ -1795,7 +1796,7 @@ pub fn weather_loc_mult(w: usize, loc: usize) -> f64 {
     WEATHER_LOC_MULT[w.min(WEATHER_LOC_MULT.len() - 1)][loc.min(5)]
 }
 
-// 立绘分档：0凡人 1道基 2紫府 3真仙（按最高境界取档）
+// 立绘分档：0白丁 1道基 2紫府 3墨仙（按最高境界取档）
 pub const PORTRAIT_TIERS: [usize; 4] = [0, 3, 6, 10]; // 各档境界下限
 
 pub fn portrait_tier(realm: usize) -> usize {

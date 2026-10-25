@@ -41,7 +41,7 @@ pub fn comp_cult_mult(fav: i32) -> f64 {
     COMPANION_CULT_MULT[tier_of(fav)]
 }
 
-// v1.8.0 D1：大师姐「剑意点拨」——现实跨境破境成功率加成（同境/渡劫不加）
+// v1.8.0 D1：大师姐「剑意点拨」——现实跨境破境成功率加成（同境/问笔不加）
 pub fn senior_break_add(fav: i32) -> f32 {
     SENIOR_BREAK_ADD[tier_of(fav)]
 }
@@ -96,10 +96,10 @@ pub struct NpcEventDef {
     pub text: &'static str,
 }
 pub const NPC_EVENTS: [NpcEventDef; 4] = [
-    // 0 长老「旧剑相赠」：取剑（玄天斩灵剑；已有折灵石）/ 折现（贡献+150、灵石+3000）
+    // 0 长老「旧伞相赠」：取伞（墨骨伞；已有折灵石）/ 折现（贡献+150、灵石+3000）
     NpcEventDef {
-        title: "旧剑相赠",
-        text: "玄诚长老唤你入静室，取出一柄旧剑：「此剑随老夫半生，今日赠你——莫坠了它的名声。」",
+        title: "旧伞相赠",
+        text: "玄诚长老唤你入静室，取出一柄旧伞：「此伞随老夫半生，今日赠你——莫坠了它的名声。」",
     },
     // 1 掌柜「万宝楼夜宴」：灵石+8000 / 聚气丹×3
     NpcEventDef {
@@ -130,13 +130,13 @@ pub fn npc_event_card(i: usize) -> Option<EventCard> {
     match i {
         0 => {
             let mut e1 = Eff::new();
-            e1.relic = Some(3); // 玄天斩灵剑（apply_reff：未拥有入包、已有折 15000 灵石）
-            e1.msg = vec!["你郑重接过旧剑，剑鞘上的旧痕犹温。".to_string()];
-            card.opts.push(("受剑".to_string(), e1));
+            e1.relic = Some(3); // 墨骨伞（apply_reff：未拥有入包、已有折 15000 灵石）
+            e1.msg = vec!["你郑重接过旧伞，伞骨上的旧痕犹温。".to_string()];
+            card.opts.push(("受伞".to_string(), e1));
             let mut e2 = Eff::new();
             e2.contrib = 150;
             e2.stones = 3000;
-            e2.msg = vec!["你婉谢宝剑，长老大笑转赠灵石，并记你一功。".to_string()];
+            e2.msg = vec!["你婉谢宝伞，长老大笑转赠灵石，并记你一功。".to_string()];
             card.opts.push(("婉谢折现".to_string(), e2));
         }
         1 => {

@@ -1,5 +1,5 @@
 // v1.4.0 山河图志：世界地图场景
-// 赶路 / 宗门（拜入·任务·商店）/ 坊市入口 / 秘境远征 / 洞府闭关 / 荒骨寻仇 / 天雷峰渡劫
+// 赶路 / 宗门（拜入·任务·商店）/ 坊市入口 / 秘境远征 / 洞府闭关 / 荒骨寻仇 / 天雷峰问笔
 //
 // 借用规范与 game.rs 一致：对 life / world.exp 的可变借用圈在小块内，日志音效存档在块外。
 // 会话状态（sel/exp/shop）不进存档；持久化的只有 Life.loc（Lloc 键）与 Meta.sect_contrib（sc 键）。
@@ -125,7 +125,7 @@ pub fn sect_join(g: &mut Game) {
         return;
     }
     if realm < 1 {
-        g.toast("根基尚浅，先修至炼气期再来", C_RED);
+        g.toast("根基尚浅，先修至沁墨境再来", C_RED);
         return;
     }
     if !spend_year(g, "你于拜山途中遭劫，殒身林莽。") {
@@ -948,7 +948,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                         g.act_break();
                     }
                     txt(
-                        "※ 渡劫台：冲击大境界时每重雷劫存活+2%",
+                        "※ 问笔台：冲击大境界时每重雷劫存活+2%",
                         340.0,
                         664.0,
                         14, // v1.8.0 A8：13→14 字号下限

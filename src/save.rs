@@ -13,6 +13,13 @@ pub const PATH: &str = "xiuxian_save.txt";
 #[allow(dead_code)]
 pub const STORAGE_KEY: &str = "xiuxian_save";
 
+// v1.12.0 换皮迁移：旧档宿敌名号别名表——旧档 neme= 行以旧名号落盘（唯一直接以
+// 名字字符串存档的文案），读档时按同下标映射到 game::NEME_TITLES 新名。
+// 旧档迁移用，非展示文案；命中失败照旧走 find 失配兜底 NEME_TITLES[0]。
+const OLD_NEME_TITLES: [&str; 6] = [
+    "血手人屠", "血魔老祖", "幽冥鬼帝", "噬天魔尊", "灭世魔主", "太上魔祖",
+];
+
 // ---- 存档后端：读取全文 / 写入全文 ----
 #[cfg(target_arch = "wasm32")]
 mod backend {
@@ -98,6 +105,10 @@ pub fn save_text(m: &Meta) -> String {
     if let Some(n) = &m.neme {
         s.push_str(&format!("neme={} {} {}\n", n.title, n.name, n.realm));
     }
+    // v1.12.0 留行批注：结算屏大事记点走的一行（下一稿开卷浮现后清空；缺键 → None 零迁移）
+    if let Some(note) = &m.note_line {
+        s.push_str(&format!("note={}\n", note));
+    }
     if let Some(l) = &m.life {
         s.push_str(&life_text(l));
     }
@@ -165,12 +176,18 @@ fn life_text(l: &Life) -> String {
     s.push_str(&format!("Lbuf={}\n", l.power_buff));
     s.push_str(&format!("Lloc={}\n", l.loc));
     s.push_str(&format!("Lcfav={}\n", l.comp_fav)); // v1.6.0 D：道侣好感
+    // v1.12.0 P0 修复：道侣落盘（此前 Life.companion 从未持久化，重启即 None）。
+    // 以名字字符串存档，空串=None；历史版本从未写此键，旧档缺键 → None，零迁移。
+    s.push_str(&format!(
+        "Lcomp={}\n",
+        l.companion.as_deref().unwrap_or("")
+    ));
     s.push_str(&format!("Lequip={:?}\n", l.equipped));
     // v1.8.0 E：法宝灵纹等级（旧档缺键 → 全 0）
     s.push_str(&format!("Lrlv={:?}\n", l.relic_lv));
     s.push_str(&format!("Lslot={}\n", l.slot));
     s.push_str(&format!("Lweather={}\n", l.weather));
-    // v1.10.2 筑基择道：道途（0..=3；旧档缺键 0=未择，越界归 0，选定终身不改）
+    // v1.10.2 成行择道：道途（0..=3；旧档缺键 0=未择，越界归 0，选定终身不改）
     s.push_str(&format!("Lpath={}\n", l.path));
     s
 }
@@ -302,6 +319,14 @@ fn parse_save(text: &str) -> Meta {
                 neme_realm = it.next().and_then(|x| x.parse().ok()).unwrap_or(3);
                 has_neme = !neme_title.is_empty();
             }
+            // v1.12.0 留行批注：note= 行（空串/缺键 → None；缺键回退照 zt= 先例）
+            "note" => {
+                m.note_line = if v.trim().is_empty() {
+                    None
+                } else {
+                    Some(v.trim().to_string())
+                };
+            }
             "Ln" => {
                 in_life = true;
                 life = Life::default();
@@ -341,6 +366,14 @@ fn parse_save(text: &str) -> Meta {
                     .unwrap_or(0)
                     .clamp(0, crate::data::NPC_FAV_MAX as i64) as i32;
             }
+            // v1.12.0 P0 修复：道侣落盘回读（空串/缺键 → None；缺键回退照 Lrlv/zt 先例）
+            "Lcomp" => {
+                life.companion = if v.trim().is_empty() {
+                    None
+                } else {
+                    Some(v.trim().to_string())
+                };
+            }
             "Lequip" => {
                 life.equipped = nums(v).iter().map(|&x| x as usize).collect();
                 has_lequip = true;
@@ -360,7 +393,7 @@ fn parse_save(text: &str) -> Meta {
                 life.weather = v.trim().parse::<i64>().unwrap_or(0).clamp(0, 4) as u8;
             }
             "Lpath" => {
-                // v1.10.2 筑基择道：值域 0..=3，越界/坏值归 0=未择（坏档/未来版本键容错）
+                // v1.10.2 成行择道：值域 0..=3，越界/坏值归 0=未择（坏档/未来版本键容错）
                 life.path = match v.trim().parse::<u8>() {
                     Ok(x) if x <= 3 => x,
                     _ => 0,
@@ -383,11 +416,20 @@ fn parse_save(text: &str) -> Meta {
         }
     }
     if has_neme {
-        let title = crate::game::NEME_TITLES
+        // v1.12.0 换皮迁移：旧表六名按同下标映射新名（OLD_NEME_TITLES，见文件头）；
+        // 新名直读；未知名号走原 find 失配兜底 NEME_TITLES[0]（战力/寻仇/斩杀进度
+        // 全按结构与 neme_slain 计数走，功能无损，仅称号显示）。
+        let title = match OLD_NEME_TITLES
             .iter()
-            .find(|t| t.to_string() == neme_title)
-            .copied()
-            .unwrap_or(crate::game::NEME_TITLES[0]);
+            .position(|t| *t == neme_title)
+        {
+            Some(i) => crate::game::NEME_TITLES[i],
+            None => crate::game::NEME_TITLES
+                .iter()
+                .find(|t| t.to_string() == neme_title)
+                .copied()
+                .unwrap_or(crate::game::NEME_TITLES[0]),
+        };
         m.neme = Some(Nemes {
             title,
             name: neme_name,
@@ -605,7 +647,7 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
         assert_eq!(parse_save(&bad).last_ts, 0);
     }
 
-    // v1.10.2 筑基择道：Lpath= 回环 / 旧档缺键 / 越界归 0
+    // v1.10.2 成行择道：Lpath= 回环 / 旧档缺键 / 越界归 0
     #[test]
     fn lpath_roundtrip_missing_and_out_of_range() {
         let mut m = Meta::default();
@@ -637,5 +679,83 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
             .collect::<Vec<_>>()
             .join("\n");
         assert_eq!(parse_save(&bad).life.as_ref().unwrap().path, 0);
+    }
+
+    // v1.12.0 P0 修复：道侣落盘——Lcomp= 回环 / 空串 None / 旧档缺键 None
+    #[test]
+    fn lcomp_roundtrip_missing_and_empty() {
+        let mut m = Meta::default();
+        let mut l = Life::default();
+        l.companion = Some("闻人未晚".to_string());
+        l.comp_fav = 35;
+        m.life = Some(l);
+        let text = save_text(&m);
+        assert!(text.contains("Lcomp=闻人未晚\n"));
+        let l2 = parse_save(&text).life.unwrap();
+        assert_eq!(l2.companion.as_deref(), Some("闻人未晚"));
+        assert_eq!(l2.comp_fav, 35);
+
+        // 空串 = None（显式无道侣态）
+        let none_text = text.replace("Lcomp=闻人未晚\n", "Lcomp=\n");
+        assert_eq!(parse_save(&none_text).life.unwrap().companion, None);
+
+        // 旧档缺 Lcomp → None（历史版本从未落盘道侣，旧档行为不变）
+        let old: String = text
+            .lines()
+            .filter(|l| !l.starts_with("Lcomp="))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(parse_save(&old).life.unwrap().companion, None);
+    }
+
+    // v1.12.0 换皮迁移：旧档宿敌名号按同下标映射新名（真档样例 neme=旧名号 萧绝尘 3）
+    #[test]
+    fn old_neme_title_maps_to_new() {
+        let m = parse_save(&format!(
+            "lives=1\nslain=0\nneme={} 萧绝尘 3\n",
+            OLD_NEME_TITLES[0]
+        ));
+        let n = m.neme.unwrap();
+        assert_eq!(n.title, crate::game::NEME_TITLES[0]);
+        assert_eq!(n.name, "萧绝尘"); // 随机名串原样保留
+        assert_eq!(n.realm, 3); // 档位（境界）不变
+
+        // 六名一一对应：末档旧名 → 封卷
+        let m1 = parse_save(&format!("neme={} 墨荒 14\n", OLD_NEME_TITLES[5]));
+        let n1 = m1.neme.unwrap();
+        assert_eq!(n1.title, "封卷");
+        assert_eq!(n1.realm, 14);
+
+        // 新名直读不再二次映射
+        let m2 = parse_save("neme=撕页 厉无咎 5\n");
+        let n2 = m2.neme.unwrap();
+        assert_eq!(n2.title, "撕页");
+        assert_eq!(n2.name, "厉无咎");
+        assert_eq!(n2.realm, 5);
+    }
+
+    // v1.12.0 留行批注：note= 回环 / 空串 None / 旧档缺键 None（零迁移）
+    #[test]
+    fn note_line_roundtrip_missing_and_empty() {
+        let mut m = Meta::default();
+        m.note_line = Some("23岁，与洛书遥缝作同页".to_string());
+        let text = save_text(&m);
+        assert!(text.contains("note=23岁，与洛书遥缝作同页\n"));
+        assert_eq!(
+            parse_save(&text).note_line.as_deref(),
+            Some("23岁，与洛书遥缝作同页")
+        );
+
+        // 空串 = None（解析容错；save_text 不会写出空值）
+        let none_text = text.replace("note=23岁，与洛书遥缝作同页\n", "note=\n");
+        assert_eq!(parse_save(&none_text).note_line, None);
+
+        // 旧档缺 note 键 → None（历史版本从未落盘批注，向后兼容零迁移）
+        let old: String = text
+            .lines()
+            .filter(|l| !l.starts_with("note="))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(parse_save(&old).note_line, None);
     }
 }

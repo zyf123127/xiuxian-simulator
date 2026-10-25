@@ -594,7 +594,7 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
             }
             if npc_row_vis(y + 52.0) {
                 txt(
-                    "模拟中「良缘天定」事件可选执子之手；遗泽亦可携道侣魂归现实。",
+                    "模拟中「同页天成」事件可选执子之手；遗泽亦可携道侣魂归现实。",
                     col,
                     y + 52.0, 14,
                     C_DIM,
@@ -632,7 +632,7 @@ fn draw_overview(g: &Game, l: &Life) {
         portrait_tier(l.realm),
     );
     txt(&realm_full_name(l), 170.0, 345.0, 20, col_realm(l.realm));
-    // v1.10.2 筑基择道：道途标签（终身标识；未择显示占位，选定后青色常显）
+    // v1.10.2 成行择道：道途标签（终身标识；未择显示占位，选定后青色常显）
     txt(
         &format!("道途：{}", path_name(l.path)),
         170.0,
@@ -707,6 +707,16 @@ fn draw_overview(g: &Game, l: &Life) {
         14,
         C_CYAN,
     );
+    // v1.12.0 留行批注：随身批注（结算屏大事记点走的一行；开卷消费后本行隐去）
+    if let Some(note) = &g.meta.note_line {
+        let disp: String = if note.chars().count() > 15 {
+            format!("{}…", note.chars().take(14).collect::<String>())
+        } else {
+            note.clone()
+        };
+        txt("批注：", 170.0, 596.0, 14, C_DIM);
+        txt(&disp, 220.0, 596.0, 14, C_GOLD);
+    }
 
     // ---------- 右区左列：四维 / 功法 / 法宝摘要 / 丹药 ----------
     let col1 = 460.0;

@@ -91,7 +91,7 @@ pub extern "C" fn xx_set_debug(on: i32) {
 
 fn window_conf() -> Conf {
     Conf {
-        window_title: "凡人修仙·轮回模拟器".to_owned(),
+        window_title: "凡人模拟·轮回模拟器".to_owned(),
         window_width: 1280,
         window_height: 720,
         // v1.6.0 B 清晰度：high_dpi 恒开。桌面端 miniquad 调 SetProcessDPIAware()，
@@ -488,7 +488,7 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
         // 覆盖 v1.7.1 道侣 AI 立绘 comp_ovr 渲染路径——有 comp_N.png 即见其像，无则丹药图标）
         if *shots == 30 && frame % 120 == 0 {
             if let Some(l) = g.life.as_mut() {
-                l.companion = Some("南宫婉".to_string());
+                l.companion = Some("闻人未晚".to_string());
                 l.comp_fav = 60;
             }
         }

@@ -9,7 +9,7 @@ PKG = r"E:\Rust_Game\GetFish_Game\fonts\package\files"
 OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
 os.makedirs(OUT_DIR, exist_ok=True)
 
-need = {0x25CF, 0x6E1F}  # ● 渟
+need = {0x25CF, 0x6E1F, 0x6D07, 0x8D4D}  # ● 渟 洇 赍（v1.12.0 书道换皮补字）
 slices = []
 for p in sorted(glob.glob(os.path.join(PKG, "*.woff2"))):
     if not need:
@@ -39,5 +39,5 @@ merged.save(out)
 print(f"written {out} ({os.path.getsize(out)//1024} KB)")
 
 cm = TTFont(out).getBestCmap()
-for ch in "※→①②④●渟":
+for ch in "※→①②④●渟洇赍":
     print(f"  {ch}: {'OK' if ord(ch) in cm else 'MISSING'}")

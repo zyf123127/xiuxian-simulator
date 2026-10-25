@@ -426,7 +426,7 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
     let t = g.time;
     let glow = 0.75 + 0.25 * (t * 1.2).sin();
     txt_c(
-        "凡 人 修 仙",
+        "凡 人 模 拟",
         V_W * 0.5,
         120.0,
         60,
@@ -434,7 +434,7 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
     );
     txt_c("· 轮 回 模 拟 器 ·", V_W * 0.5, 190.0, 28, C_GOLD);
     txt_c(
-        "轮回镜中演一世，造化归身证长生",
+        "天道写你的书，写了十万年，写废了十万稿——这一稿，不肯退",
         V_W * 0.5,
         240.0,
         18,
@@ -996,7 +996,7 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
     txt_c("轮 回 镜 · 天 机 演 演", V_W * 0.5, 70.0, 28, C_GOLD);
     let max = 1 + g.meta.upg[5].min(1) as usize;
     txt_c(
-        &format!("觉醒天赋（{} 选 {}）——仅此一梦生效", g.draft.len(), max),
+        &format!("天赍 {} 选 {}——仅此一梦生效", g.draft.len(), max),
         V_W * 0.5,
         108.0, 16,
         C_DIM,
@@ -1017,6 +1017,16 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
         16,
         C_GREEN,
     );
+    // v1.12.0 留行批注：随身批注提示（开卷浮现后清空；置于落笔按钮下方空白带，避开卡片区）
+    if let Some(note) = &g.meta.note_line {
+        txt_c(
+            &format!("朱批随身：「{}」——开卷自现，本稿气运+2", note),
+            V_W * 0.5,
+            604.0,
+            14,
+            C_GOLD,
+        );
+    }
     // 卡片
     let n = g.draft.len();
     let cw = 280.0f32;
@@ -1103,7 +1113,7 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
         540.0,
         280.0,
         52.0,
-        "沉 入 轮 回 镜",
+        "落 笔",
         Some("开始此世模拟"),
         ready,
     ) {
@@ -1202,7 +1212,7 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
             ll.color,
         );
     }
-    // 渡劫演出
+    // 问笔演出
     if tribbing {
         let t = s.trib.as_ref().unwrap();
         // 多层雷云（远紫近黑）——v1.9.25 根因3：18 个 draw_circle → 9 个预烘焙云团
@@ -1334,7 +1344,7 @@ pub fn draw_modal_card(g: &mut Game) {
                 card.opts
                     .iter()
                     .map(|(l, e)| {
-                        // v1.10.2 筑基择道：道途卡副标统一为改道禁示（乘区效果见卡面总述；
+                        // v1.10.2 成行择道：道途卡副标统一为改道禁示（乘区效果见卡面总述；
                         // eff_desc 无法表达 ×1.35 之类静态乘区）
                         let d = if card.kind == crate::game::CardKind::Path {
                             "择定终身，不可改道".to_string()
@@ -1387,7 +1397,7 @@ pub fn draw_modal_card(g: &mut Game) {
     if let Some(i) = picked {
         g.play(crate::sounds::Which::Click);
 
-        // v1.10.2 筑基择道：道途卡抉择走 choose_path（rmodal_npc 为 None，
+        // v1.10.2 成行择道：道途卡抉择走 choose_path（rmodal_npc 为 None，
         // 不得落入 choose_roption——那会因 npc None 静默 return 使卡挂死）
         let is_path = g
             .rmodal
@@ -1414,7 +1424,7 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     };
     // v1.9.25 卡顿修复（根因2）：上行为借用替代原 g.sim_result.clone()——本函数对 sr
     // 只读，选项/收尾按钮的 &mut 路径上 sr 已不再被使用（NLL 借用自然终结），逐帧深克隆消除
-    txt_c("一 世 落 幕 · 造 化 归 身", V_W * 0.5, 56.0, 28, C_GOLD);
+    txt_c("草 稿 退 回", V_W * 0.5, 56.0, 28, C_GOLD);
     // 左：此生摘要
     panel_card(60.0, 84.0, 420.0, 480.0);
     txt("此 生", 84.0, 116.0, 20, C_GOLD);
@@ -1443,10 +1453,40 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
         296.0, 16,
         C_GOLD,
     );
-    txt("—— 大事记 ——", 84.0, 336.0, 14, C_DIM);
+    // v1.12.0 留行批注：大事记点一行带走（下一稿开卷浮现后清空；定稿 §5.2 留行）。
+    // 先收成 owned 再进点击循环（sr 为 &g.sim_result 借用，&mut g 须待其终结——照打稿屏 draft.clone() 先例）
+    txt("—— 大事记 · 点一行留作朱批 ——", 84.0, 336.0, 14, C_DIM);
+    let note_lines: Vec<String> = sr.highlights.iter().rev().take(7).cloned().collect();
+    let (nmx, nmy) = crate::cam::mouse();
     let mut y = 360.0;
-    for h in sr.highlights.iter().rev().take(7) {
-        wrap_draw(h, 84.0, y, 14, 372.0, 20.0, C_TEXT);
+    for h in &note_lines {
+        let noted = g.meta.note_line.as_deref() == Some(h.as_str());
+        let hot = nmx >= 84.0 && nmx <= 456.0 && nmy >= y - 4.0 && nmy <= y + 20.0;
+        if noted {
+            txt("朱", 84.0, y, 14, C_RED);
+        }
+        wrap_draw(
+            h,
+            84.0 + if noted { 18.0 } else { 0.0 },
+            y,
+            14,
+            372.0,
+            20.0,
+            if noted {
+                C_RED
+            } else if hot {
+                C_GOLD
+            } else {
+                C_TEXT
+            },
+        );
+        // 热点点击照同行继承卡先例（cam::mouse + 左键按下即拾取；重点另一行即改批）
+        if hot && is_mouse_button_pressed(MouseButton::Left) {
+            g.meta.note_line = Some(h.clone());
+            g.toast("朱批已留——下一稿开卷自现", C_GOLD);
+            g.play(crate::sounds::Which::Page);
+            g.sync_save();
+        }
         y += 26.0;
         if y > 540.0 {
             break;
@@ -1457,13 +1497,19 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     let _n = g.inherit_opts.len();
     let left = g.inherit_max().saturating_sub(g.inherit_picked);
     txt(
-        &format!("镜灵低语：还可择 {} 项造化", left),
+        "退稿前，留一样东西。反正下一稿的你，也不知道你是谁。",
         524.0,
         116.0,
         20,
         C_PURPLE,
     );
-    txt("所选将随神魂带回现实", 524.0, 142.0, 14, C_DIM);
+    txt(
+        &format!("还可择 {} 项 · 所选将随神魂带回现实", left),
+        524.0,
+        142.0,
+        14,
+        C_DIM,
+    );
     // v1.6.0 B：行高 62 / 步进 70（至多 5 行，卡底 564 内收齐）
     for (i, &idx) in g.inherit_opts.iter().enumerate() {
         let card = &INHERITS[idx];
@@ -1511,7 +1557,7 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
     draw_bg(art);
     draw_motes(g);
     panel_card(210.0, 70.0, 860.0, 550.0);
-    txt_c("一 世 归 尘", V_W * 0.5, 112.0, 28, C_GOLD);
+    txt_c("退 稿 结 算", V_W * 0.5, 112.0, 28, C_GOLD);
     if let Some(s) = &g.settle {
         let hh = wrap_draw(&s.cause, 250.0, 160.0, 18, 780.0, 27.0, C_TEXT);
         let mut y = 160.0 + hh + 16.0;
@@ -1540,7 +1586,7 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
         556.0,
         300.0,
         50.0,
-        "轮 回 再 起",
+        "再 打 一 稿",
         Some("道韵烙印保留"),
         true,
     ) {
@@ -1683,7 +1729,7 @@ fn draw_shop(g: &mut Game) {
             }
         }
         txt(
-            "（筑基丹/破境丹/护神丹在突破与渡劫时自动生效）",
+            "（成行丹/破境丹/护神丹在突破与问笔时自动生效）",
             180.0,
             636.0,
             14,
@@ -2156,7 +2202,7 @@ fn draw_upgrade_panel(g: &mut Game) {
     }
     // 页脚（原头部说明收编：motto 归位 + 轮回总计）
     txt(
-        "道韵不灭，烙印永随——纵使身死道消，来世仍享此泽。",
+        "道韵：上一稿的你，留给这一稿的批注——稿退人亡，批注仍在。",
         230.0,
         592.0,
         14,
@@ -2205,7 +2251,7 @@ fn draw_help_panel(g: &mut Game) {
         "【轮回镜】耗 1 枚模拟点数，推演“可能的你”的一生，直至死亡。",
         "【模拟前】3 选 1 天赋（仅此一梦生效）；模拟中自动修炼、游历、闭关、突破。",
         "【模拟毕】随机给出数项“造化”，选一项带回现实：修为、功法、法宝、丹药……",
-        "【现实】闭关涨修为（寿元-1年）；修为满可突破；清源洞府闭关+25%，天雷峰渡劫更稳。",
+        "【现实】闭关涨修为（寿元-1年）；修为满可突破；清源洞府闭关+25%，天雷峰问笔更稳。",
         "【坊市】灵石购丹药，亦可兑换模拟点数（境界越高越贵）。",
         "【宿敌】血仇之敌每世模拟中皆会遭遇——实力不足则被斩，可逃可死。",
         "【斩敌】在模拟中反杀宿敌（领悟其招）或现实寻仇，皆可得灵石、点数与大笔道韵。",

@@ -15,7 +15,7 @@ pub struct Art {
     pub bg: Texture2D,
     // v1.6.0 C：map_bg 移除固定字段——改 map_bg_for(region, seed) 按主题参数化 + 缓存
     pub map_icons: [Texture2D; 6],
-    pub portraits: [Texture2D; 4], // v1.5.0：立绘四档（0凡人 1道基 2紫府 3真仙），portrait = portraits[0]
+    pub portraits: [Texture2D; 4], // v1.5.0：立绘四档（0白丁 1道基 2紫府 3墨仙），portrait = portraits[0]
     // v1.7.0 AI 立绘覆盖：assets/portraits/ 下有对应 PNG 则用之，缺失回退像素立绘
     // （portrait_0..3=境界四档；v1.8.0 npc_ovr 扩四：0玄诚长老 1胡掌柜 2宁清霜 3醉道人。wasm 恒回退）
     // v1.9.24 懒加载：16 张覆盖图解码后约 7MB RGBA（桌面全量版更大），启动全量
@@ -24,7 +24,7 @@ pub struct Art {
     pub npc_ovr: [LazyTex; 4],
     // v1.7.1 女道侣立绘：comp_0..9 与 COMPANION_NAMES 顺序一一对应（缺失回退丹药图标）
     pub comp_ovr: [LazyTex; 10],
-    // v1.9.25 卡顿修复（根因3）：渡劫暗角预烘焙——原 4 个半透明矩形逐帧叠加过绘，
+    // v1.9.25 卡顿修复（根因3）：问笔暗角预烘焙——原 4 个半透明矩形逐帧叠加过绘，
     // 烘焙为 1 张 320×180 纹理拉伸全屏（角落双叠 α=1-(1-0.35)² 精确保真），1 次绘制
     pub trib_vignette: Texture2D,
     // v1.9.25 卡顿修复（根因3）：雷云团预烘焙（大 r58+小 r40 双圆 over 合成）——
@@ -229,7 +229,7 @@ pub fn build_art() -> Art {
     a
 }
 
-// v1.9.25 卡顿修复（根因3）：渡劫四周暗角。原 4 个 α0.35 矩形（上/下 90px 带 +
+// v1.9.25 卡顿修复（根因3）：问笔四周暗角。原 4 个 α0.35 矩形（上/下 90px 带 +
 // 左/右 110px 带）逐帧叠加，角落被两条带同时覆盖时 macroquad 顺序混合得
 // 1-(1-0.35)²=0.5775——烘焙纹理按每像素覆盖带数精确复现该合成，视觉逐像素等价。
 // 320×180（4× 降采样）+ Linear 过滤：带缘约 4px 软化，雷劫演出中不可辨。
@@ -341,7 +341,7 @@ fn build_cloud() -> Texture2D {
     tex
 }
 
-// v1.5.0 立绘四档：0凡人 1道基（金冠）2紫府（金冠+霜鬓+袖口金纹）3真仙（金冠+白发披肩）
+// v1.5.0 立绘四档：0白丁 1道基（金冠）2紫府（金冠+霜鬓+袖口金纹）3墨仙（金冠+白发披肩）
 fn build_portrait(tier: usize) -> Texture2D {
     let tier = tier.min(3);
     let mut g = PixGrid::new(32, 36);
@@ -353,7 +353,7 @@ fn build_portrait(tier: usize) -> Texture2D {
     let hair = rgba(30, 26, 38, 255);
     let gold = rgba(222, 186, 110, 255);
     let frost = rgba(226, 230, 238, 255);
-    // 发髻 + 头（真仙档须发皆白）
+    // 发髻 + 头（墨仙档须发皆白）
     let hair_c = if tier >= 3 { frost } else { hair };
     g.fill_ellipse(16, 5, 2, 2, hair_c);
     g.fill_ellipse(16, 9, 4, 4, hair_c);
@@ -852,7 +852,7 @@ pub fn draw_cultivator(
         1.5,
         Color::new(aura.r, aura.g, aura.b, 0.28 * pulse),
     );
-    // 真仙档：身后金色仙环
+    // 墨仙档：身后金色仙环
     if tier >= 3 {
         draw_circle_lines(
             cx,

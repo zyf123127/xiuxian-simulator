@@ -193,7 +193,7 @@ impl Eff {
                 9 => "拔剑试炼",
                 10 => "魔窟探宝",
                 11 => "护送驰援",
-                13 => "立即渡劫",
+                13 => "立即问笔",
                 14 => "闭关备劫",
                 15 => "立即破境",
                 16 => "蛰伏蓄势",
@@ -214,7 +214,7 @@ impl Eff {
 #[derive(Clone, Copy, PartialEq)]
 pub enum CardKind {
     Npc,  // v1.8.0 D2 现实好感事件：choose_roption 抉择（rmodal_npc 配对）
-    Path, // v1.10.2 筑基择道：choose_path 抉择（三途分流；副标由 draw_modal_card 特判）
+    Path, // v1.10.2 成行择道：choose_path 抉择（三途分流；副标由 draw_modal_card 特判）
 }
 
 pub struct EventCard {
@@ -318,7 +318,7 @@ pub struct Life {
 
     pub weather: u8, // 天气 0..=4（WEATHERS 索引，随推岁演化；v1.5.0）
 
-    pub path: u8, // v1.10.2 筑基择道：道途 0未择/1剑修/2气修/3丹修（存档键 Lpath=，旧档缺键 0；选定终身不改，模拟侧恒 0）
+    pub path: u8, // v1.10.2 成行择道：道途 0未择/1剑修/2气修/3丹修（存档键 Lpath=，旧档缺键 0；选定终身不改，模拟侧恒 0）
 }
 
 impl Default for Life {
@@ -403,7 +403,7 @@ impl Default for Life {
     }
 }
 
-// v1.10.2 筑基择道：道途常量与名号（三途分流，分别挂钩战力/周天吐纳/坊市丹药与灵田）
+// v1.10.2 成行择道：道途常量与名号（三途分流，分别挂钩战力/周天吐纳/坊市丹药与灵田）
 pub const PATH_NONE: u8 = 0;
 pub const PATH_SWORD: u8 = 1; // 剑修：战力 ×1.35
 pub const PATH_QI: u8 = 2;    // 气修：每载修为 ×1.25、破境率 +0.06
@@ -475,6 +475,8 @@ pub struct Meta {
 
     pub neme: Option<Nemes>,
 
+    pub note_line: Option<String>, // v1.12.0 留行批注：结算屏大事记点走的一行（note= 键；开卷消费即清）
+
     pub music: bool,
 
     pub sfx: bool,
@@ -535,6 +537,8 @@ impl Default for Meta {
             companion_lives: 0,
 
             neme: None,
+
+            note_line: None,
 
             music: true,
 
@@ -802,6 +806,8 @@ pub struct Game {
 
     pub offline_card: Option<OfflineReport>, // v1.10.2 离线闭关：出关结算卡（独占输入；不进存档）
 
+    pub blank_used: bool, // v1.12.0 空白行：每稿至多一次门闩（瞬态，不进存档；launch_sim 清零）
+
     pub time: f32,
 
     pub sfx_ok: Option<crate::sounds::Which>,
@@ -889,7 +895,7 @@ pub fn realm_full_name(l: &Life) -> String {
     let rd = &REALMS[l.realm];
 
     if l.realm == 0 {
-        "凡人之躯".to_string()
+        "白丁之躯".to_string()
     } else {
         format!(
             "{}·{}",
@@ -1029,7 +1035,7 @@ pub fn cult_rate(l: &Life, meta: &Meta) -> f64 {
         r *= 0.5;
     }
 
-    // v1.10.2 筑基择道：气修（path=2）每载修为 ×1.25（乘区尾接）
+    // v1.10.2 成行择道：气修（path=2）每载修为 ×1.25（乘区尾接）
     if l.path == PATH_QI {
         r *= 1.25;
     }
@@ -1057,7 +1063,7 @@ pub fn power(l: &Life) -> f64 {
             };
     }
 
-    // v1.10.2 筑基择道：剑修（path=1）战力 ×1.35（乘区尾接；模拟侧 path 恒 0 不受益）
+    // v1.10.2 成行择道：剑修（path=1）战力 ×1.35（乘区尾接；模拟侧 path 恒 0 不受益）
     if l.path == PATH_SWORD {
         p *= 1.35;
     }
@@ -1082,7 +1088,7 @@ pub fn big_break_p(l: &Life, target: usize) -> f32 {
         p += 0.25;
     }
 
-    // v1.10.2 筑基择道：气修（path=2）破境率 +0.06（加在 0.05..0.95 钳制之前）
+    // v1.10.2 成行择道：气修（path=2）破境率 +0.06（加在 0.05..0.95 钳制之前）
     if l.path == PATH_QI {
         p += 0.06;
     }
@@ -1213,6 +1219,8 @@ impl Game {
             settle: None,
 
             offline_card: None,
+
+            blank_used: false,
 
             time: 0.0,
 
@@ -1402,17 +1410,17 @@ impl Game {
         );
 
         self.log(
-            "十六岁这年，你于清源洞府侧的破败道观中醒来，识海中多出一座古朴的【轮回镜】。",
+            "雨夜。乱葬岗。你从尸堆里爬出来，手里攥着一枚方印——印身无字，只有层层叠叠被划掉的痕迹。",
             C_GOLD,
         );
 
         self.log(
-            "镜灵低语：\"以点数演一世，死而不亡；取其造化，归汝一身。\"",
+            "识海里有个少年人的嗓子，累得不像少年人：\"先说好——你的名字是错的。天写错了。\"",
             C_CYAN,
         );
 
         self.log(
-            format!("此外，你有一桩血仇未报——{}，此獠不除，道心难安。", nm),
+            format!("此外，血仇未销——{}。它删过你的字、批过你的行；此吏不除，书不成书。", nm),
             C_RED,
         );
 
@@ -1468,7 +1476,7 @@ impl Game {
         self.log("轮回镜微亮，前缘未了。", C_TEXT);
         // v1.10.2 离线闭关：恢复即结算（收益先入账内存，落盘交收功/去抖/pagehide）
         self.offline_settle();
-        // v1.10.2 筑基择道：旧档 realm≥2 且未择道 → 补弹道途卡（offline_card 若在弹，
+        // v1.10.2 成行择道：旧档 realm≥2 且未择道 → 补弹道途卡（offline_card 若在弹，
         // 其独占分支先行，收功后道途卡经 rmodal 自然接棒）
         if self
             .life
@@ -1544,7 +1552,7 @@ impl Game {
         }
     }
 
-    // ================= v1.10.2 筑基择道：三途分流 =================
+    // ================= v1.10.2 成行择道：三途分流 =================
 
     // 弹道途卡（rmodal 独占模态；neme 卡/事件卡不可同帧抢输入——rmodal 空时才弹）。
     // 三钮副标由 draw_modal_card 的 CardKind::Path 分支统一为「择定终身，不可改道」。
@@ -1554,8 +1562,8 @@ impl Game {
         }
         self.rmodal = Some(EventCard {
             kind: CardKind::Path,
-            title: "筑基择道 · 三途分流".into(),
-            text: "筑基之上道途分三，一经择定终身不改（模拟推演不携道途）：剑修战力×1.35；气修每载修为×1.25、破境率+6%；丹修服丹效果×1.35、灵田岁入×1.6。你将何以证道？".into(),
+            title: "成行择道 · 三途分流".into(),
+            text: "成行之上道途分三，一经择定终身不改（模拟推演不携道途）：剑修战力×1.35；气修每载修为×1.25、破境率+6%；丹修服丹效果×1.35、灵田岁入×1.6。你将何以证道？".into(),
             opts: vec![
                 ("剑修 · 战力 ×1.35".into(), Eff::new()),
                 ("气修 · 修为 ×1.25 破境 +6%".into(), Eff::new()),
@@ -1565,7 +1573,7 @@ impl Game {
         self.rmodal_npc = None; // 道途卡不归属 NPC
     }
 
-    // 道途抉择：选定终身、无改道入口；未到筑基（realm<2）或已择者卫语句拒绝
+    // 道途抉择：选定终身、无改道入口；未到成行（realm<2）或已择者卫语句拒绝
     pub fn choose_path(&mut self, p: u8) {
         self.rmodal = None;
         self.rmodal_npc = None;
@@ -1581,7 +1589,7 @@ impl Game {
         l.path = p;
         let name = path_name(p);
         self.log(
-            format!("筑基关口，你择定道途——{}。自此终身不改。", name),
+            format!("成行关口，你择定道途——{}。自此终身不改。", name),
             C_GOLD,
         );
         self.play(crate::sounds::Which::Ascend);
@@ -1735,9 +1743,20 @@ impl Game {
 
         s.trib = None;
 
-        // v1.10.2 筑基择道：道途不进模拟——推演是另一条人生，择道只属现实主角；
+        // v1.10.2 成行择道：道途不进模拟——推演是另一条人生，择道只属现实主角；
         // 不剥离会把五处乘区全部带进模拟侧、破坏推演对照（单测 sim_does_not_inherit_path）
         s.path = 0;
+
+        // v1.12.0 留行批注：上一稿的你点走的一行，开卷浮现（take 即消耗清空）；
+        // 气运+2 仅此一梦——只微调善缘权重与心魔检定两处 luck 消费
+        let note_line = self.meta.note_line.take();
+
+        if note_line.is_some() {
+            s.luck = (s.luck + 2.0).min(100.0);
+        }
+
+        // v1.12.0 空白行：每稿至多一次门闩随开稿清零
+        self.blank_used = false;
 
         self.sim = Some(s);
 
@@ -1752,6 +1771,11 @@ impl Game {
         self.scene = Scene::Sim;
 
         let names: Vec<&str> = self.picked.iter().map(|&t| TALENTS[t].name).collect();
+
+        // v1.12.0 留行批注：开卷先浮现上一稿的批注，再入镜像
+        if let Some(note) = &note_line {
+            self.slog(format!("【批注】上一稿的你：「{}」", note), C_GOLD);
+        }
 
         self.slog(
             format!(
@@ -2116,7 +2140,7 @@ impl Game {
                     s.natural_end = true;
                 }
 
-                self.sim_die("寿元耗尽，你于静室中含笑坐化，一场大梦归真。");
+                self.sim_die("纸寿尽了。这本书比你自己先老——你含笑搁笔，一场大梦归真。");
 
                 return;
             }
@@ -2250,13 +2274,13 @@ impl Game {
 
                 e1.good = false;
 
-                card.opts.push(("立即渡劫！".into(), e1));
+                card.opts.push(("立即问笔！".into(), e1));
 
                 let mut e2 = Eff::new();
 
                 e2.special = 14;
 
-                e2.msg = vec!["你转入闭关，默运玄功迎劫（每载存活+4%，三载后自动渡劫）".into()];
+                e2.msg = vec!["你转入闭关，默运玄功迎劫（每载存活+4%，三载后自动问笔）".into()];
 
                 card.opts.push(("闭关准备".into(), e2));
             } else {
@@ -2468,7 +2492,7 @@ impl Game {
                 s.natural_end = true;
             }
 
-            self.sim_die("寿元耗尽，你于静室中含笑坐化，一场大梦归真。");
+            self.sim_die("纸寿尽了。这本书比你自己先老——你含笑搁笔，一场大梦归真。");
 
             return;
         }
@@ -2601,7 +2625,7 @@ impl Game {
         let nm = self.meta.neme.as_ref().unwrap().full();
 
         self.log(
-            format!("宿敌虽死，其背后之势涌动——新的强敌浮出水面：{}。", nm),
+            format!("【文狱更换】{} 已按册候查——删你的字，从不假手他人。", nm),
             C_RED,
         );
 
@@ -2682,7 +2706,8 @@ impl Game {
         for &(id, w, mr, good) in EVENTS.iter() {
             let mut ww = w as f32;
 
-            if (id == 6 && sect) || (id == 9 && lingmai) {
+            // v1.12.0 空白行：每稿至多一次——门闩置位后权重归零（照 sect/lingmai 先例）
+            if (id == 6 && sect) || (id == 9 && lingmai) || (id == 30 && self.blank_used) {
                 ww = 0.0;
             }
 
@@ -2744,22 +2769,22 @@ impl Game {
 
         match id {
             28 => {
-                card.title = "良缘天定".into();
+                card.title = "同页天成".into();
                 let cn = COMPANION_NAMES[gen_range(0, COMPANION_NAMES.len())];
                 card.text = format!(
-                    "同门师妹{}于月下递来一炉亲手所炼的凝神丹：\"道途漫漫，若不弃……愿与师兄结伴同行。\"",
+                    "晒书日，{}于书摊间递来半页残稿：\"两页相贴，缝作同页——可愿？\"",
                     cn
                 );
                 let mut e1 = Eff::new();
                 e1.special = 17;
                 e1.msg = vec![format!(
-                    "你与{}结为道侣！修炼速度+20%，心魔有抚，或得赠礼。",
+                    "你与{}缝作同页！修炼速度+20%，心魔有抚，或得赠礼。",
                     cn
                 )];
-                card.opts.push(("执子之手".into(), e1));
+                card.opts.push(("认下这页".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 5.0;
-                e2.msg = vec!["你婉拒道：\"大道未成，何以家为。\"道心+5".into()];
+                e2.msg = vec!["你婉拒道：\"一页未成，何以同页。\"道心+5".into()];
                 card.opts.push(("专注于道".into(), e2));
             }
             29 => {
@@ -2774,6 +2799,44 @@ impl Game {
                 e2.qi_pct = 0.05;
                 e2.msg = vec!["你于台下观摩他人过招，亦有所得。修为+5%".into()];
                 card.opts.push(("台下观摩".into(), e2));
+            }
+
+            30 => {
+                // v1.12.0 空白行：天曹没写的一年——每稿至多一次（sim_event 权重归零，
+                // launch_sim 清零门闩）；三选走 EventCard→choose_option→apply_eff 既有链
+                self.blank_used = true;
+
+                card.title = "空白行".into();
+
+                card.text =
+                    "翻到这一页——天曹漏写了，整页空白。你握着笔，听见自己的心跳：这一年，你自己写。"
+                        .into();
+
+                let mut e1 = Eff::new();
+
+                e1.qi_pct = 0.20;
+
+                e1.msg = vec!["你把这页写成修行——字字入纸，修为+20%。".into()];
+
+                card.opts.push(("留墨 · 修为+20%".into(), e1));
+
+                let mut e2 = Eff::new();
+
+                e2.life_y = 6.0;
+
+                e2.msg = vec!["你把这页留给岁月——不急，一笔一画慢慢写，寿元+6。".into()];
+
+                card.opts.push(("留纸 · 寿元+6".into(), e2));
+
+                let mut e3 = Eff::new();
+
+                e3.luck = 2.0;
+
+                e3.special = 19;
+
+                e3.msg = vec!["你在这页写下自己的一行——笔落生根，气运+2。".into()];
+
+                card.opts.push(("留行 · 气运+2".into(), e3));
             }
 
             0 => {
@@ -3340,7 +3403,7 @@ impl Game {
     fn apply_eff(&mut self, e: &Eff) {
         match e.special {
             13 => {
-                // 立即渡劫（玩家抉择）
+                // 立即问笔（玩家抉择）
                 let (target, acc) = {
                     let s = self.sim.as_ref().unwrap();
                     (10, s.pending_break.as_ref().map(|(_, a)| *a).unwrap_or(0.0))
@@ -3348,7 +3411,7 @@ impl Game {
                 self.sim_do_break(target, acc);
             }
             14 => {
-                // 闭关准备三载后自动渡劫
+                // 闭关准备三载后自动问笔
                 let s = self.sim.as_mut().unwrap();
                 s.pending_break = Some((10, 0.12));
                 self.slog("你转入闭关，默运玄功静候天劫。", C_DIM);
@@ -3386,7 +3449,7 @@ impl Game {
                     // 换伴侣保留好感：好感挂「玩家—NPC 体系」而非具体人名。
                     s.comp_fav = s.comp_fav.max(COMPANION_BOND_FAV);
                     s.highlights
-                        .push(format!("{}岁，与{}结为道侣", s.age as i32, cn));
+                        .push(format!("{}岁，与{}缝作同页", s.age as i32, cn));
                     first
                 };
                 if first {
@@ -3398,7 +3461,7 @@ impl Game {
                 }
                 self.slog(
                     format!(
-                        "你与{}于月下结为道侣！修炼速度+{:.0}%，心魔有抚。",
+                        "你与{}缝作同页！修炼速度+{:.0}%，心魔有抚。",
                         cn,
                         (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0
                     ),
@@ -3445,6 +3508,15 @@ impl Game {
                     }
                     self.check_ach(23);
                 }
+            }
+
+            19 => {
+                // v1.12.0 空白行·留行：在大事记亲手写下一行。不 return——落入通用乘区
+                // （气运+2 照常生效），照既有 special 臂只做旁路效果的口径
+                let s = self.sim.as_mut().unwrap();
+
+                s.highlights
+                    .push(format!("{}岁，空白行上，你亲手写下一行", s.age as i32));
             }
 
             1 => {
@@ -3635,9 +3707,9 @@ impl Game {
                         s.equipped.push(3); // v1.5.0：模拟获得即装备（守则见文件头）
 
                         s.highlights
-                            .push(format!("{}岁，古剑冢得玄天斩灵剑", s.age as i32));
+                            .push(format!("{}岁，古剑冢得墨骨伞", s.age as i32));
 
-                        self.slog("古剑认主——【玄天斩灵剑】出鞘！十万剑齐鸣相送！", C_GOLD);
+                        self.slog("冢中遗物认主——【墨骨伞】撑开，遮尽十万剑气！", C_GOLD);
                     } else {
                         s.power_buff += 0.15;
 
@@ -3907,14 +3979,17 @@ impl Game {
             }
 
             F::Dead => {
-                self.sim_die(&format!("你伤重不治，陨落于{}之爪。", name));
+                self.sim_die(&format!(
+                    "你伤重不治，成了{}爪下的一滩墨渍——这一行，就此断在这里。",
+                    name
+                ));
 
                 false
             }
         }
     }
 
-    // ================= 模拟：渡劫 =================
+    // ================= 模拟：问笔 =================
 
     fn trib_tick(&mut self, dt: f32) {
         let mut strike = false;
@@ -4021,7 +4096,7 @@ impl Game {
                 self.slog(format!("第{}重雷劫轰落——你咬牙扛住了！", w), C_CYAN);
             }
         } else {
-            self.sim_die("天威之下，你形神俱灭，化作漫天流萤。渡劫失败。");
+            self.sim_die("天道按语：此稿平平。退。——九问未过，形神俱灭，化作漫天流萤。");
         }
     }
 
@@ -4335,7 +4410,7 @@ impl Game {
         }
 
         if died {
-            self.real_die("寿元耗尽，你于榻上安然长逝。轮回镜微光一闪，一切归零——唯道韵永存。");
+            self.real_die("寿元耗尽，你在自家榻上安然合卷——名字终被写对了一次。唯道韵永存。");
 
             return 0.0;
         }
@@ -4541,7 +4616,7 @@ impl Game {
             weather_changed = next != l.weather.min(4) as usize;
             l.weather = next as u8;
             // 灵田：按层级产出，收成随天气与所在地起伏
-            // v1.10.2 筑基择道：丹修（path=3）灵田岁入 ×1.6（静态乘区，随唯一推岁口）
+            // v1.10.2 成行择道：丹修（path=3）灵田岁入 ×1.6（静态乘区，随唯一推岁口）
             let path_pill = if l.path == PATH_PILL { 1.6 } else { 1.0 };
             let lv = self.meta.dongfu[1].clamp(0, 3) as usize;
             let y = (LINGTIAN_YIELD[lv.min(3)] as f64
@@ -4727,7 +4802,7 @@ impl Game {
             }
 
             if target == 10 {
-                    // 现实渡劫：九重雷劫一次性结算（轮回镜护持，失败重伤不身死）
+                    // 现实问笔：九重雷劫一次性结算（轮回镜护持，失败重伤不身死）
                     let mut report: Vec<String> = Vec::new();
                     let (pw, dead_at) = {
                         let l = self.life.as_ref().unwrap();
@@ -4742,7 +4817,7 @@ impl Game {
                         }
                         if l.loc == NODE_PEAK {
                             base += PEAK_TRIB_BONUS;
-                            report.push("天雷峰渡劫台：每重雷劫存活+2%。".to_string());
+                            report.push("天雷峰问笔台：每重雷劫存活+2%。".to_string());
                         }
                         let mut pw = 0u8;
                         let mut dead_at = None;
@@ -4806,7 +4881,7 @@ impl Game {
                         l.injured = 10;
                         l.qi = (l.qi * 0.4).max(0.0);
                         self.log(format!(
-                        "渡劫在第{}重雷劫处功亏一篑！轮回镜金光护住你的元神——身受重伤，但无性命之忧。重整旗鼓，来日再战！",
+                        "问笔至第{}重雷劫功亏一篑！轮回镜金光护住你的元神——身受重伤，但无性命之忧。重整旗鼓，来日再战！",
                         w
                     ), C_RED);
                         self.play(crate::sounds::Which::BreakFail);
@@ -4820,7 +4895,7 @@ impl Game {
 
                 big_break_p(l, target)
             };
-            // v1.8.0 D1：大师姐「剑意点拨」——仅现实跨境破境加成（同境分支、渡劫分支不加；
+            // v1.8.0 D1：大师姐「剑意点拨」——仅现实跨境破境加成（同境分支、问笔分支不加；
             // big_break_p 函数体不动，模拟侧不受影响）
             let p = (p + crate::npc::senior_break_add(self.meta.npc_fav[crate::npc::NPC_SENIOR]))
                 .clamp(0.05, 0.95);
@@ -4883,6 +4958,13 @@ impl Game {
                 self.play(crate::sounds::Which::Ascend);
 
                 self.check_ach_all();
+
+                // v1.12.0 P0 修复：跨境破入成行（realm 2）成功当帧弹道途卡——此前
+                // open_path_card 仅 resume_life 旧档补弹，会话内首次破境后三途五处
+                // 乘区全程空转；rmodal 被占时 open_path_card 自带 no-op，无需排队
+                if target == 2 {
+                    self.open_path_card();
+                }
             } else {
                 self.log(
                     format!(
@@ -5210,7 +5292,7 @@ impl Game {
 
         let boost = self.life.as_ref().map(|l| {
             let mut b = teff(l).pill_mult.max(1.0);
-            // v1.10.2 筑基择道：丹修（path=3）服丹效果 ×1.35（单点；模拟侧 teff 路径 path 恒 0）
+            // v1.10.2 成行择道：丹修（path=3）服丹效果 ×1.35（单点；模拟侧 teff 路径 path 恒 0）
             if l.path == PATH_PILL {
                 b *= 1.35;
             }
@@ -5608,12 +5690,12 @@ impl Game {
 }
 
 pub const NEME_TITLES: [&str; 6] = [
-    "血手人屠",
-    "血魔老祖",
-    "幽冥鬼帝",
-    "噬天魔尊",
-    "灭世魔主",
-    "太上魔祖",
+    "断章",
+    "撕页",
+    "朱批",
+    "删骨",
+    "夺砚",
+    "封卷",
 ];
 
 pub fn rand_name() -> String {
@@ -5791,6 +5873,8 @@ mod revenge_tests {
 
             offline_card: None,
 
+            blank_used: false,
+
             time: 0.0,
 
             sfx_ok: None,
@@ -5816,7 +5900,7 @@ mod revenge_tests {
     // ① r→0：胜率归 0（原 clamp 下限 0.05 = 弱者恒 5% 保底，连点 N 次必成之根）
     #[test]
     fn underdog_rate_floors_at_zero() {
-        // 凡人（战力 5.0×1.2）对道祖宿敌（1.5e10×1.25）：比率 ~3e-10，胜率应近 0 而非 5%
+        // 白丁（战力 5.0×1.2）对天笔宿敌（1.5e10×1.25）：比率 ~3e-10，胜率应近 0 而非 5%
         let g = game_with(Life::default(), Some(neme(14)));
 
         assert!(g.can_revenge());
@@ -5979,7 +6063,7 @@ mod revenge_tests {
         assert!(capped);
     }
 
-    // ================= v1.10.2 筑基择道 =================
+    // ================= v1.10.2 成行择道 =================
 
     // 泄漏修正：launch_sim 必须剥离 path——模拟推演不携道途，五处乘区零泄漏；
     // 现实主角的道途不被触碰
@@ -6018,5 +6102,136 @@ mod revenge_tests {
         // +0.06 加在钳制之前：base 概率未触 0.05..0.95 界时应恰 +0.06
         let dp = big_break_p(&qi_l, 3) - big_break_p(&base, 3);
         assert!((dp - 0.06).abs() < 1e-6, "气修破境应恰 +0.06，实得 {}", dp);
+    }
+
+    // ================= v1.12.0 P0-1 修复回归 =================
+
+    // 成行（跨境破入 realm 2）成功当帧必须弹道途卡——此前 open_path_card 仅
+    // resume_life 旧档补弹（:1478），会话内首次破境后三途五处乘区全程空转。
+    // act_break 成功率 p≈0.95（0.72+dao/300+luck/400 钳 0.95），循环兜住随机性；
+    // 失败仅损修为/轻伤（无身死），回补修为重试。sync_save 仅置脏标记，单测无 IO。
+    #[test]
+    fn chengxing_break_opens_path_card() {
+        let mut l = Life::default();
+        l.realm = 1;
+        l.layer = REALMS[1].layers.len() - 1; // 沁墨十二阶圆满（同层已尽 → 跨境）
+        let mut g = game_with(l, None);
+
+        let mut opened = false;
+
+        for _ in 0..40 {
+            if g.rmodal.is_some() {
+                opened = true;
+
+                break;
+            }
+            // 失败路径回补修为（qi×0.5 + injured=3 不阻断 can_break）
+            let l2 = g.life.as_mut().unwrap();
+            l2.qi = qi_need(l2);
+            l2.injured = 0;
+            g.act_break();
+        }
+
+        assert!(opened, "跨境破境成功后应弹道途卡");
+
+        let rm = g.rmodal.as_ref().unwrap();
+
+        assert!(
+            matches!(rm.kind, CardKind::Path),
+            "弹出的必须是道途卡，实得 {:?}",
+            rm.title
+        );
+
+        assert_eq!(g.life.as_ref().unwrap().realm, 2, "应已破入成行");
+
+        // 道途卡抉择后 path 落定且终身生效
+        g.choose_path(PATH_SWORD);
+
+        assert_eq!(g.life.as_ref().unwrap().path, PATH_SWORD);
+    }
+
+    // ================= v1.12.0 留行批注 =================
+
+    // 开卷浮现上一稿的批注并消耗（take 即清），本稿气运+2 仅作用于模拟侧
+    #[test]
+    fn note_line_consumed_on_launch() {
+        let mut l = Life::default();
+        l.luck = 40.0;
+        let mut g = game_with(l, None);
+        g.meta.note_line = Some("23岁，与洛书遥缝作同页".to_string());
+        g.picked = vec![0]; // launch_sim 卫语句
+        g.meta.sim_points = 5;
+        g.launch_sim();
+        assert!(g.meta.note_line.is_none(), "开卷即消耗批注");
+        assert!(
+            g.sim_log.iter().any(|x| x.text.contains("【批注】")),
+            "开卷应浮现批注行"
+        );
+        assert_eq!(g.sim.as_ref().unwrap().luck, 42.0, "本稿气运+2");
+    }
+
+    // ================= v1.12.0 空白行 =================
+
+    // build_event(30)：置位每稿一次门闩并组三选卡（留墨/留纸/留行）
+    #[test]
+    fn blank_event_card_and_gate() {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = 2; // min_realm=2 成行境
+        g.sim = Some(s);
+        assert!(!g.blank_used);
+        g.build_event(30);
+        assert!(g.blank_used, "抽到空白行即置位门闩");
+        let card = g.modal.as_ref().unwrap();
+        assert_eq!(card.title, "空白行");
+        assert_eq!(card.opts.len(), 3);
+    }
+
+    // 留行臂（special 19）不 return：气运+2 走通用乘区生效 + 大事记亲手写行
+    #[test]
+    fn blank_liuhang_applies_luck_and_highlight() {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = 2;
+        s.luck = 40.0;
+        s.age = 20.0;
+        g.sim = Some(s);
+        g.build_event(30);
+        g.choose_option(2); // 留行 · 气运+2
+        let s = g.sim.as_ref().unwrap();
+        assert_eq!(s.luck, 42.0, "留行气运+2 应走通用乘区生效");
+        assert!(
+            s.highlights.iter().any(|h| h.contains("空白行")),
+            "留行应在大事记写下一行"
+        );
+    }
+
+    // 每稿一次：blank_used 置位后 sim_event 权重对 id 30 归零（300 抽不再现）
+    #[test]
+    fn blank_event_once_per_sim() {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = 5; // 放开大部分事件抬高期望
+        s.luck = 100.0; // 善缘权重拉满
+        g.sim = Some(s);
+        g.build_event(30);
+        for _ in 0..300 {
+            g.modal = None;
+            g.sim_event();
+            if let Some(c) = &g.modal {
+                assert_ne!(c.title, "空白行", "门闩置位后同一稿不得再遇空白行");
+            }
+        }
+    }
+
+    // 开新稿重置门闩（launch_sim 清零）
+    #[test]
+    fn blank_used_resets_per_sim() {
+        let mut g = game_with(Life::default(), None);
+        g.picked = vec![0]; // launch_sim 卫语句
+        g.meta.sim_points = 5;
+        g.blank_used = true;
+        g.launch_sim();
+        assert!(!g.blank_used, "launch_sim 必须清零空白行门闩");
     }
 }

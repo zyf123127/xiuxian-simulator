@@ -3,8 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <title>凡人修仙·轮回模拟器</title>
-    <meta name="description" content="凡人修仙·轮回模拟器 —— 修仙放置 H5 游戏：轮回镜中推演一生、天赋抽取、造化继承、宿敌血仇、山河图志六大地点、洞府经营与四时气象。Rust + WebAssembly，打开即玩。" />
+    <title>凡人模拟·轮回模拟器</title>
+    <meta name="description" content="凡人模拟·轮回模拟器 —— 修仙放置 H5 游戏：轮回镜中推演一生、天赋抽取、造化继承、宿敌血仇、山河图志六大地点、洞府经营与四时气象。Rust + WebAssembly，打开即玩。" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%E2%98%AF%3C/text%3E%3C/svg%3E" />
     <style>
         html, body, canvas {
@@ -78,7 +78,7 @@
 </head>
 <body>
     <div id="loading">
-        <div id="ld_msg">凡人修仙 · 加载中…</div>
+        <div id="ld_msg">凡人模拟 · 加载中…</div>
         <div class="bar"><i></i></div>
         <div style="font-size:12px;color:#b8a8e0;">首次加载需要数秒，请稍候</div>
     </div>
@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.11.0";</script>
+    <script>var GAME_VER = "1.12.0";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -138,7 +138,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.11.0"></script>
+    <script src="mq_js_bundle.js?v=1.12.0"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -338,7 +338,7 @@
             if (xxMsg && xxLoading && !xxLoading.classList.contains("hidden")) {
                 var s = Math.round((performance.now() - xxLoadStart) / 1000);
                 xxMsg.textContent =
-                    "凡人修仙 v" + GAME_VER + " · " + xxStageMsg + "（已等待 " + s + " 秒）";
+                    "凡人模拟 v" + GAME_VER + " · " + xxStageMsg + "（已等待 " + s + " 秒）";
             }
         }
         function xx_stage(msg) {
@@ -660,7 +660,7 @@
                 // 缓存热秒开，加载条一闪即过。快加载直接进入（无白闪无重载）。
                 if (performance.now() - xxLoadStart > 1500 && !/[?&]r2=1/.test(location.search)) {
                     try { document.getElementById("ld_msg").textContent =
-                        "凡人修仙 v" + GAME_VER + " · 正在进入（已等待 " +
+                        "凡人模拟 v" + GAME_VER + " · 正在进入（已等待 " +
                         Math.round((performance.now() - xxLoadStart) / 1000) + " 秒）"; } catch (e) {}
                     location.href = location.href.split("#")[0] +
                         (location.search ? "&" : "?") + "r2=1";
