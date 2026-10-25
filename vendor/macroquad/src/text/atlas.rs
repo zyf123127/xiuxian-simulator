@@ -22,6 +22,12 @@ pub struct Atlas {
 
     pub dirty: bool,
 
+    /// PATCH(getfish v1.10.2): 自上次 texture() 上传以来写入的精灵脏区列表。
+    /// cache_sprite 每写入一个精灵 push 一条，texture() 按子矩形 texture_update_part
+    /// 上传后清空——把「每 dirty 帧 16MiB 整图上传」降为「KB 级子矩形上传」。
+    /// reset-in-place/倍增重建分支会整体清空（重建后走整图路径或无 sprite 引用残留）。
+    dirty_rects: Vec<Rect>,
+
     filter: miniquad::FilterMode,
 
     unique_id: u64,
@@ -59,6 +65,7 @@ impl Atlas {
             cursor_x: 0,
             cursor_y: 0,
             dirty: false,
+            dirty_rects: Vec::new(),
             max_line_height: 0,
             sprites: HashMap::new(),
             filter,
@@ -69,10 +76,17 @@ impl Atlas {
 
     /// PATCH(getfish): 设备允许的最大图集边长。
     /// wasm：读取 JS 探测的真实 GL MAX_TEXTURE_SIZE（index.html 的 gf_gpu 插件桥），
-    /// 钳制到 [512, 4096]——上限封顶防止巨纹理分配，下限防止设备上报异常值导致死循环。
+    /// 下限防止设备上报异常值导致死循环；上限再钳到 2048（v1.10.2 内存修复）——
+    /// 收益：4096 上限的设备（手机主流）长会话图集 CPU 副本+GPU 各 -48MiB（计 -96MiB），
+    /// 且每次 dirty 帧整图上传 64MiB→16MiB（-75%，与脏矩形上传叠加后为 KB 级）。
+    /// 代价：2048²≈7~9K 个 (字符,字号) 组合，填满后走 reset-in-place（清 sprites +
+    /// 重建 16MiB CPU image + 屏上可见字形逐帧重栅格化），预估正常游玩每小时数次
+    /// （未实测），reset 帧 G/U 仪表出现尖峰属预期豁免（?dbg=1 验收口径已写明）。
     /// 若 JS 未提供该导入（--import-undefined 桩返回 0），同样落到 512 兜底。
-    /// native：固定 4096（桌面 GPU 上限普遍 ≥ 8192，足够）。
+    /// native：同步 2048（桌面本会话实测 2 分钟内图集即从 512² 爬到 2048²，
+    /// 封顶一致便于双端行为对齐与验收口径统一）。
     fn device_max_dim() -> u16 {
+        const CAP: u16 = 2048;
         #[cfg(target_arch = "wasm32")]
         {
             #[link(wasm_import_module = "env")]
@@ -82,15 +96,15 @@ impl Atlas {
             let v = unsafe { gf_max_texture_size() };
             if v < 512 {
                 512
-            } else if v > 4096 {
-                4096
+            } else if v > CAP as i32 {
+                CAP
             } else {
                 v as u16
             }
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            4096
+            CAP
         }
     }
 
@@ -123,11 +137,15 @@ impl Atlas {
         if self.dirty {
             self.dirty = false;
 
-            // PATCH(getfish): 整图集重上传计数（性能验收仪表）
+            // PATCH(getfish): 图集上传帧计数（性能验收仪表）——v1.10.2 起一次 dirty 帧
+            // 只上传脏子矩形（KB 级），本计数语义仍为「发生图集上传的帧数」，
+            // ?dbg=1 的 U 逐帧增量口径不变（稳态 0，reset/倍增帧豁免）。
             crate::text::ATLAS_UPLOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
             let (texture_width, texture_height) = ctx.texture_size(self.texture);
             if texture_width != self.image.width as _ || texture_height != self.image.height as _ {
+                // 图集倍增/重建：GPU 纹理尺寸不符，只能整图重建上传（旧路径），
+                // 重灌期积累的脏区已被整图覆盖，作废
                 ctx.delete_texture(self.texture);
 
                 self.texture = ctx.new_texture_from_rgba8(
@@ -136,9 +154,33 @@ impl Atlas {
                     &self.image.bytes[..],
                 );
                 ctx.texture_set_filter(self.texture, self.filter, miniquad::MipmapFilterMode::None);
+                self.dirty_rects.clear();
+            } else {
+                // PATCH(getfish v1.10.2): 脏矩形上传——只传本帧写入的子矩形
+                //（miniquad texture_update_part → glTexSubImage2D）。收益：面板首开
+                // 的新字形滴漏从每帧 16MiB 整图降为几十个字形 × ~1KB，GB 级首开
+                // 上传风暴变 MB 级。reset-in-place 帧 GPU 残留像素无 sprite 引用
+                //（sprites 已清空、新矩形由后续上传覆盖），无需整图清理。
+                let stride = self.image.width as usize * 4;
+                for r in &self.dirty_rects {
+                    let (rx, ry, rw, rh) =
+                        (r.x as usize, r.y as usize, r.w as usize, r.h as usize);
+                    let mut buf = Vec::with_capacity(rw * rh * 4);
+                    for row in 0..rh {
+                        let start = (ry + row) * stride + rx * 4;
+                        buf.extend_from_slice(&self.image.bytes[start..start + rw * 4]);
+                    }
+                    ctx.texture_update_part(
+                        self.texture,
+                        rx as i32,
+                        ry as i32,
+                        rw as i32,
+                        rh as i32,
+                        &buf,
+                    );
+                }
+                self.dirty_rects.clear();
             }
-
-            ctx.texture_update(self.texture, &self.image.bytes);
         }
 
         self.texture
@@ -198,6 +240,7 @@ impl Atlas {
                 self.cursor_x = 0;
                 self.cursor_y = 0;
                 self.max_line_height = 0;
+                self.dirty_rects.clear(); // 重建分支：旧脏区随旧 image 一起作废
 
                 let old_image = self.image.clone();
 
@@ -226,6 +269,7 @@ impl Atlas {
                 self.cursor_x = 0;
                 self.cursor_y = 0;
                 self.max_line_height = 0;
+                self.dirty_rects.clear(); // 重建分支：旧脏区随旧 image 一起作废
                 self.image = Image::gen_image_color(
                     self.image.width,
                     self.image.height,
@@ -239,6 +283,7 @@ impl Atlas {
                 self.cursor_x = 0;
                 self.cursor_y = 0;
                 self.max_line_height = 0;
+                self.dirty_rects.clear(); // 重建分支：旧脏区随旧 image 一起作废
 
                 let old_image = self.image.clone();
 
@@ -257,6 +302,12 @@ impl Atlas {
             }
         } else {
             self.dirty = true;
+            self.dirty_rects.push(Rect::new(
+                x as f32,
+                y as f32,
+                width as f32,
+                height as f32,
+            ));
 
             for j in 0..height {
                 for i in 0..width {

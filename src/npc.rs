@@ -3,7 +3,9 @@
 // 表驱动（data.rs）：档次阈值 [0,20,40,70,95]，各增益按档取值。
 // v1.8.0 D1：扩四人（+宁清霜/醉道人）；D2：好感专属事件（rmodal 现实侧模态通道）。
 use crate::data::*;
-use crate::game::{fmt_num, gain_qi, qi_need, Eff, EventCard, Game, Scene, C_GOLD, C_RED};
+use crate::game::{
+    fmt_num, gain_qi, qi_need, CardKind, Eff, EventCard, Game, Scene, C_GOLD, C_RED,
+};
 
 pub const NPC_ELDER: usize = 0; // 玄诚长老（宗门任务收益）
 pub const NPC_MERCHANT: usize = 1; // 胡掌柜（坊市丹价折扣）
@@ -120,6 +122,7 @@ pub const NPC_EVENTS: [NpcEventDef; 4] = [
 pub fn npc_event_card(i: usize) -> Option<EventCard> {
     let def = NPC_EVENTS.get(i)?;
     let mut card = EventCard {
+        kind: CardKind::Npc,
         title: format!("【{}】{}", NPC_NAMES[i], def.title),
         text: def.text.to_string(),
         opts: Vec::new(),

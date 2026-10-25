@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.10.1";</script>
+    <script>var GAME_VER = "1.11.0";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -98,7 +98,13 @@
          Rust 侧零 dpi 乘除、cam.rs 零改动，坐标仍在唯一坐标系（backing）。
          ?ss=1 可临时回到 v1.9.9 观感做 A/B（本地回归用）。 -->
     <script>
-        var XX_SS = 3;
+        // v1.10.2 默认 SS 3→2（内存/帧率修复）：收益 = GPU backing 720p 类屏
+        // 3840x2160(66MB 双缓冲)→2560x1440(29MB)，-37MB；填充率 9x→4x（-56% fragment），
+        // 全屏 alpha 叠加型 UI（背景+日志底+面板+模态罩层）直接受益。
+        // 画质折中：dpr<=2 设备 SS=2 恰好 >=1:1 物理像素（dpr≈2 时 1:1 最优，无感知）；
+        // dpr>2（≥2.5 主流手机）维持 3 避免浏览器阶段 ~1.6x 整帧放大的发软回归
+        // （v1.9.10 教训）。?ss= 参数覆盖优先级不变（真机 A/B 仍可 ?ss=3 对照）。
+        var XX_SS = (window.devicePixelRatio || 1) > 2 ? 3 : 2;
         try {
             var __ssq = new URLSearchParams(location.search).get("ss");
             if (__ssq) XX_SS = Math.max(1, Math.min(4, parseInt(__ssq, 10) || 1));
@@ -132,7 +138,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.10.1"></script>
+    <script src="mq_js_bundle.js?v=1.11.0"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -253,6 +259,30 @@
                 };
             },
             on_init: function () {}
+        });
+
+        // v1.10.2 存档落盘去抖的强制兜底：Rust 侧 sync_save 置脏后延迟落盘
+        // （主循环 ≥3s 或场景/弹窗边界才写），手机 WebView 切后台/被强杀时 rAF
+        // 停摆、3s 定时不再到来——本钩子在 pagehide / visibilitychange(hidden)
+        // 时经 wasm_exports 读取 Rust 侧最近一次 sync_save 的存档快照写入
+        // localStorage（键与 xx_storage 插件的 XX_KEY 一致），丢档窗口 ≤3s。
+        // wasm_exports 由下方 WebAssembly.instantiate 钩子挂载；兜底失败静默
+        // （localStorage 配额/解码异常不阻断页面卸载）。
+        function xxFlushPendingSave() {
+            try {
+                var e = window.wasm_exports;
+                if (!e || !e.xx_save_pending_len || !e.xx_save_pending_ptr) return;
+                var len = e.xx_save_pending_len() | 0;
+                if (len <= 0) return;
+                var ptr = e.xx_save_pending_ptr();
+                if (!ptr) return;
+                var bytes = new Uint8Array(e.memory.buffer, ptr, len);
+                localStorage.setItem("xiuxian_save", new TextDecoder("utf-8").decode(bytes));
+            } catch (err) { /* 兜底失败不阻断卸载 */ }
+        }
+        window.addEventListener("pagehide", xxFlushPendingSave);
+        document.addEventListener("visibilitychange", function () {
+            if (document.visibilityState === "hidden") xxFlushPendingSave();
         });
 
         // v1.8.2 关键修复：加载层"就绪"信号。此前 window.wasm_exports 从未被

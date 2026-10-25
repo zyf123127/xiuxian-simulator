@@ -59,8 +59,7 @@ pub fn button(
         txt_c(
             s,
             x + w * 0.5,
-            y + h - 26.0,
-            13,
+            y + h - 26.0, 14,
             if enabled {
                 C_DIM
             } else {
@@ -391,8 +390,7 @@ pub fn version_mark() {
     txt_r(
         &format!("v{}", env!("CARGO_PKG_VERSION")),
         V_W - 8.0,
-        V_H - 20.0,
-        13,
+        V_H - 20.0, 14,
         Color::from_rgba(120, 112, 140, 200),
     );
 }
@@ -434,7 +432,7 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
         60,
         Color::new(1.0, 0.85, 0.5, glow),
     );
-    txt_c("· 轮 回 模 拟 器 ·", V_W * 0.5, 190.0, 32, C_GOLD);
+    txt_c("· 轮 回 模 拟 器 ·", V_W * 0.5, 190.0, 28, C_GOLD);
     txt_c(
         "轮回镜中演一世，造化归身证长生",
         V_W * 0.5,
@@ -468,13 +466,10 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
             true,
         ) {
             g.play(crate::sounds::Which::Click);
-            g.life = g.meta.life.clone(); // 还原现实主角（缺失则 draw_reality 黑屏）
-            g.panel = 0;
-            // v1.8.0 C5：承接旧档补记当前区域到访（旧档缺 mvis 键已由 save 层迁移；
-            // 此处兜底显式已至但未记的区域——已置位则为 no-op）
-            g.visit_region(true);
-            g.scene = Scene::Reality;
-            g.log("轮回镜微亮，前缘未了。", C_TEXT);
+            // v1.10.2 前置修复：恢复逻辑抽为 Game::resume_life（与菜单 8 秒自动进入
+            // 同口——旧实现自动进入无条件 begin_mortal，有档挂菜单即被覆盖旧档人生；
+            // resume_life 内含离线结算与旧档道途卡补弹）
+            g.resume_life();
         }
     }
     let mlabel = if g.meta.music {
@@ -533,10 +528,18 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
 
 // ================= 现实主界面 =================
 pub fn draw_reality(g: &mut Game, art: &Art) {
-    let Some(l) = g.life.clone() else { return };
     // v1.7.0：幻境广告浮层独占输入（模态期间不画不响应其余界面）
+    // v1.10.2：各早退分支挪到 life 借用之前（NLL：借用存活期不接纳 &mut）
     if g.ad.is_some() {
         draw_ad_overlay(g);
+        return;
+    }
+    // v1.10.2 离线闭关：出关结算卡独占输入（resume_life 恢复时 N≥10 弹出；
+    // 收益已入账内存，收功即一次落盘；rmodal 道途卡在其后排队）
+    if g.offline_card.is_some() {
+        draw_bg(art);
+        draw_offline_card(g);
+        version_mark();
         return;
     }
     // v1.8.0 D2：现实侧好感事件卡——模态独占输入（罩层在 draw_modal_card 内）
@@ -546,25 +549,15 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         version_mark();
         return;
     }
+    // v1.10.2 卡顿修复（次要项③）：去每帧整 Life 深克隆（含 relics/talents/equipped
+    // 三个 Vec 堆分配，先例 v1.10.0 draw_sim）——只读前段（顶栏/左栏渲染 + 所在行）
+    // 借 life 不可变引用，借用随最后使用自然归还（NLL），后续行动栏 &mut 交互照旧
+    let Some(l) = g.life.as_ref() else { return };
     draw_bg(art);
     draw_sky_life(g);
     draw_motes(g);
-    render_top(g, &l);
-    // 顶栏按钮
-    if button(1086.0, 8.0, 62.0, 36.0, "烙印", None, true) {
-        g.panel = 3;
-        g.tab = 0;
-        g.play(crate::sounds::Which::Page);
-    }
-    if button(1154.0, 8.0, 62.0, 36.0, "帮助", None, true) {
-        g.panel = 4;
-        g.play(crate::sounds::Which::Page);
-    }
-    // v1.9.23：返回开始界面（存档已落盘，菜单「承接前缘」可恢复）
-    if button(1222.0, 8.0, 58.0, 36.0, "主页", None, true) {
-        g.back_to_menu();
-    }
-    render_left(g, &l, art, true);
+    render_top(g, l);
+    render_left(g, l, art, true);
 
     // 现实日志
     draw_rectangle(
@@ -585,8 +578,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     txt_c(
         "—— 现 实 ——",
         376.0 + (V_W - 384.0) * 0.5,
-        68.0,
-        13,
+        68.0, 14,
         Color::from_rgba(162, 152, 184, 220), // v1.6.0：对比度提升（110,100,130→）
     );
     txt_r(
@@ -596,6 +588,22 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         14,
         C_DIM,
     );
+    // v1.10.2：顶栏三钮（烙印/帮助/主页）从 render_left 之前整体移到 life 借用
+    // 最后一用（所在行）之后——立即模式命中不依赖绘制顺序（draw_sim 先例），
+    // 且按钮区（y≤44）与左栏/日志区无像素重叠，z 序变化不影响画面
+    if button(1086.0, 8.0, 62.0, 36.0, "烙印", None, true) {
+        g.panel = 3;
+        g.tab = 0;
+        g.play(crate::sounds::Which::Page);
+    }
+    if button(1154.0, 8.0, 62.0, 36.0, "帮助", None, true) {
+        g.panel = 4;
+        g.play(crate::sounds::Which::Page);
+    }
+    // v1.9.23：返回开始界面（存档已落盘，菜单「承接前缘」可恢复）
+    if button(1222.0, 8.0, 58.0, 36.0, "主页", None, true) {
+        g.back_to_menu();
+    }
     let area_y = 88.0;
     let area_h = PANEL_B - 60.0 - 36.0;
     let line_h = 28.0; // v1.6.0：24→28，16px 中文行距 1.5 倍更透气（18 行预算仍够）
@@ -780,8 +788,8 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
 
     // 面板
     match g.panel {
-        1 => draw_shop(g, &l),
-        2 => draw_bag(g, &l),
+        1 => draw_shop(g),
+        2 => draw_bag(g),
         3 => draw_upgrade_panel(g),
         4 => draw_help_panel(g),
         5 => crate::charpanel::draw_char_panel(g),
@@ -816,23 +824,21 @@ fn render_top(g: &Game, l: &Life) {
         C_TEXT,
     );
     draw_texture(&crate::art::art().icon_stone, 700.0, 16.0, WHITE);
-    txt(&fmt_int(l.stones), 718.0, 15.0, 17, C_CYAN);
+    txt(&fmt_int(l.stones), 718.0, 15.0, 16, C_CYAN);
     txt(
         "模拟点",
         830.0,
-        15.0,
-        17,
+        15.0, 16,
         Color::from_rgba(200, 160, 250, 255),
     );
     txt(
         &format!("●{}", g.meta.sim_points),
         896.0,
-        15.0,
-        17,
+        15.0, 16,
         C_PURPLE,
     );
     draw_texture(&crate::art::art().icon_yun, 960.0, 15.0, WHITE);
-    txt(&fmt_int(g.meta.dao_yun), 980.0, 15.0, 17, C_GOLD);
+    txt(&fmt_int(g.meta.dao_yun), 980.0, 15.0, 16, C_GOLD);
     txt_r("烙印", 1148.0, 15.0, 16, C_GOLD_D);
     txt_r("帮助", 1216.0, 15.0, 16, C_GOLD_D);
     draw_rectangle_lines(1086.0, 8.0, 62.0, 36.0, 1.5, C_GOLD_D);
@@ -916,7 +922,7 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
     bar(104.0, y - 26.0, 168.0, 14.0, l.body / 100.0, C_RED);
     txt(&format!("{:.0}", l.body), 280.0, y - 21.0, 14, C_TEXT);
     y = row("战力", y);
-    txt(&fmt_num(power(l)), 100.0, y - 21.0, 15, C_TEXT);
+    txt(&fmt_num(power(l)), 100.0, y - 21.0, 14, C_TEXT);
     if l.injured > 0 {
         txt(
             &format!("（重伤{}年）", l.injured),
@@ -935,7 +941,7 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
         C_TEXT,
     );
     y = row("功法", y);
-    txt(TECHS[l.tech].name, 100.0, y - 21.0, 15, C_GOLD);
+    txt(TECHS[l.tech].name, 100.0, y - 21.0, 14, C_GOLD);
     y = row("法宝", y);
     // v1.5.0：只留计数摘要（详情见角色面板·法宝页）
     if l.relics.is_empty() {
@@ -967,7 +973,7 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
             );
             draw_rectangle_lines(24.0, ny, LEFT_W - 32.0, 60.0, 1.5, C_RED);
             txt("宿敌", 36.0, ny + 8.0, 14, C_RED);
-            txt(&n.full(), 80.0, ny + 8.0, 15, C_TEXT);
+            txt(&n.full(), 80.0, ny + 8.0, 14, C_TEXT);
             // v1.9.25 宿敌追缉：静态行改动态警示——宿敌随推岁成长（advance_time 6%/载），
             // 标注其当前境界提醒玩家趁早动手
             txt(
@@ -976,8 +982,7 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
                     REALMS[n.realm.min(14)].name
                 ),
                 36.0,
-                ny + 32.0,
-                13,
+                ny + 32.0, 14,
                 C_RED,
             );
         }
@@ -988,13 +993,12 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
 pub fn draw_draft(g: &mut Game, art: &Art) {
     draw_bg(art);
     draw_motes(g);
-    txt_c("轮 回 镜 · 天 机 演 演", V_W * 0.5, 70.0, 30, C_GOLD);
+    txt_c("轮 回 镜 · 天 机 演 演", V_W * 0.5, 70.0, 28, C_GOLD);
     let max = 1 + g.meta.upg[5].min(1) as usize;
     txt_c(
         &format!("觉醒天赋（{} 选 {}）——仅此一梦生效", g.draft.len(), max),
         V_W * 0.5,
-        108.0,
-        17,
+        108.0, 16,
         C_DIM,
     );
     // 已选
@@ -1077,7 +1081,7 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
             Color::from_rgba(tr, tg, tb, 255),
         );
         txt_c(card.name, x + cw * 0.5, y + 84.0, 24, C_TEXT);
-        wrap_draw(card.desc, x + 24.0, y + 120.0, 17, cw - 48.0, 28.0, C_DIM);
+        wrap_draw(card.desc, x + 24.0, y + 120.0, 16, cw - 48.0, 28.0, C_DIM);
         // 小图标占位：修士
         draw_cultivator(
             art,
@@ -1142,8 +1146,7 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
     txt(
         &format!("{}岁 · {}", fmt_num(s.age), realm_full_name(&s)),
         110.0,
-        15.0,
-        19,
+        15.0, 18,
         C_TEXT,
     );
     bar(
@@ -1155,8 +1158,8 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
         C_CYAN,
     );
     let ql = format!("修为 {}/{}", fmt_num(s.qi), fmt_num(qi_need(&s)));
-    txt_c(&ql, 601.0, 13.0, 13, Color::from_rgba(10, 8, 20, 255));
-    txt_c(&ql, 600.0, 12.0, 13, C_TEXT);
+    txt_c(&ql, 601.0, 13.0, 14, Color::from_rgba(10, 8, 20, 255));
+    txt_c(&ql, 600.0, 12.0, 14, C_TEXT);
     draw_texture(&crate::art::art().icon_stone, 760.0, 16.0, WHITE);
     txt(&fmt_int(s.stones), 778.0, 15.0, 16, C_CYAN);
     // 日志流
@@ -1195,8 +1198,7 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
         txt(
             &ll.text,
             24.0,
-            area_y + 10.0 + i as f32 * line_h,
-            17,
+            area_y + 10.0 + i as f32 * line_h, 16,
             ll.color,
         );
     }
@@ -1250,8 +1252,7 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
         txt_c(
             &format!("第 {} 重 · 雷 劫", (t.wave + 1).min(9)),
             V_W * 0.5,
-            660.0,
-            30,
+            660.0, 28,
             C_GOLD,
         );
         for i in 0..9 {
@@ -1332,7 +1333,16 @@ pub fn draw_modal_card(g: &mut Game) {
                 card.text.clone(),
                 card.opts
                     .iter()
-                    .map(|(l, e)| (l.clone(), e.eff_desc()))
+                    .map(|(l, e)| {
+                        // v1.10.2 筑基择道：道途卡副标统一为改道禁示（乘区效果见卡面总述；
+                        // eff_desc 无法表达 ×1.35 之类静态乘区）
+                        let d = if card.kind == crate::game::CardKind::Path {
+                            "择定终身，不可改道".to_string()
+                        } else {
+                            e.eff_desc()
+                        };
+                        (l.clone(), d)
+                    })
                     .collect(),
             ));
         }
@@ -1348,7 +1358,7 @@ pub fn draw_modal_card(g: &mut Game) {
     panel_card(340.0, 160.0, 600.0, 400.0);
     txt_c(title, V_W * 0.5, 188.0, 24, C_GOLD);
     draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
-    wrap_draw(text, 380.0, 224.0, 17, 520.0, 28.0, C_TEXT);
+    wrap_draw(text, 380.0, 224.0, 16, 520.0, 28.0, C_TEXT);
     // 命中先收集、借还后再分派（&mut）——免整卡克隆
     let mut picked: Option<usize> = None;
 
@@ -1377,7 +1387,15 @@ pub fn draw_modal_card(g: &mut Game) {
     if let Some(i) = picked {
         g.play(crate::sounds::Which::Click);
 
-        if g.scene == Scene::Sim {
+        // v1.10.2 筑基择道：道途卡抉择走 choose_path（rmodal_npc 为 None，
+        // 不得落入 choose_roption——那会因 npc None 静默 return 使卡挂死）
+        let is_path = g
+            .rmodal
+            .as_ref()
+            .is_some_and(|c| c.kind == crate::game::CardKind::Path);
+        if is_path {
+            g.choose_path(i as u8 + 1);
+        } else if g.scene == Scene::Sim {
             g.choose_option(i);
         } else {
             crate::npc::choose_roption(g, i);
@@ -1396,10 +1414,10 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     };
     // v1.9.25 卡顿修复（根因2）：上行为借用替代原 g.sim_result.clone()——本函数对 sr
     // 只读，选项/收尾按钮的 &mut 路径上 sr 已不再被使用（NLL 借用自然终结），逐帧深克隆消除
-    txt_c("一 世 落 幕 · 造 化 归 身", V_W * 0.5, 56.0, 30, C_GOLD);
+    txt_c("一 世 落 幕 · 造 化 归 身", V_W * 0.5, 56.0, 28, C_GOLD);
     // 左：此生摘要
     panel_card(60.0, 84.0, 420.0, 480.0);
-    txt("此 生", 84.0, 116.0, 22, C_GOLD);
+    txt("此 生", 84.0, 116.0, 20, C_GOLD);
     wrap_draw(&sr.cause, 84.0, 146.0, 16, 372.0, 25.0, C_RED);
     txt(
         &format!(
@@ -1422,8 +1440,7 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     txt(
         &format!("道韵 +{}", fmt_int(sr.total_dy)),
         84.0,
-        296.0,
-        17,
+        296.0, 16,
         C_GOLD,
     );
     txt("—— 大事记 ——", 84.0, 336.0, 14, C_DIM);
@@ -1466,7 +1483,7 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
         );
         draw_rectangle_lines(520.0, y, 680.0, 62.0, 1.5, C_GOLD_D);
         txt(&format!("【{}】", card.name), 536.0, y + 10.0, 18, C_GOLD);
-        txt(card.desc, 700.0, y + 12.0, 15, C_TEXT);
+        txt(card.desc, 700.0, y + 12.0, 14, C_TEXT);
         txt_c("选此项", 1160.0, y + 12.0, 14, C_CYAN);
         if hot && is_mouse_button_pressed(MouseButton::Left) {
             g.play(crate::sounds::Which::Ascend);
@@ -1494,22 +1511,22 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
     draw_bg(art);
     draw_motes(g);
     panel_card(210.0, 70.0, 860.0, 550.0);
-    txt_c("一 世 归 尘", V_W * 0.5, 112.0, 32, C_GOLD);
+    txt_c("一 世 归 尘", V_W * 0.5, 112.0, 28, C_GOLD);
     if let Some(s) = &g.settle {
         let hh = wrap_draw(&s.cause, 250.0, 160.0, 18, 780.0, 27.0, C_TEXT);
         let mut y = 160.0 + hh + 16.0;
         draw_rectangle(250.0, y, 780.0, 1.0, Color::from_rgba(96, 76, 130, 160));
         y += 14.0;
         for (label, v) in &s.lines {
-            txt(label, 250.0, y, 17, C_TEXT);
-            txt_r(&format!("+{}", fmt_int(*v)), 930.0, y, 17, C_GREEN);
+            txt(label, 250.0, y, 16, C_TEXT);
+            txt_r(&format!("+{}", fmt_int(*v)), 930.0, y, 16, C_GREEN);
             y += 26.0;
         }
         y += 8.0;
         draw_rectangle(250.0, y, 780.0, 1.0, Color::from_rgba(96, 76, 130, 160));
         y += 16.0;
         txt("道韵累积", 250.0, y, 20, C_GOLD);
-        txt_r(&format!("+{}", fmt_int(s.total)), 930.0, y, 22, C_GOLD);
+        txt_r(&format!("+{}", fmt_int(s.total)), 930.0, y, 20, C_GOLD);
         txt_r(
             &format!("总道韵 {}", fmt_int(g.meta.dao_yun)),
             1030.0,
@@ -1549,12 +1566,19 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
 }
 
 // ================= 坊市 =================
-fn draw_shop(g: &mut Game, l: &Life) {
+// v1.10.2 借用化（次要项③）：签名去 l——坊市只读状态在函数头一次性值化（栈上
+// 标量，life 借用随即归还），丹药存量按行瞬时短借；购买/兑换交互照旧 &mut 且
+// 各分支即时 return，值化快照本帧内不失效。先例 v1.10.0 draw_sim
+fn draw_shop(g: &mut Game) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
     panel_card(140.0, 60.0, 1000.0, 600.0);
-    txt("修仙坊市", 170.0, 92.0, 26, C_GOLD);
+    txt("修仙坊市", 170.0, 92.0, 24, C_GOLD);
     draw_texture(&crate::art::art().icon_stone, 880.0, 84.0, WHITE);
-    txt(&fmt_int(l.stones), 902.0, 92.0, 20, C_CYAN);
+    let (stones, tech) =
+        g.life
+            .as_ref()
+            .map_or((0i64, 0usize), |x| (x.stones, x.tech));
+    txt(&fmt_int(stones), 902.0, 92.0, 20, C_CYAN);
     if button(1064.0, 74.0, 44.0, 36.0, "×", None, true) {
         g.panel = 0;
         g.buy_pending = None; // v1.8.0 B3：关坊市清求购确认态
@@ -1579,19 +1603,17 @@ fn draw_shop(g: &mut Game, l: &Life) {
         let cost = g.exchange_cost();
         draw_rectangle(160.0, 150.0, 960.0, 80.0, Color::from_rgba(44, 30, 66, 220));
         draw_rectangle_lines(160.0, 150.0, 960.0, 80.0, 1.5, Color::from_rgba(96, 76, 130, 160));
-        txt("模拟点数", 176.0, 170.0, 17, C_PURPLE);
+        txt("模拟点数", 176.0, 170.0, 16, C_PURPLE);
         txt(
             &format!("●{}", g.meta.sim_points),
             280.0,
-            170.0,
-            17,
+            170.0, 16,
             C_PURPLE,
         );
         txt_r(
             &format!("当前价 {} 灵石 / 1 点", fmt_int(cost)),
             840.0,
-            170.0,
-            15,
+            170.0, 14,
             C_CYAN,
         );
         // 大兑换钮（158..226 ⊂ 盒 150..230，上下各余 8px 垂直居中）
@@ -1602,7 +1624,7 @@ fn draw_shop(g: &mut Game, l: &Life) {
             64.0,
             "兑换 1 点",
             Some("灵石→模拟点"),
-            l.stones >= cost,
+            stones >= cost,
         ) {
             g.play(crate::sounds::Which::Coin);
             g.exchange_points();
@@ -1611,15 +1633,13 @@ fn draw_shop(g: &mut Game, l: &Life) {
         txt(
             "轮回镜以灵石为引——点数推演一世，死后造化归身，可无限轮回。",
             176.0,
-            260.0,
-            15,
+            260.0, 14,
             C_TEXT,
         );
         txt(
             "兑换价随境界水涨船高；模拟中反杀宿敌亦可白得点数。",
             176.0,
-            294.0,
-            15,
+            294.0, 14,
             C_TEXT,
         );
         txt(
@@ -1628,8 +1648,7 @@ fn draw_shop(g: &mut Game, l: &Life) {
                 crate::data::AD_REWARD
             ),
             176.0,
-            328.0,
-            15,
+            328.0, 14,
             C_TEXT,
         );
         draw_rectangle(176.0, 380.0, 928.0, 1.5, Color::from_rgba(96, 76, 130, 160));
@@ -1647,8 +1666,9 @@ fn draw_shop(g: &mut Game, l: &Life) {
             let price = g.pill_price(i);
             draw_texture(&crate::art::art().icon_pill, 160.0, y - 6.0, WHITE);
             txt(p.name, 184.0, y + 4.0, 18, C_GOLD);
-            txt(p.desc, 320.0, y + 4.0, 15, C_TEXT);
-            txt(&format!("存量 {}", l.pills[i]), 320.0, y + 26.0, 14, C_DIM);
+            txt(p.desc, 320.0, y + 4.0, 14, C_TEXT);
+            let stock = g.life.as_ref().map_or(0, |x| x.pills[i]);
+            txt(&format!("存量 {}", stock), 320.0, y + 26.0, 14, C_DIM);
             txt_r(
                 &format!("{} 灵石", fmt_int(price)),
                 1010.0,
@@ -1656,7 +1676,7 @@ fn draw_shop(g: &mut Game, l: &Life) {
                 16,
                 C_CYAN,
             );
-            if button(1024.0, y - 6.0, 80.0, 40.0, "购买", None, l.stones >= price) {
+            if button(1024.0, y - 6.0, 80.0, 40.0, "购买", None, stones >= price) {
                 g.play(crate::sounds::Which::Coin);
                 g.buy_pill(i);
                 return;
@@ -1673,8 +1693,7 @@ fn draw_shop(g: &mut Game, l: &Life) {
         txt(
             "藏经阁——功法一经习得，现实与模拟通用",
             180.0,
-            124.0,
-            15,
+            124.0, 14,
             C_DIM,
         );
         for idx in 1..TECHS.len() {
@@ -1682,8 +1701,8 @@ fn draw_shop(g: &mut Game, l: &Life) {
             let y = 150.0 + (idx - 1) as f32 * 66.0;
             let t = &TECHS[idx];
             let price = g.tech_price(idx);
-            let owned = l.tech >= idx;
-            let cur = l.tech == idx;
+            let owned = tech >= idx;
+            let cur = tech == idx;
             draw_rectangle(
                 160.0,
                 y - 12.0,
@@ -1706,24 +1725,23 @@ fn draw_shop(g: &mut Game, l: &Life) {
             txt(t.desc, 420.0, y + 26.0, 14, C_DIM);
             if owned {
                 if cur {
-                    txt_c("当前修习", 1058.0, y + 6.0, 15, C_GREEN);
+                    txt_c("当前修习", 1058.0, y + 6.0, 14, C_GREEN);
                 } else {
-                    txt_c("已超越", 1058.0, y + 6.0, 15, C_DIM);
+                    txt_c("已超越", 1058.0, y + 6.0, 14, C_DIM);
                 }
             } else {
                 txt_r(
                     &format!("{} 灵石", fmt_int(price)),
                     1030.0,
-                    y + 6.0,
-                    15,
+                    y + 6.0, 14,
                     // v1.8.0 A6：买不起的价格标红，与可购青色区分
-                    if l.stones >= price { C_CYAN } else { C_RED },
+                    if stones >= price { C_CYAN } else { C_RED },
                 );
                 // v1.8.0 B3：藏经阁「求购」二次确认（仿行囊献祭 sac_pending 范式）
                 // 常态钮 80×40 @1040（不遮价格）；确认态钮 150×40 @970（盖住价格短暂可接受）
                 let confirming = g.buy_pending == Some(idx);
                 if confirming {
-                    if button(970.0, y - 8.0, 150.0, 40.0, "确认求购?", None, l.stones >= price) {
+                    if button(970.0, y - 8.0, 150.0, 40.0, "确认求购?", None, stones >= price) {
                         g.buy_pending = None;
                         g.buy_tech(idx);
                         return;
@@ -1735,7 +1753,7 @@ fn draw_shop(g: &mut Game, l: &Life) {
                     {
                         g.buy_pending = None; // 点外取消
                     }
-                } else if button(1040.0, y - 8.0, 80.0, 40.0, "求购", None, l.stones >= price) {
+                } else if button(1040.0, y - 8.0, 80.0, 40.0, "求购", None, stones >= price) {
                     g.buy_pending = Some(idx);
                     g.play(crate::sounds::Which::Click);
                 }
@@ -1788,10 +1806,12 @@ fn draw_ad_overlay(g: &mut Game) {
     }
 }
 
-fn draw_bag(g: &mut Game, l: &Life) {
+// v1.10.2 借用化（次要项③）：签名去 l——丹药存量/功法/宗门在函数头一次性值化，
+// 法宝 owned/装备态/灵纹按行瞬时短借（各交互分支即时 return，快照本帧不失效）
+fn draw_bag(g: &mut Game) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
     panel_card(140.0, 70.0, 1000.0, 580.0);
-    txt("行囊", 170.0, 100.0, 26, C_GOLD);
+    txt("行囊", 170.0, 100.0, 24, C_GOLD);
     if button(1064.0, 86.0, 44.0, 36.0, "×", None, true) {
         g.panel = 0;
         g.sac_pending = None; // v1.7.0：关行囊清献祭确认态
@@ -1812,6 +1832,15 @@ fn draw_bag(g: &mut Game, l: &Life) {
         }
     }
     draw_rectangle(160.0, 134.0, 960.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    let (pills, tech, sect) = g.life.as_ref().map_or(([0i32; 6], 0usize, false), |x| {
+        (
+            [
+                x.pills[0], x.pills[1], x.pills[2], x.pills[3], x.pills[4], x.pills[5],
+            ],
+            x.tech,
+            x.sect,
+        )
+    });
     if g.bag_tab == 0 {
         // 丹药（原列表移入，行距 62）
         txt("丹药（服用即生效）", 180.0, 158.0, 16, C_DIM);
@@ -1819,8 +1848,8 @@ fn draw_bag(g: &mut Game, l: &Life) {
             let y = 188.0 + i as f32 * 62.0;
             let p = &PILLS[i];
             txt(p.name, 180.0, y + 4.0, 18, C_GOLD);
-            txt(&format!("×{}", l.pills[i]), 300.0, y + 4.0, 16, C_TEXT);
-            txt(p.desc, 360.0, y + 4.0, 15, C_TEXT);
+            txt(&format!("×{}", pills[i]), 300.0, y + 4.0, 16, C_TEXT);
+            txt(p.desc, 360.0, y + 4.0, 14, C_TEXT);
             if button(
                 1040.0,
                 y - 8.0,
@@ -1828,7 +1857,7 @@ fn draw_bag(g: &mut Game, l: &Life) {
                 40.0,
                 "服用",
                 None,
-                p.edible && l.pills[i] > 0,
+                p.edible && pills[i] > 0,
             ) {
                 g.play(crate::sounds::Which::Gain);
                 g.eat_pill(i);
@@ -1855,9 +1884,9 @@ fn draw_bag(g: &mut Game, l: &Life) {
         }
         for (k, rl) in RELICS.iter().enumerate() {
             let y = 190.0 + k as f32 * 54.0;
-            let owned = l.relics.contains(&k);
-            let on = l.equipped.contains(&k);
-            let lv = l.relic_lv[k.min(7)];
+            let owned = g.life.as_ref().is_some_and(|x| x.relics.contains(&k));
+            let on = g.life.as_ref().is_some_and(|x| x.equipped.contains(&k));
+            let lv = g.life.as_ref().map_or(0, |x| x.relic_lv[k.min(7)]);
             draw_rectangle(
                 160.0,
                 y - 8.0,
@@ -1881,7 +1910,7 @@ fn draw_bag(g: &mut Game, l: &Life) {
             );
             // v1.8.0 E3：灵纹等级徽标
             if lv > 0 {
-                txt(&format!("+{}", lv), 318.0, y + 2.0, 15, C_PURPLE);
+                txt(&format!("+{}", lv), 318.0, y + 2.0, 14, C_PURPLE);
             }
             txt(
                 rl.desc,
@@ -1897,7 +1926,10 @@ fn draw_bag(g: &mut Game, l: &Life) {
                     return;
                 }
             } else if owned {
-                let can = l.equipped.len() < RELIC_EQUIP_MAX;
+                let can = g
+                    .life
+                    .as_ref()
+                    .is_some_and(|x| x.equipped.len() < RELIC_EQUIP_MAX);
                 if button(1000.0, y - 4.0, 110.0, 40.0, "装备", None, can) {
                     g.play(crate::sounds::Which::Ascend);
                     g.equip_relic(k);
@@ -1963,41 +1995,41 @@ fn draw_bag(g: &mut Game, l: &Life) {
         }
     } else {
         // 行装：功法 / 法宝摘要 / 宗门 / 称号
-        txt("功法", 180.0, 164.0, 17, C_DIM);
+        txt("功法", 180.0, 164.0, 16, C_DIM);
         txt(
-            &format!("《{}》 {}", TECHS[l.tech].name, TECHS[l.tech].desc),
+            &format!("《{}》 {}", TECHS[tech].name, TECHS[tech].desc),
             250.0,
             164.0,
             16,
             C_GOLD,
         );
-        txt("法宝", 180.0, 200.0, 17, C_DIM);
-        if l.relics.is_empty() {
-            txt("尚无法宝，模拟奇遇可寻。", 250.0, 200.0, 15, C_DIM);
+        txt("法宝", 180.0, 200.0, 16, C_DIM);
+        if g.life.as_ref().is_none_or(|x| x.relics.is_empty()) {
+            txt("尚无法宝，模拟奇遇可寻。", 250.0, 200.0, 14, C_DIM);
         } else {
             txt(
                 &format!(
                     "已装 {}/{} · 包内 {}（详情与装卸见「法宝」页签）",
-                    l.equipped.len().min(RELIC_EQUIP_MAX),
+                    g.life
+                        .as_ref()
+                        .map_or(0, |x| x.equipped.len().min(RELIC_EQUIP_MAX)),
                     RELIC_EQUIP_MAX,
-                    l.relics.len()
+                    g.life.as_ref().map_or(0, |x| x.relics.len())
                 ),
                 250.0,
-                200.0,
-                15,
+                200.0, 14,
                 C_CYAN,
             );
         }
-        txt("宗门", 180.0, 236.0, 17, C_DIM);
+        txt("宗门", 180.0, 236.0, 16, C_DIM);
         txt(
-            if l.sect { "青云宗弟子" } else { "无门无派" },
+            if sect { "青云宗弟子" } else { "无门无派" },
             250.0,
-            236.0,
-            15,
+            236.0, 14,
             C_TEXT,
         );
-        txt("称号", 180.0, 264.0, 17, C_DIM);
-        txt(&format!("『{}』", g.worn_title_of()), 250.0, 264.0, 15, C_GOLD);
+        txt("称号", 180.0, 264.0, 16, C_DIM);
+        txt(&format!("『{}』", g.worn_title_of()), 250.0, 264.0, 14, C_GOLD);
         txt(
             "—— 随身行装一览；丹药服用见「丹药」页签，法宝装卸见「法宝」页签 ——",
             180.0,
@@ -2008,13 +2040,59 @@ fn draw_bag(g: &mut Game, l: &Life) {
     }
 }
 
+// ================= v1.10.2 离线闭关：出关结算卡 =================
+// 独占输入（先例 ad-overlay）：明细列表 + 单「收功」钮。收益已在 resume_life 时
+// 入账内存（qi/stones/age），收功即一次 sync_save（去抖兜底 pagehide 亦覆盖）。
+fn draw_offline_card(g: &mut Game) {
+    let Some(r) = g.offline_card.as_ref() else {
+        return;
+    };
+    draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.78));
+    panel_card(340.0, 160.0, 600.0, 400.0);
+    txt_c("离 闭 归 来", V_W * 0.5, 188.0, 24, C_GOLD);
+    draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    txt(
+        &format!("现实人间已悄然流逝 {} 载。", r.years),
+        380.0,
+        226.0, 16,
+        C_TEXT,
+    );
+    txt(
+        &format!("闭关吐纳（五折）：修为 +{}", fmt_num(r.qi)),
+        380.0,
+        260.0, 15,
+        C_CYAN,
+    );
+    txt(
+        &format!("洞府灵田岁入：灵石 +{}", fmt_int(r.stones)),
+        380.0,
+        288.0, 15,
+        C_CYAN,
+    );
+    if r.life_capped {
+        txt("寿元将尽——再不归返便要坐化！", 380.0, 320.0, 15, C_RED);
+    }
+    txt(
+        "收益已入账；修为满不破境，周天吐纳可续——点击收功归于现实。",
+        380.0,
+        352.0, 14,
+        C_DIM,
+    );
+    if button(490.0, 420.0, 300.0, 64.0, "收功", Some("归于现实 · 落盘"), true) {
+        g.offline_card = None;
+        g.play(crate::sounds::Which::Gain);
+        g.log("你收功出关，将离闭所攒尽数归于己身。", C_GOLD);
+        g.sync_save();
+    }
+}
+
 // ================= 轮回烙印 =================
 // v1.8.0 B1：十项烙印 5+5 页签化（复用 g.tab，零新字段）。
 // 布局（面板 200,80,880,560）：96..132 标题｜150..190 页签｜216..548 行带（5×72）｜592/614 页脚
 fn draw_upgrade_panel(g: &mut Game) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
     panel_card(200.0, 80.0, 880.0, 560.0);
-    txt("轮回烙印", 230.0, 114.0, 26, C_GOLD);
+    txt("轮回烙印", 230.0, 114.0, 24, C_GOLD);
     draw_texture(&crate::art::art().icon_yun, 800.0, 104.0, WHITE);
     txt(&fmt_int(g.meta.dao_yun), 824.0, 114.0, 20, C_GOLD);
     if button(996.0, 96.0, 44.0, 36.0, "×", None, true) {
@@ -2048,11 +2126,11 @@ fn draw_upgrade_panel(g: &mut Game) {
         let lv = g.meta.upg[i];
         let maxed = lv >= u.max;
         let cost = upg_cost(i, lv);
-        txt(u.name, 230.0, y + 12.0, 17, C_GOLD);
-        txt(&format!("{}/{}", lv, u.max), 350.0, y + 14.0, 15, C_TEXT);
-        txt(u.desc, 420.0, y + 14.0, 15, C_TEXT);
+        txt(u.name, 230.0, y + 12.0, 16, C_GOLD);
+        txt(&format!("{}/{}", lv, u.max), 350.0, y + 14.0, 14, C_TEXT);
+        txt(u.desc, 420.0, y + 14.0, 14, C_TEXT);
         if maxed {
-            txt("圆满", 950.0, y + 14.0, 15, C_DIM);
+            txt("圆满", 950.0, y + 14.0, 14, C_DIM);
         } else {
             txt_r(
                 &format!("{} 道韵", fmt_int(cost)),
@@ -2104,7 +2182,7 @@ fn draw_upgrade_panel(g: &mut Game) {
 fn draw_help_panel(g: &mut Game) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
     panel_card(140.0, 70.0, 1000.0, 580.0);
-    txt("轮回镜·使用指南", 170.0, 104.0, 26, C_GOLD);
+    txt("轮回镜·使用指南", 170.0, 104.0, 24, C_GOLD);
     if button(1064.0, 86.0, 44.0, 36.0, "×", None, true) {
         g.panel = 0;
         g.play(crate::sounds::Which::Page);
@@ -2145,6 +2223,6 @@ fn draw_help_panel(g: &mut Game) {
     for j in 0..count {
         let i = base + j;
         let c = if j == 0 { C_GOLD } else { C_TEXT };
-        wrap_draw(lines[i], 180.0, 200.0 + j as f32 * 52.0, 17, 920.0, 30.0, c);
+        wrap_draw(lines[i], 180.0, 200.0 + j as f32 * 52.0, 16, 920.0, 30.0, c);
     }
 }

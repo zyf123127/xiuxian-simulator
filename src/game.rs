@@ -211,12 +211,20 @@ impl Eff {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum CardKind {
+    Npc,  // v1.8.0 D2 现实好感事件：choose_roption 抉择（rmodal_npc 配对）
+    Path, // v1.10.2 筑基择道：choose_path 抉择（三途分流；副标由 draw_modal_card 特判）
+}
+
 pub struct EventCard {
     pub title: String,
 
     pub text: String,
 
     pub opts: Vec<(String, Eff)>,
+
+    pub kind: CardKind,
 }
 
 #[derive(Clone)]
@@ -309,6 +317,8 @@ pub struct Life {
     pub slot: u8,    // 时段 0..=3（晨/昼/昏/夜，随推岁流转；v1.5.0）
 
     pub weather: u8, // 天气 0..=4（WEATHERS 索引，随推岁演化；v1.5.0）
+
+    pub path: u8, // v1.10.2 筑基择道：道途 0未择/1剑修/2气修/3丹修（存档键 Lpath=，旧档缺键 0；选定终身不改，模拟侧恒 0）
 }
 
 impl Default for Life {
@@ -387,7 +397,24 @@ impl Default for Life {
             slot: 0,
 
             weather: 0,
+
+            path: 0,
         }
+    }
+}
+
+// v1.10.2 筑基择道：道途常量与名号（三途分流，分别挂钩战力/周天吐纳/坊市丹药与灵田）
+pub const PATH_NONE: u8 = 0;
+pub const PATH_SWORD: u8 = 1; // 剑修：战力 ×1.35
+pub const PATH_QI: u8 = 2;    // 气修：每载修为 ×1.25、破境率 +0.06
+pub const PATH_PILL: u8 = 3;  // 丹修：服丹效果 ×1.35、灵田岁入 ×1.6
+
+pub fn path_name(p: u8) -> &'static str {
+    match p {
+        PATH_SWORD => "剑修",
+        PATH_QI => "气修",
+        PATH_PILL => "丹修",
+        _ => "未择道途",
     }
 }
 
@@ -472,6 +499,8 @@ pub struct Meta {
     pub region_visited: [bool; 5], // v1.8.0 C5：五域到访记录（按 map_region%5 置位，跨世持久）
 
     pub auto: u8, // v1.9.25 周天吐纳：现实自动修炼开关 0关/1开（存档键 zt=，旧档缺键默认 0）
+
+    pub last_ts: u64, // v1.10.2 离线闭关：最后一次落盘 epoch 秒（存档键 ts=；旧档缺键/0 → 首落盘不计收益仅落新基准）
 }
 
 impl Default for Meta {
@@ -532,6 +561,8 @@ impl Default for Meta {
             region_visited: [false; 5],
 
             auto: 0,
+
+            last_ts: 0,
         }
     }
 }
@@ -613,6 +644,55 @@ pub fn gain_qi(l: &mut Life, amount: f64) {
     l.gained += amount;
 }
 
+// v1.10.2 离线闭关：出关结算卡数据（会话态不进存档；收益在 resume_life 时已入账内存）
+pub struct OfflineReport {
+    pub years: i64,        // 离闭载数
+    pub qi: f64,           // 修为收益（五折后）
+    pub stones: i64,       // 灵田岁入（静态口径）
+    pub life_capped: bool, // 被寿元钳住（再不归返便要坐化）
+}
+
+// ================= v1.10.2 离线闭关：出关结算 =================
+// 纯函数（可测）：离线收益三件套。口径：90 秒 = 1 载；raw = min(离线秒, 8h)/90；
+// 效率 5 折；N = min(raw×0.5, lifespan − age − 1)——终值恒保 age<lifespan，绝不替玩家死亡。
+// 修为 = 每载收益×N（cult_gain_per_year 同口）；灵石 = 灵田岁入×N（静态口径，不 roll 天气）。
+// 返回 None = 不结算（首落盘 ts 缺 0 / 时钟回拨 / N≤0）。
+pub const OFFLINE_SEC_PER_YEAR: f64 = 90.0;
+pub const OFFLINE_CAP_SECS: f64 = 8.0 * 3600.0;
+pub const OFFLINE_EFF: f64 = 0.5;
+
+pub fn offline_settle_calc(
+    last_ts: u64,
+    now: u64,
+    gain_per_year: f64,
+    lingtian_per_year: i64,
+    lifespan: f64,
+    age: f64,
+) -> Option<(i64, f64, i64, bool)> {
+    if last_ts == 0 {
+        return None; // 首次落盘前无基准
+    }
+    let sec = (now as f64 - last_ts as f64).max(0.0); // 时钟回拨/脏值 → 按 0 收益
+    let raw = sec.min(OFFLINE_CAP_SECS) / OFFLINE_SEC_PER_YEAR;
+    let n_raw = (raw * OFFLINE_EFF) as i64;
+    let cap = ((lifespan - age - 1.0) as i64).max(0);
+    let n = n_raw.min(cap);
+    if n <= 0 {
+        return None;
+    }
+    Some((
+        n,
+        gain_per_year * n as f64,
+        (lingtian_per_year as f64 * n as f64).round() as i64,
+        n_raw > cap, // 被寿元钳住
+    ))
+}
+
+// epoch 秒（native=SystemTime；wasm=Date.now/1e3——miniquad date::now 双端已为 epoch 秒）
+pub fn date_now() -> u64 {
+    macroquad::miniquad::date::now() as u64
+}
+
 pub struct SettleInfo {
     pub cause: String,
 
@@ -662,6 +742,15 @@ pub struct Game {
     pub npc_vel: f32,
     pub npc_anim: Option<f32>,
 
+    // v1.10.2 落盘去抖会话态（不进存档；卡顿修复·次要项②）：sync_save 只置脏，
+    // 统一由主循环在「场景/弹窗/面板开合边界」或「距上次落盘 ≥3s」时落盘——
+    // 周天吐纳挂机期 localStorage 同步写从 0.6 次/s 降到 0.2 次/s（微顿消除）。
+    // wasm 另存最近快照供 pagehide/visibilitychange 强制落盘（丢档窗口 ≤3s）。
+    pub save_dirty: bool,
+    pub save_timer: f32,
+    /// 上一帧 UI 边界信号：(scene, panel, rmodal, modal, submenu, shop, dev, exp)
+    pub prev_sig: (u8, u8, bool, bool, bool, bool, bool, bool),
+
     // v1.9.25 周天吐纳会话态（不进存档）：计时/连续载数/累计修为/跨境满修为 toast 门闩
     pub auto_acc: f32,
     pub auto_years: u32,
@@ -710,6 +799,8 @@ pub struct Game {
     pub banner: Option<(String, f32, Color)>,
 
     pub settle: Option<SettleInfo>,
+
+    pub offline_card: Option<OfflineReport>, // v1.10.2 离线闭关：出关结算卡（独占输入；不进存档）
 
     pub time: f32,
 
@@ -938,6 +1029,11 @@ pub fn cult_rate(l: &Life, meta: &Meta) -> f64 {
         r *= 0.5;
     }
 
+    // v1.10.2 筑基择道：气修（path=2）每载修为 ×1.25（乘区尾接）
+    if l.path == PATH_QI {
+        r *= 1.25;
+    }
+
     r
 }
 
@@ -961,6 +1057,11 @@ pub fn power(l: &Life) -> f64 {
             };
     }
 
+    // v1.10.2 筑基择道：剑修（path=1）战力 ×1.35（乘区尾接；模拟侧 path 恒 0 不受益）
+    if l.path == PATH_SWORD {
+        p *= 1.35;
+    }
+
     p *= 1.0 + l.power_buff;
 
     if l.injured > 0 {
@@ -979,6 +1080,11 @@ pub fn big_break_p(l: &Life, target: usize) -> f32 {
 
     if target == 2 && l.pills[1] > 0 {
         p += 0.25;
+    }
+
+    // v1.10.2 筑基择道：气修（path=2）破境率 +0.06（加在 0.05..0.95 钳制之前）
+    if l.path == PATH_QI {
+        p += 0.06;
     }
 
     if rd.immortal {
@@ -1048,6 +1154,10 @@ impl Game {
             npc_vel: 0.0,
             npc_anim: None,
 
+            save_dirty: false,
+            save_timer: 0.0,
+            prev_sig: (0, 0, false, false, false, false, false, false),
+
             auto_acc: 0.0,
 
             auto_years: 0,
@@ -1102,6 +1212,8 @@ impl Game {
 
             settle: None,
 
+            offline_card: None,
+
             time: 0.0,
 
             sfx_ok: None,
@@ -1116,6 +1228,24 @@ impl Game {
     pub fn sync_save(&mut self) {
         self.meta.life = self.life.clone();
 
+        // v1.10.2 落盘去抖：meta.life 快照保持即时（承接前缘/恢复逻辑依赖），
+        // 磁盘写推迟到 save_flush（主循环：场景/弹窗/面板开合边界 或 ≥3s 一落）；
+        // wasm 侧同步暂存快照供 pagehide/visibilitychange 强制落盘兜底。
+        self.save_dirty = true;
+        #[cfg(target_arch = "wasm32")]
+        save::stash_pending(&self.meta);
+    }
+
+    // v1.10.2：把去抖窗口内的变更统一落盘（幂等；无脏即 no-op）
+    pub fn save_flush(&mut self) {
+        if !self.save_dirty {
+            return;
+        }
+        self.save_dirty = false;
+        self.save_timer = 0.0;
+        // 离线起点=最后一次落盘时刻：真实落盘才推进 ts 基准——
+        // 不推进会把「在局游玩时长」按离线口径重算（多算）
+        self.meta.last_ts = date_now();
         save::save(&self.meta);
     }
 
@@ -1323,6 +1453,141 @@ impl Game {
         self.play(crate::sounds::Which::Page);
     }
 
+    // ================= v1.10.2 离线闭关 / 承接前缘 =================
+
+    // 承接前缘：恢复现实主角（自 draw.rs 菜单按钮抽出——前置修复：菜单 8 秒自动进入
+    // 曾无条件 begin_mortal，有档玩家挂菜单即被覆盖旧档人生；抽出后自动进入与按钮同口）。
+    // 恢复即结算离线收益（N≥10 弹结算卡 / 1≤N<10 静默入账 / N=0 不动）并补弹旧档道途卡。
+    pub fn resume_life(&mut self) {
+        self.life = self.meta.life.clone(); // 还原现实主角（缺失则 draw_reality 黑屏）
+        self.panel = 0;
+        // v1.8.0 C5：承接旧档补记当前区域到访（旧档缺 mvis 键已由 save 层迁移；
+        // 此处兜底显式已至但未记的区域——已置位则为 no-op）
+        self.visit_region(true);
+        self.scene = Scene::Reality;
+        self.log("轮回镜微亮，前缘未了。", C_TEXT);
+        // v1.10.2 离线闭关：恢复即结算（收益先入账内存，落盘交收功/去抖/pagehide）
+        self.offline_settle();
+        // v1.10.2 筑基择道：旧档 realm≥2 且未择道 → 补弹道途卡（offline_card 若在弹，
+        // 其独占分支先行，收功后道途卡经 rmodal 自然接棒）
+        if self
+            .life
+            .as_ref()
+            .is_some_and(|l| l.realm >= 2 && l.path == PATH_NONE)
+        {
+            self.open_path_card();
+        }
+    }
+
+    // 菜单 8 秒自动进入的统一入口：有档恢复（含离线结算），无档开新人生
+    pub fn resume_or_begin(&mut self) {
+        if self.meta.life.is_some() {
+            self.resume_life();
+        } else {
+            self.begin_mortal();
+        }
+    }
+
+    // 离线结算：以最后一次落盘（meta.last_ts）为起点算收益。严禁循环 act_cultivate
+    //（其尾部逐载 sync_save 会打爆 localStorage）与 advance_time（唯一推岁口含天气
+    // 转移 roll 与宿敌成长，离线一律静态口径）——qi 累加后不自动破境，交还周天吐纳
+    // 既有衔接（tick_auto→act_cultivate 主循环下次自然接管）。
+    pub fn offline_settle(&mut self) {
+        let Some(l) = self.life.as_ref() else {
+            return;
+        };
+        let now = date_now();
+        let gain = self.cult_gain_per_year();
+        let lv = self.meta.dongfu[1].clamp(0, 3) as usize;
+        // v1.10.2 复审③：丹修（path=3）灵田岁入 ×1.6——与唯一推岁口 advance_time 的
+        // 静态项同式，同一载在线/离线口径一致（漏乘则丹修离闭收益少 60%）
+        let path_pill = if l.path == PATH_PILL { 1.6 } else { 1.0 };
+        let lingtian = (LINGTIAN_YIELD[lv.min(3)] as f64
+            * weather_loc_mult(l.weather as usize, l.loc)
+            * path_pill)
+        .round() as i64;
+        let Some((n, qi, stones, capped)) = offline_settle_calc(
+            self.meta.last_ts,
+            now,
+            gain,
+            lingtian,
+            l.lifespan,
+            l.age,
+        ) else {
+            self.meta.last_ts = now; // 本次不计收益，仅落新基准
+            return;
+        };
+        {
+            let l = self.life.as_mut().unwrap();
+            l.qi += qi; // 与 act_cultivate 完全同式累加；修为满不破境（不调破境口）
+            l.stones += stones;
+            l.age += n as f64;
+        }
+        self.meta.last_ts = now;
+        if n >= 10 {
+            self.offline_card = Some(OfflineReport {
+                years: n,
+                qi,
+                stones,
+                life_capped: capped,
+            });
+        } else {
+            self.log(
+                format!(
+                    "离闭 {} 载，修为+{}，灵田岁入灵石 {}。",
+                    n,
+                    fmt_num(qi),
+                    fmt_int(stones)
+                ),
+                C_CYAN,
+            );
+        }
+    }
+
+    // ================= v1.10.2 筑基择道：三途分流 =================
+
+    // 弹道途卡（rmodal 独占模态；neme 卡/事件卡不可同帧抢输入——rmodal 空时才弹）。
+    // 三钮副标由 draw_modal_card 的 CardKind::Path 分支统一为「择定终身，不可改道」。
+    pub fn open_path_card(&mut self) {
+        if self.rmodal.is_some() {
+            return;
+        }
+        self.rmodal = Some(EventCard {
+            kind: CardKind::Path,
+            title: "筑基择道 · 三途分流".into(),
+            text: "筑基之上道途分三，一经择定终身不改（模拟推演不携道途）：剑修战力×1.35；气修每载修为×1.25、破境率+6%；丹修服丹效果×1.35、灵田岁入×1.6。你将何以证道？".into(),
+            opts: vec![
+                ("剑修 · 战力 ×1.35".into(), Eff::new()),
+                ("气修 · 修为 ×1.25 破境 +6%".into(), Eff::new()),
+                ("丹修 · 服丹 ×1.35 灵田 ×1.6".into(), Eff::new()),
+            ],
+        });
+        self.rmodal_npc = None; // 道途卡不归属 NPC
+    }
+
+    // 道途抉择：选定终身、无改道入口；未到筑基（realm<2）或已择者卫语句拒绝
+    pub fn choose_path(&mut self, p: u8) {
+        self.rmodal = None;
+        self.rmodal_npc = None;
+        if p == 0 || p > 3 {
+            return;
+        }
+        let Some(l) = self.life.as_mut() else {
+            return;
+        };
+        if l.path != PATH_NONE || l.realm < 2 {
+            return;
+        }
+        l.path = p;
+        let name = path_name(p);
+        self.log(
+            format!("筑基关口，你择定道途——{}。自此终身不改。", name),
+            C_GOLD,
+        );
+        self.play(crate::sounds::Which::Ascend);
+        self.sync_save();
+    }
+
     // ================= 模拟：开始 =================
 
     pub fn sim_cost(&self) -> i32 {
@@ -1469,6 +1734,10 @@ impl Game {
         s.seclusion = None;
 
         s.trib = None;
+
+        // v1.10.2 筑基择道：道途不进模拟——推演是另一条人生，择道只属现实主角；
+        // 不剥离会把五处乘区全部带进模拟侧、破坏推演对照（单测 sim_does_not_inherit_path）
+        s.path = 0;
 
         self.sim = Some(s);
 
@@ -1948,6 +2217,8 @@ impl Game {
             let rd = &REALMS[target];
 
             let mut card = EventCard {
+                kind: CardKind::Npc,
+
                 title: String::new(),
 
                 text: String::new(),
@@ -2462,6 +2733,8 @@ impl Game {
         };
 
         let mut card = EventCard {
+            kind: CardKind::Npc,
+
             title: String::new(),
 
             text: String::new(),
@@ -4086,10 +4359,13 @@ impl Game {
         }
 
         // 广告/事件卡/弹层/结算期冻结（不清零，回来接着吐纳）
+        // v1.10.2 复审②：离闭结算卡独占输入期间同样冻结——否则周天吐纳在卡后照跑，
+        // 最坏 age 达 lifespan → real_die 玩家死在读卡画面里
         if self.ad.is_some()
             || self.rmodal.is_some()
             || self.submenu.is_some()
             || self.settle.is_some()
+            || self.offline_card.is_some()
         {
             return;
         }
@@ -4265,9 +4541,12 @@ impl Game {
             weather_changed = next != l.weather.min(4) as usize;
             l.weather = next as u8;
             // 灵田：按层级产出，收成随天气与所在地起伏
+            // v1.10.2 筑基择道：丹修（path=3）灵田岁入 ×1.6（静态乘区，随唯一推岁口）
+            let path_pill = if l.path == PATH_PILL { 1.6 } else { 1.0 };
             let lv = self.meta.dongfu[1].clamp(0, 3) as usize;
             let y = (LINGTIAN_YIELD[lv.min(3)] as f64
-                * weather_loc_mult(l.weather as usize, l.loc))
+                * weather_loc_mult(l.weather as usize, l.loc)
+                * path_pill)
             .round() as i64;
             if y > 0 {
                 l.stones += y;
@@ -4929,11 +5208,15 @@ impl Game {
             return;
         }
 
-        let boost = self
-            .life
-            .as_ref()
-            .map(|l| teff(l).pill_mult.max(1.0))
-            .unwrap_or(1.0);
+        let boost = self.life.as_ref().map(|l| {
+            let mut b = teff(l).pill_mult.max(1.0);
+            // v1.10.2 筑基择道：丹修（path=3）服丹效果 ×1.35（单点；模拟侧 teff 路径 path 恒 0）
+            if l.path == PATH_PILL {
+                b *= 1.35;
+            }
+            b
+        })
+        .unwrap_or(1.0);
 
         let msg = {
             let l = self.life.as_mut().unwrap();
@@ -5448,6 +5731,10 @@ mod revenge_tests {
             npc_vel: 0.0,
             npc_anim: None,
 
+            save_dirty: false,
+            save_timer: 0.0,
+            prev_sig: (0, 0, false, false, false, false, false, false),
+
             auto_acc: 0.0,
 
             auto_years: 0,
@@ -5501,6 +5788,8 @@ mod revenge_tests {
             banner: None,
 
             settle: None,
+
+            offline_card: None,
 
             time: 0.0,
 
@@ -5653,5 +5942,81 @@ mod revenge_tests {
         }
 
         assert_eq!(g2.meta.neme.as_ref().unwrap().realm, 14);
+    }
+
+    // ================= v1.10.2 离线闭关 =================
+
+    // 离线收益纯函数：门槛/封顶/回拨/钳寿逐项口径
+    #[test]
+    fn offline_settle_calc_gates() {
+        // 缺基准（ts=0）不结算
+        assert!(offline_settle_calc(0, 1_000_000, 10.0, 100, 75.0, 20.0).is_none());
+        // 时钟回拨按 0 收益
+        assert!(offline_settle_calc(2_000_000, 1_000_000, 10.0, 100, 75.0, 20.0).is_none());
+        // N=0（<3 分钟）不动：179s → raw=1.99 → N=0
+        assert!(offline_settle_calc(1000, 1179, 10.0, 100, 75.0, 20.0).is_none());
+        // 90s=1 载、五折：1800s → raw=20 → N=10；qi=10×10=100；stones=100×10=1000
+        let (n, qi, st, capped) = offline_settle_calc(1000, 2800, 10.0, 100, 75.0, 20.0).unwrap();
+        assert_eq!(n, 10);
+        assert!((qi - 100.0).abs() < 1e-9, "qi={}", qi);
+        assert_eq!(st, 1000);
+        assert!(!capped);
+        // 8h 封顶：一天挂机 → raw = min(86400,28800)/90 = 320 → N=160，
+        // 但寿元余量 cap=(75−20−1)=54 更紧 → N=54 且 capped
+        let (n, _, _, capped) =
+            offline_settle_calc(1000, 1000 + 86_400, 10.0, 100, 75.0, 20.0).unwrap();
+        assert_eq!(n, 54);
+        assert!(capped);
+        // 8h 封顶本径（寿元充裕）：lifespan=300 → cap=279 > 160 → N=160 且未钳
+        let (n, _, _, capped) =
+            offline_settle_calc(1000, 1000 + 86_400, 10.0, 100, 300.0, 20.0).unwrap();
+        assert_eq!(n, 160);
+        assert!(!capped);
+        // 寿元钳制：age=73, lifespan=75 → cap = 1 → N=1 且 capped（绝不替玩家死亡）
+        let (n, _, _, capped) =
+            offline_settle_calc(1000, 1000 + 86_400, 10.0, 100, 75.0, 73.0).unwrap();
+        assert_eq!(n, 1);
+        assert!(capped);
+    }
+
+    // ================= v1.10.2 筑基择道 =================
+
+    // 泄漏修正：launch_sim 必须剥离 path——模拟推演不携道途，五处乘区零泄漏；
+    // 现实主角的道途不被触碰
+    #[test]
+    fn sim_does_not_inherit_path() {
+        let mut l = Life::default();
+        l.realm = 2;
+        l.path = PATH_QI;
+        let mut g = game_with(l, None);
+        g.picked = vec![0]; // 至少一个天赋（launch_sim 卫语句）
+        g.meta.sim_points = 5;
+        g.launch_sim();
+        assert_eq!(g.sim.as_ref().unwrap().path, 0, "模拟侧 path 必须为 0");
+        assert_eq!(g.life.as_ref().unwrap().path, PATH_QI, "现实道途不被触碰");
+    }
+
+    // 钩子数值对照：剑修战力恰 ×1.35、气修修为恰 ×1.25、气修破境恰 +0.06
+    //（丹修服丹 ×1.35 与灵田 ×1.6 的消费点含 sync_save/天气 roll，按验收口径手测）
+    #[test]
+    fn path_hooks_exact_multipliers() {
+        let base = Life::default();
+        let mut sword = base.clone();
+        sword.path = PATH_SWORD;
+        assert!(
+            (power(&sword) / power(&base) - 1.35).abs() < 1e-9,
+            "剑修战力应恰 ×1.35，实得 {}",
+            power(&sword) / power(&base)
+        );
+
+        let meta = Meta::default();
+        let mut qi_l = base.clone();
+        qi_l.path = PATH_QI;
+        let ratio = cult_rate(&qi_l, &meta) / cult_rate(&base, &meta);
+        assert!((ratio - 1.25).abs() < 1e-9, "气修修为应恰 ×1.25，实得 {}", ratio);
+
+        // +0.06 加在钳制之前：base 概率未触 0.05..0.95 界时应恰 +0.06
+        let dp = big_break_p(&qi_l, 3) - big_break_p(&base, 3);
+        assert!((dp - 0.06).abs() < 1e-6, "气修破境应恰 +0.06，实得 {}", dp);
     }
 }

@@ -231,7 +231,8 @@ async fn main() {
         if g.scene == Scene::Reality {
             // v1.6.0 B：弹层打开时 C/M 暂避让，防误触穿透
             // v1.8.0 B4：好感事件卡独占期一并避让
-            if g.submenu.is_none() && g.rmodal.is_none() {
+            // v1.10.2 复审②：离闭结算卡独占期同样避让（防卡上开面板/山河图穿透）
+            if g.submenu.is_none() && g.rmodal.is_none() && g.offline_card.is_none() {
                 if is_key_pressed(KeyCode::C) {
                     g.panel = if g.panel == 5 { 0 } else { 5 };
                 }
@@ -246,6 +247,10 @@ async fn main() {
         } else {
             g.time += dt;
             g.update_ambient(dt);
+        }
+        // v1.10.2 面板语料分帧预热（卡顿修复：面板首开 ≈ 温开）：菜单期每帧灌 ~40 字形
+        if g.scene == Scene::Menu {
+            ui::panel_warm_step(40);
         }
         // v1.9.25 周天吐纳：每帧 tick（内部自门控：仅 Reality 且弹层/事件/结算全关时累计）
         g.tick_auto(dt);
@@ -288,7 +293,7 @@ async fn main() {
                     &format!("{:.0},{:.0}", mx, my),
                     mx + 24.0,
                     my - 20.0,
-                    26.0,
+                    24.0,
                     Color::new(1.0, 0.1, 0.1, 1.0),
                 );
                 let last_str = match xx_last {
@@ -318,7 +323,7 @@ async fn main() {
                     ),
                     700.0,
                     40.0,
-                    22.0,
+                    20.0,
                     Color::new(1.0, 0.9, 0.2, 1.0),
                 );
                 // v1.9.25 字体缓存 churn 仪表（第二行防溢出）：G=新字形栅格化 U=图集整图
@@ -334,7 +339,7 @@ async fn main() {
                     &format!("G:{}/+{} U:{}/+{}", gl, dg, up, du),
                     700.0,
                     70.0,
-                    22.0,
+                    20.0,
                     Color::new(0.7, 0.95, 1.0, 1.0),
                 );
                 if let Some((x, y)) = xx_last {
@@ -383,7 +388,7 @@ async fn main() {
                         ),
                         662.0,
                         118.0,
-                        22.0,
+                        20.0,
                         Color::new(0.5, 1.0, 0.7, 1.0),
                     );
                     draw_text(
@@ -393,7 +398,7 @@ async fn main() {
                         ),
                         662.0,
                         152.0,
-                        21.0,
+                        20.0,
                         Color::new(1.0, 0.9, 0.4, 1.0),
                     );
                 }
@@ -403,7 +408,10 @@ async fn main() {
                 xx_auto -= dt;
                 if xx_auto <= 0.0 {
                     g.play(crate::sounds::Which::Click);
-                    g.begin_mortal();
+                    // v1.10.2 前置修复（数据丢失）：有档恢复（含离线结算）而非无条件
+                    // 开新人生——旧实现挂菜单 8 秒即被 begin_mortal 覆盖旧档人生；
+                    // ?tap= 自动回归与 mumu 冒烟预期同步：有档时进的是 Reality
+                    g.resume_or_begin();
                 }
             }
         }
@@ -412,6 +420,26 @@ async fn main() {
         if let Some(w) = g.sfx_ok.take() {
             g.audio.play(w);
         }
+        // v1.10.2 存档落盘去抖（卡顿修复·次要项②）：场景/弹窗/面板开合边界立即落，
+        // 否则每 ≥3s 一落（周天挂机 localStorage 写 0.6→0.2 次/s；wasm 侧另有
+        // index.html pagehide/visibilitychange 兜底，native 关窗丢 ≤3s 属既定折中）
+        g.save_timer += dt;
+        let sig = (
+            g.scene as u8,
+            g.panel,
+            g.rmodal.is_some(),
+            g.modal.is_some(),
+            g.submenu.is_some(),
+            g.world.shop,
+            g.world.dev,
+            g.world.exp.is_some(),
+        );
+        if sig != g.prev_sig {
+            g.save_flush();
+        } else if g.save_dirty && g.save_timer >= 3.0 {
+            g.save_flush();
+        }
+        g.prev_sig = sig;
         if debug {
             autopilot(&mut g, frame, &mut shots);
         }
@@ -428,7 +456,8 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
         img.export_png(&path);
         *shots += 1;
         if *shots >= 63 {
-            g.sync_save();
+            // v1.10.2：落盘去抖后 sync_save 只置脏，退出前必须显式 flush
+            g.save_flush();
             std::process::exit(0);
         }
     }
@@ -673,6 +702,7 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
             // 若自然事件已先弹出（is_none 守卫）则顺带入镜。慢速下弹窗冻结画面。
             if *shots >= 49 && *shots < 51 && g.modal.is_none() && g.sim.is_some() {
                 let mut card = game::EventCard {
+                    kind: game::CardKind::Npc,
                     title: "仙人问道".into(),
                     text: "云端降下一位白须仙人，含笑看你：「小子，老夫可指你一条路，要哪般？」"
                         .into(),

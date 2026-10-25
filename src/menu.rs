@@ -127,7 +127,7 @@ pub fn draw_sub(g: &mut Game) {
     {
         let responsive = !g.sub_fresh; // 开帧门闩：置位帧只显示不响应
         panel_card(380.0, 160.0, 520.0, 300.0);
-        txt_c(&title, 640.0, 186.0, 22, C_GOLD);
+        txt_c(&title, 640.0, 186.0, 20, C_GOLD);
         draw_rectangle(410.0, 206.0, 460.0, 1.5, Color::from_rgba(96, 76, 130, 160));
         for (i, (label, sub, enabled, code)) in rows.iter().enumerate() {
             if button(410.0, 220.0 + i as f32 * 78.0, 460.0, 66.0, label, Some(sub), *enabled)
@@ -171,8 +171,7 @@ pub fn draw_atlas(g: &mut Game) {
     txt_r(
         &format!("已解锁 {}/5", unlocked),
         920.0,
-        132.0,
-        15,
+        132.0, 14,
         C_CYAN,
     );
     draw_rectangle(370.0, 160.0, 540.0, 1.5, Color::from_rgba(96, 76, 130, 160));
@@ -182,7 +181,7 @@ pub fn draw_atlas(g: &mut Game) {
             draw_rectangle(370.0, y, 540.0, 70.0, Color::from_rgba(255, 255, 255, 6));
         }
         let visited = g.meta.region_visited[i]; // i 本身 0..5，直接索引安全
-        txt(MAP_THEMES[i].name, 386.0, y + 10.0, 17, C_GOLD);
+        txt(MAP_THEMES[i].name, 386.0, y + 10.0, 16, C_GOLD);
         txt_r(
             if visited { "已至" } else { "未至" },
             894.0,

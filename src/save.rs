@@ -92,6 +92,9 @@ pub fn save_text(m: &Meta) -> String {
     // v1.9.25 周天吐纳：现实自动修炼开关（旧档缺键默认 0=关）
     s.push_str(&format!("zt={}\n", m.auto));
     s.push_str(&format!("music={} sfx={}\n", m.music as i32, m.sfx as i32));
+    // v1.10.2 离线闭关：最后一次落盘 epoch 秒（缺键/0 → 首落盘不计收益仅落新基准；
+    // 回拨/脏值 → 按 0 收益；离线起点=最后一次落盘时刻，保守口径）
+    s.push_str(&format!("ts={}\n", m.last_ts));
     if let Some(n) = &m.neme {
         s.push_str(&format!("neme={} {} {}\n", n.title, n.name, n.realm));
     }
@@ -104,6 +107,37 @@ pub fn save_text(m: &Meta) -> String {
 pub fn save(m: &Meta) {
     // v1.5.0 双端后端：桌面写文件 / WASM 写 localStorage（JS 侧 try/catch，配额异常不上抛）
     backend::write_text(&save_text(m));
+}
+
+// ---------------- v1.10.2 落盘去抖的 pagehide 兜底（仅 wasm）----------------
+// sync_save 去抖后磁盘写延迟 ≤3s；手机 WebView 切后台被强杀时 pagehide 是唯一
+// 落盘时机——JS 在 pagehide/visibilitychange(hidden) 经 wasm_exports 调下列两个
+// 导出，把最近一次 sync_save 的存档快照写入 localStorage（键与 xx_storage 插件
+// 一致），丢档窗口从「3s 内全部变更」压到「距最近一次 sync_save 的间隔」。
+#[cfg(target_arch = "wasm32")]
+static PENDING: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+#[cfg(target_arch = "wasm32")]
+pub fn stash_pending(m: &Meta) {
+    *PENDING.lock().unwrap() = Some(save_text(m));
+}
+
+/// JS 兜底读取：pending 快照字节长度（0 = 无待兜底快照）
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn xx_save_pending_len() -> i32 {
+    PENDING.lock().unwrap().as_ref().map_or(0, |s| s.len() as i32)
+}
+
+/// JS 兜底读取：pending 快照字节指针（两次调用间 wasm 单线程串行，指针有效）
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn xx_save_pending_ptr() -> *const u8 {
+    PENDING
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map_or(std::ptr::null(), |s| s.as_ptr())
 }
 
 fn life_text(l: &Life) -> String {
@@ -136,6 +170,8 @@ fn life_text(l: &Life) -> String {
     s.push_str(&format!("Lrlv={:?}\n", l.relic_lv));
     s.push_str(&format!("Lslot={}\n", l.slot));
     s.push_str(&format!("Lweather={}\n", l.weather));
+    // v1.10.2 筑基择道：道途（0..=3；旧档缺键 0=未择，越界归 0，选定终身不改）
+    s.push_str(&format!("Lpath={}\n", l.path));
     s
 }
 
@@ -255,6 +291,8 @@ fn parse_save(text: &str) -> Meta {
             // v1.9.25 周天吐纳开关（旧档缺键默认 0=关；坏值静默回退）
             // v1.10.1 归一化到 0/1：脏档 zt=2..255 曾致「自动修炼暗中运转但 UI 显示关」
             "zt" => m.auto = (v.parse::<u8>() == Ok(1)) as u8,
+            // v1.10.2 离线闭关：落盘基准时刻（缺键/0 → 首落盘不计收益仅落新基准）
+            "ts" => m.last_ts = v.trim().parse().unwrap_or(0),
             "music" => m.music = v.trim().split(' ').next().map_or(true, |x| x == "1"),
             "sfx" => m.sfx = v.trim().split(' ').nth(1).map_or(true, |x| x == "1"),
             "neme" => {
@@ -320,6 +358,13 @@ fn parse_save(text: &str) -> Meta {
             }
             "Lweather" => {
                 life.weather = v.trim().parse::<i64>().unwrap_or(0).clamp(0, 4) as u8;
+            }
+            "Lpath" => {
+                // v1.10.2 筑基择道：值域 0..=3，越界/坏值归 0=未择（坏档/未来版本键容错）
+                life.path = match v.trim().parse::<u8>() {
+                    Ok(x) if x <= 3 => x,
+                    _ => 0,
+                };
             }
             "Lflags" => {
                 let a = nums(v);
@@ -536,5 +581,61 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
         // v1.10.1：脏档 zt=2..255 归一化为 0（关），与 UI 门 meta.auto==1 单一口径
         let dirty = format!("{}zt=2\n", OLD_BASE);
         assert_eq!(parse_save(&dirty).auto, 0);
+    }
+
+    // v1.10.2 离线闭关：ts= 回环 / 旧档缺键 / 坏值
+    #[test]
+    fn offline_ts_roundtrip_missing_and_bad() {
+        let mut m = Meta::default();
+        m.last_ts = 1_700_000_000;
+        let text = save_text(&m);
+        assert!(text.contains("ts=1700000000\n"));
+        assert_eq!(parse_save(&text).last_ts, 1_700_000_000);
+
+        // 旧档缺 ts 键 → 0（首落盘不计收益仅落新基准）
+        let old: String = text
+            .lines()
+            .filter(|l| !l.starts_with("ts="))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(parse_save(&old).last_ts, 0);
+
+        // 坏值 → 0（时钟回拨按 0 收益由 offline_settle_calc 的 max(0.0) 兜底）
+        let bad = format!("{}ts=abc\n", OLD_BASE);
+        assert_eq!(parse_save(&bad).last_ts, 0);
+    }
+
+    // v1.10.2 筑基择道：Lpath= 回环 / 旧档缺键 / 越界归 0
+    #[test]
+    fn lpath_roundtrip_missing_and_out_of_range() {
+        let mut m = Meta::default();
+        let mut l = Life::default();
+        l.path = 2;
+        m.life = Some(l);
+        let text = save_text(&m);
+        assert!(text.contains("Lpath=2\n"));
+        assert_eq!(parse_save(&text).life.as_ref().unwrap().path, 2);
+
+        // 旧档缺 Lpath → 0 = 未择（向后兼容零迁移）
+        let old: String = text
+            .lines()
+            .filter(|l| !l.starts_with("Lpath="))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(parse_save(&old).life.as_ref().unwrap().path, 0);
+
+        // 越界归 0
+        let bad: String = text
+            .lines()
+            .map(|l| {
+                if l.starts_with("Lpath=") {
+                    "Lpath=9".to_string()
+                } else {
+                    l.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(parse_save(&bad).life.as_ref().unwrap().path, 0);
     }
 }
