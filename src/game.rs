@@ -654,7 +654,13 @@ pub struct Game {
 
     pub char_tab: u8, // 角色面板页签 0总览 1法宝 2成就·称号（v1.5.0）
 
-    pub char_page: u8, // v1.9.25：人物页翻页游标 0..=3 四 NPC / 4 道侣（会话态，不进存档）
+    // v1.10.2 人物页单列滚动列表会话态（不进存档，×/Esc 归零；先例 char_page）：
+    // npc_scroll 滚动偏移（钳 [0, 1198]）；npc_drag 拖动锚点 (按下x, 按下y, 按下时scroll)；
+    // npc_vel 松手惯性 px/帧；npc_anim 页点/头像条跳转目标（lerp 0.2/帧平滑趋近）
+    pub npc_scroll: f32,
+    pub npc_drag: Option<(f32, f32, f32)>,
+    pub npc_vel: f32,
+    pub npc_anim: Option<f32>,
 
     // v1.9.25 周天吐纳会话态（不进存档）：计时/连续载数/累计修为/跨境满修为 toast 门闩
     pub auto_acc: f32,
@@ -1037,7 +1043,10 @@ impl Game {
 
             char_tab: 0,
 
-            char_page: 0,
+            npc_scroll: 0.0,
+            npc_drag: None,
+            npc_vel: 0.0,
+            npc_anim: None,
 
             auto_acc: 0.0,
 
@@ -1146,6 +1155,14 @@ impl Game {
 
     pub fn play(&mut self, w: crate::sounds::Which) {
         self.sfx_ok = Some(w);
+    }
+
+    // v1.10.2：人物页滚动会话态归零（×/Esc 关面板同批归零，先例 char_page 归零口径）
+    pub fn npc_scroll_reset(&mut self) {
+        self.npc_scroll = 0.0;
+        self.npc_drag = None;
+        self.npc_vel = 0.0;
+        self.npc_anim = None;
     }
 
     pub fn show_banner(&mut self, text: impl Into<String>, c: Color) {
@@ -5426,7 +5443,10 @@ mod revenge_tests {
 
             char_tab: 0,
 
-            char_page: 0,
+            npc_scroll: 0.0,
+            npc_drag: None,
+            npc_vel: 0.0,
+            npc_anim: None,
 
             auto_acc: 0.0,
 

@@ -13,13 +13,36 @@ pub fn draw_char_panel(g: &mut Game) {
     let Some(l) = g.life.clone() else { return };
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
     panel_card(140.0, 60.0, 1000.0, 600.0);
+    // v1.10.2：人物页（页签 3）改为「先内容 → 遮幅 → 后 chrome」——人物页滚动列表的
+    // 上下遮幅带会盖住页签行（74..108），chrome 须最后重铺才不被遮；其余页签无溢出，
+    // 维持先 chrome 后内容的旧序（立即模式命中不依赖绘制顺序，行为不变）。
+    let npc_tab = g.char_tab == 3;
+    let mut closed = false;
+    if !npc_tab {
+        closed = draw_panel_chrome(g);
+    }
+    if !closed {
+        match g.char_tab {
+            1 => draw_relic_page(g, &l),
+            2 => draw_ach_title_page(g, &l),
+            3 => draw_npc_page(g, &l), // v1.6.0 D：好感度页（v1.10.2 单列滚动列表）
+            _ => draw_overview(g, &l),
+        }
+        if npc_tab {
+            draw_panel_chrome(g);
+        }
+    }
+}
+
+// 标题 / × / 页签（v1.10.2 自 draw_char_panel 抽出；返回 true 表示本帧点了 ×）
+fn draw_panel_chrome(g: &mut Game) -> bool {
     txt("角色", 170.0, 92.0, 26, C_GOLD);
     if button(1064.0, 74.0, 44.0, 36.0, "×", None, true) {
         g.panel = 0;
         g.char_tab = 0; // v1.5.0：关面板同时归零页签（与 Esc 行为一致）
-        g.char_page = 0; // v1.9.25：人物页翻页游标同步归零（与 Esc 行为一致）
+        g.npc_scroll_reset(); // v1.10.2：人物页滚动会话态同批归零（与 Esc 行为一致）
         g.play(crate::sounds::Which::Page);
-        return;
+        return true;
     }
     // ---------- 页签（v1.6.0 D：追加第 4 页「人物」） ----------
     let tabs = ["总览", "法宝", "成就·称号", "人物"];
@@ -33,12 +56,7 @@ pub fn draw_char_panel(g: &mut Game) {
             draw_rectangle(x, 108.0, 140.0, 3.0, C_GOLD);
         }
     }
-    match g.char_tab {
-        1 => draw_relic_page(g, &l),
-        2 => draw_ach_title_page(g, &l),
-        3 => draw_npc_page(g, &l), // v1.6.0 D：好感度页
-        _ => draw_overview(g, &l),
-    }
+    false
 }
 
 // ---------- 页 3：人物（v1.6.0 D 好感度；v1.9.25 单列大卡改版）----------

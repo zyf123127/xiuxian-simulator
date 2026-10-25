@@ -218,7 +218,7 @@ async fn main() {
             } else if g.panel != 0 {
                 g.panel = 0;
                 g.char_tab = 0; // 与角色面板 × 行为一致：关面板同时归零页签
-                g.char_page = 0; // v1.9.25：人物页翻页游标同步归零
+                g.npc_scroll_reset(); // v1.10.2：人物页滚动会话态同批归零（先例 char_page 口径）
                 // v1.8.0 B3/E3：关面板统一清各面板的挂起确认态（顺手修复既有缺陷：
                 // Esc 关行囊后 sac_pending 残留，重开仍处确认态）
                 g.sac_pending = None;
