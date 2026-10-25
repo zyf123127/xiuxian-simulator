@@ -1306,7 +1306,9 @@ pub fn draw_modal_card(g: &mut Game) {
     }
     // v1.9.25 卡顿修复（根因2）：卡面文本/eff_desc 不再每帧克隆+重建——按卡面内容
     // 惰性缓存于 g.modal_desc（打开帧重建一次，此后逐帧只做字符串比对零分配）；
-    // 模态期游戏态冻结、eff_desc 只依赖 Eff 本身（&self），无失真风险
+    // 模态期游戏态冻结、eff_desc 只依赖 Eff 本身（&self），无失真风险。
+    // v1.10.1：缓存项含 label，按位比对 label↔label（v1.9.25 曾拿 label 比对 desc，
+    // 二者按构造恒不等 → stale 恒真，缓存永不命中，模态期逐帧重建仍在）
     {
         let card = g.rmodal.as_ref().or(g.modal.as_ref()).unwrap();
 
@@ -1319,7 +1321,7 @@ pub fn draw_modal_card(g: &mut Game) {
                         .opts
                         .iter()
                         .zip(d.iter())
-                        .any(|((l, _), c)| l != c)
+                        .any(|((l, _), (cl, _))| l != cl)
             }
             None => true,
         };
@@ -1328,7 +1330,10 @@ pub fn draw_modal_card(g: &mut Game) {
             g.modal_desc = Some((
                 card.title.clone(),
                 card.text.clone(),
-                card.opts.iter().map(|(_, e)| e.eff_desc()).collect(),
+                card.opts
+                    .iter()
+                    .map(|(l, e)| (l.clone(), e.eff_desc()))
+                    .collect(),
             ));
         }
     }
@@ -1362,7 +1367,7 @@ pub fn draw_modal_card(g: &mut Game) {
             520.0,
             62.0,
             label,
-            Some(&descs[i]),
+            Some(descs[i].1.as_str()),
             true,
         ) {
             picked = Some(i);

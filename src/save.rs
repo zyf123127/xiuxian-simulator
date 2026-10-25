@@ -253,7 +253,8 @@ fn parse_save(text: &str) -> Meta {
             // v1.7.0：广告次数（旧档缺键默认 0）
             "adw" => m.ad_watched = v.parse().unwrap_or(0),
             // v1.9.25 周天吐纳开关（旧档缺键默认 0=关；坏值静默回退）
-            "zt" => m.auto = v.parse().unwrap_or(0),
+            // v1.10.1 归一化到 0/1：脏档 zt=2..255 曾致「自动修炼暗中运转但 UI 显示关」
+            "zt" => m.auto = (v.parse::<u8>() == Ok(1)) as u8,
             "music" => m.music = v.trim().split(' ').next().map_or(true, |x| x == "1"),
             "sfx" => m.sfx = v.trim().split(' ').nth(1).map_or(true, |x| x == "1"),
             "neme" => {
@@ -532,5 +533,8 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
         assert_eq!(parse_save(&text).auto, 1);
         let bad = format!("{}zt=abc\n", OLD_BASE);
         assert_eq!(parse_save(&bad).auto, 0);
+        // v1.10.1：脏档 zt=2..255 归一化为 0（关），与 UI 门 meta.auto==1 单一口径
+        let dirty = format!("{}zt=2\n", OLD_BASE);
+        assert_eq!(parse_save(&dirty).auto, 0);
     }
 }

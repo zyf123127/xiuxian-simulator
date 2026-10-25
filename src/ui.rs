@@ -56,10 +56,8 @@ pub fn txt_r(s: &str, rx: f32, y: f32, size: u16, c: Color) {
 // 事件帧调用本函数把全部档位字形一次栅格化，动画帧零缓存 miss。
 pub fn prewarm_text(text: &str, sizes: &[u16]) {
     for ch in text.chars() {
-        if ch.is_whitespace() {
-            continue;
-        }
-
+        // v1.10.1：不再跳过空白——draw_text_ex 对空格同样走 cache_glyph（0×0 精灵
+        // 也会置图集 dirty），跳过会让首条 banner 的 pop 期留 4 次/档 miss
         let cs = ch.to_string();
 
         for &sz in sizes {

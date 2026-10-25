@@ -674,7 +674,7 @@ pub struct Game {
 
     pub refine_pending: Option<usize>, // v1.8.0 E3：行囊法宝炼化选材态（目标法宝下标；不进存档；Esc 清理点已随 B4 前置建立）
 
-    pub modal_desc: Option<(String, String, Vec<String>)>, // v1.9.25：模态卡面 eff_desc 惰性缓存（title,text,各选项desc；不进存档，逐帧零重建）
+    pub modal_desc: Option<(String, String, Vec<(String, String)>)>, // v1.10.1：模态卡面惰性缓存（title,text,各选项(label,desc)；不进存档，逐帧零重建）
 
     pub shop_tab: u8,
 
@@ -4064,7 +4064,7 @@ impl Game {
     // 挂点唯一：main.rs 每帧 tick_auto(dt)。结算与手点完全同口 act_cultivate(true)，
     // 严禁复制第二条结算路径；寿尽 real_die→life None→自然停机。
     pub fn tick_auto(&mut self, dt: f32) {
-        if self.scene != Scene::Reality || self.meta.auto == 0 {
+        if self.scene != Scene::Reality || self.meta.auto != 1 {
             return;
         }
 
