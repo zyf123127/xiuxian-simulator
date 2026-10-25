@@ -213,8 +213,10 @@ impl Eff {
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum CardKind {
-    Npc,  // v1.8.0 D2 现实好感事件：choose_roption 抉择（rmodal_npc 配对）
-    Path, // v1.10.2 成行择道：choose_path 抉择（三途分流；副标由 draw_modal_card 特判）
+    Npc,    // v1.8.0 D2 现实好感事件：choose_roption 抉择（rmodal_npc 配对）
+    Path,   // v1.10.2 成行择道：choose_path 抉择（三途分流；副标由 draw_modal_card 特判）
+    Finale, // v1.12.1 终卷四结局：choose_ending 抉择（问笔终战独占卡；新变体是硬前置——
+            // 现有三路分派 else 落 choose_roption，rmodal_npc=None 时静默挂死）
 }
 
 pub struct EventCard {
@@ -503,6 +505,13 @@ pub struct Meta {
     pub auto: u8, // v1.9.25 周天吐纳：现实自动修炼开关 0关/1开（存档键 zt=，旧档缺键默认 0）
 
     pub last_ts: u64, // v1.10.2 离线闭关：最后一次落盘 epoch 秒（存档键 ts=；旧档缺键/0 → 首落盘不计收益仅落新基准）
+
+    pub endings_seen: u8, // v1.12.1 终卷四结局达成位掩码：bit0=A定稿 bit1=B留白(推荐) bit2=C执笔 bit3=D合订(隐藏)
+                          //（存档键 ed=；旧档缺键/坏值 → 0，零迁移向后兼容；D 钮显隐与书志页灰行均读此位）
+
+    pub taodie: u8, // v1.12.1 讨牒：已请职牒 0..=6（键 dp=；sync_taodie 对账补发，旧档首检补齐）
+    pub feng_bn: u8, // v1.12.1 缝页人名下标（键 bn=；FENG_UNSET=255 未定）
+    pub feng_blv: u8, // v1.12.1 缝页缘 0..=3，一世同页至终 +1（键 blv=；缘一/二数值 perk，缘三纯叙事）
 }
 
 impl Default for Meta {
@@ -567,6 +576,12 @@ impl Default for Meta {
             auto: 0,
 
             last_ts: 0,
+
+            endings_seen: 0,
+
+            taodie: 0,
+            feng_bn: crate::data::FENG_UNSET,
+            feng_blv: 0,
         }
     }
 }
@@ -734,7 +749,7 @@ pub struct Game {
 
     pub modal: Option<EventCard>,
 
-    pub panel: u8, // 0无 1坊市 2行囊 3轮回烙印 4帮助 5角色
+    pub panel: u8, // 0无 1坊市 2行囊 3轮回烙印 4帮助 5角色 6书志（v1.12.1 终卷四结局重看）
 
     pub char_tab: u8, // 角色面板页签 0总览 1法宝 2成就·称号（v1.5.0）
 
@@ -805,6 +820,10 @@ pub struct Game {
     pub settle: Option<SettleInfo>,
 
     pub offline_card: Option<OfflineReport>, // v1.10.2 离线闭关：出关结算卡（独占输入；不进存档）
+
+    pub ending_show: Option<usize>, // v1.12.1 终卷四结局：问笔终战演出页覆层（ENDINGS 下标 0..=3；不进存档，合页即清）
+
+    pub book_view: Option<usize>, // v1.12.1 书志重看覆层：panel=6 书志页点开已达成的结局条目，复用演出页绘制（不进存档）
 
     pub blank_used: bool, // v1.12.0 空白行：每稿至多一次门闩（瞬态，不进存档；launch_sim 清零）
 
@@ -1029,6 +1048,10 @@ pub fn cult_rate(l: &Life, meta: &Meta) -> f64 {
     if l.companion.is_some() {
         // v1.6.0 D：双修倍率由道侣好感档决定（结缘起步 25 → ×1.20，生死之交 ×1.35）
         r *= crate::npc::comp_cult_mult(l.comp_fav);
+
+        if meta.feng_blv >= 1 {
+            r *= crate::data::FENG_CULT_MULT; // v1.12.1 缝页缘一：双修再乘 ×1.10（双侧共用本率）
+        }
     }
 
     if l.injured > 0 {
@@ -1220,6 +1243,10 @@ impl Game {
 
             offline_card: None,
 
+            ending_show: None,
+
+            book_view: None,
+
             blank_used: false,
 
             time: 0.0,
@@ -1360,7 +1387,10 @@ impl Game {
 
         let lifespan = REALMS[0].life * (1.0 + upg[8] as f64 * 0.10);
 
-        let stones = 100 * (1i64 << upg[6].min(4) as i64);
+        // v1.12.1 缝页缘二：开局灵石 ×1.3（模拟侧由现实克隆自动继承）
+        let stones = 100 * (1i64 << upg[6].min(4) as i64)
+            * if self.meta.feng_blv >= 2 { 13 } else { 10 }
+            / 10;
 
         let life = Life {
             n: self.meta.lives,
@@ -1474,6 +1504,7 @@ impl Game {
         self.visit_region(true);
         self.scene = Scene::Reality;
         self.log("轮回镜微亮，前缘未了。", C_TEXT);
+        self.sync_taodie(); // v1.12.1 讨牒旧档首检：neme_slain>0 自动补齐职牒（零迁移）
         // v1.10.2 离线闭关：恢复即结算（收益先入账内存，落盘交收功/去抖/pagehide）
         self.offline_settle();
         // v1.10.2 成行择道：旧档 realm≥2 且未择道 → 补弹道途卡（offline_card 若在弹，
@@ -1593,6 +1624,56 @@ impl Game {
             C_GOLD,
         );
         self.play(crate::sounds::Which::Ascend);
+        self.sync_save();
+    }
+
+    // ================= v1.12.1 终卷 · 四结局（未竟稿 §9）=================
+
+    // 弹终战抉择卡（rmodal 独占模态，复用道途卡同款机制；rmodal 被占时不弹——
+    // 与 open_path_card 同口径。触发单口：act_break target==10 九重雷劫成功段
+    // 且 meta.neme_slain>=6（封卷吏已斩=宿敌链 NEME_TITLES[min(lv,5)] 链顶已通）。
+    // 卡面 3 选项常显（A 认写 / B 撕稿·推荐位 / C 夺笔），D《合订》仅当
+    // endings_seen bit1（B 已达成）时追加为第 4 钮——§12「后事不详→合订」直译，
+    // 构成「达成 B 后再轮回一世、二次问笔」的跨世钩子）。
+    pub fn open_finale_card(&mut self) {
+        if self.rmodal.is_some() {
+            return;
+        }
+        let mut opts = vec![
+            ("《定稿》 · 认写".to_string(), Eff::new()),
+            ("《留白》 · 撕稿".to_string(), Eff::new()),
+            ("《执笔》 · 夺笔".to_string(), Eff::new()),
+        ];
+        if self.meta.endings_seen & 0b0010 != 0 {
+            opts.push(("《合订》 · 收册人（隐藏）".to_string(), Eff::new()));
+        }
+        self.rmodal = Some(EventCard {
+            kind: CardKind::Finale,
+            title: "终卷 · 执笔人递笔".into(),
+            text: "你赢了封卷吏。执笔人递笔：「字不错。入正文吧。」\n「我还能改自己吗？」「一字不改。永生换的。」\n别等他写，字自己跑。六牒已齐（讨牒 6/6），问笔在即。".into(),
+            opts,
+        });
+        self.rmodal_npc = None; // 终战卡不归属 NPC
+    }
+
+    // 终战抉择：i 为卡面选项下标（0认写 1撕稿 2夺笔 3合订[仅解锁时存在]）。
+    // 置位掩码 → 写 log → 横幅 → 落盘 → 置演出页覆层（合页后回 Reality，雷劫
+    // burst 已在前，衔接自然；模拟侧推演飞升不挂卡——推演不算数，终战只属现实层）。
+    pub fn choose_ending(&mut self, i: usize) {
+        self.rmodal = None;
+        self.rmodal_npc = None;
+        let d_unlocked = self.meta.endings_seen & 0b0010 != 0;
+        let e = match i {
+            0..=2 => i,
+            3 if d_unlocked => 3,
+            _ => return, // 未解锁的 D 位（脏点击/未来卡面）卫语句拒绝
+        };
+        self.meta.endings_seen |= 1 << e;
+        let ed = &ENDINGS[e];
+        self.log(format!("【结局达成】{}——{}", ed.name, ed.alias), C_GOLD);
+        self.show_banner(format!("结 局 · 《{}》", ed.name), C_GOLD);
+        self.ending_show = Some(e);
+        self.play(crate::sounds::Which::Page);
         self.sync_save();
     }
 
@@ -2120,7 +2201,9 @@ impl Game {
 
         // 宿敌遭遇
 
-        if self.sim.is_some() && self.meta.neme.is_some() && gen_range(0.0, 1.0) < 0.025 {
+        let neme_enc = if self.meta.taodie >= 6 { 0.0125 } else { 0.025 }; // v1.12.1 讨牒 6/6 遭遇减半
+
+        if self.sim.is_some() && self.meta.neme.is_some() && gen_range(0.0, 1.0) < neme_enc {
             self.sim_neme();
         }
 
@@ -2608,6 +2691,9 @@ impl Game {
     }
 
     fn spawn_next_neme(&mut self) {
+        // v1.12.1 文狱讨牒：每斩一吏即请其职牒（slain 已由两入口先行 +1，此处对账补发）
+        self.sync_taodie();
+
         let lv = self.meta.neme_slain as usize;
 
         let title = NEME_TITLES[(lv).min(NEME_TITLES.len() - 1)];
@@ -2631,6 +2717,49 @@ impl Game {
 
         // v1.6.0 山河万象：斩敌换幕（现实寻仇与模拟反杀共用此口）
         self.advance_map();
+    }
+
+    // ================= v1.12.1 文狱讨牒：六吏讨伐链终局收束 =================
+    // 讨牒对账单漏斗（共用 spawn_next_neme 之口）：while 补发幂等，旧档 neme_slain>0
+    // 首检自动补齐零迁移；第 6 牒封卷牒=大额道韵+遭遇率减半；taodie>=6 可赴问笔终战
+    fn sync_taodie(&mut self) {
+        while self.meta.taodie < self.meta.neme_slain.min(6) as u8 {
+            self.meta.taodie += 1;
+
+            let title = NEME_TITLES[(self.meta.taodie - 1) as usize];
+
+            if self.meta.taodie < 6 {
+                self.log(
+                    format!("文狱讨牒 {}/6：{}职牒归档——删你字的手，先一步被你合上。", self.meta.taodie, title),
+                    C_CYAN,
+                );
+            } else {
+                self.meta.dao_yun += 166;
+                self.log(
+                    "封卷牒归档，讨牒 6/6！六吏职牒齐聚，道韵+166——文狱闻你名而却步（遭遇减半），可赴问笔终战。",
+                    C_GOLD,
+                );
+            }
+        }
+    }
+
+    // ================= v1.12.1 同页人·三生缝页 =================
+    // 重逢判定：此番结缘的正是缝页人、且先前并非同页
+    fn feng_reunion(&self, prev: Option<&str>, cn: &str) -> bool {
+        self.meta.feng_bn != crate::data::FENG_UNSET
+            && cn == COMPANION_NAMES[self.meta.feng_bn as usize]
+            && prev != Some(cn)
+    }
+
+    // 缘深单口：一世同页至终缘+1（三生封顶；缘三纯叙事）——sim_die/real_die 共用
+    fn feng_bond_up(&mut self, cn: Option<&str>) {
+        if let Some(cn) = cn {
+            if self.meta.feng_bn != crate::data::FENG_UNSET
+                && cn == COMPANION_NAMES[self.meta.feng_bn as usize]
+            {
+                self.meta.feng_blv = (self.meta.feng_blv + 1).min(3);
+            }
+        }
     }
 
     // v1.6.0 仇敌突破换地图：region+1、种子 LCG 演化、人归清源洞府、横幅宣告
@@ -3438,18 +3567,51 @@ impl Game {
                 self.check_ach(24);
             }
             17 => {
-                // 结为道侣
-                let cn = COMPANION_NAMES[gen_range(0, COMPANION_NAMES.len())];
+                // 结为道侣。v1.12.1 同页人·三生缝页：掷名 40% 缘定缝页人——未定名时
+                // 定名初缝，已定名时强制重逢；初缝/离页重逢各补一行史笔
+                let roll = gen_range(0, COMPANION_NAMES.len());
+                let (idx, feng_new) = if self.meta.feng_bn == crate::data::FENG_UNSET {
+                    if gen_range(0.0, 1.0) < 0.4 {
+                        self.meta.feng_bn = roll as u8; // 初缝定名
+                        (roll, true)
+                    } else {
+                        (roll, false)
+                    }
+                } else if gen_range(0.0, 1.0) < 0.4 {
+                    (self.meta.feng_bn as usize, false) // 强制重逢
+                } else {
+                    (roll, false)
+                };
+                let cn = COMPANION_NAMES[idx];
+                let prev = self.sim.as_ref().unwrap().companion.clone();
+                let feng_re = !feng_new && self.feng_reunion(prev.as_deref(), cn);
+
                 let first = {
                     let s = self.sim.as_mut().unwrap();
+
                     let first = s.companion.is_none();
+
                     s.companion = Some(cn.to_string());
+
                     // v1.6.0 D 应修②：好感只升不降——sim Life 由现实克隆（launch_sim）带入
                     // comp_fav，直接赋 25 会让遗泽等来源的高好感倒退（如 1.30 档→1.20）。
                     // 换伴侣保留好感：好感挂「玩家—NPC 体系」而非具体人名。
                     s.comp_fav = s.comp_fav.max(COMPANION_BOND_FAV);
+
                     s.highlights
                         .push(format!("{}岁，与{}缝作同页", s.age as i32, cn));
+                    if feng_new {
+                        s.highlights.push(format!(
+                            "{}岁，与{}初缝三生之页——三生之约，缘起此生",
+                            s.age as i32, cn
+                        ));
+                    } else if feng_re {
+                        s.highlights.push(format!(
+                            "{}岁，与{}同页重逢——撕开的页，又缝上了",
+                            s.age as i32, cn
+                        ));
+                    }
+
                     first
                 };
                 if first {
@@ -4133,6 +4295,7 @@ impl Game {
             }
         }
         let comp_fav = self.sim.as_ref().map(|s| s.comp_fav).unwrap_or(0);
+        self.feng_bond_up(comp.as_deref()); // v1.12.1 缝页：同页至终缘+1
 
         self.meta.dao_yun += dy;
 
@@ -4441,6 +4604,7 @@ impl Game {
             || self.submenu.is_some()
             || self.settle.is_some()
             || self.offline_card.is_some()
+            || self.ending_show.is_some() // v1.12.1 终卷演出页覆层独占期同样冻结
         {
             return;
         }
@@ -4811,6 +4975,8 @@ impl Game {
                             + l.dao / 500.0
                             + l.luck / 600.0
                             + l.body as f32 / 800.0;
+
+                        // v1.12.1 缝页缘三为纯叙事（护栏裁剪：无数值 perk），史行见婚约高亮
                         let mut b = e.trib_add + if l.pills[5] > 0 { 0.12 } else { 0.0 };
                         if l.pills[5] > 0 {
                             report.push("护神丹化作雷纹护体（存活+12%）。".to_string());
@@ -4875,6 +5041,21 @@ impl Game {
                         }
                         self.check_ach(27);
                         self.check_ach_all();
+                        // v1.12.1 终卷：封卷吏已斩（slain>=6=链顶已通）者，雷劫扛下当帧
+                        // 弹终战抉择卡；未通链者维持现状飞升不弹卡。揭底只取两行压色，
+                        // 避免与雷劫战报同屏剧透冲淡卡面（§8.2-8.3 纸底显形/玺灵齐声）。
+                        if self.meta.neme_slain >= 6 {
+                            self.log(
+                                "怀里旧镇纸烫穿衣襟——纸底十万层旧字显形，每一层的名字都不一样。",
+                                C_RED,
+                            );
+                            self.log(
+                                "玺灵十万层齐声：你不是这一稿，你是十万稿摞起来的一册人。",
+                                C_CYAN,
+                            );
+                            self.sync_taodie(); // 门前对账：保卡面「讨牒 6/6」恒真
+                            self.open_finale_card();
+                        }
                     } else {
                         let w = dead_at.unwrap() + 1;
                         let l = self.life.as_mut().unwrap();
@@ -5639,6 +5820,9 @@ impl Game {
 
         self.meta.best_power = self.meta.best_power.max(bp);
 
+        let feng_cn = self.life.as_ref().and_then(|l| l.companion.clone());
+        self.feng_bond_up(feng_cn.as_deref()); // v1.12.1 缝页：现实同页至终（含遗泽）缘+1
+
         self.life = None;
 
         self.modal = None;
@@ -5688,6 +5872,42 @@ impl Game {
         }
     }
 }
+
+// v1.12.1 终卷·四结局（未竟稿 §9 原文摘句，下标=endings_seen 位 0..=3）：
+// 演出页/书志页共用文案表；B《留白》为定稿推荐结局（织机声行为定稿原文通用句）。
+pub struct EndingDef {
+    pub name: &'static str, // 结局名（横幅/书志行）
+    pub alias: &'static str, // 抉择别名（认写/撕稿/夺笔/收册人）
+    pub body: &'static str, // 演出页正文（\n 分段）
+    pub gain: &'static str, // 达成行【结局达成/隐藏成就：…】
+}
+
+pub const ENDINGS: [EndingDef; 4] = [
+    EndingDef {
+        name: "定稿",
+        alias: "认写",
+        body: "你赢了封卷吏。执笔人出现，递来笔：「字不错。入正文吧。从此你的每一行都是天定——天定，也就永不动删。」\n你看了很久那支笔。\n「我要是入了正文，」你问，「还能改自己吗？」\n「一字不改。永生换的。」",
+        gain: "【结局达成：正文第一行 · 陈砚】\n【代价：草稿权作废。你不能重来，你成了别人不能重来的理由之一】",
+    },
+    EndingDef {
+        name: "留白",
+        alias: "撕稿",
+        body: "你当着执笔人的面，把自己的书撕了。\n琅函大乱——未写完的书，天道无权合卷。你的书从此只剩一页一行：\n「某年某月，青牛镇外，陈砚生。后事不详。」\n后事不详。四个字，比永生更宽。\n你回到田里。同页的织机声，从三百里外传来。",
+        gain: "【隐藏成就：后事不详 —— 一行之外，谁也写不了你】",
+    },
+    EndingDef {
+        name: "执笔",
+        alias: "夺笔",
+        body: "你接了那支笔。\n第一件事，把十万层废稿一层层起出来，每稿的名字，一笔一笔描清楚。\n最后一行，你写给下一个雨夜：\n「某年某月，某地，有人捡到一枚发烫的方印。印里有个声音，累得不像少年人。」",
+        gain: "【隐藏成就：琅函天笔 —— 你成了别人「重来一次」的源头】",
+    },
+    EndingDef {
+        name: "合订",
+        alias: "收册人",
+        body: "收册人入库时发现一册怪书：十万张废稿，自己订成了一册，书脊上无字，只有页脚一行小字，岁岁多一行——\n「未完。」",
+        gain: "【隐藏成就：会自己长出新行的书】",
+    },
+];
 
 pub const NEME_TITLES: [&str; 6] = [
     "断章",
@@ -5872,6 +6092,10 @@ mod revenge_tests {
             settle: None,
 
             offline_card: None,
+
+            ending_show: None,
+
+            book_view: None,
 
             blank_used: false,
 
@@ -6233,5 +6457,115 @@ mod revenge_tests {
         g.blank_used = true;
         g.launch_sim();
         assert!(!g.blank_used, "launch_sim 必须清零空白行门闩");
+    }
+
+    // ================= v1.12.1 终卷四结局 =================
+
+    // 终战卡：D《合订》钮仅当 endings_seen bit1（B 已达成）时出现；
+    // 未解锁位 choose_ending(3) 卫语句拒绝（脏点击不置位、不置演出页）
+    #[test]
+    fn finale_card_d_button_gated_on_ending_b() {
+        let mut g = game_with(Life::default(), None);
+        g.open_finale_card();
+        assert!(matches!(g.rmodal.as_ref().unwrap().kind, CardKind::Finale));
+        assert_eq!(g.rmodal.as_ref().unwrap().opts.len(), 3, "未达成 B：卡面 3 钮");
+        g.choose_ending(3); // 未解锁的 D 位：卫语句拒绝
+        assert!(g.rmodal.is_none());
+        assert_eq!(g.meta.endings_seen, 0, "未解锁位不得置位");
+        assert!(g.ending_show.is_none());
+
+        // 达成 B（bit1）后再问笔：第 4 钮出现，choose_ending(3) 置 bit3 并进演出页
+        g.meta.endings_seen = 0b0010;
+        g.open_finale_card();
+        assert_eq!(g.rmodal.as_ref().unwrap().opts.len(), 4, "达成 B：卡面 4 钮");
+        g.choose_ending(3);
+        assert_eq!(g.meta.endings_seen & 0b1000, 0b1000, "D 位应置位");
+        assert_eq!(g.ending_show, Some(3));
+    }
+
+    // 抉择置位/落盘链：choose_ending(i) 置位、清 rmodal、置演出页；重入幂等
+    #[test]
+    fn choose_ending_sets_bit_and_show() {
+        let mut g = game_with(Life::default(), None);
+        g.rmodal = Some(EventCard {
+            kind: CardKind::Finale,
+            title: "终卷 · 执笔人递笔".into(),
+            text: "".into(),
+            opts: vec![
+                ("《定稿》 · 认写".into(), Eff::new()),
+                ("《留白》 · 撕稿".into(), Eff::new()),
+                ("《执笔》 · 夺笔".into(), Eff::new()),
+            ],
+        });
+        g.choose_ending(1);
+        assert_eq!(g.meta.endings_seen & 0b0010, 0b0010, "B《留白》位应置位");
+        assert_eq!(g.ending_show, Some(1));
+        assert!(g.rmodal.is_none(), "抉择后终战卡应清空");
+        // 同结局重入（异常路径兜底）：位掩码幂等
+        g.ending_show = None;
+        g.choose_ending(1);
+        assert_eq!(g.meta.endings_seen & 0b0010, 0b0010);
+    }
+
+    // ================= v1.12.1 讨牒/缝页 =================
+
+    // 讨牒对账：slain=6 首检 while 补发、第 6 牒 +166 道韵；幂等不重发；slain>6 钳 6
+    #[test]
+    fn taodie_sync_backfills_and_caps() {
+        let mut g = game_with(Life::default(), None);
+        g.meta.neme_slain = 6;
+        let dy0 = g.meta.dao_yun;
+        g.sync_taodie();
+        assert_eq!((g.meta.taodie, g.meta.dao_yun), (6, dy0 + 166));
+        g.sync_taodie(); // 幂等
+        assert_eq!(g.meta.dao_yun, dy0 + 166);
+        g.meta.neme_slain = 9;
+        g.sync_taodie();
+        assert_eq!(g.meta.taodie, 6); // 越链顶钳 6
+    }
+
+    // 缘二 perk：开局灵石 ×1.3（begin_mortal 单口；尾部 visit_region 初至奖 +2000
+    // 一存档仅一次，与基数分立不相乘——首世 100+rv、次世 130 纯基数）
+    #[test]
+    fn feng_blv2_scales_starting_stones() {
+        let rv = REGION_VISIT_REWARD[0].1;
+        let mut g = game_with(Life::default(), None);
+        g.begin_mortal();
+        assert_eq!(g.life.as_ref().unwrap().stones, 100 + rv, "无缘 baseline");
+        g.meta.feng_blv = 2;
+        g.begin_mortal();
+        assert_eq!(g.life.as_ref().unwrap().stones, 130, "缘二开局基数 ×1.3");
+    }
+
+    // 缘深单口：与缝页人同页至终缘+1（三生为限），他人/无伴离世不变——表驱动四态
+    #[test]
+    fn feng_bond_up_only_for_feng() {
+        let cases = [
+            (Some(COMPANION_NAMES[3]), 1u8, 2u8), // 缝页人同页至终：缘+1
+            (None, 1, 1),                         // 无伴离世：不变
+            (Some(COMPANION_NAMES[4]), 1, 1),     // 他人离世：不变
+            (Some(COMPANION_NAMES[3]), 3, 3),     // 缘满三生：封顶
+        ];
+        for (comp, blv0, want) in cases {
+            let mut l = Life::default();
+            l.companion = comp.map(|c| c.to_string());
+            let mut g = game_with(l, None);
+            g.meta.feng_bn = 3;
+            g.meta.feng_blv = blv0;
+            g.real_die("试归尘");
+            assert_eq!(g.meta.feng_blv, want, "comp={:?} blv0={}", comp, blv0);
+        }
+    }
+
+    // 重逢判定：结缘的正是缝页人且先前并非同页；未定名恒否
+    #[test]
+    fn feng_reunion_predicate() {
+        let mut g = game_with(Life::default(), None);
+        g.meta.feng_bn = 2;
+        assert!(g.feng_reunion(Some("旁人"), COMPANION_NAMES[2]));
+        assert!(g.feng_reunion(None, COMPANION_NAMES[2]), "跨世初婚亦重逢");
+        assert!(!g.feng_reunion(Some(COMPANION_NAMES[2]), COMPANION_NAMES[2]));
+        g.meta.feng_bn = crate::data::FENG_UNSET;
+        assert!(!g.feng_reunion(None, COMPANION_NAMES[2]));
     }
 }

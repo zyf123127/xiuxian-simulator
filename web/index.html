@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.12.0";</script>
+    <script>var GAME_VER = "1.13.0";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -138,7 +138,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.12.0"></script>
+    <script src="mq_js_bundle.js?v=1.13.0"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -340,6 +340,11 @@
                 xxMsg.textContent =
                     "凡人模拟 v" + GAME_VER + " · " + xxStageMsg + "（已等待 " + s + " 秒）";
             }
+            // v1.12.1 加载停滞看门狗：计秒 interval（下方 setInterval 每秒）执行即刷
+            // 心跳——真机观测特征"计秒先走后停"被直接编码为心跳年龄，供下方 wd
+            // 看门狗 D1 判据读取。正常慢载期间本 interval 每秒照跑、心跳恒新，
+            // 结构性不触发；心跳停刷 ≥20s = 主线程死滞。
+            window.__xxLdBeat = performance.now();
         }
         function xx_stage(msg) {
             xxStageMsg = msg;
@@ -395,6 +400,21 @@
                 errlog.textContent += "[上次] " + (__pj.reason === "manual" ? "手动" : "自动") +
                     "重载：循环停于第" + __pj.frame + "帧 触达" + __pj.touches +
                     " 已收" + __pj.clicks + " st" + __pj.st + "\n";
+            }
+        } catch (e) {}
+        // v1.12.1 加载停滞看门狗·死因穿越：wd 自动重载后的新页把上次死因打到
+        // errlog（新键 xxwd，不复用 xxpost——避免与运行期循环死因混淆），读完即清。
+        // 行含"重载"关键词会触发上方淡化唤醒全显，与 xxpost 行同口径。注意个别
+        // 内核（夸克实测）sessionStorage 跨重载会丢——丢的只是这行显示，wd 计数
+        // 在 URL 参数里，预算功能不受影响。
+        try {
+            var __wdPost = sessionStorage.getItem("xxwd");
+            if (__wdPost) {
+                sessionStorage.removeItem("xxwd");
+                var __wdPj = JSON.parse(__wdPost);
+                errlog.textContent += "[上次] 加载停滞自救重载（" +
+                    (__wdPj.reason === "cap" ? "cap·超长" : "stall·计秒停摆") +
+                    "，第 " + __wdPj.wd + " 次，等待 " + __wdPj.waited + "s）\n";
             }
         } catch (e) {}
 
@@ -587,7 +607,14 @@
                         worker = new Worker(
                             URL.createObjectURL(new Blob([wcode], { type: "application/javascript" })),
                         );
-                        worker.onmessage = function () { tick(performance.now()); };
+                        worker.onmessage = function () {
+                            tick(performance.now());
+                            // v1.12.1 加载停滞看门狗借道：worker postMessage 不受
+                            // 可见性节流，主线程一能跑宏任务判定即恢复（与帧驱动
+                            // v2 同一免疫力来源）。看门狗定义在下方 45s 看门狗后，
+                            // 早期消息时 window.xxWdCheck 尚未挂载，判空借用。
+                            if (window.xxWdCheck) window.xxWdCheck();
+                        };
                         return true;
                     } catch (e) {
                         return false;
@@ -643,6 +670,85 @@
                     xxLoading.onclick = function () { location.reload(); };
                 }
             }, 45000);
+            // v1.12.1 加载停滞看门狗：加载期主线程停滞（MuMu/X5 冷加载偶发卡死，
+            // 观测特征"计秒先走后停、页面零变化"）的自动自救盲区——上方 45s 看门狗
+            // 只挂人工点击不自动重载；运行期 xxWatch 全部以 wasm_exports 就绪为前提，
+            // wasm 编译期停滞则其判定链结构性不可达，加载期是共同盲区。双口径触发
+            // 自动重载兜底：
+            //   D1 计秒停摆 ≥20s：xx_paint_stage 每秒刷 __xxLdBeat 心跳，停摆=观测
+            //     特征直接编码。正常慢载（页面自述首开 10~40s）期间计秒 interval
+            //     每秒照跑、心跳恒新，结构性不触发；20s 连续无喘息=主线程死滞
+            //     （真机实测偏敏可放宽至 30s，仍远小于 D2——极慢设备一次性 >20s
+            //     同步编译阻塞与卡死在触发时刻不可区分，由 wd≤2+D2 保险丝+人工
+            //     终态三层兜住，最坏代价是慢设备多等两次重载）。
+            //   D2 加载层可见且无 wasm_exports 超 120s：2×正常最慢 60s 的纯保险丝，
+            //     绝不误伤 30-60s 正常慢载。
+            // 防循环：URL 参数 wd=N 累计硬上限 2 次自动重载，用尽降级为 45s 看门狗
+            // 同款"点击重试"人工终态（必有兜底）；不写 xxrlt、不查 xxRlUsed()——
+            // 运行期 wedge 预算独立满额保留，wd 重载后的新页仍带满 xxrlt 预算应对
+            // 进游戏后的卡顿；与 r2 无环路（r2 只在 wasm 就绪后追加且已存在不加，
+            // 与 wd≤2 相乘最坏 3 次导航即终态）。死因穿越走新键 xxwd（见上方读取块）。
+            (function () {
+                var m = location.search.match(/[?&]wd=(\d+)/) ||
+                        location.hash.match(/wd=(\d+)/); // 对齐 xxRlUsed：query 为主 hash 兜底
+                var wd = m ? (parseInt(m[1], 10) || 0) : 0;
+                var dead = false;
+                var __wdIv = 0;
+                // 手动终态：镜像 45s 看门狗的"点击重试"写法，预算用尽必有兜底
+                function manualExit() {
+                    xx_stage("加载受阻，点击此处重试");
+                    xxLoading.style.pointerEvents = "auto";
+                    xxLoading.onclick = function () { location.reload(); };
+                }
+                function doReload(reason, beatAge, elapsed) {
+                    try {
+                        errlog.textContent += "[诊断] 加载停滞自救（" +
+                            (reason === "cap"
+                                ? "超长 " + Math.round(elapsed / 1000) + "s"
+                                : "计秒停摆 " + Math.round(beatAge / 1000) + "s") +
+                            "），自动重载第 " + (wd + 1) + "/2 次\n";
+                    } catch (e) {}
+                    if (wd >= 2) { manualExit(); return; }
+                    try {
+                        sessionStorage.setItem("xxwd", JSON.stringify({
+                            v: window.GAME_VER, reason: reason, wd: wd + 1,
+                            waited: Math.round(elapsed / 1000),
+                        }));
+                    } catch (e) {}
+                    // 摘旧 wd 计数（保留 ?/& 锚）、摘 hash（对齐 xxReload 写法），
+                    // 再把新计数追加回 query 尾部——r2/xxrlt/ss/dbg 等既有参数原样保留
+                    var href = location.href
+                        .replace(/([?&])wd=\d+/, "$1")
+                        .replace(/#.*$/, "")
+                        .replace(/\?&/, "?")
+                        .replace(/[?&]$/, "");
+                    href += (href.indexOf("?") >= 0 ? "&" : "?") + "wd=" + (wd + 1);
+                    location.href = href;
+                }
+                // 判定函数挂 window：worker.onmessage（帧驱动时钟 2，postMessage
+                // 不受可见性节流）借道调用，主线程一能跑宏任务判定即恢复——与
+                // 帧驱动 v2 同一免疫力来源；本 interval 每 2s 兜底常规轮询。
+                window.xxWdCheck = function () {
+                    if (dead) { clearInterval(__wdIv); return; } // worker 借道防重入
+                    // 自毁：wasm 就绪或加载层已隐藏——使命结束，与运行期看门狗零交集
+                    if (window.wasm_exports ||
+                        (xxLoading && xxLoading.classList.contains("hidden"))) {
+                        dead = true;
+                        clearInterval(__wdIv);
+                        return;
+                    }
+                    var now = performance.now();
+                    var elapsed = now - xxLoadStart;
+                    if (elapsed < 10000) return; // 武装门槛：避开脚本解析/初始化抖动
+                    var beatAge = now - (window.__xxLdBeat || xxLoadStart);
+                    if (beatAge >= 20000 || elapsed >= 120000) {
+                        dead = true;
+                        clearInterval(__wdIv);
+                        doReload(beatAge >= 20000 ? "stall" : "cap", beatAge, elapsed);
+                    }
+                };
+                __wdIv = setInterval(window.xxWdCheck, 2000);
+            })();
         }
         // 首帧检测：wasm 导出就绪（on_init 里 window.wasm_exports 被赋值）即隐藏
         // 加载覆盖层。用 setInterval 而非 rAF：页面不可见时 rAF 会被挂起。

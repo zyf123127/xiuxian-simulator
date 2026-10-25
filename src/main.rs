@@ -232,7 +232,12 @@ async fn main() {
             // v1.6.0 B：弹层打开时 C/M 暂避让，防误触穿透
             // v1.8.0 B4：好感事件卡独占期一并避让
             // v1.10.2 复审②：离闭结算卡独占期同样避让（防卡上开面板/山河图穿透）
-            if g.submenu.is_none() && g.rmodal.is_none() && g.offline_card.is_none() {
+            // v1.12.1 复审③a：终卷演出页覆层独占期同样避让
+            if g.submenu.is_none()
+                && g.rmodal.is_none()
+                && g.offline_card.is_none()
+                && g.ending_show.is_none()
+            {
                 if is_key_pressed(KeyCode::C) {
                     g.panel = if g.panel == 5 { 0 } else { 5 };
                 }

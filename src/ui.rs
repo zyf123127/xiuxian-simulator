@@ -174,6 +174,13 @@ fn wrap_uncached(s: &str, size: u16, maxw: f32) -> Vec<String> {
     let mut cur = String::new();
     let mut cur_w = 0.0;
     for ch in s.chars() {
+        // v1.12.1：显式换行强制断行（终卷四结局卡面/演出页分段文案所需；
+        // 全库现有被包文案零 \n 字面量，此分支对其零影响）
+        if ch == '\n' {
+            lines.push(std::mem::take(&mut cur));
+            cur_w = 0.0;
+            continue;
+        }
         let cs = ch.to_string();
         let w = measure(&cs, size);
         if cur_w + w > maxw && !cur.is_empty() {

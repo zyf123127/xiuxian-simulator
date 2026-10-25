@@ -538,6 +538,14 @@ pub fn draw_world(g: &mut Game, art: &Art) {
         version_mark();
         return;
     }
+    // v1.12.1 复审③b：终卷演出页独占——天雷峰「冲击境界」可在世界场景触发问笔，
+    // choose_ending 置位后演出页须在本场景接管（否则玩家留地图远征、回现实才见结局页）
+    if g.ending_show.is_some() {
+        draw_bg(art);
+        crate::draw::draw_ending_page(g, g.ending_show.unwrap_or(0), false);
+        version_mark();
+        return;
+    }
     // 覆盖层门控（P5 四处一致的总闸；v1.5.0 增洞府经营；v1.6.0 增山河弹层）
     let gate = g.world.exp.is_none() && !g.world.shop && !g.world.dev && g.submenu.is_none();
     draw_bg(art);

@@ -1117,12 +1117,15 @@ fn draw_ach_title_page(g: &Game) -> Option<PanelAct> {
             }
         }
     }
-    // 页脚提示（口径：称号解锁按历代最高境界判定，与总览页「生涯」的本世口径区分）
+    // 页脚提示（称号按历代最高境界判定）；v1.12.1 讨牒 n/6 进度——看得见 6/6 才知道终战在
+    let taodie = g.meta.taodie;
     txt(
         &format!(
-            "历代最高 {}境 · 斩杀宿敌 {} · 「自动跟随」随最强境界实时变化",
+            "历代最高 {}境 · 斩杀宿敌 {} · 讨牒 {}/6{} · 「自动跟随」随最强境界实时变化",
             REALMS[best_realm.min(14)].name,
-            neme_slain
+            neme_slain,
+            taodie,
+            if taodie >= 6 { "（可赴问笔终战）" } else { "" },
         ),
         170.0,
         636.0, 14,

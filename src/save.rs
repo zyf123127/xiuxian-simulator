@@ -102,6 +102,12 @@ pub fn save_text(m: &Meta) -> String {
     // v1.10.2 离线闭关：最后一次落盘 epoch 秒（缺键/0 → 首落盘不计收益仅落新基准；
     // 回拨/脏值 → 按 0 收益；离线起点=最后一次落盘时刻，保守口径）
     s.push_str(&format!("ts={}\n", m.last_ts));
+    // v1.12.1 四结局达成位掩码（bit0=A定稿 bit1=B留白 bit2=C执笔 bit3=D合订；缺键/坏值→0）
+    s.push_str(&format!("ed={}\n", m.endings_seen));
+    // v1.12.1 讨牒 dp=（sync_taodie 对账补发，旧档首检补齐）与缝页 bn=/blv=（255 未定、缘 0..=3）
+    s.push_str(&format!("dp={}\n", m.taodie));
+    s.push_str(&format!("bn={}\n", m.feng_bn));
+    s.push_str(&format!("blv={}\n", m.feng_blv));
     if let Some(n) = &m.neme {
         s.push_str(&format!("neme={} {} {}\n", n.title, n.name, n.realm));
     }
@@ -310,6 +316,17 @@ fn parse_save(text: &str) -> Meta {
             "zt" => m.auto = (v.parse::<u8>() == Ok(1)) as u8,
             // v1.10.2 离线闭关：落盘基准时刻（缺键/0 → 首落盘不计收益仅落新基准）
             "ts" => m.last_ts = v.trim().parse().unwrap_or(0),
+            // v1.12.1 终卷四结局：达成位掩码（缺键/坏值 → 0，照 zt=/ts= 先例零迁移）
+            "ed" => m.endings_seen = v.trim().parse().unwrap_or(0),
+            // v1.12.1 讨牒 dp=（缺键 0，脏值钳 6）/缝页 bn=/blv=（未知名 255 未定，缘钳 3）
+            "dp" => m.taodie = v.trim().parse::<u8>().unwrap_or(0).min(6),
+            "bn" => {
+                m.feng_bn = match v.trim().parse::<u8>() {
+                    Ok(x) if (x as usize) < crate::data::COMPANION_NAMES.len() => x,
+                    _ => crate::data::FENG_UNSET,
+                };
+            }
+            "blv" => m.feng_blv = v.trim().parse::<u8>().unwrap_or(0).min(3),
             "music" => m.music = v.trim().split(' ').next().map_or(true, |x| x == "1"),
             "sfx" => m.sfx = v.trim().split(' ').nth(1).map_or(true, |x| x == "1"),
             "neme" => {
@@ -757,5 +774,51 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
             .collect::<Vec<_>>()
             .join("\n");
         assert_eq!(parse_save(&old).note_line, None);
+    }
+
+    // v1.12.1 终卷四结局：ed= 回环 / 旧档缺键 0 / 坏值 0（零迁移，照 zt=/ts= 先例）
+    #[test]
+    fn endings_seen_roundtrip_missing_and_bad() {
+        let mut m = Meta::default();
+        m.endings_seen = 0b0111; // A/B/C 已达成（bit1=B《留白》，是 D《合订》的钥匙位）
+        let text = save_text(&m);
+        assert!(text.contains("ed=7\n"));
+        assert_eq!(parse_save(&text).endings_seen, 0b0111);
+
+        // 旧档缺 ed 键 → 0（历史版本从未落盘结局位，向后兼容零迁移）
+        let old: String = text
+            .lines()
+            .filter(|l| !l.starts_with("ed="))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(parse_save(&old).endings_seen, 0);
+
+        // 坏值 → 0
+        let bad = format!("{}ed=abc\n", OLD_BASE);
+        assert_eq!(parse_save(&bad).endings_seen, 0);
+    }
+
+    // v1.12.1 讨牒/缝页：dp=/bn=/blv= 回环 / 旧档缺键默认 / 坏值越界回退（零迁移）
+    #[test]
+    fn taodie_feng_roundtrip_missing_and_bad() {
+        let mut m = Meta::default();
+        m.taodie = 6;
+        m.feng_bn = 3;
+        m.feng_blv = 2;
+        let text = save_text(&m);
+        assert!(text.contains("dp=6\n") && text.contains("bn=3\n") && text.contains("blv=2\n"));
+        let m2 = parse_save(&text);
+        assert_eq!((m2.taodie, m2.feng_bn, m2.feng_blv), (6, 3, 2));
+
+        // 旧档缺键 → dp 0 / bn 255 未定 / blv 0（向后兼容零迁移）；坏值/越界 → 回退钳制
+        let old: String = text
+            .lines()
+            .filter(|l| !l.starts_with("dp=") && !l.starts_with("bn=") && !l.starts_with("blv="))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let m3 = parse_save(&old);
+        assert_eq!((m3.taodie, m3.feng_bn, m3.feng_blv), (0, crate::data::FENG_UNSET, 0));
+        let m4 = parse_save(&format!("{}dp=9\nbn=77\nblv=9\n", OLD_BASE));
+        assert_eq!((m4.taodie, m4.feng_bn, m4.feng_blv), (6, crate::data::FENG_UNSET, 3));
     }
 }

@@ -451,7 +451,10 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
         portrait_tier(g.meta.best_realm),
     );
     let bx = V_W * 0.5 - 320.0;
-    if button(bx, 522.0, 300.0, 54.0, "开始新的人生", None, true) {
+    // v1.12.1 复审①②：panel!=0（书志/烙印/帮助罩层阅读态）时危险钮不做命中——
+    // 立即模式底排 button 先于罩层绘制命中，同帧重叠矩形全触发，误点即无确认
+    // begin_mortal 覆盖当前人生（resume_life 注释自证）；合页钮与它仅隔 4px
+    if g.panel == 0 && button(bx, 522.0, 300.0, 54.0, "开始新的人生", None, true) {
         g.play(crate::sounds::Which::Click);
         g.begin_mortal();
     }
@@ -503,6 +506,11 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
     if button(bx + 465.0, 592.0, 140.0, 44.0, "帮助", None, true) {
         g.panel = 4;
     }
+    // v1.12.1 书志：终卷四结局总览与重看（第 5 钮 bx+620=940..1080 ⊂ V_W=1280）
+    if button(bx + 620.0, 592.0, 140.0, 44.0, "书志", None, true) {
+        g.panel = 6;
+        g.book_view = None; // Esc 关面板不清此会话态，入口处归零防重开直接落在演出页
+    }
     let best = REALMS[g.meta.best_realm.min(14)].name;
     txt_c(
         &format!(
@@ -522,6 +530,13 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
     }
     if g.panel == 4 {
         draw_help_panel(g);
+    }
+    // v1.12.1 书志页：终卷四结局总览（panel 6）；达成条目点开复用演出页重读
+    if g.panel == 6 {
+        draw_book_record(g);
+        if let Some(i) = g.book_view {
+            draw_ending_page(g, i, true);
+        }
     }
     version_mark();
 }
@@ -546,6 +561,14 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     if g.rmodal.is_some() {
         draw_bg(art);
         draw_modal_card(g);
+        version_mark();
+        return;
+    }
+    // v1.12.1 终卷演出页：choose_ending 置位的全屏覆层独占输入（合页即回 Reality；
+    // 挂早退链尾——终战卡在其前自然渲染，抉择后卡清、覆层接管）
+    if g.ending_show.is_some() {
+        draw_bg(art);
+        draw_ending_page(g, g.ending_show.unwrap_or(0), false);
         version_mark();
         return;
     }
@@ -1343,11 +1366,21 @@ pub fn draw_modal_card(g: &mut Game) {
                 card.text.clone(),
                 card.opts
                     .iter()
-                    .map(|(l, e)| {
+                    .enumerate()
+                    .map(|(i, (l, e))| {
                         // v1.10.2 成行择道：道途卡副标统一为改道禁示（乘区效果见卡面总述；
                         // eff_desc 无法表达 ×1.35 之类静态乘区）
+                        // v1.12.1 终战卡：副标按位给抉择注脚（Eff 为空，eff_desc 无义）
                         let d = if card.kind == crate::game::CardKind::Path {
                             "择定终身，不可改道".to_string()
+                        } else if card.kind == crate::game::CardKind::Finale {
+                            match i {
+                                0 => "永生换的 · 一字不改",
+                                1 => "推荐 · 后事不详，比永生更宽",
+                                2 => "描清十万稿的名字",
+                                _ => "隐藏 · 未完的书自会看见",
+                            }
+                            .to_string()
                         } else {
                             e.eff_desc()
                         };
@@ -1372,6 +1405,15 @@ pub fn draw_modal_card(g: &mut Game) {
     // 命中先收集、借还后再分派（&mut）——免整卡克隆
     let mut picked: Option<usize> = None;
 
+    // v1.12.1 终战卡四钮几何特判：默认步距 74/高 62 时 3 钮末底 526 合规、4 钮末底
+    // 600 溢出 panel_card 底 560——Finale 收紧为步距 58/高 58，4 钮末底 548 合规
+    let fin = g
+        .rmodal
+        .as_ref()
+        .or(g.modal.as_ref())
+        .is_some_and(|c| c.kind == crate::game::CardKind::Finale);
+    let (step, bh) = if fin { (58.0, 58.0) } else { (74.0, 62.0) };
+
     for (i, (label, _)) in g
         .rmodal
         .as_ref()
@@ -1383,9 +1425,9 @@ pub fn draw_modal_card(g: &mut Game) {
     {
         if button(
             380.0,
-            316.0 + i as f32 * 74.0,
+            316.0 + i as f32 * step,
             520.0,
-            62.0,
+            bh,
             label,
             Some(descs[i].1.as_str()),
             true,
@@ -1399,12 +1441,12 @@ pub fn draw_modal_card(g: &mut Game) {
 
         // v1.10.2 成行择道：道途卡抉择走 choose_path（rmodal_npc 为 None，
         // 不得落入 choose_roption——那会因 npc None 静默 return 使卡挂死）
-        let is_path = g
-            .rmodal
-            .as_ref()
-            .is_some_and(|c| c.kind == crate::game::CardKind::Path);
-        if is_path {
+        // v1.12.1 终战卡同理单列：choose_ending（rmodal_npc 亦为 None）
+        let kind = g.rmodal.as_ref().map(|c| c.kind);
+        if kind == Some(crate::game::CardKind::Path) {
             g.choose_path(i as u8 + 1);
+        } else if kind == Some(crate::game::CardKind::Finale) {
+            g.choose_ending(i);
         } else if g.scene == Scene::Sim {
             g.choose_option(i);
         } else {
@@ -2247,11 +2289,13 @@ fn draw_help_panel(g: &mut Game) {
             draw_rectangle(x, 170.0, 190.0, 3.0, C_GOLD);
         }
     }
-    let lines: [&str; 14] = [
+    let lines: [&str; 15] = [
         "【轮回镜】耗 1 枚模拟点数，推演“可能的你”的一生，直至死亡。",
         "【模拟前】3 选 1 天赋（仅此一梦生效）；模拟中自动修炼、游历、闭关、突破。",
         "【模拟毕】随机给出数项“造化”，选一项带回现实：修为、功法、法宝、丹药……",
         "【现实】闭关涨修为（寿元-1年）；修为满可突破；清源洞府闭关+25%，天雷峰问笔更稳。",
+        // v1.12.1 终战引导：终战门槛（neme_slain>=6 才弹终战卡）的可发现性兜底
+        "【终战】现实破境至问笔、九重雷劫全扛，且斩敌链通至封卷——终战卡上落款四结局，书志可重看。",
         "【坊市】灵石购丹药，亦可兑换模拟点数（境界越高越贵）。",
         "【宿敌】血仇之敌每世模拟中皆会遭遇——实力不足则被斩，可逃可死。",
         "【斩敌】在模拟中反杀宿敌（领悟其招）或现实寻仇，皆可得灵石、点数与大笔道韵。",
@@ -2264,11 +2308,95 @@ fn draw_help_panel(g: &mut Game) {
         "【区域】山河图志五大区域各有专属机制：宗门兴望、大漠秘藏、瘴惑灵芽、冰心澄神、仙屿潮音——初至区域，图鉴有赏。",
         "【炼化】行囊·法宝页可「炼化」：献祭一件法宝为材料，为另一件提升灵纹（攻效与灵性再上一层，至多 +3 级）。",
     ];
-    let base = if g.help_tab == 0 { 0usize } else { 6usize };
-    let count = if g.help_tab == 0 { 6usize } else { 8usize };
+    let base = if g.help_tab == 0 { 0usize } else { 7usize };
+    let count = if g.help_tab == 0 { 7usize } else { 8usize };
     for j in 0..count {
         let i = base + j;
         let c = if j == 0 { C_GOLD } else { C_TEXT };
         wrap_draw(lines[i], 180.0, 200.0 + j as f32 * 52.0, 16, 920.0, 30.0, c);
+    }
+}
+
+// ================= 书志 · 终卷四结局（v1.12.1，未竟稿 §9/§12）=================
+
+// 演出页：四结局全屏覆层。问笔终战当帧首读（from_book=false，合页回 Reality）与
+// 书志页重读（from_book=true，合页回书志）共用；正文为 ENDINGS 定稿原文摘句
+// （B《留白》织机声行为定稿原文通用句，无条件追加——伏笔③的同页人具名分支按
+// 护栏裁剪序②降级，若下版同页人工作流落地可再升档）。
+// pub：世界地图天雷峰可触发问笔终战（world.rs 复审③b 挂同款独占分支）
+pub fn draw_ending_page(g: &mut Game, idx: usize, from_book: bool) {
+    let i = idx.min(3);
+    let e = &crate::game::ENDINGS[i];
+    draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(8, 5, 16, 242));
+    panel_card(190.0, 80.0, 900.0, 560.0);
+    txt_c(
+        &format!("《{}》 · {}", e.name, e.alias),
+        V_W * 0.5,
+        130.0,
+        32,
+        C_GOLD,
+    );
+    draw_rectangle(280.0, 162.0, 720.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    wrap_draw(e.body, 260.0, 186.0, 17, 760.0, 30.0, C_TEXT);
+    for (j, ln) in e.gain.lines().enumerate() {
+        txt_c(ln, V_W * 0.5, 412.0 + j as f32 * 26.0, 16, C_CYAN);
+    }
+    // 合页钮 y470..518：书志重看路径下标题屏底层按钮带（开始 522-576/底排 592-636）
+    // 先于本页做命中测试——立即模式下交互矩形不得与其重叠（烙印面板顿悟钮同款布局回避）
+    if button(V_W * 0.5 - 130.0, 470.0, 260.0, 48.0, "合上这一页", None, true) {
+        g.play(crate::sounds::Which::Page);
+        if from_book {
+            g.book_view = None;
+        } else {
+            g.ending_show = None;
+        }
+    }
+}
+
+// 书志页（panel 6）：标题屏「书志」钮进入（结算屏小钮按护栏裁剪序①移除，
+// 退稿后回主菜单重看）。
+// 达成条目整行可点复用演出页重读；未达成灰行「？？？」+ 引导
+// （终战门槛可发现性兜底：neme_slain>=6 才弹卡，玩家须能看见路标）。
+fn draw_book_record(g: &mut Game) {
+    draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
+    panel_card(140.0, 70.0, 1000.0, 580.0);
+    txt("书 志 · 终卷四结局", 170.0, 104.0, 24, C_GOLD);
+    if button(1064.0, 86.0, 44.0, 36.0, "×", None, true) {
+        g.panel = 0;
+        g.book_view = None;
+        g.play(crate::sounds::Which::Page);
+        return;
+    }
+    txt(
+        "问笔终战（现实破境问笔·九重雷劫全扛，且封卷吏已斩）之后，执笔人递笔——你如何落款？",
+        170.0,
+        146.0,
+        14,
+        C_DIM,
+    );
+    for (i, e) in crate::game::ENDINGS.iter().enumerate() {
+        let seen = g.meta.endings_seen >> i & 1 == 1;
+        // 行带 4×88 起点 170 末底 514——标题屏底层按钮带（开始 522-576/底排
+        // 592-636）先于本页做命中测试，交互矩形必须错开（烙印面板同款布局回避）
+        let y = 170.0 + i as f32 * 88.0;
+        let (label, sub) = if seen {
+            (
+                format!("《{}》 · {}", e.name, e.alias),
+                e.gain.lines().next().unwrap_or("").to_string(),
+            )
+        } else if i == 3 {
+            (
+                "？？？".to_string(),
+                "先撕稿留白（后事不详），再来问笔——未完的书，收册人自会看见".to_string(),
+            )
+        } else {
+            (
+                "？？？".to_string(),
+                "走向问笔终战，卡上自有分说".to_string(),
+            )
+        };
+        if button(170.0, y, 940.0, 80.0, &label, Some(&sub), seen) {
+            g.book_view = Some(i); // enabled=seen：未达成行点不开
+        }
     }
 }
