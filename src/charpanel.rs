@@ -17,6 +17,7 @@ pub fn draw_char_panel(g: &mut Game) {
     if button(1064.0, 74.0, 44.0, 36.0, "×", None, true) {
         g.panel = 0;
         g.char_tab = 0; // v1.5.0：关面板同时归零页签（与 Esc 行为一致）
+        g.char_page = 0; // v1.9.25：人物页翻页游标同步归零（与 Esc 行为一致）
         g.play(crate::sounds::Which::Page);
         return;
     }
@@ -40,72 +41,89 @@ pub fn draw_char_panel(g: &mut Game) {
     }
 }
 
-// ---------- 页 3：人物（v1.6.0 D 好感度；v1.8.0 D1：四 NPC 2×2 卡 + 道侣卡 + 赠礼） ----------
+// ---------- 页 3：人物（v1.6.0 D 好感度；v1.9.25 单列大卡改版）----------
+// 一页一大卡纵向铺陈：5 页（0..=3 四 NPC / 4 道侣）◀ ▶ 翻页。
+// 立绘 contain 收进 240×410、底边对齐（AI 立绘 240..302×480，改版后绘宽 200..240
+// 恒 ≥140）；无立绘回退 12×12 像素图标 Nearest ×12=144 恒 ≥140，同为像素风不糊。
+// 好感度/档次刻度/增益/赠礼交互与数据全部保留。
 fn draw_npc_page(g: &mut Game, l: &Life) {
-    // 2×2 卡阵：卡 470×160 @ (160,120)/(646,120)/(160,290)/(646,290)，相对坐标
-    for i in 0..crate::npc::NPC_COUNT {
-        let (x, y) = match i {
-            0 => (160.0f32, 120.0f32),
-            1 => (646.0, 120.0),
-            2 => (160.0, 290.0),
-            _ => (646.0, 290.0),
-        };
-        let fav = g.meta.npc_fav[i];
-        let cost = crate::npc::gift_cost(fav);
-        draw_rectangle(x, y, 470.0, 160.0, Color::from_rgba(30, 24, 50, 210));
-        draw_rectangle_lines(x, y, 470.0, 160.0, 2.0, C_GOLD_D);
-        // 立绘：AI 覆盖（全身像）按宽高比 contain 收进 52×84、底边对齐；无则云纹小图标
-        // v1.9.24：懒加载（首用解码一次）
-        let ntex = crate::art::art().npc_tex(i);
-        match ntex.as_ref() {
+    const PAGES: u8 = 5; // 4 NPC + 道侣
+    let page = (g.char_page as usize).min(PAGES as usize - 1);
+    let (cx, cy, cw, ch) = (160.0f32, 116.0f32, 960.0f32, 450.0f32); // 大卡：底边 566
+    let (tex_r, tex_b, tex_w, tex_h) = (190.0f32, 556.0f32, 240.0f32, 410.0f32); // 立绘框（底边对齐）
+    let col = 460.0f32; // 文本列
+
+    // 立绘绘制：AI 覆盖按宽高比 contain、底边对齐；无则像素图标 Nearest 放大 ×12
+    let draw_portrait = |tex: Option<&Texture2D>, icon: &Texture2D| {
+        match tex {
             Some(t) => {
                 let ar = t.width() / t.height().max(1.0);
-                let h = 84.0;
-                let w = (h * ar).min(52.0);
-                let hh = w / ar;
+
+                let w = (tex_h * ar).min(tex_w);
+
+                let h = w / ar;
+
                 draw_texture_ex(
                     t,
-                    x + 18.0 + (52.0 - w) * 0.5,
-                    y + 12.0 + (84.0 - hh),
+                    tex_r + (tex_w - w) * 0.5,
+                    tex_b - h,
                     WHITE,
                     DrawTextureParams {
-                        dest_size: Some(vec2(w, hh)),
+                        dest_size: Some(vec2(w, h)),
                         ..Default::default()
                     },
                 );
             }
-            None => draw_texture(&crate::art::art().icon_yun, x + 24.0, y + 18.0, WHITE),
+            None => {
+                let s = 144.0; // 12×12 ×12
+
+                draw_texture_ex(
+                    icon,
+                    tex_r + (tex_w - s) * 0.5,
+                    tex_b - s,
+                    WHITE,
+                    DrawTextureParams {
+                        dest_size: Some(vec2(s, s)),
+                        ..Default::default()
+                    },
+                );
+            }
         }
-        // 文本列 x+84
-        txt(NPC_NAMES[i], x + 84.0, y + 16.0, 18, C_GOLD);
-        txt_c(
-            crate::npc::tier_name(fav),
-            x + 210.0,
-            y + 20.0,
-            14,
-            C_PURPLE,
-        );
+    };
+
+    if page < 4 {
+        // ---------- NPC 大卡 ----------
+        let i = page;
+        let (x, y) = (cx, cy);
+        let fav = g.meta.npc_fav[i];
+        let cost = crate::npc::gift_cost(fav);
+        draw_rectangle(x, y, cw, ch, Color::from_rgba(30, 24, 50, 210));
+        draw_rectangle_lines(x, y, cw, ch, 2.0, C_GOLD_D);
+        let ntex = crate::art::art().npc_tex(i);
+        draw_portrait(ntex.as_ref(), &crate::art::art().icon_yun);
+        txt(NPC_NAMES[i], col, y + 24.0, 24, C_GOLD);
+        txt(crate::npc::tier_name(fav), col, y + 60.0, 16, C_PURPLE);
         txt(
             &format!("好感 {}/{}", fav, NPC_FAV_MAX),
-            x + 210.0,
-            y + 42.0,
-            14,
+            col,
+            y + 88.0,
+            15,
             C_TEXT,
         );
         bar(
-            x + 84.0,
-            y + 84.0,
-            230.0,
-            12.0,
+            col,
+            y + 112.0,
+            560.0,
+            14.0,
             fav as f32 / NPC_FAV_MAX as f32,
             C_PURPLE,
         );
-        // 档次刻度（A3 样式迁移：3px / (188,168,224,235) / 高 20；右缘 x+314 < 赠礼钮 x+320）
+        // 档次刻度（沿 A3 样式：3px / (188,168,224,235)）
         for &th in NPC_FAV_TIERS.iter() {
-            let tx = x + 84.0 + th as f32 / NPC_FAV_MAX as f32 * 230.0;
-            draw_rectangle(tx - 1.5, y + 80.0, 3.0, 20.0, Color::from_rgba(188, 168, 224, 235));
+            let tx = col + th as f32 / NPC_FAV_MAX as f32 * 560.0;
+            draw_rectangle(tx - 1.5, y + 108.0, 3.0, 22.0, Color::from_rgba(188, 168, 224, 235));
         }
-        // 增益行（按 NPC 各表取值）
+        // 增益行（按 NPC 各表取值，口径不变）
         let eff = match i {
             crate::npc::NPC_ELDER => {
                 format!("当前：宗门任务收益 ×{:.2}", crate::npc::elder_quest_mult(fav))
@@ -122,14 +140,14 @@ fn draw_npc_page(g: &mut Game, l: &Life) {
                 crate::npc::drunk_cult_mult(fav)
             ),
         };
-        txt(&eff, x + 84.0, y + 108.0, 14, C_CYAN);
-        wrap_draw(NPC_BRIEF[i], x + 84.0, y + 132.0, 14, 372.0, 18.0, C_DIM);
-        // 赠礼钮（y+92..y+144，右缘 x+456 ⊂ 卡内）
+        txt(&eff, col, y + 140.0, 15, C_CYAN);
+        wrap_draw(NPC_BRIEF[i], col, y + 172.0, 15, 620.0, 22.0, C_DIM);
+        // 赠礼（交互/价格口径不变）
         if button(
-            x + 320.0,
-            y + 92.0,
-            136.0,
-            52.0,
+            col,
+            y + 370.0,
+            230.0,
+            60.0,
             "赠礼",
             Some(&format!("{} 灵石", fmt_int(cost))),
             l.stones >= cost,
@@ -137,96 +155,102 @@ fn draw_npc_page(g: &mut Game, l: &Life) {
             crate::npc::gift_npc(g, i);
             return;
         }
+    } else {
+        // ---------- 道侣大卡 ----------
+        let y = cy;
+        let cfav = l.comp_fav;
+        draw_rectangle(cx, y, cw, ch, Color::from_rgba(42, 26, 52, 210));
+        draw_rectangle_lines(cx, y, cw, ch, 2.0, C_PURPLE);
+        // v1.7.1/1.7.2：有道侣且有 AI 立绘（comp_0..9 按结缘顺序）则替代丹药图标
+        let comp_idx = l
+            .companion
+            .as_deref()
+            .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn));
+        let comp_ovr = comp_idx.and_then(|i| crate::art::art().comp_tex(i));
+        draw_portrait(comp_ovr.as_ref(), &crate::art::art().icon_pill);
+        match &l.companion {
+            Some(cn) => {
+                txt(cn, col, y + 24.0, 24, C_PURPLE);
+                txt(crate::npc::tier_name(cfav), col, y + 60.0, 16, C_PURPLE);
+                txt(
+                    &format!("情谊 {}/{}", cfav, NPC_FAV_MAX),
+                    col,
+                    y + 88.0,
+                    15,
+                    C_TEXT,
+                );
+                bar(
+                    col,
+                    y + 112.0,
+                    560.0,
+                    14.0,
+                    cfav as f32 / NPC_FAV_MAX as f32,
+                    C_PURPLE,
+                );
+                txt(
+                    &format!(
+                        "当前：双修加成 ×{:.2}（结缘起步+{:.0}%，只升不降）",
+                        crate::npc::comp_cult_mult(cfav),
+                        (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0
+                    ),
+                    col,
+                    y + 140.0,
+                    15,
+                    C_CYAN,
+                );
+                txt(
+                    "情谊随赠礼事件与遗泽积累；更换道侣亦不忘旧谊。",
+                    col,
+                    y + 172.0,
+                    14,
+                    C_DIM,
+                );
+                txt(
+                    &format!("历世结缘 {} 次", g.meta.companion_lives),
+                    col,
+                    y + 198.0,
+                    14,
+                    C_DIM,
+                );
+            }
+            None => {
+                txt("道侣 · 此生未结缘", col, y + 24.0, 24, C_DIM);
+                txt(
+                    "模拟中「良缘天定」事件可选执子之手；遗泽亦可携道侣魂归现实。",
+                    col,
+                    y + 60.0,
+                    15,
+                    C_DIM,
+                );
+                txt(
+                    &format!(
+                        "结缘起步情谊 {}（双修 +{:.0}%），道侣赠礼事件再 +{}。",
+                        COMPANION_BOND_FAV,
+                        (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0,
+                        COMPANION_GIFT_FAV
+                    ),
+                    col,
+                    y + 88.0,
+                    15,
+                    C_CYAN,
+                );
+            }
+        }
     }
-    // 第三卡：道侣
-    let y = 460.0;
-    let cfav = l.comp_fav;
-    draw_rectangle(160.0, y, 960.0, 160.0, Color::from_rgba(42, 26, 52, 210));
-    draw_rectangle_lines(160.0, y, 960.0, 160.0, 2.0, C_PURPLE);
-    // v1.7.1：有道侣且有对应 AI 立绘（comp_0..9 按 COMPANION_NAMES 顺序）则替代丹药图标；
-    // v1.7.2 全身像按宽高比 contain 收进 48×60、底边对齐
-    let comp_idx = l
-        .companion
-        .as_deref()
-        .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn));
-    let comp_ovr = comp_idx.and_then(|i| crate::art::art().comp_tex(i));
-    match comp_ovr {
-        Some(t) => {
-            let ar = t.width() / t.height().max(1.0);
-            let h = 84.0;
-            let w = (h * ar).min(46.0);
-            let hh = w / ar;
-            draw_texture_ex(
-                &t,
-                182.0 + (46.0 - w) * 0.5,
-                y + 12.0 + (84.0 - hh),
-                WHITE,
-                DrawTextureParams {
-                    dest_size: Some(vec2(w, hh)),
-                    ..Default::default()
-                },
-            )
-        }
-        None => draw_texture(&crate::art::art().icon_pill, 184.0, y + 18.0, WHITE),
+    // ---------- 翻页（◀ ▶；端点置灰）----------
+    if button(180.0, 578.0, 70.0, 40.0, "◀", None, page > 0) {
+        g.char_page = page as u8 - 1;
+        g.play(crate::sounds::Which::Page);
     }
-    match &l.companion {
-        Some(cn) => {
-            txt(cn, 230.0, y + 22.0, 20, C_PURPLE);
-            txt_c(crate::npc::tier_name(cfav), 420.0, y + 24.0, 15, C_PURPLE);
-            txt(
-                &format!("情谊 {}/{}", cfav, NPC_FAV_MAX),
-                500.0,
-                y + 24.0,
-                15,
-                C_TEXT,
-            );
-            bar(230.0, y + 56.0, 340.0, 14.0, cfav as f32 / NPC_FAV_MAX as f32, C_PURPLE);
-            txt(
-                &format!(
-                    "当前：双修加成 ×{:.2}（结缘起步+{:.0}%，只升不降）",
-                    crate::npc::comp_cult_mult(cfav),
-                    (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0
-                ),
-                230.0,
-                y + 86.0,
-                14,
-                C_CYAN,
-            );
-            txt(
-                "情谊随赠礼事件与遗泽积累；更换道侣亦不忘旧谊。",
-                230.0,
-                y + 112.0,
-                14,
-                C_DIM,
-            );
-        }
-        None => {
-            txt("道侣 · 此生未结缘", 230.0, y + 22.0, 20, C_DIM);
-            txt(
-                "模拟中「良缘天定」事件可选执子之手；遗泽亦可携道侣魂归现实。",
-                230.0,
-                y + 56.0,
-                14,
-                C_DIM,
-            );
-            txt(
-                &format!(
-                    "结缘起步情谊 {}（双修 +{:.0}%），道侣赠礼事件再 +{}。",
-                    COMPANION_BOND_FAV,
-                    (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0,
-                    COMPANION_GIFT_FAV
-                ),
-                230.0,
-                y + 84.0,
-                14,
-                C_CYAN,
-            );
-        }
+    txt_c(&format!("{}/{}", page + 1, PAGES), 640.0, 588.0, 16, C_DIM);
+    if button(1030.0, 578.0, 70.0, 40.0, "▶", None, page < PAGES as usize - 1) {
+        g.char_page = page as u8 + 1;
+        g.play(crate::sounds::Which::Page);
     }
     txt(
         "好感随交往与赠礼增长，跨世持久（随轮回烙印存档）；赠礼价随交情水涨船高。",
         170.0,
-        636.0,
+        634.0,
         13,
         C_DIM,
     );

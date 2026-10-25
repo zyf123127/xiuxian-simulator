@@ -44,7 +44,7 @@ pub fn sub_hotkey(g: &mut Game, n: usize) {
     match sub {
         Sub::Cult => match n {
             1 => {
-                g.act_cultivate();
+                g.act_cultivate(false); // 手点：全量日志+音效
                 close_sub(g);
             }
             2 => {
@@ -142,7 +142,7 @@ pub fn draw_sub(g: &mut Game) {
     }
     match act {
         Some(0) => {
-            g.act_cultivate();
+            g.act_cultivate(false); // 手点：全量日志+音效
             close_sub(g);
         }
         Some(1) => {

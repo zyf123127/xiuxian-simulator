@@ -24,6 +24,12 @@ pub struct Art {
     pub npc_ovr: [LazyTex; 4],
     // v1.7.1 女道侣立绘：comp_0..9 与 COMPANION_NAMES 顺序一一对应（缺失回退丹药图标）
     pub comp_ovr: [LazyTex; 10],
+    // v1.9.25 卡顿修复（根因3）：渡劫暗角预烘焙——原 4 个半透明矩形逐帧叠加过绘，
+    // 烘焙为 1 张 320×180 纹理拉伸全屏（角落双叠 α=1-(1-0.35)² 精确保真），1 次绘制
+    pub trib_vignette: Texture2D,
+    // v1.9.25 卡顿修复（根因3）：雷云团预烘焙（大 r58+小 r40 双圆 over 合成）——
+    // 原 9 朵云 18 个 draw_circle → 9 个纹理 quad，游移公式与色彩不变
+    pub cloud: Texture2D,
 }
 
 // v1.9.24 懒加载槽：名字在构造期定死（避免每帧 format!），首取时解码一次并
@@ -217,8 +223,122 @@ pub fn build_art() -> Art {
             LazyTex::new("comp_8"),
             LazyTex::new("comp_9"),
         ],
+        trib_vignette: build_trib_vignette(),
+        cloud: build_cloud(),
     };
     a
+}
+
+// v1.9.25 卡顿修复（根因3）：渡劫四周暗角。原 4 个 α0.35 矩形（上/下 90px 带 +
+// 左/右 110px 带）逐帧叠加，角落被两条带同时覆盖时 macroquad 顺序混合得
+// 1-(1-0.35)²=0.5775——烘焙纹理按每像素覆盖带数精确复现该合成，视觉逐像素等价。
+// 320×180（4× 降采样）+ Linear 过滤：带缘约 4px 软化，雷劫演出中不可辨。
+fn build_trib_vignette() -> Texture2D {
+    const SW: u16 = 320;
+    const SH: u16 = 180;
+    const A: f32 = 0.35;
+
+    let mut img = Image::gen_image_color(SW, SH, Color::new(0.0, 0.0, 0.0, 0.0));
+
+    for py in 0..SH {
+        for px in 0..SW {
+            // 像素中心映射回逻辑坐标（1280×720）
+            let lx = px as f32 * 4.0 + 2.0;
+            let ly = py as f32 * 4.0 + 2.0;
+
+            let mut n = 0;
+            if ly < 90.0 {
+                n += 1;
+            }
+            if ly >= 630.0 {
+                n += 1;
+            }
+            if lx < 110.0 {
+                n += 1;
+            }
+            if lx >= 1170.0 {
+                n += 1;
+            }
+
+            if n > 0 {
+                let a = 1.0 - (1.0 - A).powi(n);
+
+                img.set_pixel(
+                    px as u32,
+                    py as u32,
+                    Color::new(0.0, 0.0, 0.02, a),
+                );
+            }
+        }
+    }
+
+    let tex = Texture2D::from_image(&img);
+    tex.set_filter(FilterMode::Linear);
+    tex
+}
+
+// v1.9.25 卡顿修复（根因3）：雷云团。原图形为每朵云先画大圆 (r58, α0.45,
+// 色 0.20,0.13,0.34) 再画小圆 (r40, α0.5, 色 0.13,0.08,0.24) 于 (+30,+12) 偏移——
+// 烘焙按同序 over 合成，双圆硬边逐像素等价；画布 140×136，锚点 = 大圆心 (70,70)。
+fn build_cloud() -> Texture2D {
+    const W: u16 = 140;
+    const H: u16 = 136;
+
+    let big = (70.0f32, 70.0f32, 58.0f32, (0.20, 0.13, 0.34, 0.45));
+    let small = (100.0f32, 82.0f32, 40.0f32, (0.13, 0.08, 0.24, 0.5));
+
+    let mut img = Image::gen_image_color(W, H, Color::new(0.0, 0.0, 0.0, 0.0));
+
+    for py in 0..H {
+        for px in 0..W {
+            let (x, y) = (px as f32 + 0.5, py as f32 + 0.5);
+
+            let in_big = (x - big.0).powi(2) + (y - big.1).powi(2) <= big.2 * big.2;
+            let in_small =
+                (x - small.0).powi(2) + (y - small.1).powi(2) <= small.2 * small.2;
+
+            // 同序 over 合成：先大圆后小圆
+            let (mut r, mut g, mut b, mut a) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
+
+            if in_big {
+                r = big.3 .0;
+                g = big.3 .1;
+                b = big.3 .2;
+                a = big.3 .3;
+            }
+
+            if in_small {
+                let (r2, g2, b2, a2) = (small.3 .0, small.3 .1, small.3 .2, small.3 .3);
+
+                let oa = a2 + a * (1.0 - a2);
+
+                if oa > 0.0 {
+                    r = (r2 * a2 + r * a * (1.0 - a2)) / oa;
+                    g = (g2 * a2 + g * a * (1.0 - a2)) / oa;
+                    b = (b2 * a2 + b * a * (1.0 - a2)) / oa;
+                }
+
+                a = oa;
+            }
+
+            if a > 0.0 {
+                img.set_pixel(
+                    px as u32,
+                    py as u32,
+                    Color::new(
+                        r.min(1.0),
+                        g.min(1.0),
+                        b.min(1.0),
+                        a.min(1.0),
+                    ),
+                );
+            }
+        }
+    }
+
+    let tex = Texture2D::from_image(&img);
+    tex.set_filter(FilterMode::Linear);
+    tex
 }
 
 // v1.5.0 立绘四档：0凡人 1道基（金冠）2紫府（金冠+霜鬓+袖口金纹）3真仙（金冠+白发披肩）

@@ -20,6 +20,10 @@ pub const V_W: f32 = 1280.0;
 
 pub const V_H: f32 = 720.0;
 
+// v1.9.25 周天吐纳：现实自动修炼节拍（秒/载）。挂点 main.rs 每帧 tick_auto，
+// 到点走与手点完全同口的 act_cultivate(true)（静音逐年日志/音效，防刷屏）。
+pub const AUTO_CULT_SECS: f32 = 1.6;
+
 pub const SIM_SPEEDS: [f32; 4] = [0.0, 0.16, 0.06, 0.0]; // 每年间隔秒；0 数值档=瞬间跳到结局
 
 #[derive(PartialEq, Clone, Copy)]
@@ -466,6 +470,8 @@ pub struct Meta {
     pub npc_ev: [bool; 4], // v1.8.0 D2：NPC 好感专属事件已抉择标记（抉择即消耗，跨世持久）
 
     pub region_visited: [bool; 5], // v1.8.0 C5：五域到访记录（按 map_region%5 置位，跨世持久）
+
+    pub auto: u8, // v1.9.25 周天吐纳：现实自动修炼开关 0关/1开（存档键 zt=，旧档缺键默认 0）
 }
 
 impl Default for Meta {
@@ -524,6 +530,8 @@ impl Default for Meta {
             npc_ev: [false; 4],
 
             region_visited: [false; 5],
+
+            auto: 0,
         }
     }
 }
@@ -646,6 +654,14 @@ pub struct Game {
 
     pub char_tab: u8, // 角色面板页签 0总览 1法宝 2成就·称号（v1.5.0）
 
+    pub char_page: u8, // v1.9.25：人物页翻页游标 0..=3 四 NPC / 4 道侣（会话态，不进存档）
+
+    // v1.9.25 周天吐纳会话态（不进存档）：计时/连续载数/累计修为/跨境满修为 toast 门闩
+    pub auto_acc: f32,
+    pub auto_years: u32,
+    pub auto_gain: f64,
+    pub auto_toast_done: bool,
+
     pub tab: u8,
 
     pub help_tab: u8, // v1.8.0 B2：帮助面板页签（0玩法 1操作·技巧；会话态不进存档）
@@ -657,6 +673,8 @@ pub struct Game {
     pub rmodal_npc: Option<usize>, // v1.8.0 D2：悬空事件归属 NPC（与 rmodal 同生共死；不进存档）
 
     pub refine_pending: Option<usize>, // v1.8.0 E3：行囊法宝炼化选材态（目标法宝下标；不进存档；Esc 清理点已随 B4 前置建立）
+
+    pub modal_desc: Option<(String, String, Vec<String>)>, // v1.9.25：模态卡面 eff_desc 惰性缓存（title,text,各选项desc；不进存档，逐帧零重建）
 
     pub shop_tab: u8,
 
@@ -1019,6 +1037,16 @@ impl Game {
 
             char_tab: 0,
 
+            char_page: 0,
+
+            auto_acc: 0.0,
+
+            auto_years: 0,
+
+            auto_gain: 0.0,
+
+            auto_toast_done: false,
+
             tab: 0,
 
             help_tab: 0,
@@ -1030,6 +1058,8 @@ impl Game {
             rmodal_npc: None,
 
             refine_pending: None,
+
+            modal_desc: None,
 
             shop_tab: 0,
 
@@ -1119,7 +1149,13 @@ impl Game {
     }
 
     pub fn show_banner(&mut self, text: impl Into<String>, c: Color) {
-        self.banner = Some((text.into(), 2.4, c));
+        let text = text.into();
+
+        // v1.9.25 卡顿修复（根因1）：弹出事件帧预热 pop 全档位字形 {54,60,66,72}——
+        // 动画帧只命中缓存（0 次新字形栅格化/0 次图集整图上传），把栅格化+上传摊到事件帧一次
+        crate::ui::prewarm_text(&text, &[54, 60, 66, 72]);
+
+        self.banner = Some((text, 2.4, c));
     }
 
     pub fn title_of(&self) -> String {
@@ -3974,9 +4010,12 @@ impl Game {
         r * 4.0
     }
 
-    pub fn act_cultivate(&mut self) {
+    // auto=true 为周天吐纳路径：逐年「你闭关一载」日志与 Gain 音静音（防 1.6s 一条刷爆
+    // 日志区），由 tick_auto 每 10 载合并记账；手点（修炼弹层/洞府闭关/冒烟）传 false 全量反馈。
+    // 返回本载修为收益（周天累计记账用）；结算路径与手点完全同口，无第二条实现。
+    pub fn act_cultivate(&mut self, auto: bool) -> f64 {
         if self.life.is_none() {
-            return;
+            return 0.0;
         }
 
         let rate = self.cult_gain_per_year();
@@ -3999,14 +4038,16 @@ impl Game {
             (died, msg)
         };
 
-        self.log(msg, C_CYAN);
+        if !auto {
+            self.log(msg, C_CYAN);
 
-        self.play(crate::sounds::Which::Gain);
+            self.play(crate::sounds::Which::Gain);
+        }
 
         if died {
             self.real_die("寿元耗尽，你于榻上安然长逝。轮回镜微光一闪，一切归零——唯道韵永存。");
 
-            return;
+            return 0.0;
         }
 
         // v1.5.0 四时：死亡当年不推时辰、不产灵田（推进点=现实推岁口，唯一）
@@ -4015,6 +4056,97 @@ impl Game {
         self.check_ach_all();
 
         self.sync_save();
+
+        rate
+    }
+
+    // ================= v1.9.25 周天吐纳：现实自动修炼（放置主循环补完） =================
+    // 挂点唯一：main.rs 每帧 tick_auto(dt)。结算与手点完全同口 act_cultivate(true)，
+    // 严禁复制第二条结算路径；寿尽 real_die→life None→自然停机。
+    pub fn tick_auto(&mut self, dt: f32) {
+        if self.scene != Scene::Reality || self.meta.auto == 0 {
+            return;
+        }
+
+        // 广告/事件卡/弹层/结算期冻结（不清零，回来接着吐纳）
+        if self.ad.is_some()
+            || self.rmodal.is_some()
+            || self.submenu.is_some()
+            || self.settle.is_some()
+        {
+            return;
+        }
+
+        if self.life.is_none() {
+            self.auto_acc = 0.0;
+
+            self.auto_years = 0;
+
+            self.auto_gain = 0.0;
+
+            return;
+        }
+
+        self.auto_acc += dt;
+
+        if self.auto_acc < AUTO_CULT_SECS {
+            return;
+        }
+
+        self.auto_acc -= AUTO_CULT_SECS;
+
+        // 突破衔接：修为满时同层下一层自动冲击（复用 act_break 单口不另 roll，
+        // 同层成功率 0.96+dao/600 上限 0.99，失败无身死）；跨境（失败 qi×0.5+重伤）
+        // 决策留给玩家——停表 + 一次性 toast，离满修为态自动复位
+        if self.can_break() {
+            let cross = self
+                .life
+                .as_ref()
+                .map_or(false, |l| l.layer + 1 >= REALMS[l.realm].layers.len());
+
+            if cross {
+                if !self.auto_toast_done {
+                    self.auto_toast_done = true;
+
+                    self.toast("修为圆满，可冲击破境", C_GOLD);
+                }
+
+                self.auto_acc = 0.0; // 停表
+
+                return;
+            }
+
+            self.act_break();
+
+            return;
+        }
+
+        self.auto_toast_done = false;
+
+        let rate = self.act_cultivate(true);
+
+        // 寿尽时 act_cultivate 内部 real_die（life 已 None）：自然停机，不计账
+        if self.life.is_some() {
+            self.auto_years += 1;
+
+            self.auto_gain += rate;
+
+            if self.auto_years >= 10 {
+                self.log(
+                    format!(
+                        "周天吐纳十载，修为精进累计+{}。",
+                        fmt_num(self.auto_gain)
+                    ),
+                    C_CYAN,
+                );
+
+                self.play(crate::sounds::Which::Gain);
+
+                self.auto_years = 0;
+
+                self.auto_gain = 0.0;
+            }
+        }
     }
 
     // ================= v1.5.0 四时洞天：称号 / 法宝装备 / 洞府经营 / 成就进度 =================
@@ -4135,6 +4267,30 @@ impl Game {
                 .map(|l| l.weather.min(4) as usize)
                 .unwrap_or(0);
             self.log(format!("天象流转：{}。", WEATHERS[w]), C_DIM);
+        }
+        // v1.9.25 宿敌追缉：宿敌随你的岁月成长。唯一推岁口（act_cultivate 与世界 spend_year
+        // 都经此）覆盖闭关/赶路/任务/远征全部耗岁路径；6%/载 roll 晋入下一境，
+        // 上限 min(14, 历代最高境+5)——拖得越久赏金越厚（stone_scale/道韵随境界）但
+        // revenge_p 越差，与寻仇修复（下限归 0+重伤禁手）构成「养伤→变强→趁早动手」闭环。
+        // 借用纪律仿灵田先例：块内收集，块外记日志。
+        let mut neme_up: Option<(String, usize)> = None;
+        {
+            let cap = (self.meta.best_realm + 5).min(14);
+            let roll = self.meta.neme.as_ref().map_or(false, |n| {
+                n.realm < cap && gen_range(0.0, 1.0) < 0.06
+            });
+            if roll {
+                if let Some(n) = self.meta.neme.as_mut() {
+                    n.realm = (n.realm + 1).min(cap);
+                    neme_up = Some((n.full(), n.realm));
+                }
+            }
+        }
+        if let Some((full, r)) = neme_up {
+            self.log(
+                format!("风声传来：{}闭关数载，已晋入{}境！", full, REALMS[r.min(14)].name),
+                C_RED,
+            );
         }
     }
 
@@ -4619,22 +4775,45 @@ impl Game {
         self.life.is_some() && self.meta.neme.is_some()
     }
 
-    pub fn revenge_p(&self) -> f32 {
-        if let (Some(l), Some(n)) = (&self.life, &self.meta.neme) {
-            let my = power(l);
-
-            let r = my / n.power().max(1.0);
-
-            let p = (r * r / (1.0 + r * r)).clamp(0.05, 0.95);
-
-            return p as f32;
+    // 实力比 r = 我方战力 / 宿敌战力——胜率与禁手判定同源口径，禁双写
+    fn revenge_ratio(&self) -> f64 {
+        match (&self.life, &self.meta.neme) {
+            (Some(l), Some(n)) => power(l) / n.power().max(1.0),
+            _ => 0.0,
         }
+    }
 
-        0.0
+    // 比率→成功率。下限 0.05→0.0（寻仇必成修复）：原 5% 保底 + 失败不禁手，
+    // 连点 N 次必成（1−0.95^N，90 次≈99%）；现实力悬殊者胜率归 0，
+    // 底栏/人物页胜率显示自动跟随。上限 0.95 不变；模拟侧决战反杀 / sim_fight 事件掷 /
+    // 跨境破境的 clamp(0.05,0.95) 语义各异（一次性抉择不可连刷），勿联动改。
+    fn revenge_p_of(r: f64) -> f32 {
+        (r * r / (1.0 + r * r)).clamp(0.0, 0.95) as f32
+    }
+
+    pub fn revenge_p(&self) -> f32 {
+        Self::revenge_p_of(self.revenge_ratio())
+    }
+
+    // 寻仇可出手单一谓词（draw/world 两入口 UI 可用性 + act_revenge 卫语句同口）：
+    // 未重伤（失败 injured=5，每年 −1 自然冷却；洞府闭关/疗伤丹可清）
+    // 且实力比 ≥ 0.1（宿敌战力超自身 10 倍即禁手）。
+    pub fn revenge_ready(&self) -> bool {
+        self.can_revenge() && self.life.as_ref().unwrap().injured == 0 && self.revenge_ratio() >= 0.1
+    }
+
+    // 禁用态副标题（前置：can_revenge() 且 !revenge_ready()；与「宿敌已清 · 静待新敌」同款）
+    pub fn revenge_disabled_text(&self) -> &'static str {
+        if self.life.as_ref().map_or(false, |l| l.injured > 0) {
+            "重伤未愈 · 静待恢复"
+        } else {
+            "实力悬殊 · 莫去送死"
+        }
     }
 
     pub fn act_revenge(&mut self) {
-        if !self.can_revenge() {
+        // 卫语句走 revenge_ready 单口：重伤/悬殊禁手态不结算，防绕过 UI 直调
+        if !self.revenge_ready() {
             return;
         }
 
@@ -5201,3 +5380,258 @@ pub const INHERITS: [InheritDef; 8] = [
         desc: "现实气运 +3（永久）",
     },
 ];
+
+// ---------------- 寻仇必成修复回归：下限归 0 + 重伤/悬殊禁手 ----------------
+
+#[cfg(test)]
+mod revenge_tests {
+    use super::*;
+
+    // 免音频初始化与存档 IO 的最小 Game：仅寻仇路径所需字段
+    fn game_with(l: Life, neme: Option<Nemes>) -> Game {
+        let mut meta = Meta::default();
+
+        meta.neme = neme;
+
+        Game {
+            scene: Scene::Menu,
+
+            meta,
+
+            life: Some(l),
+
+            sim: None,
+
+            sim_start_age: 0.0,
+
+            sim_log: Vec::new(),
+
+            sim_result: None,
+
+            inherit_opts: Vec::new(),
+
+            inherit_picked: 0,
+
+            draft: Vec::new(),
+
+            blessed: false,
+
+            picked: Vec::new(),
+
+            log: Vec::new(),
+
+            modal: None,
+
+            panel: 0,
+
+            char_tab: 0,
+
+            char_page: 0,
+
+            auto_acc: 0.0,
+
+            auto_years: 0,
+
+            auto_gain: 0.0,
+
+            auto_toast_done: false,
+
+            tab: 0,
+
+            help_tab: 0,
+
+            buy_pending: None,
+
+            rmodal: None,
+
+            rmodal_npc: None,
+
+            refine_pending: None,
+
+            modal_desc: None,
+
+            shop_tab: 0,
+
+            world: crate::world::WorldState::new(),
+
+            submenu: None,
+
+            bag_tab: 0,
+
+            ad: None,
+
+            sac_pending: None,
+
+            sub_fresh: false,
+
+            speed: 0,
+
+            acc: 0.0,
+
+            motes: Vec::new(),
+
+            meteors: Vec::new(),
+
+            sparks: Vec::new(),
+
+            shake: 0.0,
+
+            toast: None,
+
+            banner: None,
+
+            settle: None,
+
+            time: 0.0,
+
+            sfx_ok: None,
+
+            audio: crate::sounds::Audio {
+                s: None,
+                music_on: false,
+                sfx_on: false,
+                music_vol: 0.8,
+                sfx_vol: 0.8,
+            },
+        }
+    }
+
+    fn neme(realm: usize) -> Nemes {
+        Nemes {
+            title: "魔修",
+            name: "试炼者".to_string(),
+            realm,
+        }
+    }
+
+    // ① r→0：胜率归 0（原 clamp 下限 0.05 = 弱者恒 5% 保底，连点 N 次必成之根）
+    #[test]
+    fn underdog_rate_floors_at_zero() {
+        // 凡人（战力 5.0×1.2）对道祖宿敌（1.5e10×1.25）：比率 ~3e-10，胜率应近 0 而非 5%
+        let g = game_with(Life::default(), Some(neme(14)));
+
+        assert!(g.can_revenge());
+
+        assert!(
+            g.revenge_p() < 1.0e-9,
+            "弱者胜率应归 0，实得 {}",
+            g.revenge_p()
+        );
+
+        // 比率恰 0 的下界：clamp(0.0,…) 下公式值恰为 0.0
+        assert_eq!(Game::revenge_p_of(0.0), 0.0);
+    }
+
+    // ② 对照：r=1 → 50%（公式本身未动只动下限，正常对局胜率不受影响）
+    #[test]
+    fn equal_power_rate_untouched() {
+        let p = Game::revenge_p_of(1.0);
+
+        assert!((0.49..=0.51).contains(&p), "r=1 应得 50%，实得 {}", p);
+    }
+
+    // ③ 重伤禁手：injured>0 时 revenge_ready()==false，卫语句令 act_revenge 空转（不结算不掉档）
+    #[test]
+    fn injured_blocks_revenge() {
+        let mut l = Life::default();
+
+        l.injured = 5;
+
+        let mut g = game_with(l, Some(neme(0))); // 同境未伤本可出手（r≈0.96）
+
+        assert!(!g.revenge_ready());
+
+        assert_eq!(g.revenge_disabled_text(), "重伤未愈 · 静待恢复");
+
+        g.act_revenge(); // 卫语句路径：无 IO 无结算
+
+        assert_eq!(g.log.len(), 0);
+
+        assert_eq!(g.life.as_ref().unwrap().injured, 5);
+    }
+
+    // ④ 实力比 ≥ 0.1 边界：悬殊禁手 vs 同境可出手
+    #[test]
+    fn power_ratio_gates_ready() {
+        // 悬殊（宿敌战力 > 10 倍自身）：禁手
+        let g = game_with(Life::default(), Some(neme(14)));
+
+        assert!(!g.revenge_ready());
+
+        assert_eq!(g.revenge_disabled_text(), "实力悬殊 · 莫去送死");
+
+        // 同境（r = 6.0 / 6.25 = 0.96）：可出手，胜率约 48%
+        let g2 = game_with(Life::default(), Some(neme(0)));
+
+        assert!((g2.revenge_ratio() - 0.96).abs() < 1e-6);
+
+        assert!(g2.revenge_ready());
+
+        assert!((0.45..=0.5).contains(&g2.revenge_p()));
+    }
+
+    // ⑤ 周天吐纳：门控与冻结语义（开关关不累计 / 弹层期冻结不清零 / 非 Reality 不累计；
+    // 全程不触发 act_cultivate——那会 sync_save 落盘，单测禁 IO）
+    #[test]
+    fn zt_auto_gates_and_freeze() {
+        let mut g = game_with(Life::default(), None);
+
+        g.scene = Scene::Reality;
+
+        // 开关关（默认 0）：不累计
+        assert_eq!(g.meta.auto, 0);
+
+        g.tick_auto(AUTO_CULT_SECS * 10.0);
+
+        assert_eq!(g.auto_acc, 0.0);
+
+        // 开关开：正常累计
+        g.meta.auto = 1;
+
+        g.tick_auto(1.0);
+
+        assert!((g.auto_acc - 1.0).abs() < 1e-6);
+
+        // 弹层期冻结不清零
+        g.submenu = Some(crate::menu::Sub::Cult);
+
+        g.tick_auto(AUTO_CULT_SECS * 10.0);
+
+        assert!((g.auto_acc - 1.0).abs() < 1e-6);
+
+        g.submenu = None;
+
+        // 非 Reality 场景不累计
+        g.scene = Scene::World;
+
+        g.tick_auto(AUTO_CULT_SECS * 10.0);
+
+        assert!((g.auto_acc - 1.0).abs() < 1e-6);
+    }
+
+    // ⑥ 宿敌追缉：上限 cap=min(14,best+5) 与绝顶不越（advance_time 无落盘可循环；
+    // 600 次×6% 期望 36 次成长，达 cap 概率≈1，尾风险可忽略）
+    #[test]
+    fn neme_growth_capped() {
+        let mut g = game_with(Life::default(), Some(neme(5)));
+
+        g.meta.best_realm = 3; // cap = min(14, 3+5) = 8
+
+        for _ in 0..600 {
+            g.advance_time();
+        }
+
+        let cap = (g.meta.best_realm + 5).min(14);
+
+        assert_eq!(g.meta.neme.as_ref().unwrap().realm, cap);
+
+        // 绝顶宿敌不再成长
+        let mut g2 = game_with(Life::default(), Some(neme(14)));
+
+        for _ in 0..100 {
+            g2.advance_time();
+        }
+
+        assert_eq!(g2.meta.neme.as_ref().unwrap().realm, 14);
+    }
+}

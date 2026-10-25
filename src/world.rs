@@ -875,7 +875,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                         true,
                     ) {
                         g.play(crate::sounds::Which::Click);
-                        g.act_cultivate();
+                        g.act_cultivate(false); // 手点：全量日志+音效
                     }
                     // v1.5.0 洞府经营入口
                     if button(
@@ -894,18 +894,30 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                 NODE_BONES => {
                     if g.can_revenge() {
                         let neme = g.meta.neme.clone().unwrap();
-                        let p = g.revenge_p();
-                        if button(
+                        // 寻仇必成修复：可用性收敛到 revenge_ready 单口（重伤禁手 + 实力悬殊禁手）
+                        if g.revenge_ready() {
+                            let p = g.revenge_p();
+                            if button(
+                                100.0,
+                                640.0,
+                                220.0,
+                                56.0,
+                                "寻仇",
+                                Some(&format!("{:.0}% · {}", p * 100.0, neme.name)),
+                                true,
+                            ) {
+                                g.play(crate::sounds::Which::Click);
+                                g.act_revenge();
+                            }
+                        } else if button(
                             100.0,
                             640.0,
                             220.0,
                             56.0,
                             "寻仇",
-                            Some(&format!("{:.0}% · {}", p * 100.0, neme.name)),
-                            true,
+                            Some(g.revenge_disabled_text()),
+                            false,
                         ) {
-                            g.play(crate::sounds::Which::Click);
-                            g.act_revenge();
                         }
                     } else if button(100.0, 640.0, 220.0, 56.0, "宿敌已清", Some("静待新敌"), false)
                     {

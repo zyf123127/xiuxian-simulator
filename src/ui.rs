@@ -50,8 +50,74 @@ pub fn txt_r(s: &str, rx: f32, y: f32, size: u16, c: Color) {
     txt(s, rx - measure(s, size), y, size, c);
 }
 
+// v1.9.25 卡顿修复（根因1）：按字号集预热字形——macroquad 字形按（字符,字号）缓存，
+// 首见即栅格化入图集并置 dirty，下一个绘制帧整图集重上传（2048²=16MB/次）。
+// banner 的 0.6s pop 动画若逐帧首见新字号，等于逐帧整图上传；show_banner 在弹出
+// 事件帧调用本函数把全部档位字形一次栅格化，动画帧零缓存 miss。
+pub fn prewarm_text(text: &str, sizes: &[u16]) {
+    for ch in text.chars() {
+        if ch.is_whitespace() {
+            continue;
+        }
+
+        let cs = ch.to_string();
+
+        for &sz in sizes {
+            measure(&cs, sz);
+        }
+    }
+}
+
+// ---------------- 换行记忆化（v1.9.25 根因2：wrap_draw 每帧逐字符 measure+to_string
+// 是模态卡/天赋卡/结算页的稳定分配底噪；命中路径零分配，上限防膨胀整体清空） ----------------
+
+struct WrapKey {
+    text: String,
+    size: u16,
+    maxw_bits: u32,
+}
+
+std::thread_local! {
+    static WRAP_CACHE: std::cell::RefCell<Vec<(WrapKey, Vec<String>)>> =
+        std::cell::RefCell::new(Vec::new());
+}
+
+const WRAP_CACHE_CAP: usize = 256;
+
+// 命中返回缓存槽位；未命中计算并入缓存（本帧一次分配）
+fn wrap_slot(
+    s: &str,
+    size: u16,
+    maxw: f32,
+    cache: &mut Vec<(WrapKey, Vec<String>)>,
+) -> usize {
+    let bits = maxw.to_bits();
+
+    if let Some(i) = cache
+        .iter()
+        .position(|(k, _)| k.size == size && k.maxw_bits == bits && k.text.as_str() == s)
+    {
+        return i;
+    }
+
+    if cache.len() >= WRAP_CACHE_CAP {
+        cache.clear();
+    }
+
+    cache.push((
+        WrapKey {
+            text: s.to_string(),
+            size,
+            maxw_bits: bits,
+        },
+        wrap_uncached(s, size, maxw),
+    ));
+
+    cache.len() - 1
+}
+
 // 贪心换行：中文逐字断行，优先在空格/标点处断
-pub fn wrap(s: &str, size: u16, maxw: f32) -> Vec<String> {
+fn wrap_uncached(s: &str, size: u16, maxw: f32) -> Vec<String> {
     let mut lines: Vec<String> = Vec::new();
     let mut cur = String::new();
     let mut cur_w = 0.0;
@@ -74,9 +140,17 @@ pub fn wrap(s: &str, size: u16, maxw: f32) -> Vec<String> {
 }
 
 pub fn wrap_draw(s: &str, x: f32, y: f32, size: u16, maxw: f32, line_h: f32, c: Color) -> f32 {
-    let lines = wrap(s, size, maxw);
-    for (i, l) in lines.iter().enumerate() {
-        txt(l, x, y + i as f32 * line_h, size, c);
-    }
-    lines.len() as f32 * line_h
+    WRAP_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+
+        let i = wrap_slot(s, size, maxw, &mut cache);
+
+        let lines = &cache[i].1;
+
+        for (i, l) in lines.iter().enumerate() {
+            txt(l, x, y + i as f32 * line_h, size, c);
+        }
+
+        lines.len() as f32 * line_h
+    })
 }

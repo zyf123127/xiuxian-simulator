@@ -280,7 +280,10 @@ pub fn draw_banner(g: &Game) {
             1.0
         };
         let scale = 1.0 + 0.35 * (1.0 - (k * 4.0).min(1.0));
-        let size = (54.0 * scale) as u16;
+        // v1.9.25 卡顿修复（根因1）：pop 字号离散化取档 {54,60,66,72}——原 (54*scale) as u16
+        // 在 0.6s 动画期逐帧产生新整数字号，字形按（字符,字号）首见即栅格化 + 图集 dirty
+        // 整图重上传（2048²=16MB/次）；档位有限 + show_banner 预热后动画帧零缓存 miss
+        let size = ((((54.0 * scale) / 6.0).round() as u16).max(9).min(12) * 6) as u16;
         let w = measure(text, size);
         // v1.8.0 A7：横幅带收窄为文字宽+240（原全屏横带金线横穿左栏法宝区），
         // 居中绘制，装饰线端点随 bx 收拢
@@ -605,8 +608,10 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     // 底部行动栏（v1.4.0：6→8；v1.6.0 B：修炼组收进弹层 + 全钮返回值门控防弹层期穿透。
     // 取舍声明：原槽 2「冲击破境」一键直达收进修炼弹层（数字键 2 仍一键触发），
     // 核心循环动作一步变两步——Ask B 明确要求修炼组归入同一子菜单，接受）
-    let bw = 140.0;
-    let gap = 12.0;
+    // v1.9.25 周天吐纳：8→9 钮，bw 140→127 / gap 12→10（9 钮右缘 36+9×127+8×10=1259，
+    // 右边距 21px；bw=130/gap=8 右缘 1270 过贴边，弃）
+    let bw = 127.0;
+    let gap = 10.0;
     let x0 = 36.0;
     let by = 620.0;
     let bh = 88.0;
@@ -708,19 +713,31 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     }
     if g.can_revenge() {
         let neme = g.meta.neme.clone().unwrap();
-        let p = g.revenge_p();
-        if button(
+        // 寻仇必成修复：可用性收敛到 revenge_ready 单口（重伤禁手 + 实力悬殊禁手）
+        if g.revenge_ready() {
+            let p = g.revenge_p();
+            if button(
+                x0 + (bw + gap) * 7.0,
+                by,
+                bw,
+                bh,
+                "寻仇",
+                Some(&format!("{:.0}% · {}", p * 100.0, neme.name)),
+                true,
+            ) && !sub_open
+            {
+                g.play(crate::sounds::Which::Click);
+                g.act_revenge();
+            }
+        } else if button(
             x0 + (bw + gap) * 7.0,
             by,
             bw,
             bh,
             "寻仇",
-            Some(&format!("{:.0}% · {}", p * 100.0, neme.name)),
-            true,
-        ) && !sub_open
-        {
-            g.play(crate::sounds::Which::Click);
-            g.act_revenge();
+            Some(g.revenge_disabled_text()),
+            false,
+        ) {
         }
     } else if button(
         x0 + (bw + gap) * 7.0,
@@ -731,6 +748,34 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         Some("静待新敌"),
         false,
     ) {
+    }
+    // v1.9.25 周天吐纳（槽 8）：现实自动修炼开关——开启态金色下划线高亮，
+    // 到点走与手点同口的 act_cultivate(true)（tick_auto 内部门控：Reality+无弹层/事件/结算）
+    let auto_on = g.meta.auto == 1;
+    let auto_sub = if auto_on {
+        "一载/1.6s"
+    } else {
+        "自动闭关 · 关"
+    };
+    if button(
+        x0 + (bw + gap) * 8.0,
+        by,
+        bw,
+        bh,
+        "周天",
+        Some(auto_sub),
+        true,
+    ) && !sub_open
+    {
+        g.meta.auto = if auto_on { 0 } else { 1 };
+        g.auto_acc = 0.0;
+        g.auto_years = 0;
+        g.auto_gain = 0.0;
+        g.play(crate::sounds::Which::Click);
+        g.sync_save();
+    }
+    if auto_on {
+        draw_rectangle(x0 + (bw + gap) * 8.0, by + bh - 3.0, bw, 3.0, C_GOLD);
     }
 
     // 面板
@@ -832,18 +877,14 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
     // v1.8.0 A1：起点 312→298、步进 30→28——法宝值行收进 501..517，
     // 与宿敌卡顶 540（下方 ny）净空 23px，修左栏末行被宿敌卡叠压
     let mut y = 298.0;
-    // 属性区交替行底色
-    for k in 0..8 {
-        if k % 2 == 0 {
-            draw_rectangle(
-                20.0,
-                298.0 + k as f32 * 28.0,
-                LEFT_W - 24.0,
-                28.0,
-                Color::from_rgba(255, 255, 255, 6),
-            );
-        }
-    }
+    // 属性区底色（v1.9.25 过绘：α6/255 隔行 4 矩形合并为整块 1 矩形，差异肉眼不可辨）
+    draw_rectangle(
+        20.0,
+        298.0,
+        LEFT_W - 24.0,
+        8.0 * 28.0,
+        Color::from_rgba(255, 255, 255, 6),
+    );
     let row = |label: &str, y: f32| -> f32 {
         txt(label, 30.0, y, 16, C_DIM);
         y + 28.0
@@ -927,7 +968,18 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
             draw_rectangle_lines(24.0, ny, LEFT_W - 32.0, 60.0, 1.5, C_RED);
             txt("宿敌", 36.0, ny + 8.0, 14, C_RED);
             txt(&n.full(), 80.0, ny + 8.0, 15, C_TEXT);
-            txt("每世模拟皆会遭遇——变强斩之！", 36.0, ny + 32.0, 13, C_DIM);
+            // v1.9.25 宿敌追缉：静态行改动态警示——宿敌随推岁成长（advance_time 6%/载），
+            // 标注其当前境界提醒玩家趁早动手
+            txt(
+                &format!(
+                    "宿敌亦在修行，寻仇宜早（已{}境）！",
+                    REALMS[n.realm.min(14)].name
+                ),
+                36.0,
+                ny + 32.0,
+                13,
+                C_RED,
+            );
         }
     }
 }
@@ -1059,7 +1111,10 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
 
 // ================= 模拟播放 =================
 pub fn draw_sim(g: &mut Game, art: &Art) {
-    let Some(s) = g.sim.clone() else { return };
+    // v1.9.25 卡顿修复（根因2）：去每帧整 Life 深克隆——只读绘制段借 sim 不可变引用，
+    // 速度/退出/事件弹窗等 &mut 交互统一挪到借还之后；按钮区（y≤47）与日志区（y≥68）
+    // 像素无重叠，绘制次序对调不影响画面
+    let Some(s) = g.sim.as_ref() else { return };
     let tribbing = s.trib.is_some();
     draw_bg(art);
     if !tribbing {
@@ -1067,15 +1122,17 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
     }
     if tribbing {
         draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.10, 0.03, 0.18, 0.62));
-        // 四周暗角
-        for (x, y, w, h) in [
-            (0.0, 0.0, V_W, 90.0),
-            (0.0, V_H - 90.0, V_W, 90.0),
-            (0.0, 0.0, 110.0, V_H),
-            (V_W - 110.0, 0.0, 110.0, V_H),
-        ] {
-            draw_rectangle(x, y, w, h, Color::new(0.0, 0.0, 0.02, 0.35));
-        }
+        // 四周暗角（v1.9.25 根因3：4 矩形→预烘焙 1 纹理，角落叠加 α 精确保真）
+        draw_texture_ex(
+            &art.trib_vignette,
+            0.0,
+            0.0,
+            WHITE,
+            DrawTextureParams {
+                dest_size: Some(vec2(V_W, V_H)),
+                ..Default::default()
+            },
+        );
     }
     draw_motes(g);
     // 顶栏
@@ -1102,31 +1159,6 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
     txt_c(&ql, 600.0, 12.0, 13, C_TEXT);
     draw_texture(&crate::art::art().icon_stone, 760.0, 16.0, WHITE);
     txt(&fmt_int(s.stones), 778.0, 15.0, 16, C_CYAN);
-    // 速度按钮
-    let names = ["暂停", "缓", "快", "跳过"];
-    for i in 0..4 {
-        let on = g.speed == i;
-        if button(
-            880.0 + i as f32 * 88.0,
-            8.0,
-            80.0,
-            36.0,
-            names[i],
-            None,
-            true,
-        ) {
-            g.speed = i;
-            g.acc = 0.0;
-            g.play(crate::sounds::Which::Click);
-        }
-        if on {
-            draw_rectangle(880.0 + i as f32 * 88.0, 44.0, 80.0, 3.0, C_GOLD);
-        }
-    }
-    // v1.9.23：退出刷词条——未沉入/想重来时退回选天赋（点数已退还）
-    if button(1240.0, 8.0, 36.0, 36.0, "×", None, true) {
-        g.quit_sim_redraft();
-    }
     // 日志流
     let area_y = 76.0;
     let area_h = V_H - 120.0;
@@ -1148,16 +1180,18 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
         Color::from_rgba(120, 80, 150, 220),
     );
     let start = g.sim_log.len().saturating_sub(max_lines);
+    let shown = g.sim_log.len() - start;
+    // v1.9.25 过绘：隔行底色（α7/255 白，肉眼近不可辨）逐行矩形合并为整块 1 矩形
+    if shown > 0 {
+        draw_rectangle(
+            10.0,
+            area_y - 2.0,
+            V_W - 20.0,
+            shown as f32 * line_h,
+            Color::from_rgba(255, 255, 255, 7),
+        );
+    }
     for (i, ll) in g.sim_log[start..].iter().enumerate() {
-        if i % 2 == 0 {
-            draw_rectangle(
-                10.0,
-                area_y - 2.0 + i as f32 * line_h,
-                V_W - 20.0,
-                line_h,
-                Color::from_rgba(255, 255, 255, 7),
-            );
-        }
         txt(
             &ll.text,
             24.0,
@@ -1169,12 +1203,12 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
     // 渡劫演出
     if tribbing {
         let t = s.trib.as_ref().unwrap();
-        // 多层雷云（远紫近黑）
+        // 多层雷云（远紫近黑）——v1.9.25 根因3：18 个 draw_circle → 9 个预烘焙云团
+        // 纹理 quad（双圆 over 合成烘进图），游移公式与色彩不变
         for i in 0..9 {
             let x = 120.0 + i as f32 * 130.0 + (g.time * 26.0 + i as f32 * 31.0).sin() * 22.0;
             let y = 40.0 + (g.time * 16.0 + i as f32 * 11.0).sin() * 7.0;
-            draw_circle(x, y, 58.0, Color::new(0.20, 0.13, 0.34, 0.45));
-            draw_circle(x + 30.0, y + 12.0, 40.0, Color::new(0.13, 0.08, 0.24, 0.5));
+            draw_texture(&art.cloud, x - 70.0, y - 70.0, WHITE);
         }
         if t.flash > 0.02 {
             let bx = V_W * 0.5 + gen_range(-160.0, 160.0);
@@ -1230,6 +1264,32 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
             draw_circle(x, 690.0, 8.0, c);
         }
     }
+    // —— 只读段（s 借用）到此为止；以下交互需 &mut g ——
+    // 速度按钮
+    let names = ["暂停", "缓", "快", "跳过"];
+    for i in 0..4 {
+        let on = g.speed == i;
+        if button(
+            880.0 + i as f32 * 88.0,
+            8.0,
+            80.0,
+            36.0,
+            names[i],
+            None,
+            true,
+        ) {
+            g.speed = i;
+            g.acc = 0.0;
+            g.play(crate::sounds::Which::Click);
+        }
+        if on {
+            draw_rectangle(880.0 + i as f32 * 88.0, 44.0, 80.0, 3.0, C_GOLD);
+        }
+    }
+    // v1.9.23：退出刷词条——未沉入/想重来时退回选天赋（点数已退还）
+    if button(1240.0, 8.0, 36.0, 36.0, "×", None, true) {
+        g.quit_sim_redraft();
+    }
     // 事件弹窗（v1.6.0 B：卡面加高、选项纵排带机制摘要副标签）
     // v1.8.0 D2：抽取为 draw_modal_card（模拟侧 modal 与现实侧 rmodal 共用卡面）
     draw_modal_card(g);
@@ -1244,37 +1304,78 @@ pub fn draw_modal_card(g: &mut Game) {
     if g.modal.is_none() && g.rmodal.is_none() {
         return;
     }
-    // rmodal 优先：现实侧事件分支（rmodal.is_some 早退位）即使残留旧 modal 也不被其顶替
-    let (title, text, opts) = {
+    // v1.9.25 卡顿修复（根因2）：卡面文本/eff_desc 不再每帧克隆+重建——按卡面内容
+    // 惰性缓存于 g.modal_desc（打开帧重建一次，此后逐帧只做字符串比对零分配）；
+    // 模态期游戏态冻结、eff_desc 只依赖 Eff 本身（&self），无失真风险
+    {
         let card = g.rmodal.as_ref().or(g.modal.as_ref()).unwrap();
-        (
-            card.title.clone(),
-            card.text.clone(),
-            card.opts.clone(), // 保留 Eff 以生成副标签
-        )
+
+        let stale = match &g.modal_desc {
+            Some((t, x, d)) => {
+                t != &card.title
+                    || x != &card.text
+                    || d.len() != card.opts.len()
+                    || card
+                        .opts
+                        .iter()
+                        .zip(d.iter())
+                        .any(|((l, _), c)| l != c)
+            }
+            None => true,
+        };
+
+        if stale {
+            g.modal_desc = Some((
+                card.title.clone(),
+                card.text.clone(),
+                card.opts.iter().map(|(_, e)| e.eff_desc()).collect(),
+            ));
+        }
+    }
+
+    let (title, text, descs) = {
+        let (t, x, d) = g.modal_desc.as_ref().unwrap();
+
+        (t.as_str(), x.as_str(), d.as_slice())
     };
+
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.5));
     panel_card(340.0, 160.0, 600.0, 400.0);
-    txt_c(&title, V_W * 0.5, 188.0, 24, C_GOLD);
+    txt_c(title, V_W * 0.5, 188.0, 24, C_GOLD);
     draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
-    wrap_draw(&text, 380.0, 224.0, 17, 520.0, 28.0, C_TEXT);
-    for (i, (label, eff)) in opts.iter().enumerate() {
-        let desc = eff.eff_desc();
+    wrap_draw(text, 380.0, 224.0, 17, 520.0, 28.0, C_TEXT);
+    // 命中先收集、借还后再分派（&mut）——免整卡克隆
+    let mut picked: Option<usize> = None;
+
+    for (i, (label, _)) in g
+        .rmodal
+        .as_ref()
+        .or(g.modal.as_ref())
+        .unwrap()
+        .opts
+        .iter()
+        .enumerate()
+    {
         if button(
             380.0,
             316.0 + i as f32 * 74.0,
             520.0,
             62.0,
             label,
-            Some(&desc),
+            Some(&descs[i]),
             true,
         ) {
-            g.play(crate::sounds::Which::Click);
-            if g.scene == Scene::Sim {
-                g.choose_option(i);
-            } else {
-                crate::npc::choose_roption(g, i);
-            }
+            picked = Some(i);
+        }
+    }
+
+    if let Some(i) = picked {
+        g.play(crate::sounds::Which::Click);
+
+        if g.scene == Scene::Sim {
+            g.choose_option(i);
+        } else {
+            crate::npc::choose_roption(g, i);
         }
     }
 }
@@ -1285,9 +1386,11 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     draw_bg(art);
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(10, 6, 20, 235));
     draw_motes(g);
-    let Some(sr) = g.sim_result.clone() else {
+    let Some(sr) = g.sim_result.as_ref() else {
         return;
     };
+    // v1.9.25 卡顿修复（根因2）：上行为借用替代原 g.sim_result.clone()——本函数对 sr
+    // 只读，选项/收尾按钮的 &mut 路径上 sr 已不再被使用（NLL 借用自然终结），逐帧深克隆消除
     txt_c("一 世 落 幕 · 造 化 归 身", V_W * 0.5, 56.0, 30, C_GOLD);
     // 左：此生摘要
     panel_card(60.0, 84.0, 420.0, 480.0);

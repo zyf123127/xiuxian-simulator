@@ -155,6 +155,10 @@ async fn main() {
     let (mut xx_clicks, mut xx_last): (u32, Option<(f32, f32)>) = (0, None);
     #[cfg(target_arch = "wasm32")]
     let mut xx_clicks_handled: u32 = 0;
+    // v1.9.25 卡顿修复验收仪表（仅 wasm）：字体缓存 churn 计数上一帧采样值——
+    // HUD 显示「总量/本帧增量」，banner 动画期应见 G:+0 U:+0（预热+字号离散化生效）
+    #[cfg(target_arch = "wasm32")]
+    let (mut xx_g_prev, mut xx_u_prev): (usize, usize) = (0, 0);
     // v1.9.12 菜单自动进入倒计时（仅 wasm）：真机"点按钮无效"的终极保险——
     // 倒计时归零直接 begin_mortal，零输入依赖；循环活着就必然进入，循环死了
     // 冻结的倒计时数字本身就是诊断（配合 JS 看门狗大旗分层定位）。
@@ -214,6 +218,7 @@ async fn main() {
             } else if g.panel != 0 {
                 g.panel = 0;
                 g.char_tab = 0; // 与角色面板 × 行为一致：关面板同时归零页签
+                g.char_page = 0; // v1.9.25：人物页翻页游标同步归零
                 // v1.8.0 B3/E3：关面板统一清各面板的挂起确认态（顺手修复既有缺陷：
                 // Esc 关行囊后 sac_pending 残留，重开仍处确认态）
                 g.sac_pending = None;
@@ -242,6 +247,8 @@ async fn main() {
             g.time += dt;
             g.update_ambient(dt);
         }
+        // v1.9.25 周天吐纳：每帧 tick（内部自门控：仅 Reality 且弹层/事件/结算全关时累计）
+        g.tick_auto(dt);
         // 绘制（v1.5.0：信箱相机，虚拟 1280×720；桌面恒等映射，H5 任意屏比例等比适配）
         set_camera(&crate::cam::view_cam());
         match g.scene {
@@ -313,6 +320,22 @@ async fn main() {
                     40.0,
                     22.0,
                     Color::new(1.0, 0.9, 0.2, 1.0),
+                );
+                // v1.9.25 字体缓存 churn 仪表（第二行防溢出）：G=新字形栅格化 U=图集整图
+                // texture_update 次数（总量/本帧增量）。验收口径：banner 弹出 0.6s 动画期
+                // 逐帧增量 +0/+0（弹出前预热全档位 + pop 字号离散化后动画帧零缓存 miss）。
+                // 临时计数逻辑（vendor text.rs/atlas.rs），真机验收通过后可整体移除。
+                let gl = macroquad::text::GLYPH_RASTERS.load(std::sync::atomic::Ordering::Relaxed);
+                let up = macroquad::text::ATLAS_UPLOADS.load(std::sync::atomic::Ordering::Relaxed);
+                let (dg, du) = (gl - xx_g_prev, up - xx_u_prev);
+                xx_g_prev = gl;
+                xx_u_prev = up;
+                draw_text(
+                    &format!("G:{}/+{} U:{}/+{}", gl, dg, up, du),
+                    700.0,
+                    70.0,
+                    22.0,
+                    Color::new(0.7, 0.95, 1.0, 1.0),
                 );
                 if let Some((x, y)) = xx_last {
                     draw_circle(x, y, 9.0, Color::new(1.0, 0.9, 0.2, 0.95));
@@ -623,7 +646,7 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
                 } else if g.can_break() {
                     g.act_break();
                 } else {
-                    g.act_cultivate();
+                    g.act_cultivate(false); // 冒烟手点口径：全量日志+音效
                 }
             }
         }

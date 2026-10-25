@@ -89,6 +89,8 @@ pub fn save_text(m: &Meta) -> String {
     s.push_str(&format!("nfe={:?}\n", m.npc_ev.map(|b| b as i32)));
     // v1.7.0：累计观看幻境广告次数（旧档缺键默认 0）
     s.push_str(&format!("adw={}\n", m.ad_watched));
+    // v1.9.25 周天吐纳：现实自动修炼开关（旧档缺键默认 0=关）
+    s.push_str(&format!("zt={}\n", m.auto));
     s.push_str(&format!("music={} sfx={}\n", m.music as i32, m.sfx as i32));
     if let Some(n) = &m.neme {
         s.push_str(&format!("neme={} {} {}\n", n.title, n.name, n.realm));
@@ -250,6 +252,8 @@ fn parse_save(text: &str) -> Meta {
             }
             // v1.7.0：广告次数（旧档缺键默认 0）
             "adw" => m.ad_watched = v.parse().unwrap_or(0),
+            // v1.9.25 周天吐纳开关（旧档缺键默认 0=关；坏值静默回退）
+            "zt" => m.auto = v.parse().unwrap_or(0),
             "music" => m.music = v.trim().split(' ').next().map_or(true, |x| x == "1"),
             "sfx" => m.sfx = v.trim().split(' ').nth(1).map_or(true, |x| x == "1"),
             "neme" => {
@@ -514,5 +518,19 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
         let l2 = m2.life.unwrap();
         assert_eq!(l2.comp_fav, 35);
         assert_eq!(l2.relic_lv, [0, 2, 0, 0, 0, 0, 0, 3]);
+    }
+
+    // v1.9.25 周天吐纳 zt= 键：旧档缺键默认 0=关（向后兼容）；写读回环；坏值静默回退
+    #[test]
+    fn zt_auto_missing_default_and_roundtrip() {
+        let m = parse_save(OLD_BASE); // 旧档缺 zt
+        assert_eq!(m.auto, 0);
+        let mut m = Meta::default();
+        m.auto = 1;
+        let text = save_text(&m);
+        assert!(text.contains("zt=1\n"));
+        assert_eq!(parse_save(&text).auto, 1);
+        let bad = format!("{}zt=abc\n", OLD_BASE);
+        assert_eq!(parse_save(&bad).auto, 0);
     }
 }
