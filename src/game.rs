@@ -2010,7 +2010,16 @@ impl Game {
             // +Vec 分配）全堆在点「跳过」当帧 = 数百 ms 冻屏。改为每帧至多
             // SIM_SKIP_YEARS 年、未死下帧继续——1 秒级平滑滚到结局，日志可见地
             // 滚动；20000 guard 保留为单帧保险（原语义即每帧上限，非全局）。
+            // v1.15.1 真机修正：X5 上 sim_year 比 PC 慢一个量级，固定 40 年/帧
+            // 仍打出 6.1s 超长帧（HUD 峰6163ms 实证）——长帧期间触摸堆积、
+            // 玩家狂点。改为时间预算：桌面/快机自动跑满 40 年上限，慢机按
+            // ~7ms/帧 自适应收敛（每帧至少 1 年保证推进）。get_time 走既有
+            // sys_now 导入，帧路径零新增 env（防"already borrowed"教训）。
             const SIM_SKIP_YEARS: u32 = 40;
+
+            const SIM_SKIP_BUDGET_S: f64 = 0.007;
+
+            let t0 = macroquad::time::get_time();
 
             let mut n = 0;
 
@@ -2030,6 +2039,10 @@ impl Game {
                 if self.scene != Scene::Sim {
                     break;
                 }
+
+                if n % 4 == 0 && macroquad::time::get_time() - t0 > SIM_SKIP_BUDGET_S {
+                    break;
+                }
             }
 
             return;
@@ -2041,6 +2054,8 @@ impl Game {
 
         self.acc += dt;
 
+        let t0 = macroquad::time::get_time();
+
         let mut guard = 0;
 
         while self.acc >= interval && guard < 60 {
@@ -2051,6 +2066,12 @@ impl Game {
             guard += 1;
 
             if self.sim.is_none() || self.modal.is_some() {
+                break;
+            }
+
+            // v1.15.1：wedge 恢复期 dt 巨大时 acc 一次性堆出几十年的追帧雪崩，
+            // 同样按 ~7ms 预算截断（剩余 acc 下帧继续，不丢推进）。
+            if macroquad::time::get_time() - t0 > 0.007 {
                 break;
             }
         }
@@ -6003,7 +6024,7 @@ pub struct InheritDef {
     pub desc: &'static str,
 }
 
-pub const INHERITS: [InheritDef; 8] = [
+    pub const INHERITS: [InheritDef; 9] = [
     InheritDef {
         name: "继承修为",
 
@@ -6043,6 +6064,16 @@ pub const INHERITS: [InheritDef; 8] = [
         name: "继承气运",
 
         desc: "现实气运 +3（永久）",
+    },
+    // v1.15.1 真根因修复：道侣继承项（索引 8）。take_inherit 的 8 =>「道侣遗泽」
+    // 分支与 sim 端 opts.push(8)/pool.retain(!=8) 都按 9 项表编写，但表条目缺失
+    // → 模拟死亡时有道侣 → draw INHERITS[8] 越界 → panic=abort 下主循环体逐帧
+    // 重 panic（异步 future 重入同一循环体）= 永久楔死。真机实证：模拟中按跳过
+    // /随机选项后 panic 风暴、"already borrowed" 刷屏、触摸全灭、按按钮毫无反应。
+    InheritDef {
+        name: "道侣遗泽",
+
+        desc: "道侣随神魂归现实：道心 +8，气运 +8（永久）",
     },
 ];
 

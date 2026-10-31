@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.15.0";</script>
+    <script>var GAME_VER = "1.15.1";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -247,7 +247,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.15.0"></script>
+    <script src="mq_js_bundle.js?v=1.15.1"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -340,6 +340,45 @@
                             );
                             var el = document.getElementById("errlog");
                             if (el) el.textContent += "[PANIC] " + msg + "\n";
+                            // v1.15.1 首 panic 钉死：风暴期 errlog 8KB 封顶会把首条
+                            // （真根因）刷掉，只留 "already borrowed" 尾巴。首条原文
+                            // 存全局并钉进 panic 面板——真机截图即得首击根因。
+                            if (window.__xxFirstPanic == null) {
+                                window.__xxFirstPanic = msg;
+                                try {
+                                    var pd0 = document.getElementById("xx_panic_stack");
+                                    if (pd0) pd0.textContent = "[首PANIC] " + msg + "\n" + pd0.textContent;
+                                } catch (e5) {}
+                            }
+                            // v1.15.1 panic 风暴断路器：panic=abort 下主循环体的
+                            // panic 会逐帧重 panic（异步 future 重入同一循环体）=
+                            // 永久楔死（真机实证：errlog 刷屏、触摸全灭、"按按钮
+                            // 毫无反应"）。3 秒内 ≥3 次 panic 判定真死——此时不
+                            // 重载必然卡死，重载至少保住现实进度（存档已落盘）。
+                            // prl=N 参数防重载循环（同 wd 语义，上限 2 次）。
+                            try {
+                                var pn = performance.now();
+                                window.__xxPanicStamps = (window.__xxPanicStamps || []).filter(
+                                    function (t) {
+                                        return pn - t < 3000;
+                                    },
+                                );
+                                window.__xxPanicStamps.push(pn);
+                                if (window.__xxPanicStamps.length >= 3) {
+                                    var pm = location.search.match(/[?&]prl=(\d+)/);
+                                    var prl = pm ? parseInt(pm[1], 10) : 0;
+                                    if (prl < 2) {
+                                        var ph = location.href.replace(/[?&]prl=\d+/, "");
+                                        ph += (ph.indexOf("?") >= 0 ? "&" : "?") + "prl=" + (prl + 1);
+                                        try {
+                                            if (el)
+                                                el.textContent +=
+                                                    "[PANIC-风暴] 3s内" + window.__xxPanicStamps.length + "次 panic，断路重载（第 " + (prl + 1) + "/2 次）\n";
+                                        } catch (e6) {}
+                                        location.replace(ph);
+                                    }
+                                }
+                            } catch (e7) {}
                             // v1.15.0 重入定位：panic 时刻的 JS 同步栈——若 panic 由
                             // "帧中重入 wasm 导出"引起，栈会显示重入的 JS 中转函数。
                             // 打到独立全屏面板（errlog 8KB 封顶会把栈截掉）
@@ -431,9 +470,52 @@
         // "点按钮没反应/再也加载不进去"。这里包装 WebAssembly.instantiate，
         // 实例化完成即把 exports 挂到 window（bundle 的 load 走 compileStreaming
         // + WebAssembly.instantiate 两步，本钩子先于 bundle 的 then 执行）。
+        // v1.15.1 防 trap 第二层：任何 env import 抛出的 JS 异常都会变成 wasm
+        // trap；若发生在 frame() 持有事件处理器借用期间，即触发"already
+        // borrowed"永久风暴（真机 TapTap 实证：模拟中点跳过/选项 → 一次
+        // panic → 触摸/frame 全灭）。这里在 instantiate 入口把 importObject
+        // 里的全部函数包一层 try/catch：异常进 errlog + 标题可见化（首个抛
+        // 异常的 import 即首击根因），返回 0 兜底——JS 异常永远不再穿透成
+        // wasm trap。
+        function xxWrapImports(imp) {
+            try {
+                if (!imp || typeof imp !== "object" || imp.__xxWrapped) return;
+                Object.keys(imp).forEach(function (ns) {
+                    var o = imp[ns];
+                    if (!o || typeof o !== "object") return;
+                    Object.keys(o).forEach(function (k) {
+                        var f = o[k];
+                        if (typeof f !== "function" || f.__xxSafe) return;
+                        var g = function () {
+                            try {
+                                return f.apply(null, arguments);
+                            } catch (e) {
+                                try {
+                                    var el = document.getElementById("errlog");
+                                    if (el)
+                                        el.textContent +=
+                                            "[ENV@" + ns + "." + k + "] " + (e && e.message ? e.message : e) + "\n";
+                                    if (!window.__xxEnvThrew) {
+                                        window.__xxEnvThrew = ns + "." + k;
+                                        try { document.title = "ENV-THROW " + ns + "." + k; } catch (e3) {}
+                                    }
+                                } catch (e2) {}
+                                return 0;
+                            }
+                        };
+                        g.__xxSafe = 1;
+                        o[k] = g;
+                    });
+                });
+                imp.__xxWrapped = 1;
+            } catch (e) {}
+        }
         (function () {
             var _inst = WebAssembly.instantiate;
             WebAssembly.instantiate = function () {
+                try {
+                    for (var wi = 0; wi < arguments.length; wi++) xxWrapImports(arguments[wi]);
+                } catch (we) {}
                 // v1.14.0 阶段感知：本钩子在 bundle 的 compileStreaming 完成、
                 // instantiate 开始时同步触发——「下载游戏包 N%」在此交棒「编译中…」；
                 // exports 就绪（bundle 的 main() 初始化前一刻）再交棒「启动中…」，
@@ -451,6 +533,16 @@
                     return res;
                 });
             };
+            // v1.15.1：同包裹 instantiateStreaming（个别内核 bundle 走流式编译）
+            var _instS = WebAssembly.instantiateStreaming;
+            if (_instS) {
+                WebAssembly.instantiateStreaming = function () {
+                    try {
+                        for (var si = 0; si < arguments.length; si++) xxWrapImports(arguments[si]);
+                    } catch (se) {}
+                    return _instS.apply(this, arguments);
+                };
+            }
         })();
 
 

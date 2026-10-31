@@ -1,6 +1,6 @@
 [package]
 name = "xiuxian"
-version = "1.15.0"
+version = "1.15.1"
 edition = "2021"
 
 [dependencies]
@@ -13,6 +13,14 @@ macroquad = { version = "0.4", features = ["audio"] }
 # path 依赖仍生效（features 合并规则不变）。
 [patch.crates-io]
 macroquad = { path = "vendor/macroquad" }
+
+# v1.15.1 防 trap 毒化：wasm 下 JS 捕获 trap 后线性内存存续，miniquad
+# native/wasm.rs 的 tl_event_handler/REQUESTS RefCell 借用标志永久残留 →
+# 之后所有 frame/touch/mouse 调用永远 panic "already borrowed"（真机 TapTap
+# 实证：模拟中点跳过/选项触发一次 panic 后输入全灭、errlog 刷屏、看门狗重载
+# 循环）。vendor/miniquad 0.4.11 同版本，改 UnsafeCell 裸访问（单线程 wasm
+# 无真并发；JS 侧 import 处理器不回调 wasm 导出，无重入路径），trap 后自愈。
+miniquad = { path = "vendor/miniquad" }
 
 # v1.9.24 内存/体积优化：LTO+单编译单元+去符号让 wasm 从 2.3MB 显著瘦身
 # （手机上下载/解析/编译的峰值内存同步下降）；strip 去符号不碍 panic 钩子输出。
