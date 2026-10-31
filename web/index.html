@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.14.0";</script>
+    <script>var GAME_VER = "1.15.0";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -98,6 +98,24 @@
          Rust 侧零 dpi 乘除、cam.rs 零改动，坐标仍在唯一坐标系（backing）。
          ?ss=1 可临时回到 v1.9.9 观感做 A/B（本地回归用）。 -->
     <script>
+        // v1.15.0 音频保活：包装 AudioContext 构造器捕获实例——容器（X5/TapTap）
+        // 的自动播放策略会把 AudioContext 挂起（suspended），页面随之处于
+        // "静音"态、失去 intensive-throttling 的可听页豁免（帧泵被钳 →
+        // 点按钮迟钝）。触摸处理器每次 touchstart 对挂起的实例 resume。
+        (function () {
+            try {
+                var _AC = window.AudioContext || window.webkitAudioContext;
+                if (!_AC) return;
+                function WrappedAC() {
+                    var ctx = new (Function.prototype.bind.apply(_AC, [null].concat(Array.prototype.slice.call(arguments))))();
+                    (window.__xxACs = window.__xxACs || []).push(ctx);
+                    return ctx;
+                }
+                WrappedAC.prototype = _AC.prototype;
+                window.AudioContext = WrappedAC;
+                window.webkitAudioContext = WrappedAC;
+            } catch (e) { /* 捕获失败不影响音频功能本身 */ }
+        })();
         // v1.10.2 默认 SS 3→2（内存/帧率修复）：收益 = GPU backing 720p 类屏
         // 3840x2160(66MB 双缓冲)→2560x1440(29MB)，-37MB；填充率 9x→4x（-56% fragment），
         // 全屏 alpha 叠加型 UI（背景+日志底+面板+模态罩层）直接受益。
@@ -138,7 +156,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.14.0"></script>
+    <script src="mq_js_bundle.js?v=1.15.0"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -231,6 +249,15 @@
                             );
                             var el = document.getElementById("errlog");
                             if (el) el.textContent += "[PANIC] " + msg + "\n";
+                            // v1.15.0 重入定位：panic 时刻的 JS 同步栈——若 panic 由
+                            // "帧中重入 wasm 导出"引起，栈会显示重入的 JS 中转函数
+                            if (el && !window.__xxPanicStacked) {
+                                window.__xxPanicStacked = 1;
+                                try {
+                                    el.textContent += "[PANIC@JS] " +
+                                        String(new Error().stack || "").slice(0, 700) + "\n";
+                                } catch (e3) {}
+                            }
                             try { document.title = "PANIC " + msg.slice(0, 60); } catch (e2) {}
                         }
                     } catch (e) {}
@@ -244,6 +271,14 @@
                 // xx_js_touches：JS 侧累计触摸组数（同上）
                 importObject.env.xx_click = function (n) {
                     window.__xxClicksSeen = n | 0;
+                    // v1.15.0 触→消费延迟：用户反馈"点按钮很卡"的真机直接度量——
+                    // 从 touchstart 到 Rust 消费 pressed 边沿的墙钟时间。
+                    if (window.__xxTapAt != null) {
+                        var dt = performance.now() - window.__xxTapAt;
+                        window.__xxTapLat = dt | 0;
+                        if (dt > (window.__xxTapLatMax || 0)) window.__xxTapLatMax = dt | 0;
+                        window.__xxTapAt = null;
+                    }
                 };
                 importObject.env.xx_js_fr = function () {
                     return Math.min(999999, Math.round(performance.now() - (window.__xxFrameAt || 0)));
@@ -497,6 +532,51 @@
             errlog.textContent += "ERR: " + msg + " @" + (src || "") + ":" + line + "\n" +
                 (err && err.stack ? err.stack : "") + "\n";
         };
+        // v1.15.0 X5 排障①：bundle 的启动失败链是 .catch(console.error)——不经过
+        // window.onerror，errlog 只能看到被内核掩码的 "Script error."。劫持
+        // console.error 把启动期真错（含 stack）带进 errlog。QQ浏览器/X5 实测
+        // （MuMu 2026-10-31）：X5 上 main() 启动失败后 errlog 只有掩码错误，
+        // 真因永远不可见——此钩子是 X5 类内核排障的先决条件。
+        (function () {
+            var origError = console.error ? console.error.bind(console) : function () {};
+            console.error = function () {
+                try {
+                    var parts = Array.prototype.slice.call(arguments).map(function (a) {
+                        if (a && a.stack) return String(a.stack).slice(0, 400);
+                        return String(a).slice(0, 250);
+                    });
+                    var el = document.getElementById("errlog");
+                    if (el && el.textContent.length < 6000) {
+                        el.textContent += "[console.error] " + parts.join(" | ") + "\n";
+                    }
+                } catch (e) {}
+                origError.apply(null, arguments);
+            };
+        })();
+        // v1.15.0 X5 排障②：WebGL 能力预探测（丢弃式 canvas，不碰游戏 canvas，
+        // 不影响 miniquad 稍后自建上下文的属性）。X5 系内核缺 OES_vertex_array_object /
+        // WEBGL_depth_texture 时 mq_js_bundle 的 init_webgl 会 alert+抛错（游戏侧
+        // 表现为"加载完但黑屏、点哪都没反应"）——提前一行把缺失项写上 errlog。
+        (function () {
+            try {
+                var t = document.createElement("canvas");
+                var gl = t.getContext("webgl") || t.getContext("experimental-webgl");
+                if (!gl) {
+                    errlog.textContent += "ERR: WebGL1 不可用（探测 getContext 返回 null）——游戏无法启动\n";
+                    return;
+                }
+                var need = ["OES_vertex_array_object", "WEBGL_depth_texture", "ANGLE_instanced_arrays"];
+                var miss = [];
+                for (var i = 0; i < need.length; i++) {
+                    try { if (!gl.getExtension(need[i])) miss.push(need[i]); } catch (e2) {}
+                }
+                if (miss.length) {
+                    errlog.textContent += "WARN: WebGL 缺扩展 " + miss.join(",") +
+                        "（mq_js_bundle init_webgl 可能 alert 后中止启动）\n";
+                }
+                t.width = 0; t.height = 0; // 释放探测上下文占位
+            } catch (e) {}
+        })();
         // Promise 链上的失败（如 wasm 实例化被拒）不经过 window.onerror，单独兜底
         window.addEventListener("unhandledrejection", function (ev) {
             var r = ev && ev.reason;
@@ -889,8 +969,7 @@
             }
             var timer = setInterval(function () {
                 if (window.wasm_exports) onReady();
-            }, 250);
-            // v1.9.23 调试开关（Rust 侧）：?dbg=1 时把十字/诊断行/自检面板打开
+            }, 250);            // v1.9.23 调试开关（Rust 侧）：?dbg=1 时把十字/诊断行/自检面板打开
             (function () {
                 var iv = setInterval(function () {
                     if (!window.wasm_exports) return;
@@ -900,6 +979,59 @@
                     }
                 }, 250);
             })();
+        })();
+        // v1.15.0 启动死自救：wasm exports 就绪但 Rust 主循环 15s 内未上报任何
+        // 场景码（st 恒缺/停在启动分段 90-93）——QQ浏览器/X5（MuMu 2026-10-31）
+        // 实测确定性卡死形态：加载层已撤、画面黑、点哪都没反应、无 panic 无
+        // console.error（主循环一帧未跑）。场景码 0-6 视为已启动；90-93 为启动
+        // 分段标记，停在其中即视为启动死。重载预算与主看门狗同口径（60s）。
+        (function () {
+            var bootedAt = -1;
+            setInterval(function () {
+                if (!window.wasm_exports) return;
+                if (bootedAt < 0) { bootedAt = performance.now(); return; }
+                var st = window.__xxState;
+                if (typeof st === "number" && st >= 0 && st <= 6) return; // 已启动
+                if (performance.now() - bootedAt <= 15000) return;
+                var used = false;
+                var m = location.search.match(/[?&]xxrlt=(\d+)/) || location.hash.match(/xxrlt=(\d+)/);
+                if (m && Date.now() - parseInt(m[1], 10) < 60000) used = true;
+                try {
+                    var el = document.getElementById("errlog");
+                    if (el) el.textContent += "[诊断] 启动死（exports 就绪 15s 无场景上报 st=" + st + "）" +
+                        (used ? "，重载预算已用转兜底" : "，自动重载") + "\n";
+                } catch (e0) {}
+                if (used) return;
+                try { sessionStorage.setItem("xxrlAt", String(Date.now())); } catch (e1) {}
+                var t = Date.now();
+                var href = location.href.replace(/[?&]xxrlt=\d+/, "").replace(/#.*$/, "");
+                href += (href.indexOf("?") >= 0 ? "&" : "?") + "xxrlt=" + t + "#r" + t;
+                location.href = href;
+            }, 1000);
+        })();
+        // v1.15.0 常驻响应仪表（真机遥测，默认显示、9px 半透明不遮挡）：
+        // 触摸数/消费数/最近触→消费延迟/峰值/JS 帧龄——用户一句"点按钮很卡"
+        // 的截图从此可直接读出：延迟多少、帧泵是否死透（帧龄 >1000ms 即死）。
+        (function () {
+            var hud = document.createElement("div");
+            hud.style.cssText =
+                // 位置：左下诊断块（?dbg）正上方——页面被 orientFix 旋转后
+                // fixed 定位跟随 body 变换，左下角是真机可见的稳定角落
+                "position:fixed;left:2px;bottom:64px;z-index:97;color:#9f9;" +
+                "background:rgba(0,0,0,.4);font:9px/1.25 Consolas,monospace;" +
+                "white-space:pre;pointer-events:none;padding:1px 4px;opacity:.8;";
+            document.body.appendChild(hud);
+            setInterval(function () {
+                try {
+                    var gap = performance.now() - (window.__xxFrameAt || 0);
+                    hud.textContent =
+                        "触" + (window.__xxTouches || 0) +
+                        " 消" + (window.__xxClicksSeen || 0) +
+                        " 应" + (window.__xxTapLat == null ? "-" : (window.__xxTapLat | 0) + "ms") +
+                        " 峰" + (window.__xxTapLatMax | 0) + "ms" +
+                        " 帧龄" + Math.min(9999, gap | 0);
+                } catch (e) {}
+            }, 1000);
         })();
         // v1.8.2 指针自愈（两条）：
         // 1) dpr/backing 失步自愈——miniquad 只在 resize 事件重算 backing，若
@@ -1003,6 +1135,19 @@
                             e.stopImmediatePropagation();
                             mark("touch");
                             window.__xxTouches = (window.__xxTouches || 0) + 1;
+                            // v1.15.0 触→消费延迟起点 + 音频保活（见构造器捕获处注释）
+                            if (e.type === "touchstart") window.__xxTapAt = performance.now();
+                            try {
+                                var __acs = window.__xxACs;
+                                if (__acs) {
+                                    for (var ai = 0; ai < __acs.length; ai++) {
+                                        var ac = __acs[ai];
+                                        if (ac && ac.state === "suspended" && ac.resume) {
+                                            ac.resume()["catch"](function () {});
+                                        }
+                                    }
+                                }
+                            } catch (ae) {}
                             window.xxSyncScreen(); // 触摸瞬间强同步 screen_size == canvas
                             for (var j = 0; j < pts.length; j++) {
                                 var t = pts[j][0];

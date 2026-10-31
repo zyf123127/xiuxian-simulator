@@ -10,6 +10,38 @@ const TOP_H: f32 = 52.0;
 const LEFT_W: f32 = 360.0;
 const PANEL_B: f32 = 612.0;
 
+// v1.15.0 同点快速二击去抖：MuMu+夸克实测一击物理 tap 曾被消费两次（k1→k2，
+// 点击通路的双派发残留——触摸桥 down 与 pointer/compat 路径各入队一次、
+// 落入不同帧即成两个 pressed 边沿）。第二击若落在开合型按钮上会把第一击的
+// 效果当帧撤销（面板开→立关），玩家体感正是"点了没反应"。本游戏无 <120ms
+// 同点双击的合法操作（寻仇连点节奏 ≥200ms），同点 120ms 内第二边沿判幻影吞掉。
+// 只挂在 button()（绝大多数交互的唯一入口）；charpanel/world 的裸
+// is_mouse_button_pressed 判定不经过此处（无开合型按钮，不接）。
+fn click_debounced(mx: f32, my: f32) -> bool {
+    // 实现（v1.15.0 bisect 教训）：首版用 std Mutex+Instant+OnceLock——在 wasm 上
+    // 触发 miniquad tl_event_handler "already borrowed" 恐慌风暴（一次点击=
+    // 实例死亡=点哪都没反应，MuMu 夸克 100% 复现；A/B 定位到本函数）。
+    // 推断：Mutex/Instant 在 wasm 引入 std 侧额外导入路径，与本壳的 RefCell
+    // 事件借用相互作用。改为纯原子位打包（get_time 走 miniquad 既有 sys_now
+    // 导入，零新增），语义不变：同点 120ms 内第二边沿判幻影吞掉。
+    use std::sync::atomic::{AtomicU64, Ordering};
+    // 打包：高 32 位=时间 ms（get_time*1000 截断），低 32 位=|x,y| 各 16 位量化
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let t_ms = (macroquad::time::get_time() * 1000.0) as u32 as u64;
+    let qx = ((mx.max(-30000.0).min(30000.0)) + 30000.0) as u32 & 0xFFFF;
+    let qy = ((my.max(-30000.0).min(30000.0)) + 30000.0) as u32 & 0xFFFF;
+    let key = (t_ms << 32) | ((qx as u64) << 16) | (qy as u64);
+    let prev = LAST.swap(key, Ordering::Relaxed);
+    if prev != 0 {
+        let (pt, pqx, pqy) = ((prev >> 32) as u32, (prev >> 16) as u16, prev as u16);
+        let dt = t_ms.wrapping_sub(pt as u64) as u32;
+        if dt < 120 && (qx as i32 - pqx as i32).abs() < 3 && (qy as i32 - pqy as i32).abs() < 3 {
+            return false; // 幻影二击：吞
+        }
+    }
+    true
+}
+
 pub fn button(
     x: f32,
     y: f32,
@@ -81,7 +113,8 @@ pub fn button(
             },
         );
     }
-    hot && enabled && is_mouse_button_pressed(MouseButton::Left)
+    // v1.15.0 同点快速二击去抖（见 click_debounced 注释）
+    hot && enabled && is_mouse_button_pressed(MouseButton::Left) && click_debounced(mx, my)
 }
 
 pub fn bar(x: f32, y: f32, w: f32, h: f32, frac: f32, c: Color) {
@@ -663,14 +696,23 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "开始模拟",
         sim_sub.as_deref(),
         pts_ok || stuck,
-    ) && !sub_open
-    {
+    ) {
+        // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
+        // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
+        // 真机反馈"按按钮毫无反应"的确定性成因之一；现在一击必有可见反馈）
+        if sub_open {
+            crate::menu::close_sub(g);
+        }
         g.play(crate::sounds::Which::Click);
         g.start_draft();
     }
     {
         // v1.6.0 B：修炼弹层（统一入口 open_sub 打开帧门闩，防未来回归）
-        if button(x0 + (bw + gap), by, bw, bh, "修炼", Some("闭关 · 破境"), true) && !sub_open {
+        if button(x0 + (bw + gap), by, bw, bh, "修炼", Some("闭关 · 破境"), true) {
+            // v1.15.0 同上：弹层开着时点修炼 = 关弹层（同帧重开同层，观感不变）
+            if sub_open {
+                crate::menu::close_sub(g);
+            }
             g.play(crate::sounds::Which::Click);
             crate::menu::open_sub(g, crate::menu::Sub::Cult);
         }
@@ -683,8 +725,13 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "山河图",
         Some("世界地图 · M"),
         true,
-    ) && !sub_open
-    {
+    ) {
+        // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
+        // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
+        // 真机反馈"按按钮毫无反应"的确定性成因之一；现在一击必有可见反馈）
+        if sub_open {
+            crate::menu::close_sub(g);
+        }
         g.play(crate::sounds::Which::Page);
         crate::world::open_world(g);
     }
@@ -696,8 +743,13 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "坊市",
         Some("丹药 · 藏经 · 兑换"),
         true,
-    ) && !sub_open
-    {
+    ) {
+        // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
+        // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
+        // 真机反馈"按按钮毫无反应"的确定性成因之一；现在一击必有可见反馈）
+        if sub_open {
+            crate::menu::close_sub(g);
+        }
         g.panel = 1;
         g.play(crate::sounds::Which::Page);
     }
@@ -709,8 +761,13 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "行囊",
         Some("丹药 · 法宝 · 行装"),
         true,
-    ) && !sub_open
-    {
+    ) {
+        // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
+        // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
+        // 真机反馈"按按钮毫无反应"的确定性成因之一；现在一击必有可见反馈）
+        if sub_open {
+            crate::menu::close_sub(g);
+        }
         g.panel = 2;
         g.play(crate::sounds::Which::Page);
     }
@@ -722,8 +779,13 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "人物",
         Some("长老 · 商人 · 道侣"),
         true,
-    ) && !sub_open
-    {
+    ) {
+        // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
+        // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
+        // 真机反馈"按按钮毫无反应"的确定性成因之一；现在一击必有可见反馈）
+        if sub_open {
+            crate::menu::close_sub(g);
+        }
         g.panel = 5;
         g.char_tab = 3; // v1.6.0 D：直入人物页
         g.play(crate::sounds::Which::Page);
@@ -736,8 +798,13 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "角色",
         Some("C 键查看"),
         true,
-    ) && !sub_open
-    {
+    ) {
+        // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
+        // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
+        // 真机反馈"按按钮毫无反应"的确定性成因之一；现在一击必有可见反馈）
+        if sub_open {
+            crate::menu::close_sub(g);
+        }
         g.panel = 5;
         g.char_tab = 0; // v1.6.0 应修①②：直点「角色」归总览页，防沿用人物页签
         g.play(crate::sounds::Which::Page);
@@ -755,8 +822,11 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
                 "寻仇",
                 Some(&format!("{:.0}% · {}", p * 100.0, neme.name)),
                 true,
-            ) && !sub_open
-            {
+            ) {
+                // v1.15.0 同底栏语义：弹层开着时点寻仇 = 关弹层并执行
+                if sub_open {
+                    crate::menu::close_sub(g);
+                }
                 g.play(crate::sounds::Which::Click);
                 g.act_revenge();
             }
@@ -796,8 +866,13 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "周天",
         Some(auto_sub),
         true,
-    ) && !sub_open
-    {
+    ) {
+        // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
+        // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
+        // 真机反馈"按按钮毫无反应"的确定性成因之一；现在一击必有可见反馈）
+        if sub_open {
+            crate::menu::close_sub(g);
+        }
         g.meta.auto = if auto_on { 0 } else { 1 };
         g.auto_acc = 0.0;
         g.auto_years = 0;

@@ -127,8 +127,17 @@ async fn main() {
     }
     ui::init_font();
     art::init_art();
+    // v1.15.0 X5 排障：启动分段标记（st90 进入主体 / st91 音频就绪 /
+    // st92 Game::new 就绪 / st93 进入主循环）——st-1 = 主体一帧未跑，
+    // st90 = 卡音频，st91 = 卡 Game::new，st93 常驻 = 启动全通。
+    #[cfg(target_arch = "wasm32")]
+    xx_dbg::state(90);
     let audio = sounds::init().await;
+    #[cfg(target_arch = "wasm32")]
+    xx_dbg::state(91);
     let mut g = Game::new(audio);
+    #[cfg(target_arch = "wasm32")]
+    xx_dbg::state(92);
     // v1.6.0 A 清晰度：high_dpi 后窗口按物理像素开窗，125%/150% 缩放下 screen_width()
     // 首帧只有 853/1024（物理/倍率）。这里请求 1280×720 逻辑尺寸（macroquad 内部 ×dpi →
     // 客户区 1920×1080 物理像素），第 2 帧起 screen_width()==1280、cam.rs fit==1 零改动、
@@ -148,6 +157,8 @@ async fn main() {
     }
     let mut frame = 0u32;
     let mut shots = 0u32;
+    #[cfg(target_arch = "wasm32")]
+    xx_dbg::state(93);
     // v1.9.5 真机输入诊断（仅 wasm）：点击计数 + 最近点击的虚拟坐标常驻右上角。
     // 配合 JS 侧大号十字光标：一张真机截图即可区分"事件没到 Rust"（clicks 恒 0）
     // 与"到了但按钮判定不吃"（clicks 增长且十字在按钮上）。
