@@ -1135,7 +1135,7 @@
                 // z-index 150：必须压过 errlog(99)——X5 实测恐慌刷屏时
                 // errlog(max-height:100%) 会盖满整页，HUD 从此恒可读
                 "position:fixed;left:2px;bottom:64px;z-index:150;color:#9f9;" +
-                "background:rgba(0,0,0,.6);font:9px/1.25 Consolas,monospace;" +
+                "background:rgba(0,0,0,.6);font:10px/1.25 Consolas,monospace;" +
                 "white-space:pre;pointer-events:none;padding:1px 4px;opacity:.95;";
             document.body.appendChild(hud);
             setInterval(function () {
@@ -1143,6 +1143,7 @@
                     var gap = performance.now() - (window.__xxFrameAt || 0);
                     var ck = window.__xxClocks || {};
                     hud.textContent =
+                        "v" + GAME_VER + " " +
                         "触" + (window.__xxTouches || 0) +
                         " 消" + (window.__xxClicksSeen || 0) +
                         " 应" + (window.__xxTapLat == null ? "-" : (window.__xxTapLat | 0) + "ms") +
