@@ -426,8 +426,9 @@ async fn main() {
             g.audio.play(w);
         }
         // v1.10.2 存档落盘去抖（卡顿修复·次要项②）：场景/弹窗/面板开合边界立即落，
-        // 否则每 ≥3s 一落（周天挂机 localStorage 写 0.6→0.2 次/s；wasm 侧另有
-        // index.html pagehide/visibilitychange 兜底，native 关窗丢 ≤3s 属既定折中）
+        // 否则每 ≥10s 一落（v1.14.0 去抖窗 3.0→10.0：周天挂机 localStorage 写
+        // 0.33→0.1 次/s；wasm 侧另有 index.html pagehide/visibilitychange 兜底，
+        // native 关窗丢 ≤10s 属既定折中）
         g.save_timer += dt;
         let sig = (
             g.scene as u8,
@@ -441,10 +442,14 @@ async fn main() {
         );
         if sig != g.prev_sig {
             g.save_flush();
-        } else if g.save_dirty && g.save_timer >= 3.0 {
+        } else if g.save_dirty && g.save_timer >= 10.0 {
             g.save_flush();
         }
         g.prev_sig = sig;
+        // v1.14.0 立绘焕新时刻：金环闪光计时递减（会话态，render_left 收敛闪光用）
+        if g.tier_flash > 0.0 {
+            g.tier_flash = (g.tier_flash - dt).max(0.0);
+        }
         if debug {
             autopilot(&mut g, frame, &mut shots);
         }

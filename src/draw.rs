@@ -884,6 +884,26 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
         l.seclusion.is_some(),
         portrait_tier(l.realm),
     );
+    // v1.14.0 立绘焕新时刻：跨相破境金环闪光——tier_flash 1.5→0，环自 0.6r 外扩渐隐
+    //（会话态，旧档载入恒 0 不触发；双环内亮外淡与修士本体光环同构）
+    if g.tier_flash > 0.0 {
+        let k = (g.tier_flash / 1.5).min(1.0);
+        let rr = 86.0 * 0.80 * (1.15 + (1.0 - k) * 0.55);
+        draw_circle_lines(
+            cx,
+            152.0,
+            rr,
+            3.0,
+            Color::new(1.0, 0.85, 0.5, 0.55 * k),
+        );
+        draw_circle_lines(
+            cx,
+            152.0,
+            rr * 0.78,
+            2.0,
+            Color::new(1.0, 0.92, 0.65, 0.38 * k),
+        );
+    }
     txt_c(&realm_full_name(l), cx, 236.0, 20, col_realm(l.realm));
     txt_c(&format!("『{}』", g.worn_title_of()), cx, 258.0, 14, C_GOLD);
     let need = qi_need(l);

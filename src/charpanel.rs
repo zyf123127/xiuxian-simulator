@@ -121,8 +121,10 @@ fn draw_panel_chrome_act(g: &Game) -> Option<PanelAct> {
 // 性能：整卡剔除（card_y≥616 或 card_y+330≤116 连立绘查询一并跳过，任意帧 ≤2 卡在
 // 画）；LazyTex 仅可见卡与头像条取纹理，首开最多解码 npc_elder/npc_merchant 两张
 // （无立绘卡零解码，LazyTex 缓存 None 不重查）。立绘 contain 收进 220×310、底边
-// 对齐（实测素材宽高比 0.456..0.628 → 绘宽 141..195 恒 ≥140 不变形）；无立绘回退
-// 12×12 像素图标 ×12=144 同达标。好感度/档次刻度/增益/赠礼交互与数据全部保留，
+// 对齐（实测素材宽高比 0.456..0.628 → 绘宽 141..195 恒 ≥140 不变形）；NPC 无 AI 图
+// 回退 v1.14.0 程序化像素立绘 217×310（art::npc_pixel_tex，宁清霜/醉道人不再拿
+// 12×12 图标冒充人像），道侣未结缘回退书卷剪影（art::comp_silhouette_tex），
+// 已结缘恒 comp_0..9 真立绘。好感度/档次刻度/增益/赠礼交互与数据全部保留，
 // gift_npc 单口不动（npc.rs:269）；滚动会话态不进存档（×/Esc 归零见 npc_scroll_reset）。
 const NPC_VIEW_Y0: f32 = 116.0; // 视口顶（页签下划线下缘）
 const NPC_VIEW_Y1: f32 = 616.0; // 视口底
@@ -142,6 +144,12 @@ fn npc_row_vis(y: f32) -> bool {
     y >= NPC_VIEW_Y0 && y < NPC_VIEW_Y1
 }
 
+// v1.14.0 识人小传：好感→已解锁段数（20/40/70 三档，对齐 NPC_FAV_TIERS；
+// 道侣段叠加 companion_lives≥1 首段保底，见各卡调用处）——解锁纯推导零存档键
+fn tale_unlocked(fav: i32) -> usize {
+    (fav >= 20) as usize + (fav >= 40) as usize + (fav >= 70) as usize
+}
+
 // 卡体 + 边线（全部经视口裁剪；上下线仅整线可见时画，避免跨界 1-2px 残影）
 fn npc_card_chrome(x: f32, y: f32, bg: Color, border: Color) {
     if let Some((ty, th)) = npc_clip_band(y, NPC_CARD_H) {
@@ -159,7 +167,8 @@ fn npc_card_chrome(x: f32, y: f32, bg: Color, border: Color) {
 
 // 立绘：contain 收进 220×310、底边对齐（公式沿用旧卡闭包）；并按视口上下缘对纹理
 // 源等比裁剪（source 为纹理像素，vendor texture.rs:537-545 按纹理尺寸归一）；
-// 无立绘回退 12×12 图标 ×12=144（绘宽 144 ≥140，同为像素风不糊）
+// v1.14.0 起兜底像（28×40 像素立绘/书卷剪影，contain 得 217×310）由调用方经
+// or_else 以 Some 传入；icon 仅剩 tex=None 防御路径（12×12 ×12=144，同像素风不糊）
 fn npc_portrait(tex: Option<&Texture2D>, icon: &Texture2D, x: f32, card_y: f32) {
     let (dw, dh) = match tex {
         Some(t) => {
@@ -326,14 +335,23 @@ fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
     }
 
     // ---------- 发现性②：底部头像跳转条（名册常驻可见，「找不到人物」的直接解）----------
-    // 头像取立绘顶部约 35% 高度方形头裁剪（1:1 不变形）；无立绘回退像素图标 24×24
-    // （12px ×2 整数倍不糊）；当前卡金框
+    // 头像取立绘顶部约 35% 高度方形头裁剪（1:1 不变形）；v1.14.0 兜底同步卡内口径：
+    // NPC 缺 AI 图用像素立绘（28×40 → 头裁剪 14×14 整数倍放大不糊）、道侣未结缘用
+    // 书卷剪影（已结缘 comp_0..9 恒真立绘）；当前卡金框
     for i in 0..5usize {
         let (ax, ay) = (920.0 + i as f32 * 42.0, 620.0);
         let (tex, icon) = if i < 4 {
-            (crate::art::art().npc_tex(i), &crate::art::art().icon_yun)
+            (
+                crate::art::art()
+                    .npc_tex(i)
+                    .or_else(|| crate::art::npc_pixel_tex(i)),
+                &crate::art::art().icon_yun,
+            )
         } else {
-            (comp_tex.clone(), &crate::art::art().icon_pill)
+            (
+                comp_tex.clone().or_else(crate::art::comp_silhouette_tex),
+                &crate::art::art().icon_pill,
+            )
         };
         match tex.as_ref() {
             Some(t) => {
@@ -390,8 +408,18 @@ fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
             Color::from_rgba(200, 196, 214, 220),
         );
     }
+    // v1.14.0 识人小传页脚：全图鉴解锁进度 x/15（4 NPC×3 段 + 道侣 3 段，纯推导）
+    let mut tales = 0usize;
+    for f in g.meta.npc_fav.iter() {
+        tales += tale_unlocked(*f);
+    }
+    let cfav = g.life.as_ref().map_or(0, |x| x.comp_fav);
+    tales += tale_unlocked(cfav).max((g.meta.companion_lives >= 1) as usize);
     txt(
-        "好感随交往与赠礼增长，跨世持久（随轮回烙印存档）；赠礼价随交情水涨船高。",
+        &format!(
+            "好感随交往与赠礼增长，跨世持久（随轮回烙印存档）；赠礼价随交情水涨船高。 · 识人小传 {}/15",
+            tales
+        ),
         170.0,
         630.0, 14,
         C_DIM,
@@ -414,12 +442,12 @@ fn draw_npc_card(
     let fav = g.meta.npc_fav[i];
     let cost = crate::npc::gift_cost(fav);
     npc_card_chrome(x, y, Color::from_rgba(30, 24, 50, 210), C_GOLD_D);
-    npc_portrait(
-        crate::art::art().npc_tex(i).as_ref(),
-        &crate::art::art().icon_yun,
-        x + 16.0,
-        y,
-    );
+    // v1.14.0：AI 图缺失时程序化像素立绘兜底（or_else 短路——AI 图命中永不触发，
+    // 放入 assets/portraits/npc_senior.png / npc_drunk.png 重启即自动覆盖）
+    let pix = crate::art::art()
+        .npc_tex(i)
+        .or_else(|| crate::art::npc_pixel_tex(i));
+    npc_portrait(pix.as_ref(), &crate::art::art().icon_yun, x + 16.0, y);
     let col = x + 260.0;
     if npc_row_vis(y + 16.0) {
         txt(NPC_NAMES[i], col, y + 16.0, 24, C_GOLD);
@@ -472,6 +500,16 @@ fn draw_npc_card(
     }
     if npc_row_vis(y + 168.0) {
         wrap_draw(NPC_BRIEF[i], col, y + 168.0, 14, 660.0, 22.0, C_DIM);
+    }
+    // v1.14.0 识人小传：常显最新解锁 1 段（14px ≤2 行，赠礼钮 y+258 之上不挤压）；
+    // 未解锁给书道口径占位行
+    let seg = tale_unlocked(fav);
+    if seg > 0 {
+        if npc_row_vis(y + 196.0) {
+            wrap_draw(NPC_TALES[i][seg - 1], col, y + 196.0, 14, 640.0, 22.0, C_TEXT);
+        }
+    } else if npc_row_vis(y + 196.0) {
+        txt("交情愈深，其人故事自会显于纸上。", col, y + 196.0, 14, C_DIM);
     }
     // 赠礼钮 230×60 底对齐（仅整钮可见时绘出与可点）；gift_npc 内部再校验灵石（单口）
     let (bx, by) = (col, y + 258.0);
@@ -529,7 +567,11 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
     let x = 160.0;
     let cfav = l.map_or(0, |x| x.comp_fav);
     npc_card_chrome(x, y, Color::from_rgba(42, 26, 52, 210), C_PURPLE);
-    npc_portrait(comp_tex, &crate::art::art().icon_pill, x + 16.0, y);
+    // v1.14.0：未结缘（comp_tex=None）改书卷剪影兜底；已结缘 comp_0..9 全内嵌恒真立绘
+    let portrait = comp_tex
+        .map(Clone::clone)
+        .or_else(crate::art::comp_silhouette_tex);
+    npc_portrait(portrait.as_ref(), &crate::art::art().icon_pill, x + 16.0, y);
     let col = x + 260.0;
     match l.and_then(|x| x.companion.as_deref()) {
         Some(cn) => {
@@ -587,20 +629,40 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
                     C_DIM,
                 );
             }
+            // v1.14.0 识人小传：道侣槽共通段（首段结缘保底，段2/3 随情谊 40/70 解锁）
+            let cseg = tale_unlocked(cfav).max((g.meta.companion_lives >= 1) as usize);
+            if cseg > 0 && npc_row_vis(y + 222.0) {
+                wrap_draw(COMP_TALES[cseg - 1], col, y + 222.0, 14, 640.0, 22.0, C_TEXT);
+            }
         }
         None => {
+            // v1.14.0 未结缘引导改版：三行全暗 → 标题紫提亮 + 暗金引导框（引用
+            // 「同页天成」事件原文 game.rs:2901「同页天成」/『认下这页』，玩家可按图索骥）
             if npc_row_vis(y + 16.0) {
-                txt("道侣 · 此生未结缘", col, y + 16.0, 24, C_DIM);
+                txt("道侣 · 此生未结缘", col, y + 16.0, 24, C_PURPLE);
             }
-            if npc_row_vis(y + 52.0) {
+            let (gx, gy, gw, gh) = (col, y + 52.0, 560.0, 88.0);
+            if let Some((vy, vh)) = npc_clip_band(gy, gh) {
+                draw_rectangle(gx, vy, gw, vh, Color::from_rgba(24, 17, 40, 190));
+                draw_rectangle_lines(gx, vy, gw, vh, 1.5, C_GOLD_D);
+            }
+            if npc_row_vis(gy + 18.0) {
                 txt(
-                    "模拟中「同页天成」事件可选执子之手；遗泽亦可携道侣魂归现实。",
-                    col,
-                    y + 52.0, 14,
-                    C_DIM,
+                    "模拟中遇『同页天成』事件，选『认下这页』即可结缘。",
+                    gx + 16.0,
+                    gy + 18.0, 16,
+                    C_TEXT,
                 );
             }
-            if npc_row_vis(y + 80.0) {
+            if npc_row_vis(gy + 50.0) {
+                txt(
+                    "结缘后，她的立绘、情谊与双修加成都会在此卡显现。",
+                    gx + 16.0,
+                    gy + 50.0, 16,
+                    C_TEXT,
+                );
+            }
+            if npc_row_vis(y + 156.0) {
                 txt(
                     &format!(
                         "结缘起步情谊 {}（双修 +{:.0}%），道侣赠礼事件再 +{}。",
@@ -609,8 +671,28 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
                         COMPANION_GIFT_FAV
                     ),
                     col,
-                    y + 80.0, 14,
+                    y + 156.0, 14,
                     C_CYAN,
+                );
+            }
+            // v1.14.0 识人小传：未结缘但历世有缘（companion_lives≥1 保底）亦显首段旧谊
+            if g.meta.companion_lives >= 1 && npc_row_vis(y + 192.0) {
+                wrap_draw(COMP_TALES[0], col, y + 192.0, 14, 640.0, 22.0, C_TEXT);
+            }
+            // 剪影下缘小字一行（直接回应「女角色立绘丢了」的误读）
+            if npc_row_vis(y + 290.0) {
+                draw_rectangle(
+                    x + 16.0,
+                    y + 286.0,
+                    220.0,
+                    22.0,
+                    Color::from_rgba(14, 10, 26, 210),
+                );
+                txt_c(
+                    "结缘之后，立绘自会在此显现",
+                    x + 126.0,
+                    y + 290.0, 14,
+                    C_DIM,
                 );
             }
         }
@@ -631,7 +713,18 @@ fn draw_overview(g: &Game, l: &Life) {
         l.seclusion.is_some(),
         portrait_tier(l.realm),
     );
-    txt(&realm_full_name(l), 170.0, 345.0, 20, col_realm(l.realm));
+    // v1.14.0 立绘焕新时刻：相名常显行（由境界推导，零存档键，存档往返天然兼容）
+    txt(
+        &format!(
+            "{} · {}",
+            realm_full_name(l),
+            PORTRAIT_STAGE_NAMES[portrait_tier(l.realm)]
+        ),
+        170.0,
+        345.0,
+        20,
+        col_realm(l.realm),
+    );
     // v1.10.2 成行择道：道途标签（终身标识；未择显示占位，选定后青色常显）
     txt(
         &format!("道途：{}", path_name(l.path)),

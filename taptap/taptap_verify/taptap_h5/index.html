@@ -80,13 +80,13 @@
     <div id="loading">
         <div id="ld_msg">凡人模拟 · 加载中…</div>
         <div class="bar"><i></i></div>
-        <div style="font-size:12px;color:#b8a8e0;">首次加载需要数秒，请稍候</div>
+        <div style="font-size:12px;color:#b8a8e0;">首次加载约需 10~40 秒，二次进入将快很多</div>
     </div>
     <div id="errlog"></div>
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.13.0";</script>
+    <script>var GAME_VER = "1.14.0";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -138,7 +138,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.13.0"></script>
+    <script src="mq_js_bundle.js?v=1.14.0"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -294,9 +294,19 @@
         (function () {
             var _inst = WebAssembly.instantiate;
             WebAssembly.instantiate = function () {
+                // v1.14.0 阶段感知：本钩子在 bundle 的 compileStreaming 完成、
+                // instantiate 开始时同步触发——「下载游戏包 N%」在此交棒「编译中…」；
+                // exports 就绪（bundle 的 main() 初始化前一刻）再交棒「启动中…」，
+                // 终结"下载 10~40 秒全挂编译名头"的口径错位。
+                try { if (typeof xx_stage === "function") xx_stage("编译中…"); } catch (e) {}
                 return _inst.apply(this, arguments).then(function (res) {
-                    if (res && res.instance && res.instance.exports) {
-                        window.wasm_exports = res.instance.exports;
+                    // 兼容两种就绪形态：规范 WebView 为 {module, instance}；个别内嵌
+                    // 环境直接回裸 Instance（res.exports）——统一取 exports，取到即
+                    // 画「启动中…」并先行挂载（v1.8.2 修复语义在两种形态下都保持）
+                    var ex = res && (res.instance ? res.instance.exports : res.exports);
+                    if (ex) {
+                        window.wasm_exports = ex;
+                        try { if (typeof xx_stage === "function") xx_stage("启动中…"); } catch (e) {}
                     }
                     return res;
                 });
@@ -332,7 +342,11 @@
         // 首次下载+编译要 10~40 秒，让玩家确认页面没死、不再乱点黑屏。
         var xxLoading = document.getElementById("loading");
         var xxMsg = document.getElementById("ld_msg");
-        var xxStageMsg = "加载中…";
+        // v1.14.0 预期管理：r2 双加载页（首载 >1.5s 后带 r2=1 热缓存重进，见下方
+        // pollFirstFrame）秒开，初始文案口径与体验一致；首开页保持中性「加载中…」，
+        // 到 load() 处再分「下载游戏包…」（v1.14.0 下载进度感知）
+        var XX_R2 = /[?&]r2=1/.test(location.search);
+        var xxStageMsg = XX_R2 ? "缓存热身中，马上就好…" : "加载中…";
         var xxLoadStart = performance.now();
         function xx_paint_stage() {
             if (xxMsg && xxLoading && !xxLoading.classList.contains("hidden")) {
@@ -343,7 +357,7 @@
             // v1.12.1 加载停滞看门狗：计秒 interval（下方 setInterval 每秒）执行即刷
             // 心跳——真机观测特征"计秒先走后停"被直接编码为心跳年龄，供下方 wd
             // 看门狗 D1 判据读取。正常慢载期间本 interval 每秒照跑、心跳恒新，
-            // 结构性不触发；心跳停刷 ≥20s = 主线程死滞。
+            // 结构性不触发；心跳停刷 ≥30s（v1.14.0 自 20s 放宽）= 主线程死滞。
             window.__xxLdBeat = performance.now();
         }
         function xx_stage(msg) {
@@ -641,21 +655,105 @@
                     }
                 }, 500);
             })();
-            xx_stage("编译游戏引擎…");
+            // v1.14.0 下载进度感知：包装 fetch 拦截 xiuxian.wasm——body.tee() 一支
+            // 计数刷「下载游戏包 N%（x.x/2.1MB）」（~200ms 节流）并把进度条从假动画
+            // 切真宽度，一支原样包回 Response 交给 bundle（compileStreaming 主分支与
+            // 老内核 arrayBuffer() 回退分支均按 Response 消费，已核 mq_js_bundle.js
+            // load()：`var t=fetch(e)` 调用时解析全局 fetch，包装必被拾取）。
+            // 防御：res.body 为 null（老内核）/无 tee/Response 构造失败一律静默回原
+            // 响应，进度感知降级但加载功能不受损。只观察不改变加载机制本体。
+            (function () {
+                if (typeof window.fetch !== "function") return;
+                var _fetch = window.fetch;
+                window.__xxDlAt = 0; // 最近一次字节增长时刻（45s 门控：仍在推进不翻失败牌）
+                window.__xxDlActive = false; // 下载进行中（12s/30s 定时文案不抢屏）
+                window.fetch = function (input, init) {
+                    var url = "";
+                    try {
+                        url = typeof input === "string" ? input : (input && input.url) || "";
+                    } catch (e) {}
+                    if (url.indexOf("xiuxian.wasm") < 0) return _fetch.apply(this, arguments);
+                    var p = _fetch.apply(this, arguments);
+                    return p.then(function (res) {
+                        try {
+                            if (!res || !res.body || !res.body.tee) return res;
+                            var total = parseInt(res.headers.get("content-length") || "0", 10) || 0;
+                            var br = res.body.tee();
+                            var reader = br[0].getReader();
+                            var done = 0, lastPaint = 0;
+                            var bar = document.querySelector("#loading .bar i");
+                            window.__xxDlActive = true;
+                            window.__xxDlAt = performance.now();
+                            var paint = function (force) {
+                                var now = performance.now();
+                                if (!force && now - lastPaint < 200) return;
+                                lastPaint = now;
+                                if (total > 0) {
+                                    var pct = Math.min(100, Math.round((done / total) * 100));
+                                    xx_stage("下载游戏包 " + pct + "%（" +
+                                        (done / 1048576).toFixed(1) + "/" +
+                                        (total / 1048576).toFixed(1) + "MB）");
+                                    if (bar) { // 假动画 → 真宽度（无 content-length 保动画）
+                                        bar.style.animation = "none";
+                                        bar.style.marginLeft = "0";
+                                        bar.style.width = pct + "%";
+                                    }
+                                } else {
+                                    xx_stage("已下载 " + (done / 1048576).toFixed(1) + "MB…");
+                                }
+                            };
+                            var pump = function () {
+                                reader.read().then(function (r) {
+                                    if (r.done) {
+                                        window.__xxDlActive = false;
+                                        window.__xxDlAt = performance.now();
+                                        paint(true);
+                                        // 字节尽≠编译尽：末端文案与 instantiate 钩子衔接
+                                        xx_stage("下载完成，编译中…");
+                                        if (bar && total > 0) bar.style.width = "100%";
+                                        return;
+                                    }
+                                    done += r.value.byteLength;
+                                    window.__xxDlAt = performance.now();
+                                    paint(false);
+                                    pump();
+                                }).catch(function () {
+                                    window.__xxDlActive = false; // 计数支中断不影响交付支
+                                });
+                            };
+                            pump();
+                            return new Response(br[1], {
+                                status: res.status,
+                                statusText: res.statusText,
+                                headers: res.headers,
+                            });
+                        } catch (e) {
+                            // best-effort：仅兜"有 tee 但 Response 构造异常"的不存在组合
+                            //（现实内核有 Streams 必有 Response 构造器）；此时原响应流
+                            // 已被 tee 锁定可能不可再读，等价一次网络失败的既有兜底路径。
+                            // 会审点名的 body-null 老内核场景在 tee 之前就已直通。
+                            return res;
+                        }
+                    });
+                };
+            })();
+            xx_stage(XX_R2 ? "缓存热身中，马上就好…" : "下载游戏包…");
             try {
                 load("xiuxian.wasm?v=" + GAME_VER);
             } catch (e) {
                 errlog.textContent += "load() threw: " + (e && e.message ? e.message : e) + "\n";
             }
             // 加载分阶段提示：游戏包含内嵌立绘、体积较大，手机上首次下载+编译
-            // 需要 10~40 秒——中途给状态文字，避免玩家以为卡死
+            // 需要 10~40 秒——中途给状态文字，避免玩家以为卡死。
+            // v1.14.0：下载百分比正在推进时不抢屏（__xxDlActive，百分比即最优状态
+            // 文案）；12s 文案追加二次进入预期（A3）
             var stageTimers = [
-                [12, "游戏包较大，首次加载约需 10~40 秒，请稍候…"],
+                [12, "游戏包较大，首次加载约需 10~40 秒，请稍候…（下次进入会快很多）"],
                 [30, "仍在编译游戏引擎（低端设备会慢一些），请继续等待…"],
             ];
             stageTimers.forEach(function (st) {
                 setTimeout(function () {
-                    if (!window.wasm_exports) xx_stage(st[1]);
+                    if (!window.wasm_exports && !window.__xxDlActive) xx_stage(st[1]);
                 }, st[0] * 1000);
             });
             // 加载看门狗：45 秒仍未就绪（无 WebGL/无 WASM/网络失败都会卡在
@@ -665,9 +763,16 @@
             setTimeout(function () {
                 if (!window.wasm_exports && xxLoading &&
                     !xxLoading.classList.contains("hidden")) {
-                    xx_stage("加载失败或超时，点击此处重试");
-                    xxLoading.style.pointerEvents = "auto";
-                    xxLoading.onclick = function () { location.reload(); };
+                    // v1.14.0 A2：慢载≠失败——下载近 10s 仍有字节增长则不翻失败牌
+                    //（跳过本次，进度百分比继续安抚；后续真停滞由 D2=120s 保险丝兜底）；
+                    // 真停滞才给可点重试，且文案软化——"已等待 N 秒"由计秒尾缀自带
+                    var fresh = window.__xxDlAt &&
+                        performance.now() - window.__xxDlAt < 10000;
+                    if (!fresh) {
+                        xx_stage("加载较慢，可点击重试");
+                        xxLoading.style.pointerEvents = "auto";
+                        xxLoading.onclick = function () { location.reload(); };
+                    }
                 }
             }, 45000);
             // v1.12.1 加载停滞看门狗：加载期主线程停滞（MuMu/X5 冷加载偶发卡死，
@@ -675,10 +780,10 @@
             // 只挂人工点击不自动重载；运行期 xxWatch 全部以 wasm_exports 就绪为前提，
             // wasm 编译期停滞则其判定链结构性不可达，加载期是共同盲区。双口径触发
             // 自动重载兜底：
-            //   D1 计秒停摆 ≥20s：xx_paint_stage 每秒刷 __xxLdBeat 心跳，停摆=观测
-            //     特征直接编码。正常慢载（页面自述首开 10~40s）期间计秒 interval
-            //     每秒照跑、心跳恒新，结构性不触发；20s 连续无喘息=主线程死滞
-            //     （真机实测偏敏可放宽至 30s，仍远小于 D2——极慢设备一次性 >20s
+            //   D1 计秒停摆 ≥30s（v1.14.0 自 20s 放宽，注释原案即自认偏敏）：xx_paint_stage
+            //     每秒刷 __xxLdBeat 心跳，停摆=观测特征直接编码。正常慢载（页面自述
+            //     首开 10~40s）期间计秒 interval 每秒照跑、心跳恒新，结构性不触发；
+            //     30s 连续无喘息=主线程死滞（仍远小于 D2——极慢设备一次性 >30s
             //     同步编译阻塞与卡死在触发时刻不可区分，由 wd≤2+D2 保险丝+人工
             //     终态三层兜住，最坏代价是慢设备多等两次重载）。
             //   D2 加载层可见且无 wasm_exports 超 120s：2×正常最慢 60s 的纯保险丝，
@@ -741,10 +846,13 @@
                     var elapsed = now - xxLoadStart;
                     if (elapsed < 10000) return; // 武装门槛：避开脚本解析/初始化抖动
                     var beatAge = now - (window.__xxLdBeat || xxLoadStart);
-                    if (beatAge >= 20000 || elapsed >= 120000) {
+                    // v1.14.0 A2：D1 20s→30s（本注释 v1.12.1 即自认"真机实测偏敏可
+                    // 放宽至 30s"）——极慢设备一次性 >20s 的合法慢编译不再被误重载；
+                    // 停滞死滞最坏多挂 10s，仍远小于 D2=120s。wd≤2/D2/武装 10s 全不动。
+                    if (beatAge >= 30000 || elapsed >= 120000) {
                         dead = true;
                         clearInterval(__wdIv);
-                        doReload(beatAge >= 20000 ? "stall" : "cap", beatAge, elapsed);
+                        doReload(beatAge >= 30000 ? "stall" : "cap", beatAge, elapsed);
                     }
                 };
                 __wdIv = setInterval(window.xxWdCheck, 2000);

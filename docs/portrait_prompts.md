@@ -9,12 +9,14 @@
 
 | 文件名 | 用途 | 出现位置 |
 | --- | --- | --- |
-| `portrait_0.png` | 凡人档立绘（炼气前） | 现实主界面、角色面板 |
-| `portrait_1.png` | 道基档立绘（筑基~金丹） | 同上，境界提升后自动切换 |
-| `portrait_2.png` | 紫府档立绘（元婴~合体） | 同上 |
-| `portrait_3.png` | 真仙档立绘（渡劫以上） | 同上 |
+| `portrait_0.png` | 白丁档立绘（沁墨前） | 现实主界面、角色面板 |
+| `portrait_1.png` | 道基档立绘（成行~洇章） | 同上，境界提升后自动切换 |
+| `portrait_2.png` | 紫府档立绘（立骨~铁画） | 同上 |
+| `portrait_3.png` | 墨仙档立绘（问笔以上） | 同上 |
 | `npc_elder.png` | 玄诚长老 | 人物页 |
 | `npc_merchant.png` | 胡掌柜 | 人物页 |
+| `npc_senior.png` | 宁清霜（当前缺图：游戏内以名字种子像素立绘兜底） | 人物页 |
+| `npc_drunk.png` | 醉道人（当前缺图：游戏内以名字种子像素立绘兜底） | 人物页 |
 | `comp_0.png` ~ `comp_9.png` | 十位女道侣（顺序见下表） | 人物页道侣卡 |
 
 **推荐尺寸 640×1280 或 512×1024（1:2 竖版全身像）**，PNG。游戏内等比缩放绘制。
@@ -23,16 +25,16 @@
 
 | 文件 | 道侣 | 造型关键词 |
 | --- | --- | --- |
-| `comp_0.png` | 南宫婉 | 月白鎏银广袖裙·清冷仙子 |
-| `comp_1.png` | 紫灵 | 紫纱开衩长裙·神秘妖娆 |
-| `comp_2.png` | 陈巧倩 | 鹅黄百褶裙·俏皮灵动 |
-| `comp_3.png` | 董萱儿 | 绛红贴身纱衣·妩媚张扬 |
-| `comp_4.png` | 慕沛灵 | 水绿轻纱·灵巧可人 |
-| `comp_5.png` | 严灵儿 | 玄红劲装·飒爽女剑修 |
-| `comp_6.png` | 白瑶怡 | 素白衣袍鎏银缘·冰山医仙 |
-| `comp_7.png` | 云芝 | 蓝白华服披帛·端庄师姐 |
-| `comp_8.png` | 苏婉 | 藕荷色襦裙·温婉书卷 |
-| `comp_9.png` | 月灵 | 银白月华纱裙·超尘出尘 |
+| `comp_0.png` | 闻人未晚 | 月白鎏银广袖裙·清冷仙子 |
+| `comp_1.png` | 洛书遥 | 紫纱开衩长裙·神秘妖娆 |
+| `comp_2.png` | 桑落 | 鹅黄百褶裙·俏皮灵动 |
+| `comp_3.png` | 阮栖梧 | 绛红贴身纱衣·妩媚张扬 |
+| `comp_4.png` | 姜稚鱼 | 水绿轻纱·灵巧可人 |
+| `comp_5.png` | 谢迟 | 玄红劲装·飒爽女剑修 |
+| `comp_6.png` | 温衔雪 | 素白衣袍鎏银缘·冰山医仙 |
+| `comp_7.png` | 柏舟 | 蓝白华服披帛·端庄师姐 |
+| `comp_8.png` | 孟拾遗 | 藕荷色襦裙·温婉书卷 |
+| `comp_9.png` | 应梨白 | 银白月华纱裙·超尘出尘 |
 
 ## 统一风格规范（让立绘"适合这个游戏"的关键）
 
@@ -69,7 +71,7 @@
 >
 > **英文**：2D Chinese xianxia game full-body portrait, ethereal cultivator floating in meditation, dark-violet immortal robe with gold cloud patterns and golden crown, a ring of pale golden spirit light, plain deep purple background, violet-gold rim light, clean cel-shaded illustration, full figure
 
-### portrait_3 真仙档（主角·打坐全身）
+### portrait_3 墨仙档（主角·打坐全身）
 > 2D国风仙侠游戏立绘，全身像，仙风道骨的修士悬浮打坐，月白仙袍流金缘边，头戴星冠，头顶金色仙环，周身星辉流转，目光平静如渊，纯深紫色背景，无场景，克制的金色轮廓光，干净实边插画风格，全身完整入画，640x1280
 >
 > **英文**：2D Chinese xianxia game full-body portrait, transcendent immortal cultivator floating in meditation, moon-white robe with flowing gold trim, star crown and golden halo, starlight aura, plain deep purple background, restrained golden rim light, clean cel-shaded illustration, full figure
@@ -84,52 +86,64 @@
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, plump middle-aged market shopkeeper in crimson brocade robe with gold buttons, holding an abacus, beaming shrewd smile, plain deep purple background, warm rim light, clean cel-shaded illustration
 
-### comp_0 南宫婉
+### npc_senior 宁清霜（站姿全身·v1.14.0 补）
+> 2D国风仙侠游戏立绘，全身站姿，清冷绝美的青年女剑修，青云宗大师姐，霜白长发高束垂落发带，青碧色剑修劲装束袖束腰，腰悬古朴长剑暗金剑穗，眉眼细长清冷垂目，身姿挺拔纤细如霜竹，气质剑心通明不染尘埃，纯深紫色背景，无场景，冷白轮廓光，干净实边插画风格，全身完整入画，640x1280
+>
+> **英文**：2D Chinese xianxia game full-body standing portrait, cold elegant young female sword cultivator, senior sister of the sect, frost-white long hair in a high bun with hanging ribbons, teal-green fitted swordswoman robe with narrow sleeves, ancient sword at her waist with dark-gold tassel, slender serene downcast eyes, tall slender figure like frost bamboo, sword-heart composure, plain deep purple background, cool white rim light, clean cel-shaded illustration
+>
+> 提示：出图后按上文步骤放入 `assets/portraits/npc_senior.png` 即自动覆盖游戏内像素兜底；H5 版还需既定流程（tools/process_portraits.py 量化 → src/art.rs 内嵌表各加一行 include_bytes → build_web.bat）。
+
+### npc_drunk 醉道人（站姿全身·v1.14.0 补）
+> 2D国风仙侠游戏立绘，全身站姿，放浪形骸的中年男散修，灰褐色道袍松垮歪斜衣襟半敞，发髻松散两缕散发垂落，脸颊微红醉意朦胧眯眼含笑，腰间挂着赭褐色酒葫芦木塞半启，手提葫芦欲饮，仙风道骨却落魄不羁，纯深紫色背景，无场景，暖褐轮廓光，干净实边插画风格，全身完整入画，640x1280
+>
+> **英文**：2D Chinese xianxia game full-body standing portrait, carefree middle-aged male wanderer cultivator, loose askew grey-brown daoist robe half open, messy bun with two dangling hair strands, flushed cheeks with drunken squinting smile, ochre-brown wine gourd at his half-opened waist, tipsy unhinged yet faintly transcendent, plain deep purple background, warm brown rim light, clean cel-shaded illustration
+
+### comp_0 闻人未晚
 > 2D国风仙侠游戏立绘，全身站姿，清冷仙子，月白色广袖长裙鎏银缘边，束腰显身段，裙裾如流水铺地，青丝如瀑垂腰，鬓边银步摇，肌肤胜雪眉目如画，身姿曼妙气质出尘，披帛轻扬，纯深紫色背景，无场景，冷白轮廓光，干净实边插画风格，足底完整入画，640x1280
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, ethereal cold fairy, moon-white wide-sleeved gown with silver trim and cinched waist, flowing train like water, waist-length black hair with silver hairpin, porcelain skin, graceful elegant figure, floating shawl, plain deep purple background, cool white rim light, clean cel-shaded illustration, feet visible
 
-### comp_1 紫灵
+### comp_1 洛书遥
 > 2D国风仙侠游戏立绘，全身站姿，神秘妖娆女修，深紫纱质长裙高开衩露出一侧长腿线条，银线星纹，紫纱遮下半面只露灵动双眸，长腿配鎏金踝链，身段窈窕曲线优美，纯深紫色背景，无场景，紫色轮廓光，干净实边插画风格，足底完整入画，640x1280
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, mysterious alluring cultivator, deep-violet gauze gown with high side slit revealing one leg with a golden ankle chain, silver star embroidery, lower face veiled in purple gauze showing lively eyes, slender graceful figure, plain deep purple background, violet rim light, clean cel-shaded illustration, feet visible
 
-### comp_2 陈巧倩
+### comp_2 桑落
 > 2D国风仙侠游戏立绘，全身站姿，俏皮少女修士，鹅黄上衣配水绿百褶短裙，纤细腰肢与灵巧小腿，双环髻缀小铃铛，笑容明快，赤足踩一双系带软鞋，身形轻盈灵动，纯深紫色背景，无场景，暖黄轮廓光，干净实边插画风格，足底完整入画，640x1280
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, playful young cultivator girl, pale-yellow top and jade-green pleated short skirt, slim waist, twin-bun hairstyle with tiny bells, bright cheerful smile, light ribbon sandals, lively nimble figure, plain deep purple background, warm yellow rim light, clean cel-shaded illustration, feet visible
 
-### comp_3 董萱儿
+### comp_3 阮栖梧
 > 2D国风仙侠游戏立绘，全身站姿，妩媚张扬女修，绛红贴身纱衣层叠薄透，束金腰带勾勒腰线，长裙高开衩至大腿，长发松挽金步摇，眼波流转笑意盈盈，锁骨与香肩线条优美，身姿婀娜，纯深紫色背景，无场景，绯红轮廓光，干净实边插画风格，足底完整入画，640x1280
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, alluring cultivator in layered crimson gauze robes with golden waistband, high-slit long skirt, loosely pinned long hair with golden hairpin, charming knowing smile, elegant collarbone and shoulder lines, graceful bewitching figure, plain deep purple background, crimson rim light, clean cel-shaded illustration, feet visible
 
-### comp_4 慕沛灵
+### comp_4 姜稚鱼
 > 2D国风仙侠游戏立绘，全身站姿，灵巧可人女修，水绿色轻纱襦裙束腰，裙摆缀小银铃，单侧发髻系青丝带，腕上玉镯，神情温婉乖巧，身段纤细轻盈，纯深紫色背景，无场景，淡青轮廓光，干净实边插画风格，足底完整入画，640x1280
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, graceful adorable cultivator in water-green lightweight gauze ruqun with cinched waist, tiny silver bells on the hem, side bun with teal ribbon, jade bracelet, soft demure expression, slender delicate figure, plain deep purple background, pale cyan rim light, clean cel-shaded illustration, feet visible
 
-### comp_5 严灵儿
+### comp_5 谢迟
 > 2D国风仙侠游戏立绘，全身站姿，飒爽女剑修，玄色束袖劲装配正红腰封，长靴利落，背负长剑，高马尾红发带飞扬，身姿挺拔长腿利落，目光锐利英气逼人，纯深紫色背景，无场景，银白轮廓光，干净实边插画风格，足底完整入画，640x1280
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, valiant swordswoman in dark fitted martial outfit with crimson waist sash and long boots, long sword on her back, high ponytail with flowing red ribbon, tall striking figure with sharp heroic gaze, plain deep purple background, silver rim light, clean cel-shaded illustration, feet visible
 
-### comp_6 白瑶怡
+### comp_6 温衔雪
 > 2D国风仙侠游戏立绘，全身站姿，冰山医仙，素白衣袍鎏银缘边束腰，广袖间隐有药香雾气，领口微敞露出优美锁骨线条，神情疏离淡然，身姿清瘦高挑，纯深紫色背景，无场景，月白轮廓光，干净实边插画风格，足底完整入画，640x1280
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, aloof healer immortal, plain white physician robe with silver trim and cinched waist, faint medicinal mist around wide sleeves, elegant collarbone line, detached serene expression, tall slender figure, plain deep purple background, moonlight-white rim light, clean cel-shaded illustration, feet visible
 
-### comp_7 云芝
+### comp_7 柏舟
 > 2D国风仙侠游戏立绘，全身站姿，端庄宗门师姐，蓝白相间华服层叠云纹缘边，束金玉腰带，裙摆曳地，披帛绕臂飞扬，发髻高挽玉簪步摇，举止大方沉静，身姿挺拔丰满有致，纯深紫色背景，无场景，天青轮廓光，干净实边插画风格，足底完整入画，640x1280
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, dignified senior sister in layered blue-and-white ornate robe with cloud patterns and golden-jade waistband, floor-length skirt with flowing shawl around arms, high bun with jade pin, calm composed manner, tall graceful figure, plain deep purple background, azure rim light, clean cel-shaded illustration, feet visible
 
-### comp_8 苏婉
+### comp_8 孟拾遗
 > 2D国风仙侠游戏立绘，全身站姿，温婉书卷女修，藕荷色襦裙束腰，裙上暗绣墨梅，外罩淡青披帛垂落及地，怀抱一卷古籍，眉眼温柔含笑，身段柔美纤细，纯深紫色背景，无场景，柔和暖白轮廓光，干净实边插画风格，足底完整入画，640x1280
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, gentle scholarly cultivator in lotus-pink ruqun with cinched waist and subtle ink-plum embroidery, pale-teal shawl trailing to the ground, holding an ancient book scroll, soft warm smiling eyes, delicate graceful figure, plain deep purple background, soft warm-white rim light, clean cel-shaded illustration, feet visible
 
-### comp_9 月灵
+### comp_9 应梨白
 > 2D国风仙侠游戏立绘，全身站姿，月华仙子，银白纱裙层叠如月光倾泻，束银链腰饰，裙裾与丝绦向上飘浮，额间一点月印记，周身萦绕淡淡月辉，身姿超尘出尘曼妙轻盈，纯深紫色背景，无场景，银辉轮廓光，干净实边插画风格，足底完整入画，640x1280
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, moon fairy in layered silver-white gauze dress cascading like moonlight, silver-chain waist ornament, hem and ribbons floating upward, a small moon mark on her forehead, faint lunar glow, ethereal graceful figure, plain deep purple background, silver glow rim light, clean cel-shaded illustration, feet visible

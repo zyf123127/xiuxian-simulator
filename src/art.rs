@@ -18,6 +18,9 @@ pub struct Art {
     pub portraits: [Texture2D; 4], // v1.5.0：立绘四档（0白丁 1道基 2紫府 3墨仙），portrait = portraits[0]
     // v1.7.0 AI 立绘覆盖：assets/portraits/ 下有对应 PNG 则用之，缺失回退像素立绘
     // （portrait_0..3=境界四档；v1.8.0 npc_ovr 扩四：0玄诚长老 1胡掌柜 2宁清霜 3醉道人。wasm 恒回退）
+    // v1.14.0：NPC 槽缺失时不再拿 12×12 图标冒充人像——改 name_seed 程序化像素
+    // 立绘兜底（art::npc_pixel_tex，只挂 npc_tex None 分支，AI 图命中即短路）；
+    // 道侣未结缘槽改书卷剪影（art::comp_silhouette_tex），已结缘恒 comp 真立绘。
     // v1.9.24 懒加载：16 张覆盖图解码后约 7MB RGBA（桌面全量版更大），启动全量
     // 解码既推高峰值内存又拖慢首帧——改为首用才解码，未出场的道侣/NPC 常驻零成本。
     pub portrait_ovr: [LazyTex; 4],
@@ -912,5 +915,294 @@ pub fn draw_cultivator(
                 Color::new(1.0, 0.92, 0.65, 0.55 + 0.4 * (t * 3.0 + k as f32).sin()),
             );
         }
+    }
+}
+
+// ================= v1.14.0 程序化像素立绘兜底 =================
+// 背景：宁清霜/醉道人暂无 AI 立绘（npc_senior/npc_drunk），旧兜底拿 12×12 功能图标
+// （云纹/丹药）放大 144px 冒充人像，夹在真立绘卡间观感差。此处按名字种子确定性
+// 生成 28×40 像素半身像：FNV-1a 名字种子 + 定参 LCG 伪随机流（先例 build_bg 星星
+// art.rs:486-489 / build_map_bg 苔斑），同名必出同像、重启不变、零外部随机源。
+// AI 图放入 assets/portraits/ 后 LazyTex 命中即短路，本路径永不触发（代码不假定
+// 这两张图永远缺席）。纯数据构建（*_pixels 返回 PixGrid）与纹理化分离——单测只比
+// 像素缓冲，不触 GPU；28×40 contain 进 220×310 立绘框 = 217×310，to_texture 恒
+// Nearest（pixel.rs:112），放大 ~7.8px/格与全游戏像素风一致。
+
+// FNV-1a 逐 char 散列（中文名按码点编码，跨平台确定）
+fn name_seed(name: &str) -> u32 {
+    let mut h: u32 = 0x811C_9DC5;
+    for ch in name.chars() {
+        h ^= ch as u32;
+        h = h.wrapping_mul(0x0100_0193);
+    }
+    h
+}
+
+// 名字种子 → 像素半身像（28×40：发髻/脸/眉眼/肩颈/交领道袍/袖手，底边出画=半身）。
+// 知名 NPC 命中锚点特征表（与 data.rs NPC_DESC 气质对齐）；未知名纯种子出像。
+fn person_pixels(name: &str, female: bool) -> PixGrid {
+    let mut g = PixGrid::new(28, 40);
+    let senior = name == "宁清霜";
+    let drunk = name == "醉道人";
+    let mut s = name_seed(name);
+    let mut rnd = || {
+        s = s.wrapping_mul(1664525).wrapping_add(1013904223);
+        (s >> 8) as f32 / 16777216.0
+    };
+    let skin = rgba(255, 219, 186, 255);
+    let skin_d = rgba(222, 178, 148, 255);
+    let ink = rgba(40, 34, 50, 255); // 眉眼墨色（build_portrait 同款）
+    let frost = rgba(226, 230, 238, 255);
+    let gold = rgba(222, 186, 110, 255);
+    let gold_d = rgba(160, 125, 55, 255);
+
+    // 袍色三层明暗（先例 build_portrait 88,128,172 系）：知名 NPC 锚点定色，
+    // 未知名从五案书道风查表选
+    let robes = [
+        (rgba(88, 128, 172, 255), rgba(54, 82, 120, 255), rgba(126, 164, 205, 255)), // 玄青
+        (rgba(86, 62, 110, 255), rgba(62, 44, 82, 255), rgba(112, 86, 138, 255)), // 紫棠
+        (rgba(96, 108, 92, 255), rgba(66, 76, 64, 255), rgba(126, 140, 118, 255)), // 苔青
+        (rgba(146, 118, 90, 255), rgba(108, 86, 64, 255), rgba(174, 146, 114, 255)), // 赭褐
+        (rgba(120, 130, 152, 255), rgba(88, 96, 118, 255), rgba(152, 162, 184, 255)), // 月灰
+    ];
+    let (robe, robe_d, robe_l) = if senior {
+        // 宁清霜：青碧道袍 + 月白领缘（大师姐，剑心通明）
+        (rgba(64, 100, 96, 255), rgba(42, 68, 66, 255), rgba(216, 224, 220, 255))
+    } else if drunk {
+        // 醉道人：灰褐道袍（来历不明的散修酒友）
+        (rgba(122, 106, 85, 255), rgba(90, 78, 60, 255), rgba(150, 132, 106, 255))
+    } else {
+        robes[(rnd() * 5.0) as usize % 5]
+    };
+    // 发色：宁清霜霜白长发；未知名男修小概率暗紫发；余者墨发
+    let hair = if senior {
+        frost
+    } else if !female && !drunk && rnd() < 0.15 {
+        rgba(60, 48, 66, 255)
+    } else {
+        rgba(30, 26, 38, 255)
+    };
+    // 腰带/饰件色：宁清霜暗金（剑穗同源）、醉道人褪色金、未知名金/青/紫三选一
+    let sash = if senior {
+        gold_d
+    } else if drunk {
+        rgba(150, 120, 70, 255)
+    } else if rnd() < 0.6 {
+        gold
+    } else if rnd() < 0.5 {
+        rgba(130, 200, 200, 255)
+    } else {
+        rgba(180, 140, 200, 255)
+    };
+
+    // ---- 发髻与头（女高髻/男小髻，髻位 ±1px 种子微差）----
+    let bun_dx = (rnd() * 3.0) as i32 - 1;
+    g.fill_ellipse(
+        14 + bun_dx,
+        if female { 3 } else { 2 },
+        if female { 3 } else { 2 },
+        2,
+        hair,
+    );
+    g.fill_ellipse(14, 7, 5, 4, hair); // 发顶包脸
+    g.fill_ellipse(14, 9, 4, 3, skin); // 脸
+
+    // ---- 肩颈与道袍（半身，底边出画；女窄肩 sh=8 / 男宽肩 sh=6）----
+    g.rect(13, 12, 2, 1, skin_d); // 颈
+    let sh: i32 = if female { 8 } else { 6 };
+    g.tri([(sh, 14), (28 - sh, 14), (14, 25)], robe); // 肩线收腰
+    g.rect(sh + 1, 15, 26 - 2 * sh, 11, robe); // 躯干柱
+    // 交领右衽（build_portrait 双色三角手法）；醉道人衣襟歪斜 +1px
+    let skew = if drunk { 1 } else { 0 };
+    g.tri(
+        [(14 + skew, 13), (11 + skew, 20), (14 + skew, 20)],
+        robe_l,
+    );
+    g.tri(
+        [(14 + skew, 13), (17 + skew, 20), (14 + skew, 20)],
+        robe_d,
+    );
+    // 两袖垂臂 + 宽袖口（手拢袖中）
+    g.rect(sh - 2, 16, 3, 7, robe_d);
+    g.rect(28 - sh - 1, 16, 3, 7, robe_d);
+    g.rect(sh - 3, 22, 5, 3, robe);
+    g.rect(28 - sh - 2, 22, 5, 3, robe);
+    // 腰带 + 下摆（外放 1px 成袍势，中缝一道衣纹）
+    g.rect(sh, 25, 28 - 2 * sh, 2, sash);
+    g.rect(sh, 27, 28 - 2 * sh, 13, robe_d);
+    g.rect(13, 27, 2, 13, robe);
+
+    // ---- 女修：两缕垂发垂落肩前（霜白发在深底上格外醒目）----
+    if female {
+        g.rect(9, 12, 2, 8, hair);
+        g.rect(17, 12, 2, 8, hair);
+    }
+
+    // ---- 眉眼与锚点特征 ----
+    if senior {
+        // 宁清霜：细长垂目 + 双垂落发带 + 腰侧一缕暗金剑穗
+        g.rect(11, 9, 2, 1, ink);
+        g.rect(15, 9, 2, 1, ink);
+        g.rect(8, 5, 1, 9, frost);
+        g.rect(19, 5, 1, 9, frost);
+        g.rect(8, 27, 1, 3, gold_d);
+        g.set(8, 30, gold);
+    } else {
+        g.rect(12, 9, 1, 1, ink);
+        g.rect(15, 9, 1, 1, ink);
+        if drunk {
+            // 醉道人：眯眼上扬 + 脸颊两点酒晕 + 松散发髻两缕散发 + 身侧酒葫芦
+            g.set(11, 8, ink);
+            g.set(17, 8, ink);
+            g.set(11, 10, rgba(196, 112, 90, 255));
+            g.set(17, 10, rgba(196, 112, 90, 255));
+            g.rect(8, 8, 1, 9, hair);
+            g.rect(20, 9, 1, 8, hair);
+            let (gourd, gourd_l, gourd_d2) =
+                (rgba(150, 102, 58, 255), rgba(176, 126, 74, 255), rgba(110, 74, 42, 255));
+            g.set(22, 16, gold); // 木塞（金点点缀）
+            g.fill_ellipse(22, 19, 2, 2, gourd_l); // 上腹
+            g.rect(21, 21, 2, 1, gourd_d2); // 束颈
+            g.fill_ellipse(22, 25, 2, 3, gourd); // 下腹
+        } else if !female && rnd() < 0.35 {
+            g.rect(13, 11, 2, 1, hair); // 未知名男修小概率短须
+            g.set(13, 12, hair);
+        }
+    }
+    g.outline(O);
+    g
+}
+
+// 未结缘道侣兜底：合拢书卷剪影（28×40 同规格）——「同页人未缝之页」意象，
+// 替换旧丹药图标兜底位；结缘后 comp_0..9 真立绘恒命中，本纹理不再出现
+fn comp_silhouette_pixels() -> PixGrid {
+    let mut g = PixGrid::new(28, 40);
+    let paper = rgba(232, 223, 200, 255); // 米白卷面
+    let paper_d = rgba(205, 193, 168, 255);
+    let wood = rgba(92, 72, 52, 255); // 天地杆
+    let wood_d = rgba(62, 48, 36, 255);
+    let band = rgba(180, 148, 88, 255); // 暗金束带
+    let band_d = rgba(140, 112, 62, 255);
+    let stitch = rgba(150, 132, 104, 255);
+    // 天杆 + 轴头
+    g.rect(5, 3, 18, 3, wood);
+    g.set(4, 4, wood_d);
+    g.set(23, 4, wood_d);
+    // 卷面（卷起未展：卷芯与两道层叠暗线）
+    g.rect(7, 6, 14, 28, paper);
+    g.rect(7, 6, 2, 28, paper_d);
+    g.rect(11, 6, 1, 28, paper_d);
+    // 卷首缝线（未启：两排短缝）
+    for x in [9, 13, 17] {
+        g.rect(x, 8, 2, 1, stitch);
+        g.rect(x, 10, 2, 1, stitch);
+    }
+    // 束带缠腰 + 结扣
+    g.rect(7, 20, 14, 3, band);
+    g.rect(7, 22, 14, 1, band_d);
+    g.fill_circle(14, 21, 1, band_d);
+    // 地杆 + 轴头
+    g.rect(5, 34, 18, 3, wood);
+    g.set(4, 35, wood_d);
+    g.set(23, 35, wood_d);
+    g.outline(O);
+    g
+}
+
+// 像素立绘纹理缓存：整局只生成一次，每帧取句柄零分配（先例 LazyTex/MAP_BG_CACHE）
+static NPC_PIX_TEX: Mutex<[Option<Texture2D>; 4]> = Mutex::new([None, None, None, None]);
+static COMP_SIL_TEX: Mutex<Option<Texture2D>> = Mutex::new(None);
+
+/// NPC 像素立绘兜底（i=0..=3）：仅当 npc_tex(i) 为 None（无 AI 图）时由调用方
+/// or_else 进入；AI 图放入 assets/portraits/ 重启后自动覆盖，本函数不再触发。
+/// 知名 NPC（宁清霜/醉道人）走锚点特征；未知名纯种子定性别出像，不假定名单。
+pub fn npc_pixel_tex(i: usize) -> Option<Texture2D> {
+    let i = i.min(3);
+    let mut c = NPC_PIX_TEX.lock().unwrap();
+    if c[i].is_none() {
+        let name = crate::data::NPC_NAMES[i];
+        let female = match name {
+            "宁清霜" => true,
+            "醉道人" => false,
+            _ => name_seed(name) % 2 == 1,
+        };
+        c[i] = Some(build_person_pixel(name, female));
+    }
+    c[i].clone()
+}
+
+/// 未结缘道侣书卷剪影兜底（整局一次生成；已结缘 comp_tex 恒命中不经此路）
+pub fn comp_silhouette_tex() -> Option<Texture2D> {
+    let mut c = COMP_SIL_TEX.lock().unwrap();
+    if c.is_none() {
+        *c = Some(comp_silhouette_pixels().to_texture());
+    }
+    c.clone()
+}
+
+fn build_person_pixel(name: &str, female: bool) -> Texture2D {
+    person_pixels(name, female).to_texture()
+}
+
+#[cfg(test)]
+mod pixel_fallback_tests {
+    use super::*;
+
+    // 名字种子必须为定值（跨平台确定性口径：FNV-1a 逐 char）
+    #[test]
+    fn name_seed_fixed() {
+        assert_eq!(name_seed("宁清霜"), 4209301141);
+        assert_eq!(name_seed("醉道人"), 3873566653);
+        assert_eq!(name_seed("玄诚长老"), 987919751);
+        assert_eq!(name_seed("胡掌柜"), 2651355892);
+    }
+
+    // 同种子两次构建逐字节相等（纯 PixGrid 数据比较，不触 GPU）
+    #[test]
+    fn pixel_portrait_deterministic() {
+        let a = person_pixels("宁清霜", true);
+        let b = person_pixels("宁清霜", true);
+        assert_eq!((a.w, a.h), (28, 40));
+        assert_eq!(a.px, b.px);
+        let c = person_pixels("醉道人", false);
+        let d = person_pixels("醉道人", false);
+        assert_eq!((c.w, c.h), (28, 40));
+        assert_eq!(c.px, d.px);
+    }
+
+    // 二人同屏一眼可辨（数据层：像素缓冲不同 + 各自锚点色在像）
+    #[test]
+    fn anchor_features_present_and_distinct() {
+        let senior = person_pixels("宁清霜", true);
+        let drunk = person_pixels("醉道人", false);
+        assert_ne!(senior.px, drunk.px);
+        let frost_n = senior.px.iter().filter(|p| **p == [226, 230, 238, 255]).count();
+        assert!(frost_n > 20, "宁清霜霜白长发像素过少: {frost_n}");
+        assert!(senior.px.contains(&[64, 100, 96, 255]), "青碧袍缺失");
+        assert!(senior.px.contains(&[160, 125, 55, 255]), "暗金剑穗缺失");
+        let flush_n = drunk.px.iter().filter(|p| **p == [196, 112, 90, 255]).count();
+        assert!(flush_n >= 2, "醉道人酒晕缺失");
+        assert!(drunk.px.contains(&[122, 106, 85, 255]), "灰褐袍缺失");
+        assert!(drunk.px.contains(&[150, 102, 58, 255]), "酒葫芦缺失");
+    }
+
+    // 未知名（未来新 NPC）纯种子也能出像且同名同像——不 hardcode 恰好两人
+    #[test]
+    fn unknown_name_renders_deterministically() {
+        let a = person_pixels("墨衣客", true);
+        let b = person_pixels("墨衣客", true);
+        assert_eq!(a.px, b.px);
+        assert!(a.px.iter().any(|p| p[3] > 0), "未知名出像为空");
+    }
+
+    // 书卷剪影：定值同像 + 米白卷面/暗金束带在像
+    #[test]
+    fn silhouette_deterministic() {
+        let a = comp_silhouette_pixels();
+        let b = comp_silhouette_pixels();
+        assert_eq!((a.w, a.h), (28, 40));
+        assert_eq!(a.px, b.px);
+        assert!(a.px.contains(&[232, 223, 200, 255]), "米白卷面缺失");
+        assert!(a.px.contains(&[180, 148, 88, 255]), "暗金束带缺失");
     }
 }

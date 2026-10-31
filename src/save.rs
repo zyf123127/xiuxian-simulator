@@ -121,9 +121,26 @@ pub fn save_text(m: &Meta) -> String {
     s
 }
 
+// v1.14.0 存档写频（卡顿修复 P1）：落盘前与上次写入的文本做全文比对，未变则跳过
+// 本次 write_text——wasm 的 localStorage.setItem 是 WebView 主线程同步磁盘操作，
+// 同秒内 sig 边界 flush 与去抖 flush 撞车时内容逐字节相同，跳过零损。
+// 复审修正：原「长度+末 32 字节」弱指纹漏中段变化（ts=/nf= 在串中段，尾部是
+// Lslot/Lweather 区）——gift_npc/购物等同长度中段变更会被误判同文跳写，而
+// save_flush 已先清 save_dirty 无人补写，丢写窗口失去 10s 上界；改为全文相等后
+// 跳写仅发生在「磁盘内容与此刻逐字节相同」时，零丢写，防抖收益不变（~1KB 比对）。
+// 写失败不上抛（JS 侧 try/catch），故比对基准记在写入之后——极端组合「写失败且
+// 后续同文」会持续跳过，但该失败本就丢同内容，风险面与 v1.13.0 持平。
+static LAST_WRITTEN: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
 pub fn save(m: &Meta) {
+    let text = save_text(m);
+    let mut last = LAST_WRITTEN.lock().unwrap();
+    if last.as_deref() == Some(text.as_str()) {
+        return;
+    }
     // v1.5.0 双端后端：桌面写文件 / WASM 写 localStorage（JS 侧 try/catch，配额异常不上抛）
-    backend::write_text(&save_text(m));
+    backend::write_text(&text);
+    *last = Some(text);
 }
 
 // ---------------- v1.10.2 落盘去抖的 pagehide 兜底（仅 wasm）----------------

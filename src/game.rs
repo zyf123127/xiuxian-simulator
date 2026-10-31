@@ -761,6 +761,10 @@ pub struct Game {
     pub npc_vel: f32,
     pub npc_anim: Option<f32>,
 
+    // v1.14.0 立绘焕新时刻：跨相破境金环闪光剩余秒数（1.5→0 收敛；会话态不进存档，
+    // 旧档载入天然为 0 不误触——只有本次会话内真实跨相破境才置值）
+    pub tier_flash: f32,
+
     // v1.10.2 落盘去抖会话态（不进存档；卡顿修复·次要项②）：sync_save 只置脏，
     // 统一由主循环在「场景/弹窗/面板开合边界」或「距上次落盘 ≥3s」时落盘——
     // 周天吐纳挂机期 localStorage 同步写从 0.6 次/s 降到 0.2 次/s（微顿消除）。
@@ -1182,6 +1186,7 @@ impl Game {
             npc_drag: None,
             npc_vel: 0.0,
             npc_anim: None,
+            tier_flash: 0.0,
 
             save_dirty: false,
             save_timer: 0.0,
@@ -1328,6 +1333,23 @@ impl Game {
         self.npc_drag = None;
         self.npc_vel = 0.0;
         self.npc_anim = None;
+    }
+
+    // v1.14.0 立绘焕新时刻：跨相判定——破境后立绘档（portrait_tier）高于破境前时，
+    // toast『道貌焕然——【X之相】』+ 金环闪光 1.5s（会话态 tier_flash，不进存档；
+    // 同档内再破不触发，旧档载入 tier_flash 恒 0 不误触）。old_tier 须在 realm 赋值前
+    // 取快照，四处破境口（现实跨境/现实问笔/模拟破境/模拟问笔）共用本口。
+    pub fn stage_awaken(&mut self, old_tier: usize, new_realm: usize) {
+        let nt = portrait_tier(new_realm);
+
+        if nt > old_tier {
+            self.toast(
+                format!("道貌焕然——【{}】", PORTRAIT_STAGE_NAMES[nt]),
+                C_GOLD,
+            );
+
+            self.tier_flash = 1.5;
+        }
     }
 
     pub fn show_banner(&mut self, text: impl Into<String>, c: Color) {
@@ -1983,12 +2005,21 @@ impl Game {
         let interval = SIM_SPEEDS[self.speed.min(3)];
 
         if self.speed == 3 {
-            // 瞬间推演至死
+            // 瞬间推演至死。v1.14.0 分帧预算（卡顿修复 P0）：原实现单帧连跑至多
+            // 20000 次 sim_year（每次 sim_year/slog/sim_event 全是 format!+String
+            // +Vec 分配）全堆在点「跳过」当帧 = 数百 ms 冻屏。改为每帧至多
+            // SIM_SKIP_YEARS 年、未死下帧继续——1 秒级平滑滚到结局，日志可见地
+            // 滚动；20000 guard 保留为单帧保险（原语义即每帧上限，非全局）。
+            const SIM_SKIP_YEARS: u32 = 40;
+
+            let mut n = 0;
 
             let mut guard = 0;
 
-            while self.sim.is_some() && guard < 20000 {
+            while self.sim.is_some() && n < SIM_SKIP_YEARS && guard < 20000 {
                 self.sim_year();
+
+                n += 1;
 
                 guard += 1;
 
@@ -2467,6 +2498,9 @@ impl Game {
             Dead,
         }
 
+        // v1.14.0 立绘焕新：跨相判定须在 realm 赋值前取旧档快照
+        let old_tier = self.sim.as_ref().map(|s| portrait_tier(s.realm));
+
         let r = {
             let s = self.sim.as_mut().unwrap();
 
@@ -2538,6 +2572,12 @@ impl Game {
                 self.burst(50, true);
 
                 self.play(crate::sounds::Which::Ascend);
+
+                // v1.14.0 立绘焕新时刻：跨相破境 toast + 金环闪光（置于成就 toast 之后，
+                // toast 单槽后写胜——焕然词不被同帧成就播报顶掉）
+                if let Some(ot) = old_tier {
+                    self.stage_awaken(ot, target);
+                }
             }
 
             BR::Fail => {
@@ -4211,6 +4251,9 @@ impl Game {
 
             self.play(crate::sounds::Which::Thunder);
 
+            // v1.14.0 立绘焕新：跨相判定须在 realm 赋值前取旧档快照
+            let old_tier = self.sim.as_ref().map(|s| portrait_tier(s.realm));
+
             if done {
                 let first = {
                     let s = self.sim.as_mut().unwrap();
@@ -4243,6 +4286,11 @@ impl Game {
 
                 if first {
                     self.slog("【首登】仙路初开！", C_GOLD);
+                }
+
+                // v1.14.0 立绘焕新时刻：跨相（墨仙之相）toast + 金环闪光
+                if let Some(ot) = old_tier {
+                    self.stage_awaken(ot, 10);
                 }
 
                 self.burst(120, true);
@@ -4915,6 +4963,9 @@ impl Game {
             return;
         }
 
+        // v1.14.0 立绘焕新：跨相判定须在 realm 赋值前取旧档快照（问笔/一般跨境两路共用）
+        let old_tier = self.life.as_ref().map(|l| portrait_tier(l.realm));
+
         let (need, same_realm) = {
             let l = self.life.as_ref().unwrap();
 
@@ -5010,6 +5061,7 @@ impl Game {
                     }
                     self.play(crate::sounds::Which::Thunder);
                     self.shake = 16.0;
+
                     if dead_at.is_none() {
                         let first = {
                             let l = self.life.as_mut().unwrap();
@@ -5041,6 +5093,11 @@ impl Game {
                         }
                         self.check_ach(27);
                         self.check_ach_all();
+                        // v1.14.0 立绘焕新时刻：跨相（墨仙之相）toast + 金环闪光
+                        //（置于成就 toast 之后，防被同帧成就播报顶掉）
+                        if let Some(ot) = old_tier {
+                            self.stage_awaken(ot, 10);
+                        }
                         // v1.12.1 终卷：封卷吏已斩（slain>=6=链顶已通）者，雷劫扛下当帧
                         // 弹终战抉择卡；未通链者维持现状飞升不弹卡。揭底只取两行压色，
                         // 避免与雷劫战报同屏剧透冲淡卡面（§8.2-8.3 纸底显形/玺灵齐声）。
@@ -5139,6 +5196,12 @@ impl Game {
                 self.play(crate::sounds::Which::Ascend);
 
                 self.check_ach_all();
+
+                // v1.14.0 立绘焕新时刻：跨相破境 toast + 金环闪光（置于成就 toast
+                // 之后——toast 单槽后写胜，焕然词不被同帧成就播报顶掉）
+                if let Some(ot) = old_tier {
+                    self.stage_awaken(ot, target);
+                }
 
                 // v1.12.0 P0 修复：跨境破入成行（realm 2）成功当帧弹道途卡——此前
                 // open_path_card 仅 resume_life 旧档补弹，会话内首次破境后三途五处
@@ -6032,6 +6095,7 @@ mod revenge_tests {
             npc_drag: None,
             npc_vel: 0.0,
             npc_anim: None,
+            tier_flash: 0.0,
 
             save_dirty: false,
             save_timer: 0.0,
