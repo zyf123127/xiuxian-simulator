@@ -124,6 +124,17 @@
         // Chromium 系对可听页豁免 intensive throttling。游戏自身 BGM 亦可，
         // 但 X5 上音频解码可能永不完成（见 sounds.rs 懒加载），保活须独立于它。
         window.xxStartKeepAlive = function () {
+            // v1.15.0 启动失败可见化：任何一步异常/挂起都写 errlog（节流）——
+            // 真机截图即得失败原因，不再盲查
+            var kaLog = function (s) {
+                try {
+                    var now = performance.now();
+                    if (window.__xxKaLogAt && now - window.__xxKaLogAt < 10000) return;
+                    window.__xxKaLogAt = now;
+                    var el = document.getElementById("errlog");
+                    if (el) el.textContent += "[保活] " + s + "\n";
+                } catch (e0) {}
+            };
             try {
                 if (window.__xxKeepAlive) return;
                 var acs = window.__xxACs || [];
@@ -132,7 +143,10 @@
                     var c0 = acs[i];
                     if (c0 && c0.state === "running") { ctx = c0; break; }
                     if (c0 && c0.state === "suspended" && c0.resume) {
-                        c0.resume()["catch"](function () {});
+                        try {
+                            var r = c0.resume();
+                            if (r && r["catch"]) r["catch"](function () {});
+                        } catch (eR) { kaLog("resume 异常: " + eR); }
                     }
                 }
                 if (!ctx) {
@@ -140,12 +154,20 @@
                     // 完成；而探针实证 X5 上 new AudioContext() 直接 running——
                     // 无条件自建专用保活上下文（构造器已包装，自动入捕获表）
                     var AC = window.AudioContext || window.webkitAudioContext;
-                    if (!AC) return;
+                    if (!AC) { kaLog("无 AudioContext 构造器"); return; }
                     ctx = new AC();
                     if (ctx.state !== "running" && ctx.resume) {
-                        ctx.resume()["catch"](function () {});
+                        try {
+                            var r2 = ctx.resume();
+                            if (r2 && r2["catch"]) r2["catch"](function () {});
+                        } catch (eR2) { kaLog("自建 ctx resume 异常: " + eR2); }
+                    }
+                    if (ctx.state !== "running") {
+                        kaLog("等待 ctx running（state=" + ctx.state + "）");
+                        return;
                     }
                 }
+                var sr = ctx.sampleRate || 44100;
                 var buf = ctx.createBuffer(1, sr, sr); // 1s 循环
                 var d = buf.getChannelData(0);
                 d[0] = 0.03;
@@ -163,7 +185,9 @@
                     var el3 = document.getElementById("errlog");
                     if (el3) el3.textContent += "[保活] 音频保活已启动（ctx running，near-silent loop）\n";
                 } catch (e5) {}
-            } catch (e) {}
+            } catch (e) {
+                kaLog("启动异常: " + (e && e.message ? e.message : e));
+            }
         };
         // ctx 就绪时机不定（用户手势后才 running）：随触摸调用外，每秒补试
         setInterval(function () { if (window.xxStartKeepAlive) window.xxStartKeepAlive(); }, 1000);
@@ -692,6 +716,7 @@
                 var last = 0;
                 var lastFrameAt = 0;
                 var rebuilt = 0;
+                var curSrc = "o"; // v1.15.0 最近一次调 tick 的时钟源标记
                 window.requestAnimationFrame = function (f) {
                     cb = f;
                     return 0;
@@ -703,6 +728,9 @@
                     last = now;
                     lastFrameAt = now;
                     frames += 1;
+                    // v1.15.0 时钟源计数：X5 上哪个时钟活着一眼可辨
+                    window.__xxClocks = window.__xxClocks || { mc: 0, w: 0, st: 0, o: 0 };
+                    window.__xxClocks[curSrc] = (window.__xxClocks[curSrc] || 0) + 1;
                     var f = cb;
                     // v1.9.7 cb 自愈：帧回调丢失（真机 canvas 手术/GL 异常后 bundle
                     // 不再重挂 animation）时从 bundle 顶层函数复活，时钟继续出帧。
@@ -743,6 +771,7 @@
                     try {
                         var ch = new MessageChannel();
                         ch.port1.onmessage = function () {
+                            curSrc = "mc";
                             tick(performance.now());
                             // 4ms 心跳投递：port 消息不受可见性节流，帧率由 tick 门闩限制
                             if (chan === ch) {
@@ -767,6 +796,7 @@
                             URL.createObjectURL(new Blob([wcode], { type: "application/javascript" })),
                         );
                         worker.onmessage = function () {
+                            curSrc = "w";
                             tick(performance.now());
                             // v1.12.1 加载停滞看门狗借道：worker postMessage 不受
                             // 可见性节流，主线程一能跑宏任务判定即恢复（与帧驱动
@@ -780,7 +810,7 @@
                     }
                 }
                 // 时钟 3：setTimeout 循环（兜底，hidden 被钳 1fps 但绝不冻结）
-                setInterval(function () { tick(performance.now()); }, 16);
+                setInterval(function () { curSrc = "st"; tick(performance.now()); }, 16);
                 buildChan();
                 buildWorker();
                 // 停摆看门狗：>800ms 无帧 → 重建 MessageChannel 并重发 rAF 循环
@@ -1091,6 +1121,7 @@
             setInterval(function () {
                 try {
                     var gap = performance.now() - (window.__xxFrameAt || 0);
+                    var ck = window.__xxClocks || {};
                     hud.textContent =
                         "触" + (window.__xxTouches || 0) +
                         " 消" + (window.__xxClicksSeen || 0) +
@@ -1098,7 +1129,8 @@
                         " 峰" + (window.__xxTapLatMax | 0) + "ms" +
                         " 帧龄" + Math.min(9999, gap | 0) +
                         " 活" + (window.__xxKeepAlive ? 1 : 0) +
-                        " F" + (window.__xxAlive ? window.__xxAlive.n : -1);
+                        " F" + (window.__xxAlive ? window.__xxAlive.n : -1) +
+                        " 钟 mc/w/st=" + (ck.mc | 0) + "/" + (ck.w | 0) + "/" + (ck.st | 0);
                     // v1.15.0 标题诊断：errlog/HUD 会被遮挡或淡化，标题在浏览器
                     // URL 栏恒可见（旋转布局截图考古的终结手段）
                     try {
