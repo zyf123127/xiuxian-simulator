@@ -44,6 +44,8 @@ use std::panic::AssertUnwindSafe;
 use std::pin::Pin;
 
 mod exec;
+// v1.15.0 X5 调度饥饿插桩：FrameFuture 计数器经根路径暴露（仅诊断读，零行为变更）
+pub use exec::{FF_PENDS, FF_POLLS};
 mod quad_gl;
 mod tobytes;
 

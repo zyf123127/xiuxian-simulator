@@ -369,6 +369,19 @@ async fn main() {
                     20.0,
                     Color::new(0.7, 0.95, 1.0, 1.0),
                 );
+                // v1.15.0 X5 调度饥饿插桩：FrameFuture poll 总数/Pending 数——
+                // 理论每主循环迭代 2 次 poll（1 Pending+1 Ready）；实测比即饥饿倍率
+                let (ffp, fpd) = (
+                    macroquad::FF_POLLS.load(std::sync::atomic::Ordering::Relaxed),
+                    macroquad::FF_PENDS.load(std::sync::atomic::Ordering::Relaxed),
+                );
+                draw_text(
+                    &format!("FF:{}/{}", ffp, fpd),
+                    700.0,
+                    94.0,
+                    20.0,
+                    Color::new(0.7, 0.95, 1.0, 1.0),
+                );
                 if let Some((x, y)) = xx_last {
                     draw_circle(x, y, 9.0, Color::new(1.0, 0.9, 0.2, 0.95));
                 }

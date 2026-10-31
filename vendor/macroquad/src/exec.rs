@@ -11,10 +11,18 @@ pub struct FrameFuture {
     done: bool,
 }
 
+// v1.15.0 X5 调度饥饿插桩（只读计数，零行为变更）：FrameFuture 每次 poll 计数，
+// Pending/Ready 分开记——X5 实测 58 次 wasm frame() 才推进一次主循环迭代，
+// 本计数器区分"FF 反复 Pending"还是"poll 未到达 FF"。
+pub static FF_POLLS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+pub static FF_PENDS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
 impl Future for FrameFuture {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, _context: &mut Context) -> Poll<Self::Output> {
+        use std::sync::atomic::Ordering;
+        FF_POLLS.fetch_add(1, Ordering::Relaxed);
         if self.done {
             // We were told to step, meaning this future gets destroyed and we run
             // the main future until we call next_frame again and end up in this poll
@@ -22,6 +30,7 @@ impl Future for FrameFuture {
             Poll::Ready(())
         } else {
             self.done = true;
+            FF_PENDS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             Poll::Pending
         }
     }
