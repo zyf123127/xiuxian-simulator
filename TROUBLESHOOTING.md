@@ -18,7 +18,8 @@
 | WebGL 上下文丢失变黑 | 容器回收 GL | contextlost preventDefault + restored 整页重载 |
 | 无限重载循环 | 夸克等内核 sessionStorage 刷新即丢，预算标记失效 | v1.9.19 预算 URL 化（query+hash 双保险） |
 | **点按钮毫无反应 + errlog 刷 `already borrowed`**（miniquad native/wasm.rs:34 tl_event_handler；v1.15.0 MuMu 夸克 100% 复现） | JS→wasm 导出在 frame() 持有 EVENT_HANDLER RefCell 借用期间重入：帧路径新增 std `Mutex`/`Instant`/`OnceLock`（wasm 侧引入额外 env 导入路径）触发首 panic → 实例死 → touch/mouse_* 全 `unreachable`，消费帧全灭 → 冻结 → 看门狗重载循环 = 玩家体感"按按钮很卡、经常毫无反应" | 帧路径禁新增 std 同步/时间原语；去抖改纯原子位打包 + `macroquad::time::get_time()`（既有 sys_now 导入零新增）。A/B：Mutex 版 100% 恐慌风暴 → 原子版零恐慌（v1.15.0） |
-| **X5 系内核启动死**（QQ浏览器/TapTap 容器）：加载层已撤、黑屏、点哪都没反应、无 panic 无 console.error | Rust 主循环一帧未跑（`__xxState` 恒缺）；X5 另有 FPBridge Java 异常（`[Extraction::FPBridge] Bridge 调用异常`，下载/编译期）与 wasm 下载停滞 | ① 劫持 `console.error` 进 errlog（bundle 启动失败链只走 console.error，否则只见被内核掩码的 "Script error."）；② 丢弃式 canvas 预探测 WebGL 扩展；③ 启动死看门狗：exports 就绪 15s 无场景码（st∉0-6）→ 预算内自动重载（v1.15.0） |
+| **X5 系内核启动死**（QQ浏览器/TapTap 容器）：加载层已撤、黑屏、点哪都没反应、无 panic 无 console.error | **真 X5 实测确证（v1.15.0 启动分段标记）：main() 卡死在 `sounds::init()` 的 decodeAudioData await**（st 停 90→91 之间，suspended 态解码永不返回，主循环一帧未跑）；另有 FPBridge Java 异常（下载/编译期）与 wasm 下载停滞 | ① 音频改 `start_coroutine` 懒加载：同步出空 Audio、主循环每帧 `take_ready` 收货补 BGM——X5 上静音进游戏不再卡死；② 劫持 `console.error` 进 errlog（bundle 启动失败链只走 console.error，内核把 onerror 掩码成 "Script error."）；③ 丢弃式 canvas 预探测 WebGL 扩展；④ 启动死看门狗：exports 就绪 15s 无场景码（st∉0-6）→ 预算内自动重载（v1.15.0） |
+| **X5 唤醒后仅 ~0.9fps、游戏时间极慢**（车夫 1s 拍恰=0.9fps；触摸 burst 每击 +8 帧） | 容器对"静音页"施加 intensive throttling：rAF/16ms 心跳/定时器全被钳，触摸 burst 与车夫是唯二帧源，dt 每帧钳 50ms → 游戏时间以 ~4.5% 流速 | 近无声音频保活（1s 循环 buffer、头两样本 0.03 幅值、增益 0.004，不可闻但页面处于 audible 态换 intensive-throttling 豁免）；X5 上 `new AudioContext()` 无手势即 running、而 quad-snd 的上下文 resume/解码可能永不完成——保活须自建专用上下文，不可依赖游戏音频（v1.15.0） |
 | 弹层（修炼组等）开着时底栏怎么点都没反应 | 底栏 8 钮 `&& !sub_open` 直接吞点击（弹层不遮底栏但锁死全部按钮） | v1.15.0：弹层开着点底栏 = 关弹层并同击执行，一击必有可见反馈 |
 
 ## 二、核心机制（防退化必读）
