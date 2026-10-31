@@ -250,12 +250,26 @@
                             var el = document.getElementById("errlog");
                             if (el) el.textContent += "[PANIC] " + msg + "\n";
                             // v1.15.0 重入定位：panic 时刻的 JS 同步栈——若 panic 由
-                            // "帧中重入 wasm 导出"引起，栈会显示重入的 JS 中转函数
-                            if (el && !window.__xxPanicStacked) {
+                            // "帧中重入 wasm 导出"引起，栈会显示重入的 JS 中转函数。
+                            // 打到独立全屏面板（errlog 8KB 封顶会把栈截掉）
+                            if (!window.__xxPanicStacked) {
                                 window.__xxPanicStacked = 1;
                                 try {
-                                    el.textContent += "[PANIC@JS] " +
-                                        String(new Error().stack || "").slice(0, 700) + "\n";
+                                    var st = String(new Error().stack || "").slice(0, 1200);
+                                    if (el) el.textContent += "[PANIC@JS] " + st + "\n";
+                                    var pd = document.getElementById("xx_panic_stack");
+                                    if (!pd) {
+                                        pd = document.createElement("div");
+                                        pd.id = "xx_panic_stack";
+                                        pd.style.cssText =
+                                            "position:fixed;left:0;top:0;right:0;z-index:200;" +
+                                            "background:rgba(60,0,0,.92);color:#ffd9d9;" +
+                                            "font:9px/1.3 Consolas,monospace;white-space:pre-wrap;" +
+                                            "word-break:break-all;padding:4px;max-height:45%;" +
+                                            "overflow:hidden;pointer-events:none;";
+                                        document.body.appendChild(pd);
+                                    }
+                                    pd.textContent = "[PANIC@JS]\n" + st;
                                 } catch (e3) {}
                             }
                             try { document.title = "PANIC " + msg.slice(0, 60); } catch (e2) {}
