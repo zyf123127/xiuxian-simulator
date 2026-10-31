@@ -1081,10 +1081,12 @@
             var hud = document.createElement("div");
             hud.style.cssText =
                 // 位置：左下诊断块（?dbg）正上方——页面被 orientFix 旋转后
-                // fixed 定位跟随 body 变换，左下角是真机可见的稳定角落
-                "position:fixed;left:2px;bottom:64px;z-index:97;color:#9f9;" +
-                "background:rgba(0,0,0,.4);font:9px/1.25 Consolas,monospace;" +
-                "white-space:pre;pointer-events:none;padding:1px 4px;opacity:.8;";
+                // fixed 定位跟随 body 变换，左下角是真机可见的稳定角落。
+                // z-index 150：必须压过 errlog(99)——X5 实测恐慌刷屏时
+                // errlog(max-height:100%) 会盖满整页，HUD 从此恒可读
+                "position:fixed;left:2px;bottom:64px;z-index:150;color:#9f9;" +
+                "background:rgba(0,0,0,.6);font:9px/1.25 Consolas,monospace;" +
+                "white-space:pre;pointer-events:none;padding:1px 4px;opacity:.95;";
             document.body.appendChild(hud);
             setInterval(function () {
                 try {
