@@ -191,6 +191,22 @@
         };
         // ctx 就绪时机不定（用户手势后才 running）：随触摸调用外，每秒补试
         setInterval(function () { if (window.xxStartKeepAlive) window.xxStartKeepAlive(); }, 1000);
+        // v1.15.0 屏幕 Wake Lock：游戏场景屏幕常亮（体验正确性）+ 部分容器对
+        // 持屏页面的节流策略更宽松。特征检测静默降级，失败零影响。
+        window.xxWakeLock = function () {
+            try {
+                if (window.__xxWakeLockOn || !navigator.wakeLock || !navigator.wakeLock.request) return;
+                navigator.wakeLock.request("screen").then(function (l) {
+                    window.__xxWakeLockOn = 1;
+                    l.addEventListener("release", function () { window.__xxWakeLockOn = 0; });
+                    try {
+                        var el = document.getElementById("errlog");
+                        if (el) el.textContent += "[保活] 屏幕 Wake Lock 已持有\n";
+                    } catch (e2) {}
+                })["catch"](function () {});
+            } catch (e) {}
+        };
+        document.addEventListener("touchstart", function () { window.xxWakeLock(); }, { passive: true, once: true });
         // v1.10.2 默认 SS 3→2（内存/帧率修复）：收益 = GPU backing 720p 类屏
         // 3840x2160(66MB 双缓冲)→2560x1440(29MB)，-37MB；填充率 9x→4x（-56% fragment），
         // 全屏 alpha 叠加型 UI（背景+日志底+面板+模态罩层）直接受益。
