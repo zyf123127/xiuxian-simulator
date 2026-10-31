@@ -1215,17 +1215,30 @@
                             window.__xxTouches = (window.__xxTouches || 0) + 1;
                             // v1.15.0 触→消费延迟起点 + 音频保活（见构造器捕获处注释）
                             if (e.type === "touchstart") window.__xxTapAt = performance.now();
+                            // 保活启动必须在手势任务内同步先行（用户激活态创建的
+                            // AudioContext 直接 running）；且 resume 逐个防御——
+                            // 老内核 resume() 可能返回 undefined（无 promise），
+                            // `.catch` 会抛错并被外层 catch 吞掉，导致保活启动
+                            // 永远执行不到（X5 实测保活未启动的头号嫌疑）
+                            if (e.type === "touchstart" && window.xxStartKeepAlive) {
+                                try { window.xxStartKeepAlive(); } catch (ak) {}
+                            }
                             try {
                                 var __acs = window.__xxACs;
                                 if (__acs) {
                                     for (var ai = 0; ai < __acs.length; ai++) {
                                         var ac = __acs[ai];
                                         if (ac && ac.state === "suspended" && ac.resume) {
-                                            ac.resume()["catch"](function () {});
+                                            try {
+                                                var r = ac.resume();
+                                                if (r && r["catch"]) r["catch"](function () {});
+                                            } catch (ae2) {}
                                         }
                                     }
                                 }
-                                if (window.xxStartKeepAlive) window.xxStartKeepAlive();
+                                if (e.type !== "touchstart" && window.xxStartKeepAlive) {
+                                    window.xxStartKeepAlive();
+                                }
                             } catch (ae) {}
                             window.xxSyncScreen(); // 触摸瞬间强同步 screen_size == canvas
                             for (var j = 0; j < pts.length; j++) {
