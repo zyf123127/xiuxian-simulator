@@ -159,6 +159,10 @@
                 gn.connect(ctx.destination);
                 src.start();
                 window.__xxKeepAlive = 1;
+                try {
+                    var el3 = document.getElementById("errlog");
+                    if (el3) el3.textContent += "[保活] 音频保活已启动（ctx running，near-silent loop）\n";
+                } catch (e5) {}
             } catch (e) {}
         };
         // ctx 就绪时机不定（用户手势后才 running）：随触摸调用外，每秒补试
@@ -1090,7 +1094,18 @@
                         " 消" + (window.__xxClicksSeen || 0) +
                         " 应" + (window.__xxTapLat == null ? "-" : (window.__xxTapLat | 0) + "ms") +
                         " 峰" + (window.__xxTapLatMax | 0) + "ms" +
-                        " 帧龄" + Math.min(9999, gap | 0);
+                        " 帧龄" + Math.min(9999, gap | 0) +
+                        " 活" + (window.__xxKeepAlive ? 1 : 0) +
+                        " F" + (window.__xxAlive ? window.__xxAlive.n : -1);
+                    // v1.15.0 标题诊断：errlog/HUD 会被遮挡或淡化，标题在浏览器
+                    // URL 栏恒可见（旋转布局截图考古的终结手段）
+                    try {
+                        document.title = "F" + (window.__xxAlive ? window.__xxAlive.n : -1) +
+                            " 活" + (window.__xxKeepAlive ? 1 : 0) +
+                            " 触" + (window.__xxTouches || 0) +
+                            " 消" + (window.__xxClicksSeen || 0) +
+                            " 帧龄" + Math.min(999, gap | 0);
+                    } catch (e7) {}
                 } catch (e) {}
             }, 1000);
         })();
