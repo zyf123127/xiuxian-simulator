@@ -116,6 +116,53 @@
                 window.webkitAudioContext = WrappedAC;
             } catch (e) { /* 捕获失败不影响音频功能本身 */ }
         })();
+        // v1.15.0 可听保活：真 X5 内核（QQ浏览器/MuMu 2026-10-31）实测——触摸
+        // 唤醒后帧率仅 0.9fps（车夫 1s 拍恰=0.9fps）：容器对"静音页"施加
+        // intensive throttling，钳死 rAF/定时器/MessageChannel 一切时钟；触摸
+        // burst 只能一击 +8 帧。对策：用页面上首个 AudioContext 循环播放
+        // 近无声脉冲（增益 0.004，物理不可闻），使页面处于 audible 态——
+        // Chromium 系对可听页豁免 intensive throttling。游戏自身 BGM 亦可，
+        // 但 X5 上音频解码可能永不完成（见 sounds.rs 懒加载），保活须独立于它。
+        window.xxStartKeepAlive = function () {
+            try {
+                if (window.__xxKeepAlive) return;
+                var acs = window.__xxACs || [];
+                var ctx = null;
+                for (var i = 0; i < acs.length; i++) {
+                    var c0 = acs[i];
+                    if (c0 && c0.state === "running") { ctx = c0; break; }
+                    if (c0 && c0.state === "suspended" && c0.resume) {
+                        c0.resume()["catch"](function () {});
+                    }
+                }
+                if (!ctx) {
+                    // X5 实测：quad-snd 的上下文 suspended 且 resume/解码可能永不
+                    // 完成；而探针实证 X5 上 new AudioContext() 直接 running——
+                    // 无条件自建专用保活上下文（构造器已包装，自动入捕获表）
+                    var AC = window.AudioContext || window.webkitAudioContext;
+                    if (!AC) return;
+                    ctx = new AC();
+                    if (ctx.state !== "running" && ctx.resume) {
+                        ctx.resume()["catch"](function () {});
+                    }
+                }
+                var buf = ctx.createBuffer(1, sr, sr); // 1s 循环
+                var d = buf.getChannelData(0);
+                d[0] = 0.03;
+                d[1] = -0.03; // 仅头两样本有幅值：周期性近无声咔哒
+                var src = ctx.createBufferSource();
+                src.buffer = buf;
+                src.loop = true;
+                var gn = ctx.createGain();
+                gn.gain.value = 0.004;
+                src.connect(gn);
+                gn.connect(ctx.destination);
+                src.start();
+                window.__xxKeepAlive = 1;
+            } catch (e) {}
+        };
+        // ctx 就绪时机不定（用户手势后才 running）：随触摸调用外，每秒补试
+        setInterval(function () { if (window.xxStartKeepAlive) window.xxStartKeepAlive(); }, 1000);
         // v1.10.2 默认 SS 3→2（内存/帧率修复）：收益 = GPU backing 720p 类屏
         // 3840x2160(66MB 双缓冲)→2560x1440(29MB)，-37MB；填充率 9x→4x（-56% fragment），
         // 全屏 alpha 叠加型 UI（背景+日志底+面板+模态罩层）直接受益。
@@ -1161,6 +1208,7 @@
                                         }
                                     }
                                 }
+                                if (window.xxStartKeepAlive) window.xxStartKeepAlive();
                             } catch (ae) {}
                             window.xxSyncScreen(); // 触摸瞬间强同步 screen_size == canvas
                             for (var j = 0; j < pts.length; j++) {

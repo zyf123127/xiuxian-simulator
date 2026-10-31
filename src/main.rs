@@ -127,12 +127,16 @@ async fn main() {
     }
     ui::init_font();
     art::init_art();
-    // v1.15.0 X5 排障：启动分段标记（st90 进入主体 / st91 音频就绪 /
-    // st92 Game::new 就绪 / st93 进入主循环）——st-1 = 主体一帧未跑，
-    // st90 = 卡音频，st91 = 卡 Game::new，st93 常驻 = 启动全通。
+    // v1.15.0 X5 排障：启动分段标记（st90 进入主体 / st91 空 Audio 就绪 /
+    // st92 Game::new 就绪 / st93 进入主循环）。st 停在 90-93 = 启动死
+    //（JS 侧看门狗据此自动重载）。
     #[cfg(target_arch = "wasm32")]
     xx_dbg::state(90);
-    let audio = sounds::init().await;
+    // v1.15.0 X5 启动死根治：音频不再阻塞启动（X5 内核 decodeAudioData
+    // 在 suspended 态永不返回，详见 sounds.rs 注释）——协程后台解码，
+    // 主循环每帧 take_ready 收货
+    let audio = sounds::new_audio();
+    sounds::start_async_load();
     #[cfg(target_arch = "wasm32")]
     xx_dbg::state(91);
     let mut g = Game::new(audio);
@@ -147,9 +151,7 @@ async fn main() {
     // 150% 下首帧 ≈853 属预期，不算异常。
     #[cfg(not(target_arch = "wasm32"))]
     macroquad::window::request_new_screen_size(1280.0, 720.0);
-    if g.meta.music {
-        g.audio.start_bgm();
-    }
+    // v1.15.0：BGM 随懒加载收货时补开（此处 s 尚为 None，start_bgm 是 no-op）
     g.audio.sfx_on = g.meta.sfx;
     let debug = std::env::var("GF_DEBUG").is_ok();
     if debug {
@@ -181,6 +183,15 @@ async fn main() {
     let mut xx_scene_prev = Scene::World; // 与初始 Menu 不同，保证首帧上报 0
     loop {
         let dt = get_frame_time().min(1.0 / 20.0);
+        // v1.15.0 音频懒加载收货：协程解码完成后并入，并按设置补开 BGM
+        if g.audio.s.is_none() {
+            if let Some(s) = sounds::take_ready() {
+                g.audio.s = Some(s);
+                if g.meta.music {
+                    g.audio.start_bgm();
+                }
+            }
+        }
         #[cfg(target_arch = "wasm32")]
         if g.scene != xx_scene_prev {
             xx_scene_prev = g.scene;

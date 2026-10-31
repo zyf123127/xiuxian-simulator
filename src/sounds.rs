@@ -273,29 +273,52 @@ fn build_sfx() -> Vec<Vec<u8>> {
     ]
 }
 
-pub async fn init() -> Audio {
-    let v = build_sfx();
-    let sounds = Sounds {
-        bgm: load_sound_from_bytes(&build_bgm()).await.unwrap(),
-        battle: load_sound_from_bytes(&build_battle_bgm()).await.unwrap(),
-        click: load_sound_from_bytes(&v[0]).await.unwrap(),
-        gain: load_sound_from_bytes(&v[1]).await.unwrap(),
-        ding: load_sound_from_bytes(&v[2]).await.unwrap(),
-        break_ok: load_sound_from_bytes(&v[3]).await.unwrap(),
-        break_fail: load_sound_from_bytes(&v[4]).await.unwrap(),
-        death: load_sound_from_bytes(&v[5]).await.unwrap(),
-        thunder: load_sound_from_bytes(&v[6]).await.unwrap(),
-        ascend: load_sound_from_bytes(&v[7]).await.unwrap(),
-        coin: load_sound_from_bytes(&v[8]).await.unwrap(),
-        page: load_sound_from_bytes(&v[9]).await.unwrap(),
-    };
+// v1.15.0 X5 启动死根治：音频改协程懒加载——MuMu 真 X5 内核（QQ浏览器）实测
+// main() 卡死在 load_sound_from_bytes 的 decodeAudioData await 永不返回
+// （启动分段标记 st 停在 90→91 之间，主循环一帧未跑：黑屏+点哪都没反应；
+// v1.14 的"启动死 st-1"即同一病灶——该内核 AudioContext suspended 态下解码
+// 可能永不完成）。改为同步出空 Audio + start_coroutine 后台解码：主循环
+// 零阻塞，X5 上先静音进游戏；index.html 触摸 resume 使解码完成后，
+// 主循环每帧 take_ready 收货并补开 BGM，声效自动就位。
+pub fn new_audio() -> Audio {
     Audio {
-        s: Some(sounds),
+        s: None,
         music_on: true,
         sfx_on: true,
         music_vol: 0.5,
         sfx_vol: 0.9,
     }
+}
+
+static SND_READY: std::sync::Mutex<Option<Sounds>> = std::sync::Mutex::new(None);
+
+pub fn start_async_load() {
+    let task = macroquad::experimental::coroutines::start_coroutine(async {
+        let v = build_sfx();
+        let sounds = Sounds {
+            bgm: load_sound_from_bytes(&build_bgm()).await.unwrap(),
+            battle: load_sound_from_bytes(&build_battle_bgm()).await.unwrap(),
+            click: load_sound_from_bytes(&v[0]).await.unwrap(),
+            gain: load_sound_from_bytes(&v[1]).await.unwrap(),
+            ding: load_sound_from_bytes(&v[2]).await.unwrap(),
+            break_ok: load_sound_from_bytes(&v[3]).await.unwrap(),
+            break_fail: load_sound_from_bytes(&v[4]).await.unwrap(),
+            death: load_sound_from_bytes(&v[5]).await.unwrap(),
+            thunder: load_sound_from_bytes(&v[6]).await.unwrap(),
+            ascend: load_sound_from_bytes(&v[7]).await.unwrap(),
+            coin: load_sound_from_bytes(&v[8]).await.unwrap(),
+            page: load_sound_from_bytes(&v[9]).await.unwrap(),
+        };
+        if let Ok(mut g) = SND_READY.lock() {
+            *g = Some(sounds);
+        }
+    });
+    std::mem::forget(task); // 注册进 macroquad 全局轮询表即可，句柄无需持有
+}
+
+/// 主循环每帧收货（s 空时才调）；解码完成返回 Some 并清位
+pub fn take_ready() -> Option<Sounds> {
+    SND_READY.lock().ok().and_then(|mut g| g.take())
 }
 
 impl Audio {
