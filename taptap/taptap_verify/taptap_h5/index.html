@@ -766,6 +766,9 @@
                     if (!f) return;
                     try {
                         f(now);
+                        // v1.15.0 帧调用成败计数：区分"frame() 抛异常"与"成功但不推进"，
+                        // X5 半死态定位的分水岭
+                        window.__xxFrameOk = (window.__xxFrameOk || 0) + 1;
                         // v1.9.7 只在真正执行了 wasm 帧后才刷新帧时刻——回调死亡时
                         // tick 空转不再冒充"刚出过帧"，触摸帧泵保持有效。
                         window.__xxFrameAt = now;
@@ -775,6 +778,7 @@
                         // 车夫从不补帧，帧率只剩触摸驱动 ~2fps，画面一卡一卡）。
                         window.__xxTickAt = now;
                     } catch (err) {
+                        window.__xxFrameErr = (window.__xxFrameErr || 0) + 1;
                         if (frames < 100 || frames % 120 === 0) { // 限流防刷屏
                             el.textContent += "[ERR] frame " + String(err).slice(0, 120);
                         }
@@ -1146,7 +1150,8 @@
                         " 帧龄" + Math.min(9999, gap | 0) +
                         " 活" + (window.__xxKeepAlive ? 1 : 0) +
                         " F" + (window.__xxAlive ? window.__xxAlive.n : -1) +
-                        " 钟 mc/w/st=" + (ck.mc | 0) + "/" + (ck.w | 0) + "/" + (ck.st | 0);
+                        " 钟 mc/w/st=" + (ck.mc | 0) + "/" + (ck.w | 0) + "/" + (ck.st | 0) +
+                        " 帧ok/err=" + (window.__xxFrameOk | 0) + "/" + (window.__xxFrameErr | 0);
                     // v1.15.0 标题诊断：errlog/HUD 会被遮挡或淡化，标题在浏览器
                     // URL 栏恒可见（旋转布局截图考古的终结手段）
                     try {
