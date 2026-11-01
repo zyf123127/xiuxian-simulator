@@ -197,8 +197,13 @@ async fn main() {
     // v1.9.12 菜单自动进入倒计时（仅 wasm）：真机"点按钮无效"的终极保险——
     // 倒计时归零直接 begin_mortal，零输入依赖；循环活着就必然进入，循环死了
     // 冻结的倒计时数字本身就是诊断（配合 JS 看门狗大旗分层定位）。
+    // v1.15.4 智能闸：倒计时只在"输入桥疑似死"时催促（见菜单块注释）。
     #[cfg(target_arch = "wasm32")]
     let mut xx_auto: f32 = 8.0;
+    // v1.15.4 菜单输入基线：菜单首帧快照 (JS 触达, Rust 已收)，倒计时闸只看
+    // 菜单期增量——排除加载期的陈旧触摸（玩家等加载时点几下的欠账不该算数）
+    #[cfg(target_arch = "wasm32")]
+    let mut xx_menu_base: Option<(i32, u32)> = None;
     // v1.9.10 场景变化回传（wasm）：JS 侧 __xxState 断言"点按钮→进游戏"；
     // 0=Menu 1=Reality 2=Draft 3=Sim 4=Inherit 5=Settle 6=World
     #[cfg(target_arch = "wasm32")]
@@ -432,6 +437,14 @@ async fn main() {
             //   帧号/倒计时冻结  = 游戏循环死（时钟行仍跳 = JS 活着）；
             //   全部正常仍菜单  = 逻辑层（兜底与倒计时强制进入）。
             if g.scene == Scene::Menu {
+                // v1.15.4 菜单输入基线（首帧快照）+ 智能闸判据
+                if xx_menu_base.is_none() {
+                    xx_menu_base = Some((xx_dbg::js_touches(), xx_clicks));
+                }
+                let bridge_dead = match xx_menu_base {
+                    Some((t0, c0)) => xx_dbg::js_touches() - t0 > (xx_clicks - c0) as i32 + 2,
+                    None => false,
+                };
                 if xx_dbg::debug_on() {
                     let fr = xx_dbg::js_fr();
                     let tch = xx_dbg::js_touches();
@@ -453,27 +466,35 @@ async fn main() {
                         20.0,
                         Color::new(0.5, 1.0, 0.7, 1.0),
                     );
+                    let cd = if bridge_dead {
+                        format!("{} 秒后自动进入", xx_auto.max(0.0) as i32)
+                    } else {
+                        "等待点击（输入正常，不催促）".to_string()
+                    };
                     draw_text(
-                        &format!(
-                            "{} 秒后自动进入 · 点「开始新的人生」立即开始",
-                            xx_auto.max(0.0) as i32
-                        ),
+                        &format!("{} · 点「开始新的人生」立即开始", cd),
                         662.0,
                         152.0,
                         20.0,
                         Color::new(1.0, 0.9, 0.4, 1.0),
                     );
                 }
-                // 倒计时：菜单停留 8 秒直接进入（零输入依赖的终极保险）。
-                // dt 累减；任何途径离开菜单后本块不再执行，天然停摆。
-                // （功能逻辑，不受调试开关控制）
-                xx_auto -= dt;
-                if xx_auto <= 0.0 {
-                    g.play(crate::sounds::Which::Click);
-                    // v1.10.2 前置修复（数据丢失）：有档恢复（含离线结算）而非无条件
-                    // 开新人生——旧实现挂菜单 8 秒即被 begin_mortal 覆盖旧档人生；
-                    // ?tap= 自动回归与 mumu 冒烟预期同步：有档时进的是 Reality
-                    g.resume_or_begin();
+                // 倒计时（v1.15.4 智能闸）：只在输入桥疑似死时催促——菜单期内
+                // JS 触达 > Rust 已收 + 2 = "玩家点了没反应"的实锤（v1.9.12
+                // 保险的目标场景）。旧版真机帧泵坏（几 fps），dt 每帧钳 50ms
+                // → 8 秒倒计时被拉长到分钟级，保险与体验无冲突；v1.15.3 帧泵
+                // 修好后 8 秒首次以真实壁钟速度走完 → 观感"没有开始界面直接
+                // 进游戏"。输入健康时安静等待，点按钮照常立即进入。
+                // 任何途径离开菜单后本块不再执行，天然停摆。
+                if bridge_dead {
+                    xx_auto -= dt;
+                    if xx_auto <= 0.0 {
+                        g.play(crate::sounds::Which::Click);
+                        // v1.10.2 前置修复（数据丢失）：有档恢复（含离线结算）而非无条件
+                        // 开新人生——旧实现挂菜单 8 秒即被 begin_mortal 覆盖旧档人生；
+                        // ?tap= 自动回归与 mumu 冒烟预期同步：有档时进的是 Reality
+                        g.resume_or_begin();
+                    }
                 }
             }
         }
