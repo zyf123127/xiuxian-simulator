@@ -295,22 +295,37 @@ static SND_READY: std::sync::Mutex<Option<Sounds>> = std::sync::Mutex::new(None)
 pub fn start_async_load() {
     let task = macroquad::experimental::coroutines::start_coroutine(async {
         let v = build_sfx();
-        let sounds = Sounds {
-            bgm: load_sound_from_bytes(&build_bgm()).await.unwrap(),
-            battle: load_sound_from_bytes(&build_battle_bgm()).await.unwrap(),
-            click: load_sound_from_bytes(&v[0]).await.unwrap(),
-            gain: load_sound_from_bytes(&v[1]).await.unwrap(),
-            ding: load_sound_from_bytes(&v[2]).await.unwrap(),
-            break_ok: load_sound_from_bytes(&v[3]).await.unwrap(),
-            break_fail: load_sound_from_bytes(&v[4]).await.unwrap(),
-            death: load_sound_from_bytes(&v[5]).await.unwrap(),
-            thunder: load_sound_from_bytes(&v[6]).await.unwrap(),
-            ascend: load_sound_from_bytes(&v[7]).await.unwrap(),
-            coin: load_sound_from_bytes(&v[8]).await.unwrap(),
-            page: load_sound_from_bytes(&v[9]).await.unwrap(),
-        };
-        if let Ok(mut g) = SND_READY.lock() {
-            *g = Some(sounds);
+        // v1.15.2 有界解码：X5 suspended ctx 下 decodeAudioData 可能永不完成，
+        // 原实现 12 连 .await.unwrap() 首个即永续空转（协程永不退场、每帧白耗
+        // 2 次 FrameFuture poll、BGM/音效永不可得）。改每个音 6s 墙钟上限，
+        // 任一超时即整体放弃（静音可玩）；真机触摸 resume 使 ctx running 后
+        // 解码正常走完，音效照常就位。
+        async fn ld(b: &[u8]) -> Option<macroquad::audio::Sound> {
+            macroquad::audio::load_sound_from_bytes_bounded(b, 6.0)
+                .await
+                .ok()
+        }
+        let sounds = (|| async {
+            Some(Sounds {
+                bgm: ld(&build_bgm()).await?,
+                battle: ld(&build_battle_bgm()).await?,
+                click: ld(&v[0]).await?,
+                gain: ld(&v[1]).await?,
+                ding: ld(&v[2]).await?,
+                break_ok: ld(&v[3]).await?,
+                break_fail: ld(&v[4]).await?,
+                death: ld(&v[5]).await?,
+                thunder: ld(&v[6]).await?,
+                ascend: ld(&v[7]).await?,
+                coin: ld(&v[8]).await?,
+                page: ld(&v[9]).await?,
+            })
+        })()
+        .await;
+        if let Some(sounds) = sounds {
+            if let Ok(mut g) = SND_READY.lock() {
+                *g = Some(sounds);
+            }
         }
     });
     std::mem::forget(task); // 注册进 macroquad 全局轮询表即可，句柄无需持有

@@ -116,6 +116,16 @@ pub async fn load_sound(path: &str) -> Result<Sound, Error> {
 ///
 /// Attempts to automatically detect the format of the source of data.
 pub async fn load_sound_from_bytes(data: &[u8]) -> Result<Sound, Error> {
+    load_sound_from_bytes_bounded(data, f64::INFINITY).await
+}
+
+/// PATCH(getfish) v1.15.2 有界音频加载：wasm 上 decodeAudioData 在 suspended
+/// AudioContext（X5/TapTap 容器静音页实测）可能永不完成，原实现的
+/// `while !is_loaded { next_frame().await }` 会永续空转——协程永不退场，
+/// 每帧白耗 2 次 FrameFuture poll，且该 sound 永不可用。max_wait 为墙钟秒
+/// （get_time 走 sys_now，帧率被钳时也保真），到点即放弃返回 Err，调用方
+/// 可静默降级（无音效可玩）。
+pub async fn load_sound_from_bytes_bounded(data: &[u8], max_wait: f64) -> Result<Sound, Error> {
     let sound = {
         let ctx = &mut get_context().audio_context;
         QuadSndSound::load(&mut ctx.native_ctx, data)
@@ -123,8 +133,16 @@ pub async fn load_sound_from_bytes(data: &[u8]) -> Result<Sound, Error> {
 
     // only on wasm the sound is not ready right away
     #[cfg(target_arch = "wasm32")]
-    while sound.is_loaded() == false {
-        crate::window::next_frame().await;
+    {
+        let t0 = crate::time::get_time();
+
+        while sound.is_loaded() == false {
+            if crate::time::get_time() - t0 > max_wait {
+                return Err(Error::UnknownError("audio decode timeout"));
+            }
+
+            crate::window::next_frame().await;
+        }
     }
 
     Ok(Sound(Arc::new(QuadSndSoundGuarded(sound))))

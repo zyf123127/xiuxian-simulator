@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.15.1";</script>
+    <script>var GAME_VER = "1.15.2";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -247,7 +247,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.15.1"></script>
+    <script src="mq_js_bundle.js?v=1.15.2"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -1234,6 +1234,14 @@
                 try {
                     var gap = performance.now() - (window.__xxFrameAt || 0);
                     var ck = window.__xxClocks || {};
+                    // v1.15.2 FF 计数读数（主 future 挂死判据数据源 + HUD 展示）
+                    var ffp = 0, ffd = 0;
+                    if (window.wasm_exports && window.wasm_exports.xx_ffp) {
+                        ffp = window.wasm_exports.xx_ffp() | 0;
+                        ffd = window.wasm_exports.xx_ffd() | 0;
+                    }
+                    window.__xxFFP = ffp;
+                    window.__xxFFD = ffd;
                     hud.textContent =
                         "v" + GAME_VER + " " +
                         "触" + (window.__xxTouches || 0) +
@@ -1242,7 +1250,9 @@
                         " 峰" + (window.__xxTapLatMax | 0) + "ms" +
                         " 帧龄" + Math.min(9999, gap | 0) +
                         " 活" + (window.__xxKeepAlive ? 1 : 0) +
+                        " 心" + (window.__xxAlive ? Math.min(99, ((performance.now() - window.__xxAlive.at) / 1000) | 0) + "s" : "-") +
                         " F" + (window.__xxAlive ? window.__xxAlive.n : -1) +
+                        " FF" + (window.__xxFFP >> 10) + "k/" + (window.__xxFFD >> 10) + "k" +
                         " 钟 mc/w/st=" + (ck.mc | 0) + "/" + (ck.w | 0) + "/" + (ck.st | 0) +
                         " 帧ok/err=" + (window.__xxFrameOk | 0) + "/" + (window.__xxFrameErr | 0);
                     // v1.15.0 标题诊断：errlog/HUD 会被遮挡或淡化，标题在浏览器
@@ -1256,6 +1266,78 @@
                     } catch (e7) {}
                 } catch (e) {}
             }, 1000);
+        })();
+        // v1.15.2 主 future 挂死判据 + 自动重载自愈：真机 TapTap 实测（v1.15.1）
+        // frame() 调用照常（ok 2810 持续增长）而 Rust 帧号 F 冻结（144）——
+        // 主 future 挂死，触摸 burst 推不动、点击全部堆积丢失 = "点选项卡顿、
+        // 过很久才可能有反应"，玩家只能手动重进。判据：每 2s 采样 F 与 FF
+        // polls——连续 3 次采样 F 零前进、而 FF polls 增长 ≥100（泵在投递、
+        // poll 被挂死的 future 吞掉）→ 挂死实锤 → 带死亡档案自动重载
+        // （frz 参数防循环上限 2）。泵死（FF 也冻结）不触发——那走触摸
+        // 唤醒链。死亡档案经 URL 传给下页打印进 errlog（errlog 重载即清）。
+        (function () {
+            var lastF = -1, lastP = -1, frozen = 0;
+            setInterval(function () {
+                try {
+                    if (!window.wasm_exports || !window.wasm_exports.xx_ffp) return;
+                    if (!window.__xxAlive) return; // 心跳未见（还没起循环）不判
+                    // ?frztest=1 测试钩子：强制走挂死判定分支（验证自动重载链）
+                    if (/[?&]frztest=1/.test(location.search)) {
+                        window.__xxAlive = { n: 777, at: performance.now() };
+                    }
+                    var f = window.__xxAlive.n;
+                    var p = window.wasm_exports.xx_ffp() | 0;
+                    if (f === lastF) {
+                        if (p - lastP >= 100) {
+                            frozen++;
+                            if (frozen >= 3) {
+                                var m = location.search.match(/[?&]frz=(\d+)/);
+                                var k = m ? parseInt(m[1], 10) : 0;
+                                if (k < 2) {
+                                    var st = window.__xxState == null ? -1 : window.__xxState;
+                                    var href = location.href.replace(/[?&]frz=\d+/, "").replace(/[?&](f_f|f_p|f_d|f_s|f_t|f_c|f_o)=\d+/g, "");
+                                    href += (href.indexOf("?") >= 0 ? "&" : "?") +
+                                        "frz=" + (k + 1) +
+                                        "&f_f=" + f + "&f_p=" + p + "&f_d=" + (window.__xxFFD | 0) +
+                                        "&f_s=" + st + "&f_t=" + (window.__xxTouches | 0) +
+                                        "&f_c=" + (window.__xxClicksSeen | 0) +
+                                        "&f_o=" + (window.__xxFrameOk | 0);
+                                    var el = document.getElementById("errlog");
+                                    if (el) el.textContent += "[主循环挂死] F冻结" + (frozen * 2) + "s而FF poll+" + (p - lastP) +
+                                        " → 自动重载续玩（frz " + (k + 1) + "/2）\n";
+                                    frozen = -99; // 只判一次
+                                    setTimeout(function () { location.replace(href); }, 300);
+                                } else {
+                                    frozen = -99;
+                                    var el2 = document.getElementById("errlog");
+                                    if (el2) el2.textContent += "[主循环挂死] frz 预算已满（" + k + "），不再自动重载——请手动重进\n";
+                                }
+                            }
+                        } else {
+                            frozen = 0;
+                        }
+                    } else {
+                        frozen = 0;
+                    }
+                    lastF = f;
+                    lastP = p;
+                } catch (e) {}
+            }, 2000);
+        })();
+        // v1.15.2 前页死亡档案：上页主循环挂死自动重载时经 URL 带来的现场快照
+        (function () {
+            try {
+                var m = location.search.match(/[?&]f_f=(\d+)/);
+                if (!m) return;
+                var g = function (k) {
+                    var mm = location.search.match(new RegExp("[?&]" + k + "=(\\d+)"));
+                    return mm ? parseInt(mm[1], 10) : 0;
+                };
+                var el = document.getElementById("errlog");
+                if (el) el.textContent += "[前页死亡档案] F=" + g("f_f") + " FF=" + g("f_p") + "/" + g("f_d") +
+                    " 场景码=" + g("f_s") + " 触=" + g("f_t") + " 消=" + g("f_c") + " 帧ok=" + g("f_o") +
+                    "（重载续玩第 " + g("frz") + "/2 次）\n";
+            } catch (e) {}
         })();
         // v1.8.2 指针自愈（两条）：
         // 1) dpr/backing 失步自愈——miniquad 只在 resize 事件重算 backing，若
@@ -1398,8 +1480,48 @@
                                 S_touch(TOUCH[type], t.identifier, p2.x, p2.y);
                                 // 同步鼠标状态：游戏按钮判定走鼠标通路
                                 S_move(p2.x | 0, p2.y | 0);
-                                if (type === "touchstart") S_down(p2.x | 0, p2.y | 0, 0);
-                                if (type === "touchend" || type === "touchcancel") S_up(p2.x | 0, p2.y | 0, 0);
+                                if (type === "touchstart") {
+                                    S_down(p2.x | 0, p2.y | 0, 0);
+                                    // v1.15.2 本击消费基线 + 合成消费上下文
+                                    window.__xxTapSeq = window.__xxClicksSeen | 0;
+                                    window.__xxTapDownAt = performance.now();
+                                }
+                                if (type === "touchend" || type === "touchcancel") {
+                                    // v1.15.2 合成消费：泵停滞期 down 边沿压在
+                                    // macroquad 事件状态里未被任何帧处理；若 up 先
+                                    // 批处理（同一批 down→up），pressed 边沿被抹掉
+                                    // 点击即丢（真机触60消4 的直接机理）。停滞时
+                                    // 延后 S_up：先推 2 帧消费 down，再补 up。
+                                    var __stall = performance.now() - (window.__xxFrameAt || 0) > 120;
+                                    if (
+                                        type === "touchend" && __stall &&
+                                        (window.__xxClicksSeen | 0) === (window.__xxTapSeq | 0)
+                                    ) {
+                                        (function (sx, sy) {
+                                            setTimeout(function () {
+                                                try {
+                                                    if (!window.wasm_exports) return;
+                                                    S_frame();
+                                                    S_frame();
+                                                    if ((window.__xxClicksSeen | 0) === (window.__xxTapSeq | 0)) {
+                                                        // 2 帧仍未消费（future 挂死/推不动）：
+                                                        // 重放 down→帧→up 全链，边沿必被
+                                                        // 后续任一活帧处理
+                                                        S_move(sx, sy);
+                                                        S_down(sx, sy, 0);
+                                                        S_frame();
+                                                        S_frame();
+                                                    }
+                                                    S_up(sx, sy, 0);
+                                                    S_frame();
+                                                    S_frame();
+                                                } catch (se) {}
+                                            }, 0);
+                                        })(p2.x | 0, p2.y | 0);
+                                    } else {
+                                        S_up(p2.x | 0, p2.y | 0, 0);
+                                    }
+                                }
                             }
                             // v1.9.19 触摸同步 burst（中期钳制点击卡 5 秒的根治）：
                             // 真机视频定案：容器钳制不止首开——游戏中期（页面 idle
@@ -1414,8 +1536,20 @@
                             // 宏任务层保真机。tick 活着时（<60ms）零开销跳过。
                             if (performance.now() - (window.__xxFrameAt || 0) > 60 && window.wasm_exports) {
                                 try {
-                                    for (var fi = 0; fi < 12; fi++) window.wasm_exports.frame();
+                                    var n0 = window.__xxAlive ? window.__xxAlive.n : -1;
+                                    for (var fi = 0; fi < 16; fi++) window.wasm_exports.frame();
                                     window.__xxFrameAt = performance.now();
+                                    // v1.15.2 同步推进验证：16 发 = 8 迭代，n（每 8 帧
+                                    // 上报）必 +8；不变 = 手势栈内 frame() 推不动
+                                    // future（v1.9.19 结论）——一次性打标进 errlog
+                                    var n1 = window.__xxAlive ? window.__xxAlive.n : -1;
+                                    if (n0 >= 0 && n1 === n0 && !window.__xxSyncPushDead) {
+                                        window.__xxSyncPushDead = 1;
+                                        var sel = document.getElementById("errlog");
+                                        if (sel)
+                                            sel.textContent +=
+                                                "[触泵] 手势栈内 frame() 16 发未推进 F（v1.9.19 结论 v1.15.2 实证）——消费依赖宏任务层与触摸唤醒链\n";
+                                    }
                                 } catch (err) {}
                                 setTimeout(function () {
                                     try {

@@ -47,6 +47,20 @@ mod xx_dbg {
         }));
     }
 
+    /// v1.15.2 JS 反读 FF 计数（主 future 死亡判据的数据源）：frame() 调用
+    /// 照常返回而 F 冻结 = 主 future 挂死（真机 v1.15.1 实测 F144/ok2810），
+    /// JS 每秒采样 polls/pends：F 不动而 polls 增长 → 挂死实锤 → 自动重载
+    /// 自愈（此前只能手动重进）。与心跳上报（每 8 帧不同：挂死后心跳也停）
+    /// 互补——这里由 JS 主动拉取，不依赖 Rust 循环存活。
+    #[no_mangle]
+    pub extern "C" fn xx_ffp() -> i32 {
+        macroquad::FF_POLLS.load(std::sync::atomic::Ordering::Relaxed) as i32
+    }
+    #[no_mangle]
+    pub extern "C" fn xx_ffd() -> i32 {
+        macroquad::FF_PENDS.load(std::sync::atomic::Ordering::Relaxed) as i32
+    }
+
     pub fn state(code: i32) {
         unsafe { xx_state(code) };
     }
@@ -136,6 +150,14 @@ async fn main() {
     // 在 suspended 态永不返回，详见 sounds.rs 注释）——协程后台解码，
     // 主循环每帧 take_ready 收货
     let audio = sounds::new_audio();
+    // v1.15.2 H5 音频回放全量停用：真机 TapTap 实测（v1.15.1 双会话）主
+    // future 于 ~30-40s 挂死（F144/112 冻结、frame() 照常返回），时间窗与
+    // 「X5 慢速解码完成 → take_ready 收货 → start_bgm/play_sound 首跑」
+    // 吻合；本地仿真（解码永挂→永不收货）与桌面（音频正常）均不死亡。
+    // quad-snd 的 JS 音频出栈在该容器属不可控黑盒，整体移出关键路径：
+    // wasm 不解码不回放（保活的近无声 JS 上下文是独立实现，照常工作），
+    // 桌面版不受影响。若死亡档案显示停止回放后仍挂死，音频嫌疑解除。
+    #[cfg(not(target_arch = "wasm32"))]
     sounds::start_async_load();
     #[cfg(target_arch = "wasm32")]
     xx_dbg::state(91);
