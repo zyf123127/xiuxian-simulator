@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.15.2";</script>
+    <script>var GAME_VER = "1.15.3";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -247,7 +247,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.15.2"></script>
+    <script src="mq_js_bundle.js?v=1.15.3"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -840,6 +840,33 @@
                     window.__xxClocks = window.__xxClocks || { mc: 0, w: 0, st: 0, o: 0 };
                     window.__xxClocks[curSrc] = (window.__xxClocks[curSrc] || 0) + 1;
                     var f = cb;
+                    // v1.15.3 cb 夺回锁（真机 v1.15.2 首进也卡的根因）：rAF 劫持是
+                    // 单槽——TapTap 容器 SDK 横幅等任何外来 rAF 调用一发生就把 cb
+                    // 偷走；miniquad 的 animation 闭包只在"自己跑起来时"才重注册
+                    // （bundle 不暴露 window.animation，被偷即永久哑火），而真机
+                    // rAF 本就被容器钳死 → animation 全靠本泵驱动 → wasm 挨饿：
+                    // F 冻结、FF 冻结、帧ok 照涨（外来回调不抛错）、err=0、点击
+                    // 全部堆积。桌面不复现＝桌面真 rAF 活着会持续驱动 animation
+                    // 夺回 cb。对策：wasm_exports 就绪后帧驱动直接锁定 frame 导出
+                    // （animation 只多做一次 rAF 重注册，在本劫持下无意义），cb 每
+                    // 拍强制归还——外来回调最多占位 14ms、永不执行。
+                    if (window.wasm_exports && window.wasm_exports.frame) {
+                        // __xxCbWasFrame：首次 animation→frame 锁定是正常切换，
+                        // 不计劫持；此后 cb≠frame 才是真被外来回调偷走
+                        if (f && f !== window.wasm_exports.frame && window.__xxCbWasFrame &&
+                            (window.__xxFrameOk | 0) > 10) {
+                            window.__xxCbSteal = (window.__xxCbSteal || 0) + 1;
+                            if (window.__xxCbSteal === 1 || window.__xxCbSteal % 100 === 0) {
+                                try {
+                                    el.textContent += "[cb劫持] 第" + window.__xxCbSteal +
+                                        "次夺回：外来 rAF 回调偷走帧泵（容器 SDK/横幅组件嫌疑）\n";
+                                } catch (eS) {}
+                            }
+                        }
+                        f = window.wasm_exports.frame;
+                        cb = f;
+                        window.__xxCbWasFrame = 1;
+                    }
                     // v1.9.7 cb 自愈：帧回调丢失（真机 canvas 手术/GL 异常后 bundle
                     // 不再重挂 animation）时从 bundle 顶层函数复活，时钟继续出帧。
                     // 必须等 wasm 就绪——过早调 animation 会在 bundle 赋值
@@ -1253,6 +1280,7 @@
                         " 心" + (window.__xxAlive ? Math.min(99, ((performance.now() - window.__xxAlive.at) / 1000) | 0) + "s" : "-") +
                         " F" + (window.__xxAlive ? window.__xxAlive.n : -1) +
                         " FF" + (window.__xxFFP >> 10) + "k/" + (window.__xxFFD >> 10) + "k" +
+                        " 劫" + (window.__xxCbSteal | 0) +
                         " 钟 mc/w/st=" + (ck.mc | 0) + "/" + (ck.w | 0) + "/" + (ck.st | 0) +
                         " 帧ok/err=" + (window.__xxFrameOk | 0) + "/" + (window.__xxFrameErr | 0);
                     // v1.15.0 标题诊断：errlog/HUD 会被遮挡或淡化，标题在浏览器
@@ -1276,7 +1304,7 @@
         // （frz 参数防循环上限 2）。泵死（FF 也冻结）不触发——那走触摸
         // 唤醒链。死亡档案经 URL 传给下页打印进 errlog（errlog 重载即清）。
         (function () {
-            var lastF = -1, lastP = -1, frozen = 0;
+            var lastF = -1, lastP = -1, lastOk = -1, frozen = 0;
             setInterval(function () {
                 try {
                     if (!window.wasm_exports || !window.wasm_exports.xx_ffp) return;
@@ -1287,23 +1315,38 @@
                     }
                     var f = window.__xxAlive.n;
                     var p = window.wasm_exports.xx_ffp() | 0;
+                    var ok = window.__xxFrameOk | 0;
                     if (f === lastF) {
-                        if (p - lastP >= 100) {
+                        // 双模式判据：① FF 涨而 F 冻 = 主 future 挂死（v1.15.2）
+                        // ② F/FF 双冻而 帧ok 照涨 = 幽灵泵——帧泵在调用但 wasm
+                        // frame 未执行。v1.15.3 cb 夺回锁后正常不可能出现（外来
+                        // rAF 偷槽会在 14ms 内被夺回），触发即异常兜底重载。
+                        var ghost = (p - lastP) < 10 && (ok - lastOk) >= 40 && lastOk >= 0;
+                        if (p - lastP >= 100 || ghost) {
                             frozen++;
                             if (frozen >= 3) {
                                 var m = location.search.match(/[?&]frz=(\d+)/);
                                 var k = m ? parseInt(m[1], 10) : 0;
                                 if (k < 2) {
                                     var st = window.__xxState == null ? -1 : window.__xxState;
-                                    var href = location.href.replace(/[?&]frz=\d+/, "").replace(/[?&](f_f|f_p|f_d|f_s|f_t|f_c|f_o)=\d+/g, "");
-                                    href += (href.indexOf("?") >= 0 ? "&" : "?") +
+                                    var href = location.href.replace(/[?&]frz=\d+/, "").replace(/[?&](f_f|f_p|f_d|f_s|f_t|f_c|f_o|f_k)=\d+/g, "");
+                                    // v1.15.3 档案参数必须落在 search（哈希之前）：
+                                    // 真机 URL 常带 xxrlt#r 哈希，直接 append 会把
+                                    // f_* 追进 fragment，下页 search 匹配不到=档案丢失
+                                    var __h = href.indexOf("#");
+                                    var __base = __h >= 0 ? href.slice(0, __h) : href;
+                                    var __hash = __h >= 0 ? href.slice(__h) : "";
+                                    __base += (__base.indexOf("?") >= 0 ? "&" : "?") +
                                         "frz=" + (k + 1) +
                                         "&f_f=" + f + "&f_p=" + p + "&f_d=" + (window.__xxFFD | 0) +
                                         "&f_s=" + st + "&f_t=" + (window.__xxTouches | 0) +
                                         "&f_c=" + (window.__xxClicksSeen | 0) +
-                                        "&f_o=" + (window.__xxFrameOk | 0);
+                                        "&f_o=" + ok +
+                                        "&f_k=" + (window.__xxCbSteal | 0);
+                                    href = __base + __hash;
                                     var el = document.getElementById("errlog");
-                                    if (el) el.textContent += "[主循环挂死] F冻结" + (frozen * 2) + "s而FF poll+" + (p - lastP) +
+                                    if (el) el.textContent += "[主循环挂死] F冻结" + (frozen * 2) + "s而" +
+                                        (ghost ? "帧泵照涨+" + (ok - lastOk) + "（幽灵泵）" : "FF poll+" + (p - lastP)) +
                                         " → 自动重载续玩（frz " + (k + 1) + "/2）\n";
                                     frozen = -99; // 只判一次
                                     setTimeout(function () { location.replace(href); }, 300);
@@ -1321,21 +1364,26 @@
                     }
                     lastF = f;
                     lastP = p;
+                    lastOk = ok;
                 } catch (e) {}
             }, 2000);
         })();
         // v1.15.2 前页死亡档案：上页主循环挂死自动重载时经 URL 带来的现场快照
         (function () {
             try {
-                var m = location.search.match(/[?&]f_f=(\d+)/);
+                var m = location.search.match(/[?&]f_f=(\d+)/) || location.hash.match(/f_f=(\d+)/);
                 if (!m) return;
+                // v1.15.3 search 优先、hash 兜底（与 xxrlt 双保险同哲学）：
+                // 个别路径历史页把 f_* 追进了 fragment，照样能打印
                 var g = function (k) {
-                    var mm = location.search.match(new RegExp("[?&]" + k + "=(\\d+)"));
+                    var mm = location.search.match(new RegExp("[?&]" + k + "=(\\d+)")) ||
+                        location.hash.match(new RegExp(k + "=(\\d+)"));
                     return mm ? parseInt(mm[1], 10) : 0;
                 };
                 var el = document.getElementById("errlog");
                 if (el) el.textContent += "[前页死亡档案] F=" + g("f_f") + " FF=" + g("f_p") + "/" + g("f_d") +
                     " 场景码=" + g("f_s") + " 触=" + g("f_t") + " 消=" + g("f_c") + " 帧ok=" + g("f_o") +
+                    " cb劫持=" + g("f_k") +
                     "（重载续玩第 " + g("frz") + "/2 次）\n";
             } catch (e) {}
         })();
