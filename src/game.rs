@@ -512,6 +512,8 @@ pub struct Meta {
     pub taodie: u8, // v1.12.1 讨牒：已请职牒 0..=6（键 dp=；sync_taodie 对账补发，旧档首检补齐）
     pub feng_bn: u8, // v1.12.1 缝页人名下标（键 bn=；FENG_UNSET=255 未定）
     pub feng_blv: u8, // v1.12.1 缝页缘 0..=3，一世同页至终 +1（键 blv=；缘一/二数值 perk，缘三纯叙事）
+
+    pub comp_bonds: [u8; 10], // v1.16.0 交游图鉴：十同页人历世结缘次数（键 gbd=；0=未识，saturating 封顶 255；下标即 COMPANION_NAMES 下标）
 }
 
 impl Default for Meta {
@@ -582,6 +584,8 @@ impl Default for Meta {
             taodie: 0,
             feng_bn: crate::data::FENG_UNSET,
             feng_blv: 0,
+
+            comp_bonds: [0; 10],
         }
     }
 }
@@ -804,6 +808,8 @@ pub struct Game {
     pub ad: Option<f32>,           // v1.7.0：幻境广告倒计时（Some 播放中/Some(0.0) 可领取；不进存档）
     pub sac_pending: Option<usize>, // v1.7.0：行囊献祭二次确认的法宝下标（不进存档）
     pub sub_fresh: bool, // v1.6.0 B：开帧门闩——open_sub 置位、主循环顶部清零（硬伤 1）
+
+    pub guide_last: Option<u8>, // v1.16.0 道途一念：上次绘制的指引下标（变更帧一次性预热；纯会话态不进存档，指引由状态纯推导零存档键）
 
     pub speed: usize, // 模拟速度 0暂停 1慢 2快 3跳过
 
@@ -1228,6 +1234,8 @@ impl Game {
 
             sub_fresh: false,
 
+            guide_last: None,
+
             speed: 2,
 
             acc: 0.0,
@@ -1333,6 +1341,17 @@ impl Game {
         self.npc_drag = None;
         self.npc_vel = 0.0;
         self.npc_anim = None;
+    }
+
+    // v1.16.0 交游图鉴：历世结缘记账（唯一写入口）。结缘即录入——挂 apply_eff special 17
+    // 『结为道侣/同页天成』臂，quit_sim_redraft 重掷不回退（这正是选结缘点而非 sim_die
+    // 的原因：feng_bond_up 只覆盖正常落幕，漏 quit 路径）；换道侣不回退旧卡（次数只增）。
+    // idx 越界卫语句直接 return 绝不索引越界（panic=abort 纪律）；saturating_add 封顶 255。
+    pub fn gallery_bond(&mut self, idx: usize) {
+        if idx >= crate::data::COMPANION_NAMES.len() {
+            return;
+        }
+        self.meta.comp_bonds[idx] = self.meta.comp_bonds[idx].saturating_add(1);
     }
 
     // v1.14.0 立绘焕新时刻：跨相判定——破境后立绘档（portrait_tier）高于破境前时，
@@ -3682,6 +3701,9 @@ impl Game {
                         self.check_ach(26);
                     }
                 }
+                // v1.16.0 交游图鉴：结缘即录入（唯一写入口 gallery_bond；无论是否 first——
+                // 重逢/换道侣亦记历世同页一次；quit_sim_redraft 重掷不回退本账）
+                self.gallery_bond(idx);
                 self.slog(
                     format!(
                         "你与{}缝作同页！修炼速度+{:.0}%，心魔有抚。",
@@ -6084,7 +6106,8 @@ mod revenge_tests {
     use super::*;
 
     // 免音频初始化与存档 IO 的最小 Game：仅寻仇路径所需字段
-    fn game_with(l: Life, neme: Option<Nemes>) -> Game {
+    // v1.16.0：pub(crate) 供同文件 guide_tests 矩阵复用（构造器零分叉）
+    pub(crate) fn game_with(l: Life, neme: Option<Nemes>) -> Game {
         let mut meta = Meta::default();
 
         meta.neme = neme;
@@ -6168,6 +6191,8 @@ mod revenge_tests {
 
             sub_fresh: false,
 
+            guide_last: None,
+
             speed: 0,
 
             acc: 0.0,
@@ -6208,7 +6233,7 @@ mod revenge_tests {
         }
     }
 
-    fn neme(realm: usize) -> Nemes {
+    pub(crate) fn neme(realm: usize) -> Nemes {
         Nemes {
             title: "魔修",
             name: "试炼者".to_string(),
@@ -6662,5 +6687,352 @@ mod revenge_tests {
         assert!(!g.feng_reunion(Some(COMPANION_NAMES[2]), COMPANION_NAMES[2]));
         g.meta.feng_bn = crate::data::FENG_UNSET;
         assert!(!g.feng_reunion(None, COMPANION_NAMES[2]));
+    }
+}
+
+// ---------------- v1.16.0 道途一念：guide_index 优先级矩阵 ----------------
+// 构造性终结证明的回归锚：T0..T10 逐叶钉死 + 全网格 0..=8 兜底
+// （防实现时在覆盖块之下误加叶 → 死分支回归）。
+
+#[cfg(test)]
+mod guide_tests {
+    use super::revenge_tests::{game_with, neme};
+    use super::*;
+    use crate::guide::{guide_index, HINTS};
+
+    /// 前置谓词全走既有单口（is_stuck/can_break/revenge_ready/exchange_cost），
+    /// 先 assert 前置再断言下标——谓词改语义时测试先红，指引随谓词自动跟随。
+
+    // T0 山穷水尽：P=0 S=0 R=∅ → 0（死局叶最高优先，跳转看广告）
+    #[test]
+    fn t0_stuck_bottoms_out() {
+        let mut l = Life::default();
+        l.stones = 0; // R 恒空（default）
+        let mut g = game_with(l, None);
+        g.meta.sim_points = 0;
+        assert!(g.is_stuck(), "前置：点数/灵石/法宝三空即死局");
+        assert_eq!(guide_index(&g), 0);
+    }
+
+    // T1 破境：qi=qi_need P=0 S=2000(≥ex1500) auto=1 → 1
+    #[test]
+    fn t1_can_break_top_of_cult_axis() {
+        let mut l = Life::default();
+        l.stones = 2000;
+        l.qi = qi_need(&l);
+        let mut g = game_with(l, None);
+        g.meta.sim_points = 0;
+        g.meta.auto = 1;
+        assert!(!g.is_stuck(), "前置：S≥ex 不死局");
+        assert!(g.can_break(), "前置：修为已满");
+        assert_eq!(guide_index(&g), 1);
+    }
+
+    // T2 寻仇：弱宿敌(realm 0)未重伤 P=0 S=2000 auto=1 → 2
+    #[test]
+    fn t2_revenge_ready() {
+        let mut l = Life::default();
+        l.stones = 2000; // 不死局
+        l.qi = 0.0; // 不破境不候破
+        let mut g = game_with(l, Some(neme(0))); // 同境弱宿敌：r≈0.96 可出手
+        g.meta.sim_points = 0;
+        g.meta.auto = 1;
+        assert!(!g.is_stuck() && !g.can_break(), "前置：修为轴不截胡");
+        assert!(g.revenge_ready(), "前置：宿敌可寻仇（未重伤且 r≥0.1）");
+        assert_eq!(guide_index(&g), 2);
+    }
+
+    // T3 候破：qi=0.9×need P=0 S=2000 auto=1 → 3
+    #[test]
+    fn t3_qi_near_full_seclusion() {
+        let mut l = Life::default();
+        l.stones = 2000;
+        l.qi = 0.9 * qi_need(&l);
+        let mut g = game_with(l, None);
+        g.meta.sim_points = 0;
+        g.meta.auto = 1;
+        assert!(!g.can_break(), "前置：未满不破境");
+        assert!(
+            g.life.as_ref().map_or(false, |x| x.qi / qi_need(x) >= 0.8),
+            "前置：修为 ≥80%"
+        );
+        assert_eq!(guide_index(&g), 3);
+    }
+
+    // T4 扩建：loc=洞府 dongfu=[0,0,0] 贡献=30 S=2500 P=0 auto=1 qi=0 → 4
+    #[test]
+    fn t4_dongfu_upgradable() {
+        let mut l = Life::default();
+        l.loc = crate::data::NODE_DONGFU;
+        l.stones = 2500;
+        l.qi = 0.0;
+        let mut g = game_with(l, None);
+        g.meta.sim_points = 0;
+        g.meta.auto = 1;
+        g.meta.sect_contrib = 30; // = DONGFU_UP_CONTRIB[0]，双资源踩线可达
+        assert_eq!(
+            g.life.as_ref().map(|x| x.loc),
+            Some(crate::data::NODE_DONGFU)
+        );
+        assert!(
+            g.life
+                .as_ref()
+                .map_or(false, |x| x.stones >= crate::data::DONGFU_UP_STONES[0])
+                && g.meta.sect_contrib >= crate::data::DONGFU_UP_CONTRIB[0],
+            "前置：灵石+贡献双足"
+        );
+        assert_eq!(guide_index(&g), 4);
+    }
+
+    // T5 周天：P=0 S=1600(≥ex1500<扩建2000) R=∅ auto=0 qi=0 loc=坊市 → 5
+    #[test]
+    fn t5_zhouytian_off_hint() {
+        let mut l = Life::default();
+        l.loc = crate::data::NODE_MARKET; // 不落洞府扩建叶
+        l.stones = 1600;
+        l.qi = 0.0;
+        let mut g = game_with(l, None);
+        g.meta.sim_points = 0;
+        assert!(!g.is_stuck(), "前置：S≥ex 不死局");
+        assert!(g.meta.auto == 0 && g.meta.sim_points < g.sim_cost(), "前置：周天未开且无点可花");
+        assert_eq!(guide_index(&g), 5);
+    }
+
+    // T6 献祭：R=[0] P=0 S=1000(<ex) auto=1 qi=0 loc=坊市 → 6
+    #[test]
+    fn t6_sacrifice_relic_hint() {
+        let mut l = Life::default();
+        l.loc = crate::data::NODE_MARKET;
+        l.stones = 1000;
+        l.relics.push(0);
+        l.qi = 0.0;
+        let mut g = game_with(l, None);
+        g.meta.sim_points = 0;
+        g.meta.auto = 1;
+        assert!(!g.is_stuck(), "前置：法宝尚存不死局");
+        assert!(
+            g.life.as_ref().map_or(false, |x| !x.relics.is_empty())
+                && g.meta.sim_points < g.sim_cost()
+                && g.life
+                    .as_ref()
+                    .map_or(false, |x| x.stones < g.exchange_cost()),
+            "前置：有点可献、点灵两空"
+        );
+        assert_eq!(guide_index(&g), 6);
+    }
+
+    // T7 开模拟：Meta::default 原样（新玩家首局态 P=3 S=100 R=∅ auto=0 qi=0）→ 7
+    #[test]
+    fn t7_first_run_open_draft() {
+        let g = game_with(Life::default(), None);
+        assert!(
+            g.meta.sim_points >= g.sim_cost(),
+            "前置：首局自带 3 点可开卷"
+        );
+        assert_eq!(guide_index(&g), 7, "周天叶收窄 P<1，有点数不得截胡");
+    }
+
+    // T8 兑点：P=0 S=3000 R=∅ auto=1 qi=0 loc=坊市 → 8（兜底叶）
+    #[test]
+    fn t8_stones_rich_exchange() {
+        let mut l = Life::default();
+        l.loc = crate::data::NODE_MARKET;
+        l.stones = 3000;
+        l.qi = 0.0;
+        let mut g = game_with(l, None);
+        g.meta.sim_points = 0;
+        g.meta.auto = 1;
+        assert!(!g.is_stuck() && g.meta.sim_points < g.sim_cost(), "前置：无点但不死局");
+        assert_eq!(guide_index(&g), 8);
+    }
+
+    // T9 边界：S 恰 =ex → 不算死局 → 8
+    #[test]
+    fn t9_boundary_stones_equal_exchange_cost() {
+        let mut l = Life::default();
+        l.stones = 1500; // = realm 0 兑换价 exchange_cost()
+        l.qi = 0.0;
+        let mut g = game_with(l, None);
+        g.meta.sim_points = 0;
+        g.meta.auto = 1;
+        assert_eq!(
+            g.life.as_ref().map(|x| x.stones),
+            Some(g.exchange_cost()),
+            "前置：踩线等值"
+        );
+        assert!(!g.is_stuck(), "边界：S<ex 才死局，等值不算");
+        assert_eq!(guide_index(&g), 8);
+    }
+
+    // T10 边界：S=ex-1 → 死局 → 0
+    #[test]
+    fn t10_boundary_one_short_is_stuck() {
+        let mut l = Life::default();
+        l.stones = 1499; // ex(1500)-1
+        l.qi = 0.0;
+        let mut g = game_with(l, None);
+        g.meta.sim_points = 0;
+        g.meta.auto = 1;
+        assert!(g.is_stuck(), "边界：差 1 灵石即死局");
+        assert_eq!(guide_index(&g), 0);
+    }
+
+    // 全网格兜底：P×S×R×auto×qi 120 组合全部落在 0..=8
+    //（构造性保证——覆盖块之下不放任何叶，死分支在此必现形）
+    #[test]
+    fn grid_always_lands_within_hints() {
+        for p in [0i32, 1] {
+            for s in [0i64, 1000, 1600, 2000, 3000] {
+                for r in [0usize, 1] {
+                    for auto in [0u8, 1] {
+                        for qi_frac in [0.0f64, 0.9, 1.0] {
+                            let mut l = Life::default();
+                            l.loc = crate::data::NODE_MARKET;
+                            l.stones = s;
+                            if r == 1 {
+                                l.relics.push(0);
+                            }
+                            l.qi = qi_frac * qi_need(&l);
+                            let mut g = game_with(l, None);
+                            g.meta.sim_points = p;
+                            g.meta.auto = auto;
+                            let idx = guide_index(&g) as usize;
+                            assert!(
+                                idx < HINTS.len(),
+                                "P={} S={} R={} auto={} qi×{} → {} 越界",
+                                p,
+                                s,
+                                r,
+                                auto,
+                                qi_frac,
+                                idx
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 提示表契约：9 叶全为静态字面量（编译期已保证 & 'static str），
+    // 按钮叶与 GuideAct 一一对应——纯提示叶恒无按钮
+    #[test]
+    fn hints_table_shape() {
+        assert_eq!(HINTS.len(), 9);
+        for h in HINTS.iter() {
+            if h.act == crate::guide::GuideAct::None {
+                assert!(h.btn.is_none(), "纯提示叶不得带按钮");
+            } else {
+                assert!(h.btn.is_some(), "可跳转叶必须带按钮");
+            }
+        }
+    }
+
+    // 跳转执行器接线：三个有状态动作各自落在既有单入口的同一状态位
+    //（Draft 走 start_draft 既有测试面；World 不入本测——open_world→art::map_bg_for
+    //  需 GPU 上下文，无头单测不可达，World 链由既有冒烟 shot_058 实机覆盖）
+    #[test]
+    fn exec_jump_wires_existing_entries() {
+        // Cult → 修炼弹层（open_sub 单口，含开帧门闩）
+        let mut g = game_with(Life::default(), None);
+        crate::guide::exec_jump(&mut g, crate::guide::GuideAct::Cult);
+        assert!(matches!(g.submenu, Some(crate::menu::Sub::Cult)));
+        assert!(g.sub_fresh, "open_sub 开帧门闩必须随跳转置位");
+        // Shop → 坊市·点数兑换页签
+        let mut g = game_with(Life::default(), None);
+        crate::guide::exec_jump(&mut g, crate::guide::GuideAct::Shop);
+        assert_eq!((g.panel, g.shop_tab), (1, 2));
+        // Bag → 行囊·法宝页
+        let mut g = game_with(Life::default(), None);
+        crate::guide::exec_jump(&mut g, crate::guide::GuideAct::Bag);
+        assert_eq!((g.panel, g.bag_tab), (2, 1));
+        // None → 空转（防御臂）
+        let mut g = game_with(Life::default(), None);
+        crate::guide::exec_jump(&mut g, crate::guide::GuideAct::None);
+        assert_eq!(g.panel, 0);
+        assert!(g.submenu.is_none());
+    }
+}
+
+// ---------------- v1.16.0 交游图鉴：gallery_bond 卫语句与封顶 ----------------
+
+#[cfg(test)]
+mod gallery_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    // idx 越界（99 ≥ 10）不 panic 不写入（panic=abort 纪律：卫语句直接 return）
+    #[test]
+    fn gallery_bond_out_of_range_noop() {
+        let mut g = game_with(Life::default(), None);
+        g.gallery_bond(99);
+        assert_eq!(g.meta.comp_bonds, [0; 10]);
+    }
+
+    // 正常记账：idx=3 计 1；重复结缘累加；他位不动
+    #[test]
+    fn gallery_bond_counts_and_accumulates() {
+        let mut g = game_with(Life::default(), None);
+        g.gallery_bond(3);
+        assert_eq!(g.meta.comp_bonds[3], 1);
+        g.gallery_bond(3);
+        assert_eq!(g.meta.comp_bonds[3], 2);
+        assert_eq!(g.meta.comp_bonds[0], 0);
+    }
+
+    // saturating 封顶 255（历世次数极限不回绕）
+    #[test]
+    fn gallery_bond_saturates_at_255() {
+        let mut g = game_with(Life::default(), None);
+        g.meta.comp_bonds[7] = 255;
+        g.gallery_bond(7);
+        assert_eq!(g.meta.comp_bonds[7], 255);
+    }
+}
+
+// ---------------- v1.16.0 交游图鉴：结缘链路（special 17 → gallery_bond 当拍记账） ----------------
+
+#[cfg(test)]
+mod gallery_bond_chain_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    // 照模拟事件 28『同页天成』的「认下这页」选项构造（special=17，game.rs:2981-2993 同款）
+    fn bond_card() -> EventCard {
+        let mut e = Eff::new();
+        e.special = 17;
+        EventCard {
+            kind: CardKind::Npc,
+            title: "同页天成".into(),
+            text: "两页相贴，缝作同页——可愿？".into(),
+            opts: vec![("认下这页".into(), e)],
+        }
+    }
+
+    // 结缘即记账：choose_option 当拍 comp_bonds 恰一位 +1（掷名随机落位，账在 meta）
+    #[test]
+    fn special17_records_bond_on_pick() {
+        let mut g = game_with(Life::default(), None);
+        g.sim = Some(Life::default());
+        g.modal = Some(bond_card());
+        g.choose_option(0);
+        assert_eq!(g.meta.comp_bonds.iter().sum::<u8>(), 1);
+        assert!(g.sim.as_ref().unwrap().companion.is_some());
+    }
+
+    // 重掷不回退：quit_sim_redraft（点数已还、sim 清空）后历世账不回退——
+    // 这正是挂结缘点而非 sim_die 的原因（feng_bond_up 漏 quit 路径）
+    #[test]
+    fn bond_survives_quit_sim_redraft() {
+        let mut g = game_with(Life::default(), None);
+        g.scene = Scene::Sim;
+        g.sim = Some(Life::default());
+        g.modal = Some(bond_card());
+        g.choose_option(0);
+        let total = g.meta.comp_bonds.iter().sum::<u8>();
+        assert!(total >= 1);
+        g.quit_sim_redraft();
+        assert!(g.sim.is_none());
+        assert_eq!(g.meta.comp_bonds.iter().sum::<u8>(), total, "重掷不回退历世账");
     }
 }

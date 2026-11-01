@@ -51,6 +51,20 @@ pub fn drunk_cult_mult(fav: i32) -> f64 {
     DRUNK_CULT_MULT[tier_of(fav)]
 }
 
+// v1.16.0 交游图鉴：NPC 增益行文案单口（供图鉴 NPC 卡调用；与人物页 draw_npc_card
+// 内联 match 同表同口径——人物页实现按规格保持不动，本口防止未来再抄第三份漂移）
+pub fn eff_line(i: usize, fav: i32) -> String {
+    match i {
+        NPC_ELDER => format!("当前：宗门任务收益 ×{:.2}", elder_quest_mult(fav)),
+        NPC_MERCHANT => format!("当前：坊市丹价 ×{:.2}", merchant_disc(fav)),
+        NPC_SENIOR => format!(
+            "当前：跨境破境率 +{:.0}%",
+            senior_break_add(fav) * 100.0
+        ),
+        _ => format!("当前：每载修炼 ×{:.2}", drunk_cult_mult(fav)),
+    }
+}
+
 // 赠礼造价：随档次水涨船高（基础 500 × (1+档位)）
 pub fn gift_cost(fav: i32) -> i64 {
     NPC_GIFT_BASE * (1 + tier_of(fav) as i64)

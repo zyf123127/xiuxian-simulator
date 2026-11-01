@@ -644,6 +644,43 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         14,
         C_DIM,
     );
+    // ===== v1.16.0 道途一念：任务指引横带 (376,86,896,34) =====
+    // 仅 panel==0 且无弹层时绘制——panel_card(140,60,1000,600) 右缘只盖到 x1140，
+    // 横带右段 1272 遮不住，必须整条隐藏而非遮盖；ad/offline_card/rmodal/ending_show
+    // 态由本函数头部早退链天然排除。提示语由 guide_index 纯推导（零存档键）。
+    if g.panel == 0 && g.submenu.is_none() {
+        // min 钳制：纪律 1（panic=abort）——下标访问一律带运行期上限，构造性 0..=8 之上再加保险
+        let idx = crate::guide::guide_index(g).min(crate::guide::HINTS.len() as u8 - 1);
+        // 事件帧预热（先例 ui.rs prewarm/show_banner「事件帧预热」）：仅提示下标变化帧
+        // 一次性灌字形，字号只用既有离散档 14/16（UI_SIZES 前两档；按钮标经 button()
+        // 无副标档 18px 绘制，变化帧绘制路径自栅格化一次，仍属事件级一次性，稳态零 churn）
+        if g.guide_last != Some(idx) {
+            let hint = &crate::guide::HINTS[idx as usize];
+            prewarm_text(hint.text, &[14, 16]);
+            prewarm_text("目标", &[14, 16]);
+            if let Some(b) = hint.btn {
+                prewarm_text(b, &[14, 16]);
+            }
+            g.guide_last = Some(idx);
+        }
+        let hint = &crate::guide::HINTS[idx as usize];
+        draw_rectangle(
+            376.0,
+            86.0,
+            V_W - 384.0,
+            34.0,
+            Color::from_rgba(24, 17, 40, 205), // 同 charpanel 未结缘引导框底色语言
+        );
+        draw_rectangle(376.0, 86.0, 3.0, 34.0, C_GOLD_D); // 左缘 3px 金竖条
+        txt("目标", 388.0, 92.0, 14, C_GOLD_D);
+        txt(hint.text, 432.0, 90.0, 16, C_GOLD);
+        // 跳转按钮复用 draw::button()（继承去抖/悬停/描边语言）；纯提示叶不画
+        if let Some(b) = hint.btn {
+            if button(1112.0, 90.0, 144.0, 26.0, b, None, true) {
+                crate::guide::exec_jump(g, hint.act);
+            }
+        }
+    }
     // v1.10.2：顶栏三钮（烙印/帮助/主页）从 render_left 之前整体移到 life 借用
     // 最后一用（所在行）之后——立即模式命中不依赖绘制顺序（draw_sim 先例），
     // 且按钮区（y≤44）与左栏/日志区无像素重叠，z 序变化不影响画面
@@ -660,8 +697,11 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     if button(1222.0, 8.0, 58.0, 36.0, "主页", None, true) {
         g.back_to_menu();
     }
-    let area_y = 88.0;
-    let area_h = PANEL_B - 60.0 - 36.0;
+    // v1.16.0：日志行起点 88→124——顶部让位任务指引横带（86..120）；
+    // 行预算 (612-124)/28=17（原 18），日志框底部仍留 ≥12px 空隙，
+    // 日志 Vec 本就只显最新若干行，18→17 行损失可接受
+    let area_y = 124.0;
+    let area_h = PANEL_B - 124.0;
     let line_h = 28.0; // v1.6.0：24→28，16px 中文行距 1.5 倍更透气（18 行预算仍够）
     let max_lines = (area_h / line_h) as usize;
     let start = g.log.len().saturating_sub(max_lines);
@@ -2384,7 +2424,7 @@ fn draw_help_panel(g: &mut Game) {
             draw_rectangle(x, 170.0, 190.0, 3.0, C_GOLD);
         }
     }
-    let lines: [&str; 15] = [
+    let lines: [&str; 16] = [
         "【轮回镜】耗 1 枚模拟点数，推演“可能的你”的一生，直至死亡。",
         "【模拟前】3 选 1 天赋（仅此一梦生效）；模拟中自动修炼、游历、闭关、突破。",
         "【模拟毕】随机给出数项“造化”，选一项带回现实：修为、功法、法宝、丹药……",
@@ -2393,6 +2433,8 @@ fn draw_help_panel(g: &mut Game) {
         "【终战】现实破境至问笔、九重雷劫全扛，且斩敌链通至封卷——终战卡上落款四结局，书志可重看。",
         "【坊市】灵石购丹药，亦可兑换模拟点数（境界越高越贵）。",
         "【宿敌】血仇之敌每世模拟中皆会遭遇——实力不足则被斩，可逃可死。",
+        // v1.16.0 交游图鉴引导（玩法签末行）
+        "【交游图鉴】角色面板·图鉴页签：同页人结缘与文狱四友，随轮回烙印存档。",
         "【斩敌】在模拟中反杀宿敌（领悟其招）或现实寻仇，皆可得灵石、点数与大笔道韵。",
         "【宿敌不灭】斩其一身，还有更强的幕后之敌接棒，直至……",
         "【现实身死】寿元耗尽则一世归尘，结算大笔道韵；轮回再起，烙印永存。",
@@ -2403,8 +2445,9 @@ fn draw_help_panel(g: &mut Game) {
         "【区域】山河图志五大区域各有专属机制：宗门兴望、大漠秘藏、瘴惑灵芽、冰心澄神、仙屿潮音——初至区域，图鉴有赏。",
         "【炼化】行囊·法宝页可「炼化」：献祭一件法宝为材料，为另一件提升灵纹（攻效与灵性再上一层，至多 +3 级）。",
     ];
-    let base = if g.help_tab == 0 { 0usize } else { 7usize };
-    let count = if g.help_tab == 0 { 7usize } else { 8usize };
+    // v1.16.0：玩法签 7→8 行（新增图鉴行居第 8），操作·技巧签后移至 base 8（行数不变）
+    let base = if g.help_tab == 0 { 0usize } else { 8usize };
+    let count = 8usize;
     for j in 0..count {
         let i = base + j;
         let c = if j == 0 { C_GOLD } else { C_TEXT };

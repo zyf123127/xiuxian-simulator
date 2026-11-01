@@ -53,6 +53,9 @@ pub fn sub_hotkey(g: &mut Game, n: usize) {
                     close_sub(g);
                 }
             }
+            // 评审修复（guide#3 口径）：Cult 弹层第三行为「返回」钮——键 3 与之同动作，
+            // 使弹层行序 1/2/3 与数字键一一对应（此前键 3 落 _ => {} 无动作）
+            3 => close_sub(g),
             _ => {}
         },
         Sub::MapGo(i) => match n {

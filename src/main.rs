@@ -4,7 +4,9 @@ mod cam;
 mod charpanel;
 mod data;
 mod draw;
+mod gallery;
 mod game;
+mod guide;
 mod menu;
 mod npc;
 mod pixel;
@@ -537,13 +539,14 @@ async fn main() {
 }
 
 // 自动驾驶：自动玩几个轮回并截图，用于无人冒烟验收
+// v1.16.0：截图门与退出阈值 63→67（新增道途一念扩镜 063/064）
 fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
-    if frame % 120 == 30 && *shots < 63 {
+    if frame % 120 == 30 && *shots < 67 {
         let img = get_screen_data();
         let path = format!("shots/shot_{:03}.png", *shots);
         img.export_png(&path);
         *shots += 1;
-        if *shots >= 63 {
+        if *shots >= 67 {
             // v1.10.2：落盘去抖后 sync_save 只置脏，退出前必须显式 flush
             g.save_flush();
             std::process::exit(0);
@@ -713,6 +716,75 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
                         g.rmodal = Some(card);
                         g.rmodal_npc = Some(crate::npc::NPC_SENIOR);
                     }
+                }
+                _ => {}
+            }
+        }
+        return;
+    }
+    // v1.16.0 道途一念扩镜（63..64 置场，对应截图 063..064；frame%120 单发，同 56..62 范式）
+    // v1.16.0 交游图鉴扩镜（65..66 置场，对应截图 065..066——与指引共用同一序列、编号统一）
+    if *shots >= 63 && *shots <= 66 {
+        if frame % 120 == 0 {
+            match *shots {
+                // 63：现实主界面指引带——清 62 镜遗留 rmodal/rmodal_npc，置 P=1
+                // 『开模拟』叶入镜；qi=0/清宿敌防破境/寻仇叶截胡（冒烟专用直置，
+                // 正式玩法不由此入账）
+                63 => {
+                    g.rmodal = None;
+                    g.rmodal_npc = None;
+                    g.scene = Scene::Reality;
+                    g.sim = None;
+                    g.panel = 0;
+                    g.submenu = None;
+                    g.meta.sim_points = 1;
+                    g.meta.neme = None;
+                    if let Some(l) = g.life.as_mut() {
+                        l.qi = 0.0;
+                        // 评审修复（guide#6 确定性）：钉死叶 4 前置——loc 移出洞府后
+                        // 洞府扩建叶被 loc 门压制，自动驾驶到本帧无论 stones/contrib
+                        // 处于何值，指引带必落『开模拟』（叶 7）
+                        l.loc = crate::data::NODE_MARKET;
+                    }
+                }
+                // 64：跳转执行器实走——置 P=0/S=3000（叶 8）后调 exec_jump(Shop)，
+                // 画面应落坊市·点数兑换（与既有入口逐帧等价的实机验证）
+                64 => {
+                    g.rmodal = None;
+                    g.rmodal_npc = None;
+                    g.scene = Scene::Reality;
+                    g.sim = None;
+                    g.panel = 0;
+                    g.submenu = None;
+                    g.meta.sim_points = 0;
+                    if let Some(l) = g.life.as_mut() {
+                        l.stones = 3000;
+                        l.qi = 0.0;
+                    }
+                    g.meta.neme = None;
+                    crate::guide::exec_jump(g, crate::guide::GuideAct::Shop);
+                }
+                // 65（交游图鉴）：panel=5+char_tab=4+注入 comp_bonds[0]=1+道侣闻人未晚
+                // +comp_fav=60（照 shot_030 道侣注入范式；正式玩法不由此入账）——
+                // 图鉴首屏（卡 0 真名/真立绘/情谊条 + 9 张未识卡）入镜
+                65 => {
+                    g.rmodal = None;
+                    g.rmodal_npc = None;
+                    g.scene = Scene::Reality;
+                    g.sim = None;
+                    g.panel = 5;
+                    g.char_tab = 4;
+                    g.submenu = None;
+                    g.meta.comp_bonds[0] = 1;
+                    if let Some(l) = g.life.as_mut() {
+                        l.companion = Some("闻人未晚".to_string());
+                        l.comp_fav = 60;
+                    }
+                    g.npc_scroll = 0.0; // 图鉴首屏（照 shot_030 注入后回默认视位）
+                }
+                // 66（交游图鉴）：置图鉴滚动 max（2588）——列表尾段 NPC 卡+页脚进度入镜
+                66 => {
+                    g.npc_scroll = 2588.0;
                 }
                 _ => {}
             }

@@ -19,13 +19,17 @@ pub fn draw_char_panel(g: &mut Game) {
     // 三个 Vec 堆分配）——各页改 &Game 只读绘制 + 收集 PanelAct，借用归还后由
     // exec_panel_act 统一执行 &mut 交互（先例 v1.10.0 draw_sim / 本版 draw_reality）。
     // ×/页签点击帧的金条高亮切换晚一帧生效（16ms，不可见），其余行为逐项等价。
-    let npc_tab = g.char_tab == 3;
+    // v1.16.0：图鉴页（页签 4）同为单列滚动列表——上下遮幅带同样盖住页签行，
+    // chrome 须最后重铺；与人物页共用本双绘条件
+    let npc_tab = g.char_tab == 3 || g.char_tab == 4;
     let mut act = draw_panel_chrome_act(g);
     if act.is_none() {
         match g.char_tab {
             1 => act = draw_relic_page(g),
             2 => act = draw_ach_title_page(g),
             3 => act = draw_npc_page(g), // v1.6.0 D：好感度页（v1.10.2 单列滚动列表）
+            // v1.16.0 交游图鉴：同页人 10 卡 + 文狱四 NPC 卡（纯只读滚动，无 &mut 交互）
+            4 => crate::gallery::draw_gallery_page(g),
             // v1.10.2：总览页纯只读，整页持 life 借用（防御 None：面板仅在 Reality 打开）
             1 => {}
             _ => {
@@ -66,6 +70,11 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             g.play(crate::sounds::Which::Page);
         }
         PanelAct::Tab(i) => {
+            // v1.16.0：图鉴页首开帧一次性灌字形（事件帧预热先例 show_banner/指引横带；
+            // 仅 PanelAct::Tab(4) 执行帧触发，C 键带陈旧 char_tab=4 直开的首帧温开可接受）
+            if i == 4 {
+                crate::gallery::prewarm_corpus();
+            }
             g.char_tab = i;
             g.play(crate::sounds::Which::Page);
         }
@@ -89,8 +98,9 @@ fn draw_panel_chrome_act(g: &Game) -> Option<PanelAct> {
     if button(1064.0, 74.0, 44.0, 36.0, "×", None, true) {
         return Some(PanelAct::Close);
     }
-    // ---------- 页签（v1.6.0 D：追加第 4 页「人物」） ----------
-    let tabs = ["总览", "法宝", "成就·称号", "人物"];
+    // ---------- 页签（v1.6.0 D：第 4 页「人物」；v1.16.0：第 5 页「图鉴」） ----------
+    // 5 钮 x=300+i*150：第 5 钮 900..1040，与 × 钮（1064..1108）净空 24px 不重叠
+    let tabs = ["总览", "法宝", "成就·称号", "人物", "图鉴"];
     for (i, t) in tabs.iter().enumerate() {
         let x = 300.0 + i as f32 * 150.0;
         if button(x, 74.0, 140.0, 34.0, t, None, true) {
@@ -140,27 +150,30 @@ fn npc_clip_band(y: f32, h: f32) -> Option<(f32, f32)> {
 }
 
 // 视口内文本行：越界整行跳过（字形上探 ≤2px 由上遮幅兜底、下探由下遮幅兜底）
-fn npc_row_vis(y: f32) -> bool {
+// v1.16.0：pub(crate) 供图鉴页共用（视口同值）
+pub(crate) fn npc_row_vis(y: f32) -> bool {
     y >= NPC_VIEW_Y0 && y < NPC_VIEW_Y1
 }
 
 // v1.14.0 识人小传：好感→已解锁段数（20/40/70 三档，对齐 NPC_FAV_TIERS；
 // 道侣段叠加 companion_lives≥1 首段保底，见各卡调用处）——解锁纯推导零存档键
-fn tale_unlocked(fav: i32) -> usize {
+// v1.16.0：pub(crate) 供图鉴页当前道侣卡同口径取段
+pub(crate) fn tale_unlocked(fav: i32) -> usize {
     (fav >= 20) as usize + (fav >= 40) as usize + (fav >= 70) as usize
 }
 
 // 卡体 + 边线（全部经视口裁剪；上下线仅整线可见时画，避免跨界 1-2px 残影）
-fn npc_card_chrome(x: f32, y: f32, bg: Color, border: Color) {
-    if let Some((ty, th)) = npc_clip_band(y, NPC_CARD_H) {
+// v1.16.0：卡高参数化 h（人物页传 NPC_CARD_H、图鉴传 200），裁剪/描线口径不变；pub(crate) 供图鉴共用
+pub(crate) fn npc_card_chrome(x: f32, y: f32, h: f32, bg: Color, border: Color) {
+    if let Some((ty, th)) = npc_clip_band(y, h) {
         draw_rectangle(x, ty, 960.0, th, bg);
         draw_rectangle(x, ty, 2.0, th, border);
         draw_rectangle(x + 958.0, ty, 2.0, th, border);
         if y >= NPC_VIEW_Y0 {
             draw_rectangle(x, y, 960.0, 2.0, border);
         }
-        if y + NPC_CARD_H <= NPC_VIEW_Y1 {
-            draw_rectangle(x, y + NPC_CARD_H - 2.0, 960.0, 2.0, border);
+        if y + h <= NPC_VIEW_Y1 {
+            draw_rectangle(x, y + h - 2.0, 960.0, 2.0, border);
         }
     }
 }
@@ -169,16 +182,31 @@ fn npc_card_chrome(x: f32, y: f32, bg: Color, border: Color) {
 // 源等比裁剪（source 为纹理像素，vendor texture.rs:537-545 按纹理尺寸归一）；
 // v1.14.0 起兜底像（28×40 像素立绘/书卷剪影，contain 得 217×310）由调用方经
 // or_else 以 Some 传入；icon 仅剩 tex=None 防御路径（12×12 ×12=144，同像素风不糊）
+// v1.16.0：几何参数化版见 npc_portrait_box——本薄包装保持人物页原签名与几何逐值不变
 fn npc_portrait(tex: Option<&Texture2D>, icon: &Texture2D, x: f32, card_y: f32) {
+    npc_portrait_box(tex, icon, x, card_y, 220.0, 310.0, 318.0);
+}
+
+/// v1.16.0 交游图鉴共用：box 参数化立绘（contain 收进 box_w×box_h、底边锚 card_y+bottom_off、
+/// 源矩形按视口等比裁剪——与人物页同语言）。人物页 (220,310,318)，图鉴 (150,176,188)。
+pub(crate) fn npc_portrait_box(
+    tex: Option<&Texture2D>,
+    icon: &Texture2D,
+    x: f32,
+    card_y: f32,
+    box_w: f32,
+    box_h: f32,
+    bottom_off: f32,
+) {
     let (dw, dh) = match tex {
         Some(t) => {
             let ar = t.width() / t.height().max(1.0);
-            let w = (310.0 * ar).min(220.0);
+            let w = (box_h * ar).min(box_w);
             (w, w / ar)
         }
-        None => (144.0, 144.0),
+        None => (144.0f32.min(box_w), 144.0f32.min(box_h)),
     };
-    let top = card_y + 318.0 - dh; // 底边对齐（卡底内缩 12）
+    let top = card_y + bottom_off - dh; // 底边对齐（bottom_off = 底边相对卡顶偏移）
     let Some((vy, vh)) = npc_clip_band(top, dh) else {
         return;
     };
@@ -188,7 +216,7 @@ fn npc_portrait(tex: Option<&Texture2D>, icon: &Texture2D, x: f32, card_y: f32) 
     };
     draw_texture_ex(
         tex.unwrap_or(icon),
-        x + (220.0 - dw) * 0.5,
+        x + (box_w - dw) * 0.5,
         vy,
         WHITE,
         DrawTextureParams {
@@ -199,9 +227,12 @@ fn npc_portrait(tex: Option<&Texture2D>, icon: &Texture2D, x: f32, card_y: f32) 
     );
 }
 
-// v1.10.2 借用化：签名去 l——滚动状态机/页点/头像条为 &mut 直写；仅卡片绘制段
-// 借 life 不可变引用（块尾归还），命中赠礼以 PanelAct::Gift 跨借用传出
-fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
+// v1.16.0：滚动状态机自 draw_npc_page 抽出为单口——图鉴页（gallery.rs）与人物页共用
+// 同一状态机与会话字段（g.npc_scroll/npc_drag/npc_vel/npc_anim；两页不同帧显示，值跨页
+// 由各自 max 钳制收敛；npc_scroll_reset 关面板统一归零）。纯搬移自原 205-279 行：
+// 拖动/惯性/滚轮/吸附/lerp 逻辑逐行未动，仅 NPC_SCROLL_MAX/NPC_STEP 参数化为
+// max/step；返回 tap（位移<8px 的点按帧标记，人物页赠礼钮唯一激活口径）。
+pub(crate) fn scroll_list_tick(g: &mut Game, max: f32, step: f32) -> bool {
     // ---------- 滚动状态机（会话态，不进存档）----------
     let (mx, my) = crate::cam::mouse();
     let pressed = is_mouse_button_pressed(MouseButton::Left);
@@ -211,7 +242,7 @@ fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
     if wy != 0.0 {
         g.npc_anim = None;
         g.npc_vel = 0.0;
-        g.npc_scroll = (g.npc_scroll - wy * 48.0).clamp(0.0, NPC_SCROLL_MAX);
+        g.npc_scroll = (g.npc_scroll - wy * 48.0).clamp(0.0, max);
     }
     // 按下且在视口内：记锚点（按下x, 按下y, 按下时scroll）。按压帧不触发任何按钮——
     // 视口内按钮一律「抬起激活 + 位移<8px 门槛」，从赠礼钮起手拖动不再误触赠礼
@@ -228,7 +259,7 @@ fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
             // 按住：越 8px 门槛才进入拖动
             if dist >= 8.0 {
                 // 1:1 跟手（自锚点起算）；速度平滑记录供松手惯性（钳 ±40 防起手越槛帧尖峰）
-                let ns = (s0 - (my - py)).clamp(0.0, NPC_SCROLL_MAX);
+                let ns = (s0 - (my - py)).clamp(0.0, max);
                 let dv = (ns - g.npc_scroll).clamp(-40.0, 40.0);
                 g.npc_vel = g.npc_vel * 0.5 + dv * 0.5;
                 g.npc_scroll = ns;
@@ -245,8 +276,8 @@ fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
         // 松手惯性：vel×0.9/帧，|vel|<0.5 停，撞钳制即停
         if g.npc_vel.abs() >= 0.5 {
             let raw = g.npc_scroll + g.npc_vel;
-            if (g.npc_vel > 0.0 && raw >= NPC_SCROLL_MAX) || (g.npc_vel < 0.0 && raw <= 0.0) {
-                g.npc_scroll = raw.clamp(0.0, NPC_SCROLL_MAX);
+            if (g.npc_vel > 0.0 && raw >= max) || (g.npc_vel < 0.0 && raw <= 0.0) {
+                g.npc_scroll = raw.clamp(0.0, max);
                 g.npc_vel = 0.0;
             } else {
                 g.npc_scroll = raw;
@@ -254,10 +285,9 @@ fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
             }
         } else {
             g.npc_vel = 0.0;
-            // 静止对齐：向最近卡顶吸附（lerp 0.2/帧；末卡钳 1198）——任意静止态
+            // 静止对齐：向最近卡顶吸附（lerp 0.2/帧；末卡钳 max）——任意静止态
             // =整卡+邻卡露头，页点/头像条的「当前卡」高亮恒有唯一锚
-            let target =
-                ((g.npc_scroll / NPC_STEP).round() * NPC_STEP).clamp(0.0, NPC_SCROLL_MAX);
+            let target = ((g.npc_scroll / step).round() * step).clamp(0.0, max);
             let d = target - g.npc_scroll;
             if d.abs() > 0.5 {
                 g.npc_scroll += d * 0.2;
@@ -277,6 +307,16 @@ fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
             g.npc_scroll += d * 0.2;
         }
     }
+    tap
+}
+
+// v1.10.2 借用化：签名去 l——滚动状态机/页点/头像条为 &mut 直写；仅卡片绘制段
+// 借 life 不可变引用（块尾归还），命中赠礼以 PanelAct::Gift 跨借用传出
+fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
+    // ---------- 滚动状态机（单口见 scroll_list_tick；v1.16.0 抽出供图鉴页共用）----------
+    let tap = scroll_list_tick(g, NPC_SCROLL_MAX, NPC_STEP);
+    let (mx, my) = crate::cam::mouse();
+    let pressed = is_mouse_button_pressed(MouseButton::Left);
 
     // ---------- 卡片（整卡剔除：任意帧 ≤2 卡在画，剔除含立绘查询）----------
     // v1.7.1/1.7.2：有道侣且有 AI 立绘（comp_0..9 按结缘顺序）则替代丹药图标。
@@ -441,7 +481,7 @@ fn draw_npc_card(
     let x = 160.0;
     let fav = g.meta.npc_fav[i];
     let cost = crate::npc::gift_cost(fav);
-    npc_card_chrome(x, y, Color::from_rgba(30, 24, 50, 210), C_GOLD_D);
+    npc_card_chrome(x, y, NPC_CARD_H, Color::from_rgba(30, 24, 50, 210), C_GOLD_D);
     // v1.14.0：AI 图缺失时程序化像素立绘兜底（or_else 短路——AI 图命中永不触发，
     // 放入 assets/portraits/npc_senior.png / npc_drunk.png 重启即自动覆盖）
     let pix = crate::art::art()
@@ -566,7 +606,7 @@ fn draw_npc_card(
 fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2D>) {
     let x = 160.0;
     let cfav = l.map_or(0, |x| x.comp_fav);
-    npc_card_chrome(x, y, Color::from_rgba(42, 26, 52, 210), C_PURPLE);
+    npc_card_chrome(x, y, NPC_CARD_H, Color::from_rgba(42, 26, 52, 210), C_PURPLE);
     // v1.14.0：未结缘（comp_tex=None）改书卷剪影兜底；已结缘 comp_0..9 全内嵌恒真立绘
     let portrait = comp_tex
         .map(Clone::clone)

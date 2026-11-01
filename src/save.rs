@@ -108,6 +108,8 @@ pub fn save_text(m: &Meta) -> String {
     s.push_str(&format!("dp={}\n", m.taodie));
     s.push_str(&format!("bn={}\n", m.feng_bn));
     s.push_str(&format!("blv={}\n", m.feng_blv));
+    // v1.16.0 交游图鉴：十同页人历世结缘次数（旧档缺键 → [0;10] + 当前道侣位补 1，见 parse 尾）
+    s.push_str(&format!("gbd={:?}\n", m.comp_bonds));
     if let Some(n) = &m.neme {
         s.push_str(&format!("neme={} {} {}\n", n.title, n.name, n.realm));
     }
@@ -230,6 +232,7 @@ fn parse_save(text: &str) -> Meta {
     let mut life = Life::default();
     let mut has_lequip = false; // v1.5.0：区分「缺键」（旧档→迁移）与「显式卸光」
     let mut has_mvis = false; // v1.8.0 C5：区分 mvis 缺键（旧档→按 mreg 迁移）与显式记录
+    let mut has_gbd = false; // v1.16.0：区分 gbd 缺键（旧档→当前道侣位补 1）与显式记录
     let mut neme_title = String::new();
     let mut neme_name = String::new();
     let mut neme_realm = 0usize;
@@ -344,6 +347,15 @@ fn parse_save(text: &str) -> Meta {
                 };
             }
             "blv" => m.feng_blv = v.trim().parse::<u8>().unwrap_or(0).min(3),
+            // v1.16.0 交游图鉴：十同页人历世结缘次数（逐位 clamp 0..=255；短数组补零，
+            // 照 nf=/nfe= 先例；越位值丢弃）
+            "gbd" => {
+                let a = nums(v);
+                for i in 0..crate::data::COMPANION_NAMES.len() {
+                    m.comp_bonds[i] = a.get(i).copied().unwrap_or(0.0).clamp(0.0, 255.0) as u8;
+                }
+                has_gbd = true;
+            }
             "music" => m.music = v.trim().split(' ').next().map_or(true, |x| x == "1"),
             "sfx" => m.sfx = v.trim().split(' ').nth(1).map_or(true, |x| x == "1"),
             "neme" => {
@@ -502,6 +514,19 @@ fn parse_save(text: &str) -> Meta {
         life.equipped.truncate(RELIC_EQUIP_MAX);
         m.life = Some(life);
     }
+    // v1.16.0 交游图鉴：gbd 缺键（v1.15.x 旧档）迁移（照 mvis 先例 additive-only）——
+    // 仅现实同页人可定位（companion 名字命中 COMPANION_NAMES）时该位记 1，保底
+    // 『当前道侣不显示未识』；历史各伴次数不可考、不臆补。has_gbd==true 时零改动。
+    if !has_gbd {
+        let cur = m.life.as_ref().and_then(|l| {
+            l.companion
+                .as_deref()
+                .and_then(|cn| crate::data::COMPANION_NAMES.iter().position(|&n| n == cn))
+        });
+        if let Some(idx) = cur {
+            m.comp_bonds[idx] = 1;
+        }
+    }
     m
 }
 
@@ -585,6 +610,53 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
         let m2 = parse_save(&t);
         assert_eq!(m2.npc_fav, [100, 0, 0, 0]); // 上溢夹 100 / 负值夹 0 / 短数组补零
         assert_eq!(m2.life.unwrap().comp_fav, 99); // 合法值保留
+    }
+
+    // ---------------- v1.16.0 交游图鉴：gbd= 键（回环/缺键/短数组/越位 clamp/迁移） ----------------
+
+    // 回环：save_text→parse_save gbd 逐位相等（additive-only：其余键不受新键影响）
+    #[test]
+    fn gbd_roundtrip_bitwise() {
+        let mut m = Meta::default();
+        m.comp_bonds = [1, 0, 3, 255, 0, 7, 2, 0, 9, 4];
+        let text = save_text(&m);
+        let back = parse_save(&text);
+        assert_eq!(back.comp_bonds, [1, 0, 3, 255, 0, 7, 2, 0, 9, 4]);
+    }
+
+    // 缺键默认 [0;10]（OLD_BASE 无道侣 → 无迁移）；越位值丢弃、逐位 clamp 0..=255
+    #[test]
+    fn gbd_missing_default_and_clamp() {
+        let m = parse_save(OLD_BASE);
+        assert_eq!(m.comp_bonds, [0; 10]);
+        let t = format!("{}gbd=[300, -7, 3]\n", OLD_BASE);
+        let m2 = parse_save(&t);
+        assert_eq!(m2.comp_bonds, [255, 0, 3, 0, 0, 0, 0, 0, 0, 0]);
+    }
+
+    // 短数组补零（照 nf=/nfe= 先例）
+    #[test]
+    fn gbd_short_array_zero_filled() {
+        let t = format!("{}gbd=[5]\n", OLD_BASE);
+        let m = parse_save(&t);
+        assert_eq!(m.comp_bonds[0], 5);
+        assert_eq!(m.comp_bonds[1..], [0; 9]);
+    }
+
+    // 缺键迁移：旧档无 gbd + 现实同页人可定位（Lcomp=闻人未晚）→ comp_bonds[0]==1，
+    // 其余位不臆补（照 mvis 迁移先例）；显式 gbd 键存在时零改动
+    #[test]
+    fn gbd_migration_current_companion() {
+        let t = format!("{}Lcomp=闻人未晚\nLcfav=60\n", OLD_BASE);
+        let m = parse_save(&t);
+        assert_eq!(m.comp_bonds[0], 1);
+        assert_eq!(m.comp_bonds[1..], [0; 9]);
+        let t2 = format!(
+            "{}Lcomp=闻人未晚\ngbd=[0, 2, 0, 0, 0, 0, 0, 0, 0, 0]\n",
+            OLD_BASE
+        );
+        let m2 = parse_save(&t2); // has_gbd=true → 零迁移
+        assert_eq!(m2.comp_bonds, [0, 2, 0, 0, 0, 0, 0, 0, 0, 0]);
     }
 
     // v1.8.0 C5：mvis 缺键迁移——仅当前区域（mreg%5）补记，不补发
