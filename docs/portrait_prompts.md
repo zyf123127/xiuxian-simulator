@@ -15,8 +15,8 @@
 | `portrait_3.png` | 墨仙档立绘（问笔以上） | 同上 |
 | `npc_elder.png` | 玄诚长老 | 人物页 |
 | `npc_merchant.png` | 胡掌柜 | 人物页 |
-| `npc_senior.png` | 宁清霜（当前缺图：游戏内以名字种子像素立绘兜底） | 人物页 |
-| `npc_drunk.png` | 醉道人（当前缺图：游戏内以名字种子像素立绘兜底） | 人物页 |
+| `npc_senior.png` | 宁清霜 | 人物页 |
+| `npc_drunk.png` | 醉道人 | 人物页 |
 | `comp_0.png` ~ `comp_9.png` | 十位女道侣（顺序见下表） | 人物页道侣卡 |
 
 **推荐尺寸 640×1280 或 512×1024（1:2 竖版全身像）**，PNG。游戏内等比缩放绘制。
@@ -86,14 +86,14 @@
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, plump middle-aged market shopkeeper in crimson brocade robe with gold buttons, holding an abacus, beaming shrewd smile, plain deep purple background, warm rim light, clean cel-shaded illustration
 
-### npc_senior 宁清霜（站姿全身·v1.14.0 补）
+### npc_senior 宁清霜（站姿全身·已就位）
 > 2D国风仙侠游戏立绘，全身站姿，清冷绝美的青年女剑修，青云宗大师姐，霜白长发高束垂落发带，青碧色剑修劲装束袖束腰，腰悬古朴长剑暗金剑穗，眉眼细长清冷垂目，身姿挺拔纤细如霜竹，气质剑心通明不染尘埃，纯深紫色背景，无场景，冷白轮廓光，干净实边插画风格，全身完整入画，640x1280
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, cold elegant young female sword cultivator, senior sister of the sect, frost-white long hair in a high bun with hanging ribbons, teal-green fitted swordswoman robe with narrow sleeves, ancient sword at her waist with dark-gold tassel, slender serene downcast eyes, tall slender figure like frost bamboo, sword-heart composure, plain deep purple background, cool white rim light, clean cel-shaded illustration
 >
 > 提示：出图后按上文步骤放入 `assets/portraits/npc_senior.png` 即自动覆盖游戏内像素兜底；H5 版还需既定流程（tools/process_portraits.py 量化 → src/art.rs 内嵌表各加一行 include_bytes → build_web.bat）。
 
-### npc_drunk 醉道人（站姿全身·v1.14.0 补）
+### npc_drunk 醉道人（站姿全身·已就位）
 > 2D国风仙侠游戏立绘，全身站姿，放浪形骸的中年男散修，灰褐色道袍松垮歪斜衣襟半敞，发髻松散两缕散发垂落，脸颊微红醉意朦胧眯眼含笑，腰间挂着赭褐色酒葫芦木塞半启，手提葫芦欲饮，仙风道骨却落魄不羁，纯深紫色背景，无场景，暖褐轮廓光，干净实边插画风格，全身完整入画，640x1280
 >
 > **英文**：2D Chinese xianxia game full-body standing portrait, carefree middle-aged male wanderer cultivator, loose askew grey-brown daoist robe half open, messy bun with two dangling hair strands, flushed cheeks with drunken squinting smile, ochre-brown wine gourd at his half-opened waist, tipsy unhinged yet faintly transcendent, plain deep purple background, warm brown rim light, clean cel-shaded illustration

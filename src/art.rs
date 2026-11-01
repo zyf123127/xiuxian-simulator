@@ -113,7 +113,7 @@ fn tex_from_bytes(bytes: &[u8]) -> Texture2D {
 // v1.8.9 内嵌立绘表：与 TapTap 包同源（assets/portraits_wasm，640px 量化版）。
 // 三通道查找：桌面 = 文件夹（CWD/exe 同级，换图免重编译）→ 内嵌兜底（发布版
 // 单独 exe 自带立绘）；wasm 恒用内嵌。
-// 注意：npc_senior / npc_drunk 尚无立绘文件，未列入——补图后各加一行 include_bytes 即可。
+// v1.15.5：npc_senior（宁清霜）/ npc_drunk（醉道人）补图入列，18 张全齐。
 fn embedded_bytes(name: &str) -> Option<&'static [u8]> {
     const EMBED: &[(&str, &[u8])] = &[
         (
@@ -139,6 +139,14 @@ fn embedded_bytes(name: &str) -> Option<&'static [u8]> {
         (
             "npc_merchant",
             include_bytes!("../assets/portraits_wasm/npc_merchant.png"),
+        ),
+        (
+            "npc_senior",
+            include_bytes!("../assets/portraits_wasm/npc_senior.png"),
+        ),
+        (
+            "npc_drunk",
+            include_bytes!("../assets/portraits_wasm/npc_drunk.png"),
         ),
         ("comp_0", include_bytes!("../assets/portraits_wasm/comp_0.png")),
         ("comp_1", include_bytes!("../assets/portraits_wasm/comp_1.png")),
