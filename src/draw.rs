@@ -225,7 +225,7 @@ fn title_ornament(cx: f32, cy: f32, alpha: f32) {
     draw_rectangle(cx + 16.0, cy - 0.75, 48.0, 1.5, line);
 }
 
-// v1.17.1 事件正文分段绘制（复审②修正：收秒标度 t=0.18-g.modal_anim，不再把
+// v1.16.7 事件正文分段绘制（复审②修正：收秒标度 t=0.18-g.modal_anim，不再把
 // 归一化 p 当秒用——段 0 相位 (t-0.08)/0.10 与旧 text_a 逐像素一致，「80ms 后
 // 开始、100ms 淡满」的原节奏保留，段间 40ms）。段 i 除数取 0.10-i*0.04 压缩后续
 // 段淡入时长：0.18s 入场窗口物理上装不下「0.08+0.04+0.10」的段 1 全程（复审定
@@ -243,12 +243,25 @@ fn draw_event_text(
     line_h: f32,
     c: Color,
     t: f32,
+    max_h: f32, // v1.16.9 行数上界防御（复审 low①）：可用文本区像素高；0=不限。
+                // 先判后画——wrap_lines 与 wrap_draw 同源测宽，累计高度（行×行高+
+                // 段距 8px）超 max_h 即截断余段，绝不压选项钮区。当前事件表静态文案
+                // 均在预算内（tall ≤4 行/普通 ≤3 行），本防御为几何保险，防未来
+                // 长文案/动态拼文溢出（宿敌卡 full() 嵌名长度随境界名浮动尤需此保险）
 ) -> f32 {
     let mut yy = y;
     let mut total = 0.0f32;
+    let mut used_h = 0.0f32;
     for (i, seg) in s.split('\n').enumerate() {
         let dur = (0.10 - i as f32 * 0.04).max(0.02); // 防御：段数>2 时除数不归零
         let seg_a = ((t - 0.08 - i as f32 * 0.04) / dur).clamp(0.0, 1.0);
+        let seg_lines = crate::ui::wrap_lines(seg, size, maxw);
+        let seg_h = seg_lines as f32 * line_h;
+        let gap = if i == 0 { 0.0 } else { 8.0 }; // 段间距（与下方 yy 步进同源）
+        if max_h > 0.0 && used_h + gap + seg_h > max_h {
+            break; // 预算尽，余段截断（先判后画：本段一个像素都不落）
+        }
+        used_h += gap + seg_h;
         let h = wrap_draw(seg, x, yy, size, maxw, line_h, fade(c, seg_a));
         yy += h + 8.0; // 段间距
         total += h + 8.0;
@@ -256,7 +269,7 @@ fn draw_event_text(
     total - 8.0 // 末段无尾距（单段卡 total==行高*行数，与旧版式一致）
 }
 
-// v1.17.1 复审④：链段阶段徽标文本——取值域固定 5 种，match 产 &'static str
+// v1.16.7 复审④：链段阶段徽标文本——取值域固定 5 种，match 产 &'static str
 // 零分配（原每帧 format! 违反「每帧绘制路径禁止新增堆分配」红线）；5 串在
 // build_event 尾 prewarm_text(&[16])
 fn stage_label(seg: u8, total: u8) -> &'static str {
@@ -310,7 +323,7 @@ fn draw_magic_circle(cx: f32, cy: f32, t: f32, c: Color) {
 }
 
 pub fn draw_bg(art: &Art) {
-    // v1.17.1 加载小刀：bg 纹理降采样 640×360（build_bg 省靴期 75% 像素写），
+    // v1.16.7 加载小刀：bg 纹理降采样 640×360（build_bg 省靴期 75% 像素写），
     // 此处 Linear 放大到全屏 1280×720——唯一消费点，原 draw_texture 按纹理原
     // 尺寸 1:1 贴屏，改 dest_size 后观感等位
     draw_texture_ex(
@@ -819,26 +832,9 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     if button(1018.0, 8.0, 62.0, 36.0, "任务", None, true) {
         g.panel = 6;
         g.play(crate::sounds::Which::Page);
-        // 事件帧预热：面板静态文案与当前目标行（字号 14/16/18/20/24 均既有离散档）
-        prewarm_text("道途指引", &[24]);
-        prewarm_text("当前目标", &[16]);
-        prewarm_text("修行之道", &[16]);
-        for s in GUIDE_PANEL_LINES.iter() {
-            prewarm_text(s, &[14]);
-        }
-        prewarm_text(GUIDE_PANEL_NOTE, &[14]);
-        let idx = crate::guide::guide_index(g).min(crate::guide::HINTS.len() as u8 - 1);
-        let hint = &crate::guide::HINTS[idx as usize];
-        prewarm_text(hint.text, &[20]);
-        if let Some(b) = hint.btn {
-            prewarm_text(b, &[18]);
-        }
-        // v1.17.2 章节书页签：两签文案+章目+目标全量预热（guide_tab 跨次开面板
-        // 可能残留 1，开帧即见章节书——一次灌齐防缺字）
-        for t in GUIDE_TABS.iter() {
-            prewarm_text(t, &[16]);
-        }
-        prewarm_chapter_view(g);
+        // 事件帧预热：面板静态文案+当前目标行+章节书全量（v1.16.9 封装单口，
+        // 横带 Book 跳转共用 prewarm_guide_panel）
+        prewarm_guide_panel(g);
     }
     // v1.10.2：顶栏三钮（烙印/帮助/主页）从 render_left 之前整体移到 life 借用
     // 最后一用（所在行）之后——立即模式命中不依赖绘制顺序（draw_sim 先例），
@@ -1077,7 +1073,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         g.auto_years = 0;
         g.auto_gain = 0.0;
         g.play(crate::sounds::Which::Click);
-        // v1.17.2 系统初见闩（sy= bit0）：周天首开一句戏文（一次性边沿，additive 闩
+        // v1.16.8 系统初见闩（sy= bit0）：周天首开一句戏文（一次性边沿，additive 闩
         // 推导不出「从未开过」；log/toast 走既有渲染口径，讨牒 log 先例不另预热）
         if !auto_on && g.meta.sys_seen & 0b0001 == 0 {
             g.meta.sys_seen |= 0b0001;
@@ -1796,23 +1792,42 @@ pub fn draw_modal_card(g: &mut Game) {
     // v1.16.3 邂逅版式：卡带 actor（模拟「同页天成」/现实好感事件）且有真立绘时
     // 改宽卡 800×520——立绘收左 contain 220×420（复用 npc_portrait_box 人物页同
     // 语言），正文/抉择钮右移。真机反馈「模拟中结识人物看不到画像，立绘作用没体现」。
-    // Finale/Path/破境等无 actor 卡维持 600×400 原版式逐像素不变
+    // Finale/Path/破境等无 actor 卡维持 600×400 原版式逐像素不变。
+    // v1.16.9 复审修（立绘外置后）②：纹理未到/缺失走像素/剪影兜底（gallery.rs 同款
+    // None 语义——NPC 像素 name_seed / 道侣书卷剪影），不再落云纹占位或旧版式；
+    // AI 图到后 Some 短路换图（同槽一次闪变，每会话每槽一次）
     let portrait: Option<Texture2D> = {
         let card = g.rmodal.as_ref().or(g.modal.as_ref()).unwrap();
         match card.actor {
-            Some(crate::game::CardActor::Comp(i)) => crate::art::art().comp_tex(i.min(9)),
-            Some(crate::game::CardActor::Npc(i)) => crate::art::art().npc_tex(i.min(3)),
+            Some(crate::game::CardActor::Comp(i)) => crate::art::art()
+                .comp_tex(i.min(9))
+                .or_else(crate::art::comp_silhouette_tex),
+            Some(crate::game::CardActor::Npc(i)) => crate::art::art()
+                .npc_tex(i.min(3))
+                .or_else(|| crate::art::npc_pixel_tex(i.min(3))),
             None => None,
         }
     };
-    // v1.17.1 稀有/链段标记采样（纯会话态随卡生灭；rare=EVENTS w≤RARE_W、
+    // v1.16.7 稀有/链段标记采样（纯会话态随卡生灭；rare=EVENTS w≤RARE_W、
     // stage=链段进度，build_event 尾统一置位）
     let (card_rare, card_stage) = {
         let card = g.rmodal.as_ref().or(g.modal.as_ref()).unwrap();
         (card.rare, card.stage)
     };
-    let meeting = portrait.is_some();
-    // v1.17.1 复审①：tall/cy 判定上移到暂避钮命中采样之前——hide_hit 与绘制
+    // v1.16.9 复审修（立绘外置后）①：meeting 按 card.actor 锁定版式——开卡帧即定
+    // 800×520/600×400 几何。wasm 立绘外置后 XHR 拉图期 get() 返 None，若按原
+    // portrait.is_some() 判定，卡先走旧版式、图到位（1~3s）切邂逅版式 → 标题/正文/
+    // 按钮几何中途跳动，触屏玩家可能点在移动前的按钮位上。latched 后图后到只换图
+    // 不改几何（actor 有而纹理未到时立绘盒兜底链见上）；actor=None（Finale/Path/
+    // 普通事件卡）恒旧版式，语义不变
+    let meeting = g
+        .rmodal
+        .as_ref()
+        .or(g.modal.as_ref())
+        .unwrap()
+        .actor
+        .is_some();
+    // v1.16.7 复审①：tall/cy 判定上移到暂避钮命中采样之前——hide_hit 与绘制
     // 必须同源（原 hit 固定采样 (820,174+dy) 而 tall 卡按钮画在 cy+14=154，点可见
     // 钮无效、点下方空白反而触发暂避，仅 tall 版式错位 20px）。kind/行数只读
     // 采样在 modal_desc 借用前完成，与分支内原式逐值一致
@@ -1840,7 +1855,7 @@ pub fn draw_modal_card(g: &mut Game) {
         && myp <= hy + 26.0;
     if meeting {
         panel_card_a(240.0, 100.0 + dy, 800.0, 520.0, card_a);
-        // v1.17.1 稀有/链段卡描边：叠于 panel_card_a 金描边之上（2.5 同位覆盖）——
+        // v1.16.7 稀有/链段卡描边：叠于 panel_card_a 金描边之上（2.5 同位覆盖）——
         // 链段卡青、稀有卡紫，链首段 50 两者兼有时链段优先；稳态随卡面全显
         let edge = if card_stage.is_some() {
             Some(C_CYAN)
@@ -1853,7 +1868,7 @@ pub fn draw_modal_card(g: &mut Game) {
             draw_rectangle_lines(240.0, 100.0 + dy, 800.0, 520.0, 2.5, fade(ec, card_a));
         }
         txt_c(title, V_W * 0.5, 128.0 + dy, 24, fade(C_GOLD, card_a));
-        // v1.17.1 链段阶段徽标（复用品级徽标 68×26 半透明底+16px 字语言）：标题
+        // v1.16.7 链段阶段徽标（复用品级徽标 68×26 半透明底+16px 字语言）：标题
         // 右侧 x=736..804，与暂避钮（920,122）不交
         if let Some((seg, total)) = card_stage {
             let (bx, by) = (736.0, 122.0 + dy);
@@ -1881,7 +1896,8 @@ pub fn draw_modal_card(g: &mut Game) {
         );
         title_ornament(V_W * 0.5, 148.0 + dy, card_a);
         // 立绘盒 (270,160) 220×420、底边锚 580（box_h=bottom_off=420：顶 = 580−dh ≥ 160，
-        // 恒落 npc_clip_band 116..616 视口内不裁）；AI 图缺失时 portrait 为 None 已走旧版式
+        // 恒落 npc_clip_band 116..616 视口内不裁）；v1.16.9 复审修后 AI 图未到/缺失
+        // 时 portrait 走像素/剪影兜底恒 Some（actor 有恒邂逅版式，见 meeting latched）
         crate::charpanel::npc_portrait_box_a(
             portrait.as_ref(),
             &crate::art::art().icon_yun,
@@ -1901,10 +1917,11 @@ pub fn draw_modal_card(g: &mut Game) {
             28.0,
             C_TEXT,
             0.18 - g.modal_anim,
+            160.0, // v1.16.9 文本区 170..330 预算（5 行×28+段距），超限截断不压钮区
         );
         button(920.0, 122.0 + dy, 110.0, 26.0, "暂 避", None, true);
     } else {
-        // v1.17.1 多段正文承载：普通 600×400 文本区（224..316）仅 3 行；模拟事件卡
+        // v1.16.7 多段正文承载：普通 600×400 文本区（224..316）仅 3 行；模拟事件卡
         //（kind=Npc）正文 >3 行走 600×440 加高变体（卡顶 140/文本 204/钮 336，
         // 3 钮末底 546 < 卡底 580 合规）——Finale/Path 恒走原几何逐像素不变
         //（终战特判 step(58,58) 不与此相交；kind/lines/segs/tall/cy 已上移至
@@ -1927,7 +1944,7 @@ pub fn draw_modal_card(g: &mut Game) {
             draw_rectangle_lines(340.0, cy + dy, 600.0, if tall { 440.0 } else { 400.0 }, 2.5, fade(ec, card_a));
         }
         txt_c(title, V_W * 0.5, cy + 28.0 + dy, 24, fade(C_GOLD, card_a));
-        // v1.17.1 链段阶段徽标：标题右侧（x=736..804），与暂避钮（820, cy+14）不交
+        // v1.16.7 链段阶段徽标：标题右侧（x=736..804），与暂避钮（820, cy+14）不交
         if let Some((seg, total)) = card_stage {
             let (bx, by) = (736.0, cy + 13.0 + dy);
             draw_rectangle(bx, by, 68.0, 26.0, fade(Color::from_rgba(130, 220, 230, 60), card_a));
@@ -1955,7 +1972,8 @@ pub fn draw_modal_card(g: &mut Game) {
         title_ornament(V_W * 0.5, cy + 48.0 + dy, card_a);
         if kind_is_npc {
             // 分段淡入正文（复审②：秒标度 t，稳态全段恒 1 与旧单次 wrap_draw
-            // 逐像素一致）
+            // 逐像素一致）；v1.16.9 文本区像素预算上移（cy+64..316 钮区）：
+            // tall 卡 112px（4 行）、普通卡 92px（3 行），超限截断不压钮区
             draw_event_text(
                 text,
                 380.0,
@@ -1965,6 +1983,7 @@ pub fn draw_modal_card(g: &mut Game) {
                 28.0,
                 C_TEXT,
                 0.18 - g.modal_anim,
+                if tall { 112.0 } else { 92.0 },
             );
         } else {
             // Finale/Path 卡维持 v1.16.6 动效原样（单次 wrap_draw，逐像素不变）
@@ -2076,7 +2095,7 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
         296.0, 16,
         C_GOLD,
     );
-    // v1.17.2 主线感：本稿剧情一行（SimResult.story 与旧稿档案 hq= 同源一次拼接；
+    // v1.16.8 主线感：本稿剧情一行（SimResult.story 与旧稿档案 hq= 同源一次拼接；
     // 会话态零新键，&str 借用分片绘制零 format!；无摘要整行隐去零位移）。
     // 绘制于 sr 只读段末（y570 在左右卡之下、合页钮之上——借用随此终结，
     // 后续 &mut 交互照旧；立即模式绘制序不影响该行位置）
@@ -2212,7 +2231,7 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
             C_DIM,
         );
     }
-    // v1.17.2 主线感：下一章预告一行（章节书当前章+首未了目标，全静态分片绘制
+    // v1.16.8 主线感：下一章预告一行（章节书当前章+首未了目标，全静态分片绘制
     // 零 format!——帧路径零分配红线；主线全了走字面量收束行）
     {
         let cur = crate::game::Game::chapter_current(&g.meta);
@@ -2931,7 +2950,7 @@ fn draw_help_panel(g: &mut Game) {
 // 真机反馈「任务引导系统没看到」：指引横带只在现实主界面常驻，玩家在人物/图鉴/
 // 坊市等页签里没有指引入口。本面板给一个全局可达的显性入口：当前目标（guide_index
 // 纯推导，零存档键）+ 跳转按钮（guide::exec_jump 既有单口）+ 修行之道静态五行。
-// v1.17.2 章节书页签：主线八章视图（左列章目/右栏本章引入+目标清单+当前目标高亮
+// v1.16.8 章节书页签：主线八章视图（左列章目/右栏本章引入+目标清单+当前目标高亮
 // +前情提要）——达成位 chap_done（meta additive ch=），当前目标=首未了目标行。
 // 布局照 draw_help_panel 语言；开启/切签帧字形由 prewarm_chapter_view 事件帧预热。
 // ⚠panel=6 在 Menu 场景是书志页（draw.rs 顶部 dispatch）——两处场景隔离，本面板
@@ -2946,25 +2965,92 @@ const GUIDE_PANEL_LINES: [&str; 5] = [
 const GUIDE_PANEL_NOTE: &str = "主界面顶部金框横带常驻显示当前目标（现实界面）。";
 const GUIDE_TABS: [&str; 2] = ["当前目标", "章节书"];
 
-// 章节书全量字形预热（开启面板/切签事件帧一次；8 章文案+状态词+前情摘要，
-// 动态的只有前情摘要一行 &str 借用，稳态帧零栅格化零分配）
-fn prewarm_chapter_view(g: &Game) {
+// 章节书全量字形预热（开启面板/切签事件帧一次；8 章文案+状态词+奖励行+章间记事
+// 全段+进度串+前情摘要，动态的只有前情摘要一行 &str 借用，稳态帧零栅格化零分配）。
+// v1.16.9 改 pub：guide.rs exec_jump Book 臂横带跳转同口预热（任务钮/跳转共用单口）。
+pub fn prewarm_chapter_view(g: &Game) {
     prewarm_text("章节书", &[16]);
     prewarm_text("本章目标", &[16]);
+    prewarm_text("章间记事", &[14]);
     prewarm_text("前情提要", &[14]);
     for s in ["已了", "进行", "未启", "已毕", "待办"] {
         prewarm_text(s, &[14]);
+    }
+    // v1.16.9 目标行右进度串全量预热（prog_txt 静态查表：分母 1/2/3/5/6 × 分子
+    // 0..=分母——漏灌会复现首开 2048² 图集整图重传卡顿，charpanel.rs 同类事故教训）
+    for n in [1u32, 2, 3, 5, 6] {
+        for x in 0..=n {
+            prewarm_text(prog_txt(x, n), &[14]);
+        }
     }
     for ch in crate::data::CHAPTERS.iter() {
         prewarm_text(ch.num, &[14]);
         prewarm_text(ch.name, &[14, 16, 20]);
         prewarm_text(ch.intro, &[16]);
+        prewarm_text(ch.reward_note, &[14]); // 章成之礼行（含「道韵 +N」数字）
+        for seg in ch.lore.iter() {
+            prewarm_text(seg, &[14]); // 章间记事全段预热（可见性是纯显示推导）
+        }
         for gl in ch.goals.iter() {
             prewarm_text(gl.text, &[16]);
         }
     }
     if let Some(st) = g.meta.hist.last().and_then(|r| r.story.as_deref()) {
         prewarm_text(st, &[14]);
+    }
+}
+
+// 指引面板全量字形预热单口（v1.16.9 封装）：任务钮开面板与横带 Book 跳转共用。
+// 静态文案+当前目标行+两签+章节书视图（guide_tab 跨次开面板可能残留 1，一次灌齐
+// 防缺字——原任务钮块内联预热原样搬入）。
+pub fn prewarm_guide_panel(g: &Game) {
+    prewarm_text("道途指引", &[24]);
+    prewarm_text("当前目标", &[16]);
+    prewarm_text("修行之道", &[16]);
+    for s in GUIDE_PANEL_LINES.iter() {
+        prewarm_text(s, &[14]);
+    }
+    prewarm_text(GUIDE_PANEL_NOTE, &[14]);
+    let idx = crate::guide::guide_index(g).min(crate::guide::HINTS.len() as u8 - 1);
+    let hint = &crate::guide::HINTS[idx as usize];
+    prewarm_text(hint.text, &[20]);
+    if let Some(b) = hint.btn {
+        prewarm_text(b, &[18]);
+    }
+    for t in GUIDE_TABS.iter() {
+        prewarm_text(t, &[16]);
+    }
+    prewarm_chapter_view(g);
+}
+
+// v1.16.9 目标进度串静态查表：帧路径零分配红线（draw_chapter_view 无 format!），
+// 数字不进 format!——(分子,分母) 全组合枚举返回 &'static str，越界组合返回空串
+// 隐藏（防御臂，progress 单口已 clamp 不可达）。串集由 prewarm_chapter_view 全量预热。
+fn prog_txt(x: u32, n: u32) -> &'static str {
+    match (x, n) {
+        (0, 1) => "0/1",
+        (1, 1) => "1/1",
+        (0, 2) => "0/2",
+        (1, 2) => "1/2",
+        (2, 2) => "2/2",
+        (0, 3) => "0/3",
+        (1, 3) => "1/3",
+        (2, 3) => "2/3",
+        (3, 3) => "3/3",
+        (0, 5) => "0/5",
+        (1, 5) => "1/5",
+        (2, 5) => "2/5",
+        (3, 5) => "3/5",
+        (4, 5) => "4/5",
+        (5, 5) => "5/5",
+        (0, 6) => "0/6",
+        (1, 6) => "1/6",
+        (2, 6) => "2/6",
+        (3, 6) => "3/6",
+        (4, 6) => "4/6",
+        (5, 6) => "5/6",
+        (6, 6) => "6/6",
+        _ => "",
     }
 }
 
@@ -3003,8 +3089,9 @@ fn draw_guide_panel(g: &mut Game) {
     if let Some(b) = hint.btn {
         if button(170.0, 262.0, 240.0, 54.0, b, None, true) {
             crate::guide::exec_jump(g, hint.act);
-            // Shop/Bag 跳转已自置面板（坊市/行囊），其余跳转归位主界面
-            if g.panel == 6 {
+            // Shop/Bag 跳转已自置面板（坊市/行囊），其余跳转归位主界面；Book 例外：
+            // 面板内点「去书志」只切章节书签，面板保持开着（横带场景 Book 自置 panel=6）
+            if g.panel == 6 && hint.act != crate::guide::GuideAct::Book {
                 g.panel = 0;
             }
         }
@@ -3017,9 +3104,13 @@ fn draw_guide_panel(g: &mut Game) {
     txt(GUIDE_PANEL_NOTE, 170.0, 560.0, 14, C_DIM);
 }
 
-// v1.17.2 章节书视图：左列八章目录（状态词右上）+ 右栏本章引入/目标清单/前情提要。
+// v1.16.8 章节书视图：左列八章目录（状态词右上）+ 右栏本章引入/目标清单/前情提要。
 // 全静态 &str 分片绘制零 format!（帧路径零分配红线）；当前目标=首未了目标行金字高亮；
 // 达成位 meta.chap_done 由 check_chapters 边沿维护，此处纯读取。
+// v1.16.9 右栏加密度：目标行右 x/y 进度（prog_txt 静态查表）+ 章成之礼行（reward_note
+// 全静态字面量，与 reward 数字对应由表单测钉死）+ 章间记事（lore 逐段解锁，段 i 可见
+// ⟺ 已毕目标数 ≥ i，显示最新解锁段——纯显示推导零存档）。行高预算：intro ≤4 行
+// 222..334 / 目标 382..460 / 礼行 448 / 记事 508..548 / 提要 588..648，均在卡内。
 fn draw_chapter_view(g: &mut Game) {
     let cur = crate::game::Game::chapter_current(&g.meta);
     // 左列：章目 8 行（y188 起步进 46 → 末行 510，均在卡内且避开标题屏/底栏按钮带）
@@ -3040,17 +3131,18 @@ fn draw_chapter_view(g: &mut Game) {
             draw_rectangle(170.0, y + 20.0, 286.0, 2.0, C_GOLD);
         }
     }
-    // 右栏：本章引入 + 目标清单（当前目标=首未了行金字）+ 前情提要
+    // 右栏：本章引入 + 目标清单（当前目标=首未了行金字，行右 x/y 进度）+ 章成之礼
+    // + 章间记事 + 前情提要
     let ch = &crate::data::CHAPTERS[cur];
     txt(ch.num, 490.0, 188.0, 14, C_GOLD_D);
     txt(ch.name, 552.0, 184.0, 20, C_GOLD);
     wrap_draw(ch.intro, 490.0, 222.0, 16, 600.0, 28.0, C_TEXT);
-    draw_rectangle(490.0, 336.0, 610.0, 1.5, Color::from_rgba(96, 76, 130, 160));
-    txt("本章目标", 490.0, 350.0, 16, C_GOLD_D);
+    draw_rectangle(490.0, 340.0, 610.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    txt("本章目标", 490.0, 352.0, 16, C_GOLD_D);
     let mut cur_goal_hit = false; // 首未了目标行标记（金字高亮一次）
     for (j, gl) in ch.goals.iter().enumerate() {
         let met = crate::game::Game::chapter_goal_met(&g.meta, gl.pid);
-        let y = 382.0 + j as f32 * 38.0;
+        let y = 382.0 + j as f32 * 30.0;
         let (st, c) = if met {
             ("已毕", C_DIM)
         } else if !cur_goal_hit {
@@ -3060,13 +3152,34 @@ fn draw_chapter_view(g: &mut Game) {
             ("待办", C_TEXT)
         };
         txt(st, 490.0, y + 2.0, 14, c);
-        wrap_draw(gl.text, 540.0, y, 16, 560.0, 24.0, c);
+        wrap_draw(gl.text, 540.0, y, 16, 500.0, 24.0, c);
+        // 行右 x/y 进度（数值化目标才有值；静态查表串零分配，空串防御隐藏）
+        if let Some((x, n)) = crate::game::Game::chapter_goal_prog(&g.meta, gl.pid) {
+            let s = prog_txt(x, n);
+            if !s.is_empty() {
+                txt_r(s, 1096.0, y + 2.0, 14, c);
+            }
+        }
+    }
+    // 章成之礼行：达成奖励预告（全静态字面量，发放幂等性在 game.rs check_chapters）
+    txt(ch.reward_note, 490.0, 448.0, 14, C_GOLD_D);
+    draw_rectangle(490.0, 474.0, 610.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    // 章间记事：lore 段序号「其一/其二」自带静态文本，随进度翻段
+    if !ch.lore.is_empty() {
+        let met_n = ch
+            .goals
+            .iter()
+            .filter(|gl| crate::game::Game::chapter_goal_met(&g.meta, gl.pid))
+            .count();
+        let seg = ch.lore[met_n.min(ch.lore.len() - 1)];
+        txt("章间记事", 490.0, 486.0, 14, C_DIM);
+        wrap_draw(seg, 490.0, 508.0, 14, 610.0, 20.0, C_TEXT);
     }
     // 前情提要：旧稿档案最近一稿剧情摘要（&str 借用零分配；无稿/无摘要整块隐去）
     if let Some(st) = g.meta.hist.last().and_then(|r| r.story.as_deref()) {
-        draw_rectangle(490.0, 470.0, 610.0, 1.5, Color::from_rgba(96, 76, 130, 110));
-        txt("前情提要", 490.0, 484.0, 14, C_DIM);
-        wrap_draw(st, 490.0, 508.0, 14, 610.0, 22.0, C_TEXT);
+        draw_rectangle(490.0, 556.0, 610.0, 1.5, Color::from_rgba(96, 76, 130, 110));
+        txt("前情提要", 490.0, 566.0, 14, C_DIM);
+        wrap_draw(st, 490.0, 588.0, 14, 610.0, 20.0, C_TEXT);
     }
 }
 

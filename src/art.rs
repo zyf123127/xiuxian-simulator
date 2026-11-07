@@ -44,24 +44,106 @@ pub struct Art {
 // v1.9.24 懒加载槽：名字在构造期定死（避免每帧 format!），首取时解码一次并
 // 缓存结果（含"缺图 None"也缓存，防止每帧重查文件系统/内嵌表）。
 // Texture2D 是 Arc 句柄，get() 返回克隆零拷贝。
+// v1.16.9 三态化（立绘外置主刀）：wasm 侧 AI 立绘从 wasm 数据段外置到 TapTap 包
+// portraits/（18 张 696,587B，wasm raw −37.6%）。wasm get() 首用置 Loading 并起
+// 协程 XHR 异步拉图（先例 sounds.rs::start_async_load），Loading 期 get() 返 None
+// ——消费侧语义（v1.16.9 复审修后）：事件卡几何按 card.actor 锁定（draw.rs meeting
+// latched，图到位只换图不改几何），立绘盒走像素/剪影兜底（npc_pixel_tex/
+// comp_silhouette_tex，gallery.rs 同款），人物页/图鉴同槽剪影→AI 一次闪变（每会话
+// 每槽一次）；Err 写 Done(None)=调用方 or_else 恒像素/剪影兜底（与原缺图语义一致，
+// XHR 仅认 HTTP 200、CDN 抖动即兜底）。桌面侧保持同步解码收口同一三态槽（文件
+// 系统+内嵌兜底语义零变化，勘察⑦零回归面）。
+enum TexSlot {
+    Idle,
+    #[allow(dead_code)] // 仅 wasm 协程路径构造（桌面同步直通 Done，cfg 分叉固有）
+    Loading,
+    Done(Option<Texture2D>),
+}
+
 pub struct LazyTex {
     name: &'static str,
-    cell: Mutex<Option<Option<Texture2D>>>,
+    cell: Mutex<TexSlot>,
 }
 
 impl LazyTex {
     const fn new(name: &'static str) -> Self {
         Self {
             name,
-            cell: Mutex::new(None),
+            cell: Mutex::new(TexSlot::Idle),
         }
     }
+
     fn get(&self) -> Option<Texture2D> {
-        let mut g = self.cell.lock().unwrap();
-        if g.is_none() {
-            *g = Some(try_load_ovr(self.name));
+        // Done 快路径：克隆返回（无状态迁移）
+        {
+            let g = self.cell.lock().unwrap();
+            if let TexSlot::Done(t) = &*g {
+                return t.clone();
+            }
         }
-        g.as_ref().unwrap().clone()
+        #[cfg(target_arch = "wasm32")]
+        {
+            // Idle → Loading + 协程异步拉图（drop 锁再 spawn，防协程写回时再入死锁；
+            // 协程闭包只捕获 name（&'static str，EMBED 表定死），写回经 slot_by_name
+            // 全局查槽——引用捕获过不了 start_coroutine 的 'static 约束）。
+            // Loading → None（像素兜底帧）
+            let mut g = self.cell.lock().unwrap();
+            if matches!(&*g, TexSlot::Idle) {
+                *g = TexSlot::Loading;
+                drop(g);
+                let name = self.name;
+                let task = macroquad::experimental::coroutines::start_coroutine(async move {
+                    let t = load_portrait_wasm(name).await;
+                    if let Some(slot) = slot_by_name(name) {
+                        if let Ok(mut g) = slot.cell.lock() {
+                            *g = TexSlot::Done(t);
+                        }
+                    }
+                });
+                std::mem::forget(task); // 注册进 macroquad 全局轮询表即可（sounds.rs 先例）
+            }
+            None
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // 桌面：同步解码一次收口 Done（文件系统→内嵌兜底，原语义逐字节等价）
+            let mut g = self.cell.lock().unwrap();
+            if matches!(&*g, TexSlot::Idle) {
+                *g = TexSlot::Done(try_load_ovr(self.name));
+            }
+            if let TexSlot::Done(t) = &*g {
+                return t.clone();
+            }
+            None
+        }
+    }
+}
+
+// v1.16.9：协程写回查槽——三组 LazyTex 数组统一按 name 定位（name 构造期定死恒唯一）。
+// 仅 wasm 协程路径消费（桌面同步收口不经过此口，cfg 收窄消 dead_code）
+#[cfg(target_arch = "wasm32")]
+fn slot_by_name(name: &str) -> Option<&'static LazyTex> {
+    let a = art();
+    a.portrait_ovr
+        .iter()
+        .chain(a.npc_ovr.iter())
+        .chain(a.comp_ovr.iter())
+        .find(|s| s.name == name)
+}
+
+// v1.16.9 wasm 立绘异步加载：miniquad fs 通道 = XHR arraybuffer 不校验 MIME（wasm
+// 本体同通道已证真机可达）；?v= 查询串与 index.html GAME_VER 同源（CARGO_PKG_VERSION，
+// pack_taptap.py 版本一致性断言兜底）。load_texture 不自动设过滤，Ok 后手动补 Linear
+//（对齐 tex_from_bytes 口径）。
+#[cfg(target_arch = "wasm32")]
+async fn load_portrait_wasm(name: &'static str) -> Option<Texture2D> {
+    let url = format!("portraits/{}.png?v={}", name, env!("CARGO_PKG_VERSION"));
+    match load_texture(&url).await {
+        Ok(t) => {
+            t.set_filter(FilterMode::Linear);
+            Some(t)
+        }
+        Err(_) => None, // 404/网络抖动 → 永久像素兜底（与原缺图语义一致）
     }
 }
 
@@ -110,6 +192,9 @@ fn try_load_ovr(name: &str) -> Option<Texture2D> {
     embedded_bytes(name).map(tex_from_bytes)
 }
 
+// v1.16.9：内嵌字节解码入口随内嵌表收窄为桌面专用（wasm 侧走 load_portrait_wasm
+// 的 load_texture 通道，过滤在 Ok 臂手动补 Linear 同口径）
+#[cfg(not(target_arch = "wasm32"))]
 fn tex_from_bytes(bytes: &[u8]) -> Texture2D {
     let t = Texture2D::from_file_with_format(bytes, None);
     t.set_filter(FilterMode::Linear);
@@ -120,6 +205,10 @@ fn tex_from_bytes(bytes: &[u8]) -> Texture2D {
 // 三通道查找：桌面 = 文件夹（CWD/exe 同级，换图免重编译）→ 内嵌兜底（发布版
 // 单独 exe 自带立绘）；wasm 恒用内嵌。
 // v1.15.5：npc_senior（宁清霜）/ npc_drunk（醉道人）补图入列，18 张全齐。
+// v1.16.9 立绘外置：整表（fn+EMBED 本体）cfg 收窄为桌面专用——wasm 侧改走
+// portraits/ 外置文件（LazyTex 协程拉图），include_bytes 必须 cfg 包住表本体，
+// 只 cfg 调用方字节照样进 wasm 数据段（勘察④）。
+#[cfg(not(target_arch = "wasm32"))]
 fn embedded_bytes(name: &str) -> Option<&'static [u8]> {
     const EMBED: &[(&str, &[u8])] = &[
         (
@@ -169,11 +258,6 @@ fn embedded_bytes(name: &str) -> Option<&'static [u8]> {
         .iter()
         .find(|(n, _)| *n == name)
         .map(|(_, b)| *b)
-}
-
-#[cfg(target_arch = "wasm32")]
-fn try_load_ovr(name: &str) -> Option<Texture2D> {
-    embedded_bytes(name).map(tex_from_bytes)
 }
 
 // v1.6.0 C 仇敌换图：地图底图缓存（region, seed) → Texture2D。
@@ -587,7 +671,7 @@ fn build_relic_icon(idx: usize) -> Texture2D {
     g.to_texture()
 }
 
-// v1.17.1 加载小刀：boot 唯一大像素项降采样——640×360 生成（像素写省 75%），
+// v1.16.7 加载小刀：boot 唯一大像素项降采样——640×360 生成（像素写省 75%），
 // 消费侧 draw_bg 传 dest_size 1280×720 由既有 set_filter(Linear) 放大（Linear
 // 先例 art.rs:115/295）。bg 是渐变夜空+山影剪影非像素细节：星星坐标随域减半
 // 位移、月晕环带宽度减半（勘察 risk② 预期，真机截图验收口径），远景观感不变
@@ -719,7 +803,7 @@ pub fn map_river_y(x: f32) -> f32 {
 // LCG 种子由调用方传入，林木避让坐标经 data::node_xy（含主题抖动）。
 // 主题 0 + 默认种子 = v1.5.0 逐值路径（LCG 调用序列保持一致，像素级等价）。
 // v1.16.8 加载小刀②：进世界同步底图降采样 1264×480→632×240（像素写 606K→151K，
-// −75%，照 v1.17.1 build_bg 先例 art.rs:589-594）。坐标纪律：消费端世界不变——
+// −75%，照 v1.16.7 build_bg 先例 art.rs:589-594）。坐标纪律：消费端世界不变——
 // world.rs:554 dest_size 仍传 1264×480（Linear 放大，纹理 art.rs:845 恒 Linear），
 // map_river_y 保持 1264 图像系口径（world.rs:578 水面波光零改动），本函数内全部
 // 特征坐标按「源 px = 图像 px/2」映射：山脊带 base/amp/带宽减半、河心曲线采样

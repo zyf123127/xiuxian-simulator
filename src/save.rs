@@ -110,7 +110,7 @@ pub fn save_text(m: &Meta) -> String {
     s.push_str(&format!("blv={}\n", m.feng_blv));
     // v1.16.0 交游图鉴：十同页人历世结缘次数（旧档缺键 → [0;10] + 当前道侣位补 1，见 parse 尾）
     s.push_str(&format!("gbd={:?}\n", m.comp_bonds));
-    // v1.17.2 章节书达成位掩码 ch=（bit i = CHAPTERS[i] 已了；缺键/坏值 → 0，载入帧
+    // v1.16.8 章节书达成位掩码 ch=（bit i = CHAPTERS[i] 已了；缺键/坏值 → 0，载入帧
     // 按事实静默补齐零迁移）与系统初见闩 sy=（bit0=周天首开 bit1=兑换首通；缺键 → 0）。
     // 独立成行置于 h=/hq= 旧稿块之前——勿插 h=/hq= 之间（文件序约定：hq= 挂最近一条 h=）
     s.push_str(&format!("ch={}\n", m.chap_done));
@@ -131,7 +131,7 @@ pub fn save_text(m: &Meta) -> String {
             r.comp,
             r.cause
         ));
-        // v1.17.1 本世剧情摘要：additive 平行行，紧跟其 h=（解析按「hq 挂最近一条
+        // v1.16.7 本世剧情摘要：additive 平行行，紧跟其 h=（解析按「hq 挂最近一条
         // h=」的文件序约定；缺 story 不写行——旧档旧行格式逐字节不变）
         if let Some(st) = &r.story {
             s.push_str(&format!("hq={}
@@ -384,7 +384,7 @@ fn parse_save(text: &str) -> Meta {
                 }
                 has_gbd = true;
             }
-            // v1.17.2 章节书达成位掩码（缺键/坏值 → 0，照 ed= 先例零迁移；载入帧
+            // v1.16.8 章节书达成位掩码（缺键/坏值 → 0，照 ed= 先例零迁移；载入帧
             // Game::new 按事实静默补齐——位不会被洗掉只会补上）；系统初见闩（缺键 → 0）
             "ch" => m.chap_done = v.trim().parse().unwrap_or(0),
             "sy" => m.sys_seen = v.trim().parse().unwrap_or(0),
@@ -415,7 +415,7 @@ fn parse_save(text: &str) -> Meta {
                             255
                         },
                         cause: p[8].trim().to_string(),
-                        story: None, // v1.17.1 hq= 平行行补挂（缺行 → None 零迁移）
+                        story: None, // v1.16.7 hq= 平行行补挂（缺行 → None 零迁移）
                     });
                 }
             }
@@ -429,7 +429,7 @@ fn parse_save(text: &str) -> Meta {
                 has_neme = !neme_title.is_empty();
             }
             // v1.12.0 留行批注：note= 行（空串/缺键 → None；缺键回退照 zt= 先例）
-            // v1.17.1 本世剧情摘要：hq= 平行行挂最近一条 h=（文件序约定：hq 紧跟
+            // v1.16.7 本世剧情摘要：hq= 平行行挂最近一条 h=（文件序约定：hq 紧跟
             // 其 h=）。hist 空（手改档错位）则整行丢弃——不影响 9 段主档；坏值/空串
             // 不置 story（保持 None 渲染跳过）
             "hq" => {
@@ -1054,7 +1054,7 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
         assert_eq!(m2.hist[1].cause, "命殒于外 一身道果散入天地", "cause 空格余量不截断");
     }
 
-    // v1.17.1 剧情摘要 hq= 平行行：回环（紧跟 h= → 挂对一条）、旧行缺 hq → None、
+    // v1.16.7 剧情摘要 hq= 平行行：回环（紧跟 h= → 挂对一条）、旧行缺 hq → None、
     // hist 空错位丢弃、hq 在两条 h= 之间挂前一条（文件序约定）
     #[test]
     fn hq_roundtrip_missing_and_misplaced() {
@@ -1125,7 +1125,7 @@ h=1 2 3 50.0 40 100 800 255 乙
         assert_eq!(m.hist[4].cause, "死因6");
     }
 
-    // ---------------- v1.17.2 章节书：ch=/sy= 回环 / 旧档缺键 0 / 坏值 0 ----------------
+    // ---------------- v1.16.8 章节书：ch=/sy= 回环 / 旧档缺键 0 / 坏值 0 ----------------
 
     // ch=（章节达成位掩码）/ sy=（系统初见闩）回环；缺键零迁移；坏值静默回 0。
     // ch= 独立成行置于 h= 块之前（文件序约定：勿插 h=/hq= 之间）

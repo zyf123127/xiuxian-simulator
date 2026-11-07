@@ -222,7 +222,7 @@ pub fn wrap_draw(s: &str, x: f32, y: f32, size: u16, maxw: f32, line_h: f32, c: 
     })
 }
 
-// v1.17.1 版式承载判定：行数查询（与 wrap_draw 走同一缓存——命中零分配，新文案
+// v1.16.7 版式承载判定：行数查询（与 wrap_draw 走同一缓存——命中零分配，新文案
 // 首帧入缓存一次分配；仅 modal 卡绘制期调用，非逐字符路径）
 pub fn wrap_lines(s: &str, size: u16, maxw: f32) -> usize {
     WRAP_CACHE.with(|cache| {

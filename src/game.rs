@@ -30,28 +30,50 @@ pub const SIM_SPEEDS: [f32; 4] = [0.0, 0.16, 0.06, 0.0]; // 每年间隔秒；0 
 // 频率下约 46 年不见同卡）；可用池小于 K（低境界）由 sim_event 退化分支清池兜底
 pub const RECENT_EVENT_K: usize = 6;
 
-// v1.17.0 连锁剧情：置链后的「保质期」预算（按事件年计）。直取成功后由下一段的
+// v1.16.9 老年/将尽专属事件（id 88/89）入池阈值：寿元余量 ≤10 载才入池（模拟侧
+// Sim.lifespan - Sim.age）。时序自洽：sim_year 内事件在寿元检查前结算（age+=1 →
+// sim_event → 宿敌 roll → 寿元检查 sim_die），「最后一载弹了愿卡、抉择后自然归真」
+// 成立；modal 冻结模拟，卡面期无寿元推进。措辞纪律：门控是「当次入池判定」，弹卡
+// 后寿元再变化不撤卡（无面镜客 -10/仙人赠礼 +50 可跨档），文案按「大限将至」措辞
+// 而非精确年数。置 RECENT_EVENT_K 旁照同批常量惯例
+pub const ELDER_LEFT_YEARS: f64 = 10.0;
+
+// v1.16.7 连锁剧情：置链后的「保质期」预算（按事件年计）。直取成功后由下一段的
 // 置链臂重置；若链态异常（直取连续失败）耗尽即静默弃链——保险丝，正常一条链至多
 // 2 次推进、永不触发
 pub const CHAIN_TTL: u8 = 8;
 
-// v1.17.0 道侣同行事件白名单：sim.companion 存在才入池（与 sect/lingmai 门闩
-// 同点结算，见 sim_event_weights）；链内段 45/46/48/49/51/52 与 v1.17.3 链内段
+// v1.16.7 道侣同行事件白名单：sim.companion 存在才入池（与 sect/lingmai 门闩
+// 同点结算，见 sim_event_weights）；链内段 45/46/48/49/51/52 与 v1.16.8 链内段
 // 77/78/80/81 用 EVENTS 表权重 0 表达「仅链内出现」，无需代码特判
 pub const COMPANION_EVENTS: [usize; 6] = [53, 54, 55, 82, 83, 84];
 
-// v1.17.0 置链臂 special 槽位段：20..=31（apply_eff 链裁决据此区分「重写链态」
-// 与「本次抉择即链终局」）。v1.17.3 续编：28/29=链4（灯楼谜约）两段推进、
+// v1.16.7 置链臂 special 槽位段：20..=31（apply_eff 链裁决据此区分「重写链态」
+// 与「本次抉择即链终局」）。v1.16.8 续编：28/29=链4（灯楼谜约）两段推进、
 // 30/31=链5（傩面还愿）双分支；检定臂自 32 起（32 青灯三问/33 墨叟一问/
 // 34 拦问纸人）——与置链窗口不重叠，落链上即链终局的裁决语义不变
 pub const CHAIN_SPECIAL_LO: u8 = 20;
 pub const CHAIN_SPECIAL_HI: u8 = 31;
 
-// v1.17.1 连锁剧情链名（链完成大事记「{名}·缘了」用；下标=链 id-1）。
-// v1.17.3 扩五：链4 灯楼谜约 / 链5 傩面还愿
-pub const CHAIN_NAMES: [&str; 5] = ["货郎奇缘", "古碑遗篇", "沉墨遗匣", "灯楼谜约", "傩面还愿"];
+// v1.16.9 链6（血债血偿）置链臂第二段窗口 35..=36：20..=31 已满、32..=34 是检定臂
+// 刻意窗外（抬 CHAIN_SPECIAL_HI 会吞检定臂「落臂即清链」裁决），故链6 续编独立窗口
+// ——apply_eff 链裁决改双段判定（两窗之外落链即终局，语义不变）
+pub const CHAIN6_SPECIAL_LO: u8 = 35;
+pub const CHAIN6_SPECIAL_HI: u8 = 36;
 
-// v1.17.1 旧稿剧情摘要：大事记尾 1-2 条剥「N岁，」前缀拼接 ≤28 字
+// v1.16.7 连锁剧情链名（链完成大事记「{名}·缘了」用；下标=链 id-1）。
+// v1.16.8 扩五：链4 灯楼谜约 / 链5 傩面还愿；v1.16.9 扩六：链6 血债血偿
+//（宿敌剧情化复仇线——真斩杀仍走 sim_neme/寻仇两口，链只述「探踪/设伏/夺积」）
+pub const CHAIN_NAMES: [&str; 6] = [
+    "货郎奇缘",
+    "古碑遗篇",
+    "沉墨遗匣",
+    "灯楼谜约",
+    "傩面还愿",
+    "血债血偿",
+];
+
+// v1.16.7 旧稿剧情摘要：大事记尾 1-2 条剥「N岁，」前缀拼接 ≤28 字
 //（纯函数可测；无前缀条目原样保留——「与你相伴至最后一刻，含笑而逝」不被误剥）
 pub fn story_from_highlights(hs: &[String]) -> Option<String> {
     let mut parts: Vec<&str> = Vec::new();
@@ -250,7 +272,7 @@ impl Eff {
                 16 => "蛰伏蓄势",
                 17 => "结为道侣",
                 18 => "登擂夺魁",
-                // v1.17.0 置链臂与新检定臂副标（选项按钮下一行式摘要）
+                // v1.16.7 置链臂与新检定臂副标（选项按钮下一行式摘要）
                 4 => "受碑文三问",
                 5 => "得剑同舟",
                 6 => "陨铁试炼",
@@ -263,7 +285,7 @@ impl Eff {
                 25 => "续·匣底真迹",
                 26 => "镜中赌命",
                 27 => "闯灵潮漩心",
-                // v1.17.3 置链臂续编（链4/链5）与检定臂（32..=34）副标
+                // v1.16.8 置链臂续编（链4/链5）与检定臂（32..=34）副标
                 28 => "续·灯下问答",
                 29 => "续·青灯问藏",
                 30 => "续·代跳傩戏",
@@ -271,6 +293,9 @@ impl Eff {
                 32 => "受青灯三问",
                 33 => "受墨叟一问",
                 34 => "拦问纸人",
+                // v1.16.9 链6（血债血偿）第二段窗口副标
+                35 => "续·仇踪暗访",
+                36 => "续·乘虚夺积",
                 _ => "机缘",
             };
             parts.push(s.to_string());
@@ -311,7 +336,7 @@ pub struct EventCard {
 
     pub actor: Option<CardActor>, // v1.16.3：卡面主角立绘（None=无人物卡，原版式）
 
-    // v1.17.1 剧情演出·稀有/链段标记（纯会话态随卡生灭，不进存档）：
+    // v1.16.7 剧情演出·稀有/链段标记（纯会话态随卡生灭，不进存档）：
     // rare=EVENTS 权重 w∈1..=RARE_W（描边紫）；stage=链段进度 (当前段,总段)
     //（描边青+标题右侧阶段徽标，链首段 50 两者兼有时链段优先）
     pub rare: bool,
@@ -605,10 +630,10 @@ pub struct Meta {
 
     pub comp_bonds: [u8; 10], // v1.16.0 交游图鉴：十同页人历世结缘次数（键 gbd=；0=未识，saturating 封顶 255；下标即 COMPANION_NAMES 下标）
 
-    pub chap_done: u32, // v1.17.2 章节书：主线八章达成位掩码（键 ch=；bit i = CHAPTERS[i] 已了；
+    pub chap_done: u32, // v1.16.8 章节书：主线八章达成位掩码（键 ch=；bit i = CHAPTERS[i] 已了；
                         // 旧档缺键/坏值 → 0，载入帧按事实静默补齐零迁移——老玩家补齐不重播横幅）
 
-    pub sys_seen: u8, // v1.17.2 系统初见闩（键 sy=；bit0=周天首开 bit1=点数兑换首通；
+    pub sys_seen: u8, // v1.16.8 系统初见闩（键 sy=；bit0=周天首开 bit1=点数兑换首通；
                       // 一次性戏文的边沿闩，推导不出故 additive 持久；缺键 → 0 零迁移）
 
     pub hist: Vec<SimRecord>, // v1.16.5 旧稿档案：近 5 次模拟结算快照（键 h= 每条一行；旧档缺键=空表零迁移，超量解析端截断）
@@ -762,7 +787,7 @@ pub struct SimResult {
 
     pub comp: Option<String>, // v1.6.0 D：道侣（遗泽 idx 8 承接现实）
     pub comp_fav: i32,        // v1.6.0 D：模拟一世落幕时的道侣好感
-    pub story: Option<String>, // v1.17.2 本稿剧情摘要（草稿退回页一行；会话态不进存档——
+    pub story: Option<String>, // v1.16.8 本稿剧情摘要（草稿退回页一行；会话态不进存档——
                                // 持久痕迹在 hist 同源的 SimRecord.story hq= 行，此处与
                                // sim_die 同时赋值零二次拼接）
 }
@@ -780,7 +805,7 @@ pub struct SimRecord {
     pub stones: i64,      // 终局灵石
     pub comp: u8,         // 道侣下标（255=无）
     pub cause: String,    // 结局/死因全文（代码字面量，无换行）
-    // v1.17.1 本世剧情摘要（链完成/稀有遭遇等关键剧情拼接 ≤28 字；save 平行行
+    // v1.16.7 本世剧情摘要（链完成/稀有遭遇等关键剧情拼接 ≤28 字；save 平行行
     // hq= 挂载，旧档缺键 → None 渲染跳过零位移，additive-only 零迁移）
     pub story: Option<String>,
 }
@@ -946,7 +971,7 @@ pub struct Game {
 
     pub guide_last: Option<u8>, // v1.16.0 道途一念：上次绘制的指引下标（变更帧一次性预热；纯会话态不进存档，指引由状态纯推导零存档键）
 
-    pub guide_tab: u8, // v1.17.2 章节书：道途指引面板页签 0当前目标 1章节书（会话态不进存档，照 help_tab 口径）
+    pub guide_tab: u8, // v1.16.8 章节书：道途指引面板页签 0当前目标 1章节书（会话态不进存档，照 help_tab 口径）
 
     pub zoom_art: Option<ZoomArt>, // v1.16.1 立绘鉴赏覆层（模态独占输入；不进存档）
 
@@ -987,7 +1012,7 @@ pub struct Game {
 
     pub recent_events: Vec<usize>, // v1.16.5 防重复排除池：本世最近 K 次抽过的模拟事件 id（瞬态，不进存档；launch_sim 清零）
 
-    // v1.17.0 连锁剧情：Some((链id, 下段id, ttl))——下段 0=首段卡在手待分支。
+    // v1.16.7 连锁剧情：Some((链id, 下段id, ttl))——下段 0=首段卡在手待分支。
     // 纯会话态不进存档；launch_sim / quit_sim_redraft 清零，跨世绝不泄漏
     pub chain: Option<(u8, u8, u8)>,
 
@@ -1291,7 +1316,7 @@ impl Game {
     pub fn new(audio: crate::sounds::Audio) -> Self {
         let mut meta = save::load();
 
-        // v1.17.2 章节书：旧档载入帧按事实静默补齐达成位（零迁移零横幅——
+        // v1.16.8 章节书：旧档载入帧按事实静默补齐达成位（零迁移零横幅——
         // 老玩家开章节书即见已了章，此后只有新达成才走 check_chapters 边沿演出）
         meta.chap_done |= Self::chapter_done_mask(&meta);
 
@@ -1675,7 +1700,7 @@ impl Game {
         // v1.8.0 C5：新世开局即处当前区域（新档为东境青云）——补记到访
         self.visit_region(true);
 
-        // v1.17.2 章节书：转生入世事实翻转点（首世=第一章转生目标边沿）
+        // v1.16.8 章节书：转生入世事实翻转点（首世=第一章转生目标边沿）
         self.check_chapters();
 
         self.sync_save();
@@ -1691,7 +1716,7 @@ impl Game {
         self.meta.sim_points += self.sim_cost();
         self.sim = None;
         self.modal = None;
-        self.chain = None; // v1.17.0 重掷清链（未竟之缘随镜面散去）
+        self.chain = None; // v1.16.7 重掷清链（未竟之缘随镜面散去）
         self.log("轮回镜轻颤，此番推演未竟，点数已还。", C_CYAN);
         self.start_draft();
     }
@@ -1913,7 +1938,7 @@ impl Game {
         self.ending_anim = 0.6;
         self.ending_show = Some(e);
         self.play(crate::sounds::Which::Page);
-        // v1.17.2 章节书：落款成书事实翻转点（第八章边沿；位掩码幂等，书志重读不复播）
+        // v1.16.8 章节书：落款成书事实翻转点（第八章边沿；位掩码幂等，书志重读不复播）
         self.check_chapters();
         self.sync_save();
     }
@@ -2089,7 +2114,7 @@ impl Game {
         // v1.16.5 防重复排除池随新稿清零（「本世最近 K 次」的口径就是一世）
         self.recent_events.clear();
 
-        // v1.17.0 连锁剧情随新稿清零（剧情链是一世之缘，跨世绝不泄漏）
+        // v1.16.7 连锁剧情随新稿清零（剧情链是一世之缘，跨世绝不泄漏）
         self.chain = None;
 
         self.sim = Some(s);
@@ -2121,7 +2146,7 @@ impl Game {
 
         self.play(crate::sounds::Which::Ding);
 
-        // v1.17.2 章节书：开卷首模拟事实翻转点（第一章达成边沿）
+        // v1.16.8 章节书：开卷首模拟事实翻转点（第一章达成边沿）
         self.check_chapters();
     }
 
@@ -3044,7 +3069,7 @@ impl Game {
                     "封卷牒归档，讨牒 6/6！六吏职牒齐聚，道韵+166——文狱闻你名而却步（遭遇减半），可赴问笔终战。",
                     C_GOLD,
                 );
-                // v1.17.1 大事记联动：模拟世中封卷牒归档入本世剧情（现实侧 sim=None
+                // v1.16.7 大事记联动：模拟世中封卷牒归档入本世剧情（现实侧 sim=None
                 // 不记——story 数据源是 sim highlights）
                 if let Some(s) = self.sim.as_mut() {
                     s.highlights
@@ -3052,7 +3077,7 @@ impl Game {
                 }
             }
         }
-        // v1.17.2 章节书：讨牒事实翻转点（第四章边沿；while 补发可一帧多牒，
+        // v1.16.8 章节书：讨牒事实翻转点（第四章边沿；while 补发可一帧多牒，
         // 边沿检测按位掩码幂等，多章同了时横幅后写胜、日志逐章留痕）
         self.check_chapters();
     }
@@ -3131,13 +3156,13 @@ impl Game {
         } else {
             self.log(format!("初至【{}】，山河图志录下你的足迹。", tname), C_GOLD);
         }
-        // v1.17.2 章节书：五域到访事实翻转点（第五章边沿）
+        // v1.16.8 章节书：五域到访事实翻转点（第五章边沿）
         self.check_chapters();
     }
 
     pub fn sim_event(&mut self) {
 
-        // v1.17.0 连锁剧情：链活跃 → 下段已定则跳过轮盘直取下段（链内段在 EVENTS
+        // v1.16.7 连锁剧情：链活跃 → 下段已定则跳过轮盘直取下段（链内段在 EVENTS
         // 表权重 0 恒不入正常池）。直取即消费下段（置 0，防本段卡臂异常时死循环
         // 重复出卡）；照常入 K 窗口，先 retain 去重防「同世复走同链」在窗口内叠出
         // 重复 id。ttl 是保险丝（耗尽/链态异常 → 静默弃链，落正常轮盘）
@@ -3221,7 +3246,7 @@ impl Game {
     }
 
     // v1.16.5 抽取权重一行一算（sim_event 退化重算复用；仅事件年调用，非帧路径）
-    // v1.17.0 增 comp：道侣同行事件白名单门控（sim.companion 存在才入池）
+    // v1.16.7 增 comp：道侣同行事件白名单门控（sim.companion 存在才入池）
     fn sim_event_weights(
         &self,
         luck: f32,
@@ -3242,17 +3267,37 @@ impl Game {
                 ww = 0.0;
             }
 
-            // v1.17.0 道侣同行事件：无伴不入池（白名单门控，与 sect/lingmai 同点）
+            // v1.16.7 道侣同行事件：无伴不入池（白名单门控，与 sect/lingmai 同点）
             if !comp && COMPANION_EVENTS.contains(&id) {
                 ww = 0.0;
             }
 
-            // v1.17.3 章节联动事件：主线章节达成（施工单1章节书系统 chap_done 位掩码）
+            // v1.16.8 章节联动事件：主线章节达成（施工单1章节书系统 chap_done 位掩码）
             // 才入池——模拟侧的章节涟漪，照 sect/lingmai/blank_used 同点结算：
             // 74 血仇余响 = 第三章·血仇得报已了（bit2）；75 同页灯约 = 第六章·
             // 同页之缘已了（bit5）且有伴（宿命双门控——无伴时该题不可述）
             if (id == 74 && self.meta.chap_done & (1 << 2) == 0)
                 || (id == 75 && (self.meta.chap_done & (1 << 5) == 0 || !comp))
+            {
+                ww = 0.0;
+            }
+
+            // v1.16.9 宿敌剧情化（链6 首段 85 仇踪入册）：有宿敌才入池——血仇线
+            // 无宿敌不可述（照 74/75 门控同点；85 臂文案读 meta.neme 已自兜底）。
+            // 只读 meta.neme 既有字段，零新增存档键
+            if id == 85 && self.meta.neme.is_none() {
+                ww = 0.0;
+            }
+
+            // v1.16.9 老年/将尽专属（88 灯下了愿 / 89 薪火相托）：寿元余量
+            // ≤ ELDER_LEFT_YEARS 才入池——池内原零覆盖的终章题材。读 self.sim
+            // 既有字段（照 blank_used/chap_done 读 self 态先例）；sim=None 帧
+            // （weights 只被 sim_event 调用、sim 恒 Some）防御归零
+            if (id == 88 || id == 89)
+                && !self
+                    .sim
+                    .as_ref()
+                    .map_or(false, |s| s.lifespan - s.age <= ELDER_LEFT_YEARS)
             {
                 ww = 0.0;
             }
@@ -4109,7 +4154,7 @@ impl Game {
                 card.opts.push(("只探外洞".into(), e2));
             }
 
-            // ---------- v1.17.0 扩池 15 条（id 44..=58）----------
+            // ---------- v1.16.7 扩池 15 条（id 44..=58）----------
             // 三条连锁剧情（44..=46 货郎 / 47..=49 古碑 / 50..=52 墨匣）：首段入
             // 正常池，弹卡即置链（下段 0=待分支，抉择经 special 20..=25 推进）；
             // 链内段标题带「·续」。道侣同行 53..=55（COMPANION_EVENTS 门控）挂
@@ -4120,7 +4165,7 @@ impl Game {
                 // draw.rs 邂逅版式；npc_tex(1) 为 None 时自动落旧版式，可接受）
                 card.title = "货郎奇遇".into();
                 card.actor = Some(CardActor::Npc(1));
-                // v1.17.1 两段文案（邂逅版式 5 行内）：叙述与叫卖分段，段间 8px
+                // v1.16.7 两段文案（邂逅版式 5 行内）：叙述与叫卖分段，段间 8px
                 card.text = "山道拐角，万宝楼外柜的货郎拦住你，担子里一支墨锭透着幽光，隐有灵气盘旋。\n「引灵墨，观道友有缘——先拿去用，账回头再算。」".into();
                 let g = (60.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -4172,7 +4217,7 @@ impl Game {
             47 => {
                 // 链2 首段：雾中古碑（文案基因承 id32 古碑残字，为另一方碑）
                 card.title = "古碑残篇".into();
-                // v1.17.1 两段文案共 4 行 → 首个走加高版式（600×440）的剧情卡
+                // v1.16.7 两段文案共 4 行 → 首个走加高版式（600×440）的剧情卡
                 card.text = "雾锁的山坳立着一方丈高古碑，苔痕不生，碑面无字——山风过处，隐有金石摩挲之声。\n你走近时，指尖竟渗出墨意，在碑上洇出半个「行」字，如有人隔世落笔。".into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.06;
@@ -4221,7 +4266,7 @@ impl Game {
             50 => {
                 // 链3 首段：江底墨匣
                 card.title = "江底墨匣".into();
-                // v1.17.1 两段文案共 4 行 → 加高版式
+                // v1.16.7 两段文案共 4 行 → 加高版式
                 card.text = "渡舟行至江心，你失足落水。呛了几口江水，指尖却触到江底一只冰凉的铜匣，匣身纹路温润如墨玉。\n匣面錾着「沉墨候主」四字——指腹刚碰到，匣身微微发热，湍急的江水竟在你四周静了下来。".into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
@@ -4371,7 +4416,7 @@ impl Game {
             57 => {
                 // 稀有：无面镜客（w1；special26 赌命臂 / fight 碎镜）
                 card.title = "无面镜客".into();
-                // v1.17.1 两段文案共 4 行 → 加高版式（镜中怪谈的节奏感靠分段撑）
+                // v1.16.7 两段文案共 4 行 → 加高版式（镜中怪谈的节奏感靠分段撑）
                 card.text = "荒庙断壁前立着一面古镜，镜中人没有脸。它抬手，你也抬手；它偏头，你也偏头。\n而后它开口，用的正是你的声音：「赌一次么？赢，得我半生修为；输，留十年寿数。」".into();
                 let mut e1 = Eff::new();
                 e1.special = 26;
@@ -4396,7 +4441,7 @@ impl Game {
                 card.opts.push(("外围引气".into(), e2));
             }
 
-            // ---------- v1.17.3 扩池 26 条（id 59..=84）----------
+            // ---------- v1.16.8 扩池 26 条（id 59..=84）----------
             // 普通 13 条（59..=71）无 actor → 600 版式正文 ≤3 行（单段 ≤50 字/两段
             // 合计 ≤96 字）；稀有 2 条（72..=73，w≤2，检定臂 special33/34）；章节联动
             // 2 条（74..=75，入池门控在 sim_event_weights 读 chap_done 位——75 有伴
@@ -4700,7 +4745,7 @@ impl Game {
                 // 链4 首段：灯楼谜约（宁清霜脸作灯楼主人；首段建链待分支）
                 card.title = "灯楼谜约".into();
                 card.actor = Some(CardActor::Npc(2));
-                // v1.17.1 两段文案（邂逅版式 5 行内）：谜面独立成段
+                // v1.16.7 两段文案（邂逅版式 5 行内）：谜面独立成段
                 card.text = "上元灯会，临水灯楼悬一盏无火自明的青灯，楼主人立灯下：「青灯有主三十载，只候一个能对上灯谜的人。」\n谜面只有一行小字：「写它的人不在了，读它的人还没来。」".into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.06;
@@ -4888,11 +4933,295 @@ impl Game {
                 ];
                 card.opts.push(("各自静修".into(), e2));
             }
+            // ---------- v1.16.9 扩池 15 条（id 85..=99）----------
+            // 链6 血债血偿（85..=87）：宿敌剧情化复仇线——85 有宿敌才入池
+            //（sim_event_weights 门控读 meta.neme），动态文案走 Nemes::full()
+            // 既有格式化单口勿手拼；86/87 为链内段（权重 0），宿敌链中途可能被
+            // sim_neme/寻仇反杀（neme.take()），具名走 Some、None 兜底泛称。
+            // ⚠结算只用 Eff 通用字段：宿敌胜率公式已有 sim_neme:2937 与现实
+            // revenge_p_of:7268 两处且注释明令勿三写，本链只述「探踪/设伏/夺积」，
+            // 真对决仍走既有两口
+            85 => {
+                // 链6 首段：仇踪入册（动态宿敌名）
+                card.title = "仇踪入册".into();
+                let nfull = self
+                    .meta
+                    .neme
+                    .as_ref()
+                    .map(|n| n.full())
+                    .unwrap_or_else(|| "删你字的血仇之敌".to_string());
+                card.text = format!(
+                    "茶棚歇脚，两个行脚商人压着嗓子议论{}——「近来招兵买马，看样子要办大事。」你摩挲着方印：血仇的名字，从来不需要想起。",
+                    nfull
+                );
+                let mut e1 = Eff::new();
+                e1.dao = 1.0;
+                e1.special = 35; // 置链：→86 仇踪暗访
+                e1.msg = vec!["你不动声色，把行踪记入旧册——来日方长。道心+1".into()];
+                card.opts.push(("循踪暗记".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec!["血仇宜缓不宜急，你连夜收拾行装避开风口。气运+1".into()];
+                card.opts.push(("当夜就走".into(), e2));
+                self.chain = Some((6, 0, CHAIN_TTL)); // 首段建链：待分支
+            }
+            86 => {
+                // 链6 中段（仅链内）：探虚实
+                card.title = "仇踪暗访·续".into();
+                let nname = self
+                    .meta
+                    .neme
+                    .as_ref()
+                    .map(|n| n.name.clone())
+                    .unwrap_or_else(|| "那血仇之敌".to_string());
+                card.text = format!(
+                    "循旧册线索，你扮作佣工混进{}的营外围——粮道、岗哨、换防的时辰，一一入画。灶下一碗冷饭的工夫，进出这条路你已走了三遍。",
+                    nname
+                );
+                let mut e1 = Eff::new();
+                e1.luck = 1.0;
+                e1.special = 36; // 置链：→87 乘虚夺积
+                e1.msg = vec!["你散出「携重宝夜行」的假讯，专候其亲信出营。气运+1".into()];
+                card.opts.push(("布饵设伏".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.msg = vec!["虚实已探，来日再举。你抹去痕迹悄然退走。道心+1".into()];
+                card.opts.push(("就此罢手".into(), e2));
+            }
+            87 => {
+                // 链6 末段（仅链内）：趁虚夺积——通用 Eff 结算，无第三份胜率公式
+                card.title = "乘虚夺积·续".into();
+                let nname = self
+                    .meta
+                    .neme
+                    .as_ref()
+                    .map(|n| n.name.clone())
+                    .unwrap_or_else(|| "那血仇之敌".to_string());
+                card.text = format!(
+                    "假讯生效，{}的亲信果然倾巢而出。你趁夜摸入主营，帐中只剩一只描金木匣——正是其积攒多年的私库。",
+                    nname
+                );
+                let g0 = (90.0 * ss) as i64;
+                let mut e1 = Eff::new();
+                e1.stones = g0;
+                e1.luck = 2.0;
+                e1.msg = vec![format!(
+                    "匣中灵石尽入行囊，你一把火燎了空帐——等他回营，只剩满地灰烬。灵石+{}，气运+2",
+                    fmt_int(g0)
+                )];
+                card.opts.push(("取匣而走".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 3.0;
+                e2.msg = vec![
+                    "你不取分文，只把粮道布防图付之一炬——断其羽翼，来日对决又高一分胜算。道心+3".into(),
+                ];
+                card.opts.push(("毁其布防".into(), e2));
+            }
+            // 老年/将尽专属（88..=89）：寿元余量 ≤ELDER_LEFT_YEARS 才入池（weights
+            // 门控）。措辞按「大限将至」而非精确年数——门控是当次入池判定，弹卡后
+            // 寿元再变化（无面镜客/仙人赠礼）不撤卡
+            88 => {
+                card.title = "灯下了愿".into();
+                card.text = "灯芯将尽。你把这些年欠下的愿一件件数过——有些还了，有些再不还就来不及了。\n今夜把灯挑亮，了结最后一桩。".into();
+                let mut e1 = Eff::new();
+                e1.stones_pct = -0.10;
+                e1.dao = 4.0;
+                e1.msg = vec![
+                    "散尽浮财，了却旧愿。灯花爆了一声，你心头忽然轻了。灵石-10%，道心+4".into(),
+                ];
+                card.opts.push(("重金还愿".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.luck = 2.0;
+                e2.msg = vec!["不必惊动旁人，对着一盏灯把话说尽。道心+2，气运+2".into()];
+                card.opts.push(("只了心结".into(), e2));
+            }
+            89 => {
+                card.title = "薪火相托".into();
+                card.text = "山下少年仰着脸问：「先生，您这一身本事，往后传给谁？」\n你望着他，像望见很多年前那个没名没姓的自己。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 3.0;
+                e1.luck = 1.0;
+                e1.msg = vec![
+                    "你收他做了记名弟子，倾囊相授。道统有继，此生不算白来。道心+3，气运+1".into(),
+                ];
+                card.opts.push(("收徒传艺".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.msg = vec!["你把一部旧稿送他：「看得懂是缘，看不懂是命。」道心+2".into()];
+                card.opts.push(("赠稿不收徒".into(), e2));
+            }
+            // 高境界补充（90..=91）：mr 地板 EVENTS 第三元直写即生效（weights 内
+            // realm<mr→0），补高境界普通层缺口——原 mr≥4 仅 15/26 两条稀有
+            90 => {
+                card.title = "雷池遗蜕".into();
+                card.text = "雷池深处，一具渡劫失败的前辈遗蜕盘坐如生，周身雷纹未散，池底沉着半截焦雷之髓。".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.12;
+                e1.msg = vec![
+                    "雷髓入体，经脉如遭雷洗——痛过之后，灵气行得比从前快。修为+12%".into(),
+                ];
+                card.opts.push(("取雷髓炼体".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 2.0;
+                e2.dao = 1.0;
+                e2.msg = vec![
+                    "你长揖一礼，敬而退走——前辈的道，不由外人取。气运+2，道心+1".into(),
+                ];
+                card.opts.push(("敬而退走".into(), e2));
+            }
+            91 => {
+                card.title = "仙门论道".into();
+                card.text = "仙门真传云游至此，与你论道三日。对方执仙家礼数，你以十万废稿为注——一场论下来，谁也没说服谁。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 4.0;
+                e1.msg = vec![
+                    "真传捧着你一册旧稿良久，叹道：「此稿……不在仙家谱系里。」道心+4".into(),
+                ];
+                card.opts.push(("以稿为注".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 3.0;
+                e2.msg = vec!["不立文字，一笑而别。气运+3".into()];
+                card.opts.push(("论罢即别".into(), e2));
+            }
+            // 常规批次（92..=99）：题材查重对账见 data.rs 批注（茶棚/染坊/傀儡/
+            // 煎茶/悬棺/鱼龙/盐井/矿洞/梦笔，均不撞既有 85 条）
+            92 => {
+                card.title = "染坊秘色".into();
+                card.text = "镇尾染坊晾出一匹「会动的青」，布上水色随日光流转，像把去年的一段江装了进去。".into();
+                let mut e1 = Eff::new();
+                e1.luck = 2.0;
+                e1.msg = vec![
+                    "青布裁作里衣，行走时衣角总带着一点洗不掉的水汽。气运+2".into(),
+                ];
+                card.opts.push(("买布裁衣".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.msg = vec![
+                    "老板娘说染的是「去年那条江的颜色」。你记下了这手艺。道心+2".into(),
+                ];
+                card.opts.push(("讨教染法".into(), e2));
+            }
+            93 => {
+                card.title = "傀儡戏班".into();
+                card.text = "傀儡戏班夜宿破庙，班主醉后哀叹：祖传三具傀儡，如今只有一具还会动——另两具，是「老了」。".into();
+                let mut e1 = Eff::new();
+                e1.luck = 2.0;
+                e1.dao = 1.0;
+                e1.msg = vec![
+                    "你雇匠人补全丝线。开锣那夜台下只有你一个观众，班主却哭得像个孩子。气运+2，道心+1".into(),
+                ];
+                card.opts.push(("出钱修傀儡".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.msg = vec!["提线的手法暗合御物之术，你看了一整夜。道心+2".into()];
+                card.opts.push(("向傀儡学艺".into(), e2));
+            }
+            94 => {
+                card.title = "雪夜煎茶".into();
+                card.text = "雪夜投宿无门，山亭里一位老者正煎雪水煮茶。见你来，他不多话，只把第二只盏推了过来。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.luck = 2.0;
+                e1.msg = vec![
+                    "一盏茶从雪落喝到雪停，你们谁也没问对方来路。道心+2，气运+2".into(),
+                ];
+                card.opts.push(("共饮一盏".into(), e1));
+                let mut e2 = Eff::new();
+                e2.qi_pct = 0.06;
+                e2.msg = vec![
+                    "老者说茶要「等水醒了再下」——你忽然懂了行功的火候。修为+6%".into(),
+                ];
+                card.opts.push(("讨问茶道".into(), e2));
+            }
+            95 => {
+                card.title = "断崖悬棺".into();
+                card.text = "断崖半腰悬着七具石棺，绳索早已朽断。风过时，棺中传出极轻的翻书声。".into();
+                let g0 = (50.0 * ss) as i64;
+                let mut e1 = Eff::new();
+                e1.stones = g0;
+                e1.dao = 3.0;
+                e1.msg = vec![format!(
+                    "第三具棺里只有一册无字书。你读完，书页散作灰。道心+3，灵石+{}",
+                    fmt_int(g0)
+                )];
+                card.opts.push(("攀崖探棺".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 2.0;
+                e2.msg = vec!["你在崖下焚香三拜。翻书声停了一瞬，像是谁应了。气运+2".into()];
+                card.opts.push(("拜而去".into(), e2));
+            }
+            96 => {
+                card.title = "春汛鱼龙".into();
+                card.text = "春汛夜，江面忽然沸腾——成群的银鱼跃出水面，鳞光映月，像一场逆着下的星雨。".into();
+                let g0 = (55.0 * ss) as i64;
+                let mut e1 = Eff::new();
+                e1.stones = g0;
+                e1.luck = 1.0;
+                e1.msg = vec![format!(
+                    "渔村大丰，分你一担头鱼。灵石+{}，气运+1",
+                    fmt_int(g0)
+                )];
+                card.opts.push(("张网助渔".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 3.0;
+                e2.msg = vec![
+                    "鱼跃龙门只是传说，可那一夜的江水，确实在往上流。道心+3".into(),
+                ];
+                card.opts.push(("临流观化".into(), e2));
+            }
+            97 => {
+                card.title = "盐井卤灾".into();
+                card.text = "盐井连日出黑卤，气味刺鼻。井户说井底「有东西翻身」，夜里，井口传来咕咚咕咚的响。".into();
+                let mut e1 = Eff::new();
+                e1.fight = 0.9; // 通用战斗乘区（sim_fight 单口；敌按自身战力缩放）
+                e1.msg = vec!["你下井一探究竟——是福是祸，下去才知道。".into()];
+                card.opts.push(("下井除患".into(), e1));
+                let mut e2 = Eff::new();
+                e2.stones_pct = -0.08;
+                e2.luck = 1.0;
+                e2.good = false;
+                e2.msg = vec![
+                    "花一笔封井钱，另凿新眼。破财免灾。灵石-8%，气运+1".into(),
+                ];
+                card.opts.push(("封井另凿".into(), e2));
+            }
+            98 => {
+                card.title = "矿洞钟声".into();
+                card.text = "废弃矿洞每逢雨夜自鸣钟声，声如闷雷。挖矿人说，洞底压着「不该醒的东西」。".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.08;
+                e1.injure = true;
+                e1.msg = vec![
+                    "你在钟腹刻下镇文，钟声从此哑了——代价是三天走不利索。修为+8%，受创".into(),
+                ];
+                card.opts.push(("入洞镇钟".into(), e1));
+                let mut e2 = Eff::new();
+                e2.stones_pct = -0.10;
+                e2.good = false;
+                e2.msg = vec!["你买断矿脉，封洞立碑。有些东西，不值得惊动。灵石-10%".into()];
+                card.opts.push(("买断封洞".into(), e2));
+            }
+            99 => {
+                card.title = "梦笔生花".into();
+                card.text = "连着三夜梦见同一支笔。第四夜醒来，它就立在案头——笔身无字，笔尖却有墨，像等了很久。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 3.0;
+                e1.qi_pct = 0.05;
+                e1.msg = vec![
+                    "醒来案上多了一行字，不是你写的，却认得你的笔迹。道心+3，修为+5%".into(),
+                ];
+                card.opts.push(("提笔落墨".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 2.0;
+                e2.msg = vec!["来路不明的笔，你用镇纸压住。第三夜，它自己走了。气运+2".into()];
+                card.opts.push(("不碰它".into(), e2));
+            }
 
             _ => {}
         }
 
-        // v1.17.1 剧情演出·稀有/链段标记（纯会话态随卡生灭，不进存档）：
+        // v1.16.7 剧情演出·稀有/链段标记（纯会话态随卡生灭，不进存档）：
         // 稀有=EVENTS 权重 w∈1..=RARE_W（w=0 是链内段「仅链内出现」的哨兵，不算）；
         // 链段进度 (当前段,总段)——链1 两段式（44→45|46），链2/链3/链4 三段式，
         // 链5 两段分支式（79→80|81）
@@ -4916,11 +5245,14 @@ impl Game {
             78 => Some((3, 3)),
             79 => Some((1, 2)),
             80 | 81 => Some((2, 2)),
+            85 => Some((1, 3)),
+            86 => Some((2, 3)),
+            87 => Some((3, 3)),
             _ => None,
         };
 
         if !card.opts.is_empty() {
-            // v1.17.1 稀有事件遭遇记事：入本世大事记（旧稿 story 数据源；卡构建
+            // v1.16.7 稀有事件遭遇记事：入本世大事记（旧稿 story 数据源；卡构建
             // 帧即记「遇」，与抉择无关）
             if card.rare {
                 if let Some(s) = self.sim.as_mut() {
@@ -4935,7 +5267,7 @@ impl Game {
             crate::ui::prewarm_text(&card.title, &[24]);
             crate::ui::prewarm_text(&card.text, &[16]);
 
-            // v1.17.1 复审④：链段阶段徽标串 @16 预热（取值域固定 5 种，绘制期
+            // v1.16.7 复审④：链段阶段徽标串 @16 预热（取值域固定 5 种，绘制期
             // stage_label 产 &'static str 零分配）
             if card.stage.is_some() {
                 for lab in ["1/2", "2/2", "1/3", "2/3", "3/3"] {
@@ -4958,7 +5290,7 @@ impl Game {
             return;
         };
 
-        // v1.17.1 链完成大事记：末段卡（stage 达总段）抉择即缘了——链 id 须在
+        // v1.16.7 链完成大事记：末段卡（stage 达总段）抉择即缘了——链 id 须在
         // apply_eff 清链前捕获（直取消费后 chain=(链id,0,ttl) 仍活跃）。中段断链
         // （非推链选项）不算完成、不入大事记
         let chain_done = card.stage.map_or(false, |(seg, total)| seg >= total);
@@ -5069,7 +5401,7 @@ impl Game {
                     if self.meta.companion_lives >= 3 {
                         self.check_ach(26);
                     }
-                    // v1.17.2 章节书：首结缘事实翻转点（第六章目标边沿）
+                    // v1.16.8 章节书：首结缘事实翻转点（第六章目标边沿）
                     self.check_chapters();
                 }
                 // v1.16.0 交游图鉴：结缘即录入（唯一写入口 gallery_bond；无论是否 first——
@@ -5135,10 +5467,10 @@ impl Game {
                     .push(format!("{}岁，空白行上，你亲手写下一行", s.age as i32));
             }
 
-            // ---------- v1.17.0 连锁剧情：置链臂（20..=31）与新检定臂 ----------
+            // ---------- v1.16.7 连锁剧情：置链臂（20..=31）与新检定臂 ----------
             // 一律不 return（照 special19 口径）：置链臂重写链态，其余臂落通用段
             // 尾的链裁决清链。检定臂（4/6/26/27/32/33/34）效果全在臂内结算，
-            // 通用字段全空，落通用段无副作用。v1.17.3 续编：28/29=链4（灯楼谜约
+            // 通用字段全空，落通用段无副作用。v1.16.8 续编：28/29=链4（灯楼谜约
             // 三段式 76→77→78）、30/31=链5（傩面还愿双分支 79→80|81）
             20 => {
                 // 链1 货郎·分支a：赊墨立契 → 恩怨上门
@@ -5179,6 +5511,14 @@ impl Game {
             31 => {
                 // 链5 傩面还愿·分支b：出钱贴班 → 愿成符赠
                 self.chain = Some((5, 81, CHAIN_TTL));
+            }
+            35 => {
+                // 链6 血债血偿：循踪暗记 → 仇踪暗访（第二段窗口，见 CHAIN6_SPECIAL_LO）
+                self.chain = Some((6, 86, CHAIN_TTL));
+            }
+            36 => {
+                // 链6 血债血偿：布饵设伏 → 乘虚夺积
+                self.chain = Some((6, 87, CHAIN_TTL));
             }
             32 => {
                 // 青灯三问（链4 末段）：道心检定——过授功法一阶（满阶折灯油银），
@@ -5446,7 +5786,7 @@ impl Game {
                     let (msg, c) = {
                         let s = self.sim.as_mut().unwrap();
 
-                        s.lifespan -= 12.0;
+                        s.lifespan -= 10.0; // v1.16.9 对账：与卡面「输，留十年寿数」（id57 文案）数值统一
 
                         s.injured = 6;
 
@@ -5896,10 +6236,14 @@ impl Game {
             e.death > 0.0 && gen_range(0.0, 1.0) < e.death
         };
 
-        // v1.17.0 连锁剧情·链裁决：选卡即结算——置链臂（20..=25）已重写链态；
+        // v1.16.7 连锁剧情·链裁决：选卡即结算——置链臂（20..=25）已重写链态；
         // 其余任何选项（含检定臂/终结段/普通卡）落在链上即本次抉择为链的终局，
-        // 立即清链（叙事上即「缘尽/碑散/匣还」），防残段复现
-        if !(CHAIN_SPECIAL_LO..=CHAIN_SPECIAL_HI).contains(&e.special) {
+        // 立即清链（叙事上即「缘尽/碑散/匣还」），防残段复现。
+        // v1.16.9 双段判定：链6（血债血偿）置链臂 35..=36 续编第二段窗口——
+        // 20..=31 已满且 32..=34 是检定臂刻意窗外，抬 HI 会吞检定臂裁决语义
+        if !(CHAIN_SPECIAL_LO..=CHAIN_SPECIAL_HI).contains(&e.special)
+            && !(CHAIN6_SPECIAL_LO..=CHAIN6_SPECIAL_HI).contains(&e.special)
+        {
             self.chain = None;
         }
 
@@ -5972,7 +6316,7 @@ impl Game {
 
                 self.play(crate::sounds::Which::BreakOk);
 
-                // v1.17.2 章节书：首胜事实翻转点（第二章目标边沿）
+                // v1.16.8 章节书：首胜事实翻转点（第二章目标边沿）
                 self.check_chapters();
 
                 true
@@ -6153,7 +6497,7 @@ impl Game {
 
         self.meta.dao_yun += dy;
 
-        // v1.17.2 本稿剧情摘要：先算一次、草稿退回页（SimResult.story 会话态）与
+        // v1.16.8 本稿剧情摘要：先算一次、草稿退回页（SimResult.story 会话态）与
         // 旧稿档案（SimRecord.story hq= 持久）同源共用，两处零二次拼接
         let story = self
             .sim
@@ -6196,7 +6540,7 @@ impl Game {
         let ci = comp
             .as_deref()
             .and_then(|c| COMPANION_NAMES.iter().position(|&n| n == c));
-        // v1.17.1 本世剧情摘要：大事记尾 1-2 条拼接 ≤28 字（v1.17.2 起本稿剧情
+        // v1.16.7 本世剧情摘要：大事记尾 1-2 条拼接 ≤28 字（v1.16.8 起本稿剧情
         // 上移与 SimResult.story 同源一次拼接——旧稿页/退回页一眼看到本世剧情核心）
         self.meta.hist.push(SimRecord {
             life_no: self.meta.lives,
@@ -6932,7 +7276,7 @@ impl Game {
                         }
                         self.check_ach(27);
                         self.check_ach_all();
-                        // v1.17.2 章节书：首登仙界事实翻转点（第七章问笔目标边沿）
+                        // v1.16.8 章节书：首登仙界事实翻转点（第七章问笔目标边沿）
                         self.check_chapters();
                         // v1.14.0 立绘焕新时刻：跨相（墨仙之相）toast + 金环闪光
                         //（置于成就 toast 之后，防被同帧成就播报顶掉）
@@ -7038,7 +7382,7 @@ impl Game {
 
                 self.check_ach_all();
 
-                // v1.17.2 章节书：现实首破境事实翻转点（第二章目标边沿）
+                // v1.16.8 章节书：现实首破境事实翻转点（第二章目标边沿）
                 self.check_chapters();
 
                 // v1.14.0 立绘焕新时刻：跨相破境 toast + 金环闪光（置于成就 toast
@@ -7093,7 +7437,7 @@ impl Game {
             C_CYAN,
         );
 
-        // v1.17.2 系统初见闩（sy= bit1）：点数兑换首通一句戏文（讨牒 log 先例，
+        // v1.16.8 系统初见闩（sy= bit1）：点数兑换首通一句戏文（讨牒 log 先例，
         // 一次性边沿——推导不出「从未兑过」，挂 meta additive 闩，缺键 0 零迁移）
         if self.meta.sys_seen & 0b0010 == 0 {
             self.meta.sys_seen |= 0b0010;
@@ -7374,7 +7718,7 @@ impl Game {
 
         self.check_ach_all();
 
-        // v1.17.2 章节书：首斩宿敌事实翻转点（第三章边沿；讨牒边沿在 sync_taodie 口）
+        // v1.16.8 章节书：首斩宿敌事实翻转点（第三章边沿；讨牒边沿在 sync_taodie 口）
         self.check_chapters();
     }
 
@@ -7669,7 +8013,7 @@ impl Game {
         }
     }
 
-    // ================= v1.17.2 章节书：主线八章达成单口 =================
+    // ================= v1.16.8 章节书：主线八章达成单口 =================
     // 谓词唯一实现（data.rs CHAPTERS 的 pid 全部走此 match 分发，禁第二实现；
     // 照 check_ach_all 的 (id,bool) 元组表先例）。只读 meta 标量、零分配——
     // 存档载入帧静默补齐与每帧章节书视图共用同一口，谓词语义不漂移。
@@ -7701,6 +8045,29 @@ impl Game {
         }
     }
 
+    /// 章节目标进度数值单口（v1.16.9 章节书目标行右侧 x/y 显示用）。与 chapter_goal_met
+    /// 平行分发表（谓词布尔仍只以 goal_met 为准——本表只派生展示数值，met 判定不读本
+    /// 表；同口纪律见上）。仅数值化目标（讨牒/斩敌/到域）有值，其余 pid 返回 None 行右
+    /// 不显示。零分配（返回标量元组），帧路径安全；单测钉死 Some((x,y)) ⟹ x≥y 与
+    /// met==（x≥y）同口一致。
+    pub fn chapter_goal_prog(m: &Meta, pid: u8) -> Option<(u32, u32)> {
+        match pid {
+            3 => Some((m.neme_slain.min(1), 1)),       // 首斩宿敌
+            4 => Some((m.taodie.min(3) as u32, 3)),    // 讨牒三成
+            5 => Some((m.taodie.min(6) as u32, 6)),    // 讨牒 6/6
+            6 => Some((
+                m.region_visited.iter().filter(|&&x| x).count() as u32,
+                3,
+            )),                                        // 三域已至
+            7 => Some((
+                m.region_visited.iter().filter(|&&x| x).count() as u32,
+                5,
+            )),                                        // 五域全至
+            14 => Some((m.neme_slain.min(2), 2)),      // 再斩一敌
+            _ => None,
+        }
+    }
+
     /// 章节达成位掩码（章 i 全目标即中 bit i）。载入帧据此静默补齐旧档
     /// （老玩家补齐不重播横幅），check_chapters 据此做边沿演出。
     pub fn chapter_done_mask(m: &Meta) -> u32 {
@@ -7716,10 +8083,12 @@ impl Game {
         mask
     }
 
-    /// 章节达成边沿演出（show_banner 三件套先例：横幅 + 金行日志）。在事实翻转点
-    /// 显式调用（launch_sim/破境/寻仇/讨牒/到访/结缘/抉择/结局各口），位掩码幂等——
-    /// 同帧多章全了时横幅单槽后写胜（日志逐章留痕），不主动 sync_save（调用点均在
-    /// 既有落盘流程内，零额外落盘）。
+    /// 章节达成边沿演出 + 章成之礼发放（v1.16.9）：newly 位命中处 meta.dao_yun +=
+    /// ch.reward——发放与演出同处边沿，chap_done 位即领取凭证，幂等零补发（载入帧
+    /// 静默补齐的老玩家不补发，属既定取舍）。只发道韵（meta 跨世持久标量）：本函数
+    /// 可能 life=None 帧被调（寻仇/抉择口），禁发灵石等现世资源。同帧多章全了时横幅
+    /// 单槽后写胜——奖励数字只走逐章金行 log 防吞，横幅维持章名。不主动 sync_save
+    /// （调用点均在既有落盘流程内，零额外落盘）。
     pub fn check_chapters(&mut self) {
         let done = Self::chapter_done_mask(&self.meta);
         let newly = done & !self.meta.chap_done;
@@ -7729,8 +8098,9 @@ impl Game {
         self.meta.chap_done |= newly;
         for (i, ch) in crate::data::CHAPTERS.iter().enumerate() {
             if newly >> i & 1 == 1 {
+                self.meta.dao_yun += ch.reward as i64;
                 self.log(
-                    format!("【{}·了】{}——主线又进一程。", ch.num, ch.name),
+                    format!("【{}·了】{}——主线又进一程。{}", ch.num, ch.name, ch.reward_note),
                     C_GOLD,
                 );
                 self.show_banner(format!("{} · {}", ch.num, ch.name), C_GOLD);
@@ -8621,11 +8991,16 @@ mod revenge_tests {
     fn taodie_sync_backfills_and_caps() {
         let mut g = game_with(Life::default(), None);
         g.meta.neme_slain = 6;
+        // 第三章位按事实先补齐隔离（neme_slain=6 → pid3/14）：其章成之礼不入本测总账；
+        // 第四章位在 taodie=0 时补不齐（谓词就是 taodie 本身），边沿必随补牒触发——
+        // 断言显式计入 CHAPTERS[3].reward（v1.16.9 章成之礼，边沿发放见 check_chapters）
+        g.meta.chap_done |= Game::chapter_done_mask(&g.meta);
         let dy0 = g.meta.dao_yun;
+        let pay = 166 + CHAPTERS[3].reward as i64; // 封卷牒 +166、章成之礼 +166
         g.sync_taodie();
-        assert_eq!((g.meta.taodie, g.meta.dao_yun), (6, dy0 + 166));
-        g.sync_taodie(); // 幂等
-        assert_eq!(g.meta.dao_yun, dy0 + 166);
+        assert_eq!((g.meta.taodie, g.meta.dao_yun), (6, dy0 + pay));
+        g.sync_taodie(); // 幂等（讨牒 while 与章节位均已置）
+        assert_eq!(g.meta.dao_yun, dy0 + pay);
         g.meta.neme_slain = 9;
         g.sync_taodie();
         assert_eq!(g.meta.taodie, 6); // 越链顶钳 6
@@ -8710,10 +9085,10 @@ mod guide_tests {
         let mut g = game_with(l, None);
         g.meta.sim_points = 0;
         g.meta.auto = 1;
-        g.meta.total_sims = 1; // v1.17.2 里程碑叶（total_sims==0）已过，验原修为叶
+        g.meta.total_sims = 1; // v1.16.8 里程碑叶（total_sims==0）已过，验原修为叶
         assert!(!g.is_stuck(), "前置：S≥ex 不死局");
         assert!(g.can_break(), "前置：修为已满");
-        assert_eq!(guide_index(&g), 2);
+        assert_eq!(guide_index(&g), 3);
     }
 
     // T2 寻仇：弱宿敌(realm 0)未重伤 P=0 S=2000 auto=1 → 2
@@ -8725,10 +9100,10 @@ mod guide_tests {
         let mut g = game_with(l, Some(neme(0))); // 同境弱宿敌：r≈0.96 可出手
         g.meta.sim_points = 0;
         g.meta.auto = 1;
-        g.meta.total_sims = 1; // v1.17.2 里程碑叶已过
+        g.meta.total_sims = 1; // v1.16.8 里程碑叶已过
         assert!(!g.is_stuck() && !g.can_break(), "前置：修为轴不截胡");
         assert!(g.revenge_ready(), "前置：宿敌可寻仇（未重伤且 r≥0.1）");
-        assert_eq!(guide_index(&g), 3);
+        assert_eq!(guide_index(&g), 4);
     }
 
     // T3 候破：qi=0.9×need P=0 S=2000 auto=1 → 3
@@ -8740,13 +9115,13 @@ mod guide_tests {
         let mut g = game_with(l, None);
         g.meta.sim_points = 0;
         g.meta.auto = 1;
-        g.meta.total_sims = 1; // v1.17.2 里程碑叶已过
+        g.meta.total_sims = 1; // v1.16.8 里程碑叶已过
         assert!(!g.can_break(), "前置：未满不破境");
         assert!(
             g.life.as_ref().map_or(false, |x| x.qi / qi_need(x) >= 0.8),
             "前置：修为 ≥80%"
         );
-        assert_eq!(guide_index(&g), 4);
+        assert_eq!(guide_index(&g), 5);
     }
 
     // T4 扩建：loc=洞府 dongfu=[0,0,0] 贡献=30 S=2500 P=0 auto=1 qi=0 → 4
@@ -8759,7 +9134,7 @@ mod guide_tests {
         let mut g = game_with(l, None);
         g.meta.sim_points = 0;
         g.meta.auto = 1;
-        g.meta.total_sims = 1; // v1.17.2 里程碑叶已过
+        g.meta.total_sims = 1; // v1.16.8 里程碑叶已过
         g.meta.sect_contrib = 30; // = DONGFU_UP_CONTRIB[0]，双资源踩线可达
         assert_eq!(
             g.life.as_ref().map(|x| x.loc),
@@ -8772,7 +9147,7 @@ mod guide_tests {
                 && g.meta.sect_contrib >= crate::data::DONGFU_UP_CONTRIB[0],
             "前置：灵石+贡献双足"
         );
-        assert_eq!(guide_index(&g), 5);
+        assert_eq!(guide_index(&g), 6);
     }
 
     // T5 周天：P=0 S=1600(≥ex1500<扩建2000) R=∅ auto=0 qi=0 loc=坊市 → 5
@@ -8784,10 +9159,10 @@ mod guide_tests {
         l.qi = 0.0;
         let mut g = game_with(l, None);
         g.meta.sim_points = 0;
-        g.meta.total_sims = 1; // v1.17.2 里程碑叶已过
+        g.meta.total_sims = 1; // v1.16.8 里程碑叶已过
         assert!(!g.is_stuck(), "前置：S≥ex 不死局");
         assert!(g.meta.auto == 0 && g.meta.sim_points < g.sim_cost(), "前置：周天未开且无点可花");
-        assert_eq!(guide_index(&g), 6);
+        assert_eq!(guide_index(&g), 7);
     }
 
     // T6 献祭：R=[0] P=0 S=1000(<ex) auto=1 qi=0 loc=坊市 → 6
@@ -8801,7 +9176,7 @@ mod guide_tests {
         let mut g = game_with(l, None);
         g.meta.sim_points = 0;
         g.meta.auto = 1;
-        g.meta.total_sims = 1; // v1.17.2 里程碑叶已过
+        g.meta.total_sims = 1; // v1.16.8 里程碑叶已过
         assert!(!g.is_stuck(), "前置：法宝尚存不死局");
         assert!(
             g.life.as_ref().map_or(false, |x| !x.relics.is_empty())
@@ -8811,10 +9186,10 @@ mod guide_tests {
                     .map_or(false, |x| x.stones < g.exchange_cost()),
             "前置：有点可献、点灵两空"
         );
-        assert_eq!(guide_index(&g), 7);
+        assert_eq!(guide_index(&g), 8);
     }
 
-    // T7a 里程碑叶（v1.17.2 链首）：Meta::default 原样（新玩家首局态 P=3 S=100
+    // T7a 里程碑叶（v1.16.8 链首）：Meta::default 原样（新玩家首局态 P=3 S=100
     // R=∅ auto=0 qi=0 total_sims=0）→ 1（开卷首模拟压经济/养成叶，主线第一章）
     #[test]
     fn t7a_milestone_first_sim_overrides_economy() {
@@ -8836,7 +9211,7 @@ mod guide_tests {
             g.meta.sim_points >= g.sim_cost(),
             "前置：自带 3 点可开卷"
         );
-        assert_eq!(guide_index(&g), 8, "周天叶收窄 P<1，有点数不得截胡");
+        assert_eq!(guide_index(&g), 9, "周天叶收窄 P<1，有点数不得截胡");
     }
 
     // T8 兑点：P=0 S=3000 R=∅ auto=1 qi=0 loc=坊市 → 8（兜底叶）
@@ -8849,9 +9224,9 @@ mod guide_tests {
         let mut g = game_with(l, None);
         g.meta.sim_points = 0;
         g.meta.auto = 1;
-        g.meta.total_sims = 1; // v1.17.2 里程碑叶已过
+        g.meta.total_sims = 1; // v1.16.8 里程碑叶已过
         assert!(!g.is_stuck() && g.meta.sim_points < g.sim_cost(), "前置：无点但不死局");
-        assert_eq!(guide_index(&g), 9);
+        assert_eq!(guide_index(&g), 10);
     }
 
     // T9 边界：S 恰 =ex → 不算死局 → 8
@@ -8863,14 +9238,14 @@ mod guide_tests {
         let mut g = game_with(l, None);
         g.meta.sim_points = 0;
         g.meta.auto = 1;
-        g.meta.total_sims = 1; // v1.17.2 里程碑叶已过
+        g.meta.total_sims = 1; // v1.16.8 里程碑叶已过
         assert_eq!(
             g.life.as_ref().map(|x| x.stones),
             Some(g.exchange_cost()),
             "前置：踩线等值"
         );
         assert!(!g.is_stuck(), "边界：S<ex 才死局，等值不算");
-        assert_eq!(guide_index(&g), 9, "total_sims=1 兜底终结叶");
+        assert_eq!(guide_index(&g), 10, "total_sims=1 兜底终结叶");
     }
 
     // T10 边界：S=ex-1 → 死局 → 0（死局叶压里程碑叶——三空时看广告是唯一出路）
@@ -8889,7 +9264,7 @@ mod guide_tests {
 
     // 全网格兜底：P×S×R×auto×qi 120 组合全部落在 0..=9
     //（构造性保证——覆盖块之下不放任何叶，死分支在此必现形；
-    //  total_sims=1 过里程碑叶，专测原链 2..9 的覆盖完备性）
+    //  total_sims=1 过里程碑叶，专测原链 3..10 的覆盖完备性）
     #[test]
     fn grid_always_lands_within_hints() {
         for p in [0i32, 1] {
@@ -8930,7 +9305,7 @@ mod guide_tests {
     // 按钮叶与 GuideAct 一一对应——纯提示叶恒无按钮
     #[test]
     fn hints_table_shape() {
-        assert_eq!(HINTS.len(), 10);
+        assert_eq!(HINTS.len(), 11);
         for h in HINTS.iter() {
             if h.act == crate::guide::GuideAct::None {
                 assert!(h.btn.is_none(), "纯提示叶不得带按钮");
@@ -8966,7 +9341,7 @@ mod guide_tests {
     }
 }
 
-// ---------------- v1.17.2 章节书：goal_met / done_mask / check_chapters ----------------
+// ---------------- v1.16.8 章节书：goal_met / done_mask / check_chapters ----------------
 
 #[cfg(test)]
 mod chapter_tests {
@@ -9158,6 +9533,170 @@ mod chapter_tests {
         let fresh = Meta::default();
         assert_eq!(Game::chapter_current(&fresh), 0, "全新档当前章 1");
     }
+
+    // v1.16.9 章成之礼：边沿发放幂等——首调 dao_yun 加 reward 且金行含奖励段；
+    // 再调（chap_done 位已置）零补发零重复 log。发放只动 meta.dao_yun（life=None
+    // 帧可达，禁现世资源），发放与演出同处 newly 臂、chap_done 位即领取凭证。
+    #[test]
+    fn chapter_reward_edge_pays_once() {
+        let mut g = game_with(Life::default(), None);
+        g.meta.lives = 1;
+        g.meta.total_sims = 1; // 章 1 事实已齐，位未置
+        let dy0 = g.meta.dao_yun;
+        g.check_chapters();
+        let r0 = CHAPTERS[0].reward;
+        assert_eq!(
+            g.meta.dao_yun,
+            dy0 + r0 as i64,
+            "章成之礼按表发放一次"
+        );
+        assert!(
+            g.log.iter().any(|l| l.text.contains("道韵 +") && l.text.contains("第一章")),
+            "金行 log 携奖励段（横幅单槽吞字由日志兜底）"
+        );
+        let log_len = g.log.len();
+        g.check_chapters(); // 幂等：位已置不再演不再发
+        assert_eq!(g.meta.dao_yun, dy0 + r0 as i64, "补调零补发");
+        assert_eq!(g.log.len(), log_len, "奖励 log 不重播");
+    }
+
+    // 多章同帧全了：dao_yun 加两章之和，逐章 log 各携奖励段（横幅单槽后写胜为既定
+    // 演出语义，奖励信息不依赖横幅）
+    #[test]
+    fn chapter_reward_multi_same_edge_sums() {
+        let mut g = game_with(Life::default(), None);
+        g.meta.lives = 1;
+        g.meta.total_sims = 1;
+        g.meta.total_wins = 1;
+        g.meta.first_realm[1] = true;
+        let dy0 = g.meta.dao_yun;
+        g.check_chapters();
+        let expect = CHAPTERS[0].reward as i64 + CHAPTERS[1].reward as i64;
+        assert_eq!(g.meta.dao_yun, dy0 + expect, "两章奖励同帧加总");
+        let pays = g
+            .log
+            .iter()
+            .filter(|l| l.text.contains("道韵 +"))
+            .count();
+        assert_eq!(pays, 2, "逐章金行各携奖励段");
+    }
+
+    // 奖励表静态一致性：reward 克制梯度（50..=400）、reward_note 携「道韵 +N」且
+    // 数字与 reward 一致（两处手改漂移防线）、lore 非空且每段带序号
+    #[test]
+    fn chapter_reward_table_consistent() {
+        for ch in CHAPTERS.iter() {
+            assert!(
+                (50..=400).contains(&ch.reward),
+                "{} 奖励越梯度 50..=400: {}",
+                ch.num,
+                ch.reward
+            );
+            let num = ch.reward.to_string();
+            assert!(
+                ch.reward_note.contains("道韵 +") && ch.reward_note.contains(&num),
+                "{} reward_note 与 reward 数字不一致: {} vs {}",
+                ch.num,
+                ch.reward_note,
+                ch.reward
+            );
+            assert!(
+                !ch.lore.is_empty() && ch.lore.len() <= 3,
+                "{} lore 段数 1..=3",
+                ch.num
+            );
+            for seg in ch.lore.iter() {
+                assert!(seg.contains("其"), "{} lore 段缺序号", ch.num);
+            }
+        }
+    }
+
+    // 进度数值单口与谓词单口同口一致：Some((x,y)) ⟹ x≤y 且 (x≥y)==goal_met；
+    // 数值化 pid（3/4/5/6/7/14）之外的 pid 恒 None（行右不显示）
+    #[test]
+    fn chapter_goal_prog_matches_goal_met() {
+        let mut g = game_with(Life::default(), None);
+        g.meta.taodie = 2;
+        g.meta.neme_slain = 1;
+        g.meta.region_visited = [true, true, true, false, false];
+        assert_eq!(Game::chapter_goal_prog(&g.meta, 4), Some((2, 3)));
+        assert_eq!(Game::chapter_goal_prog(&g.meta, 5), Some((2, 6)));
+        assert_eq!(Game::chapter_goal_prog(&g.meta, 3), Some((1, 1)));
+        assert_eq!(
+            Game::chapter_goal_prog(&g.meta, 14),
+            Some((1, 2)),
+            "neme_slain=1：pid3 已毕 pid14 半程（同源两档，8986 注释口径）"
+        );
+        assert_eq!(Game::chapter_goal_prog(&g.meta, 6), Some((3, 3)));
+        assert_eq!(Game::chapter_goal_prog(&g.meta, 7), Some((3, 5)));
+        // 非数值化目标恒 None
+        for pid in [0u8, 1, 2, 8, 9, 10, 11, 12, 13] {
+            assert_eq!(
+                Game::chapter_goal_prog(&g.meta, pid),
+                None,
+                "pid {pid} 不该有进度数值"
+            );
+        }
+        // 全 pid 同口一致性：有值 ⟹ x≤y 且 met ⟺ x≥y；脏 pid 两口都落空臂
+        for pid in 0u8..=16 {
+            let met = Game::chapter_goal_met(&g.meta, pid);
+            match Game::chapter_goal_prog(&g.meta, pid) {
+                Some((x, y)) => {
+                    assert!(x <= y);
+                    assert_eq!(x >= y, met, "pid {pid} prog/met 口径漂移");
+                }
+                None => {}
+            }
+        }
+        // 推进后仍同口：neme_slain=2 → pid14 x≥y 翻真、met 翻真
+        g.meta.neme_slain = 2;
+        assert_eq!(Game::chapter_goal_prog(&g.meta, 14), Some((2, 2)));
+        assert!(Game::chapter_goal_met(&g.meta, 14));
+    }
+
+    // v1.16.9 终局指路叶：问笔已达 ∧ 四结局未全 → 叶 2（压修为/经济叶）；四结局全 →
+    // 落回原链（模拟点已足叶 9）；开局未模拟时里程碑叶 1 压终局叶（链首语义保持）
+    #[test]
+    fn guide_finale_leaf_routes_endgame() {
+        let mut g = game_with(Life::default(), None);
+        g.meta.total_sims = 1;
+        g.meta.first_realm[10] = true; // 现实问笔已达成
+        assert_eq!(
+            crate::guide::guide_index(&g),
+            2,
+            "问笔后四结局未全 → 终局叶"
+        );
+        g.meta.endings_seen = 0b1111;
+        assert_eq!(
+            crate::guide::guide_index(&g),
+            9,
+            "四结局全了 → 落回原链（P=3 模拟点已足叶）"
+        );
+        // total_sims==0 且问笔已达成：里程碑叶压终局叶（开局推演优先一切）
+        let mut g = game_with(Life::default(), None);
+        g.meta.first_realm[10] = true;
+        assert_eq!(
+            crate::guide::guide_index(&g),
+            1,
+            "里程碑叶压终局叶"
+        );
+    }
+
+    // 终局叶按钮接线：Book 跳转 → 指引面板+章节书签（横带场景开面板；面板内场景
+    // 只切签不关面板——draw 侧归零例外的前提是 exec_jump 不重复置 panel）
+    #[test]
+    fn exec_jump_book_opens_chapter_tab() {
+        // 横带场景（panel=0）：开面板直落章节书签
+        let mut g = game_with(Life::default(), None);
+        crate::guide::exec_jump(&mut g, crate::guide::GuideAct::Book);
+        assert_eq!((g.panel, g.guide_tab), (6, 1));
+        // 面板内场景（panel=6）：只切签，面板保持
+        let mut g = game_with(Life::default(), None);
+        g.panel = 6;
+        g.guide_tab = 0;
+        crate::guide::exec_jump(&mut g, crate::guide::GuideAct::Book);
+        assert_eq!((g.panel, g.guide_tab), (6, 1), "面板内只切签不关面板");
+    }
 }
 
 // ---------------- v1.16.0 交游图鉴：gallery_bond 卫语句与封顶 ----------------
@@ -9327,7 +9866,7 @@ mod recent_event_tests {
     }
 }
 
-// ================= v1.17.0 连锁剧情 + 扩池 15 条（id 44..=58） =================
+// ================= v1.16.7 连锁剧情 + 扩池 15 条（id 44..=58） =================
 
 #[cfg(test)]
 mod chain_event_tests {
@@ -9464,7 +10003,9 @@ mod chain_event_tests {
     #[test]
     fn chain_missing_arm_breaks_safely() {
         let mut g = sim_game(5, 100.0);
-        g.chain = Some((9, 99, CHAIN_TTL));
+        // v1.16.9 扩池后 id 99 已有真实卡臂——幽灵样本改用表外 id 199（EVENTS
+        // 恒 0..=99，199 永无 build_event 臂）
+        g.chain = Some((9, 199, CHAIN_TTL));
         g.modal = None;
         g.sim_event();
         assert!(g.chain.is_none(), "缺臂链段弃链");
@@ -9595,7 +10136,7 @@ mod chain_event_tests {
         ));
     }
 
-    // v1.17.1 story 拼接纯函数：剥「N岁，」前缀、无前缀条目不误剥、28 字截断
+    // v1.16.7 story 拼接纯函数：剥「N岁，」前缀、无前缀条目不误剥、28 字截断
     #[test]
     fn story_from_highlights_strips_prefix_and_caps() {
         let hs = vec![
@@ -9658,7 +10199,7 @@ mod chain_event_tests {
     }
 
     // rare/stage 置位口径：链首段 50 两者兼有；链内段 w=0 不算稀有；链1 两段式。
-    // v1.17.3 扩：链4 三段（76/77/78）链5 双分支（79/80/81）、新稀有 72/73（w≤2）
+    // v1.16.8 扩：链4 三段（76/77/78）链5 双分支（79/80/81）、新稀有 72/73（w≤2）
     #[test]
     fn rare_and_stage_flags() {
         let mut g = sim_game(5, 100.0);
@@ -9683,8 +10224,12 @@ mod chain_event_tests {
             (79, false, Some((1, 2))),
             (80, false, Some((2, 2))),
             (81, false, Some((2, 2))),
+            (85, false, Some((1, 3))),
+            (86, false, Some((2, 3))),
+            (87, false, Some((3, 3))),
             (59, false, None),
             (84, false, None),
+            (92, false, None),
             (0, false, None),
         ] {
             g.modal = None;
@@ -9713,7 +10258,217 @@ mod chain_event_tests {
     }
 }
 
-// ================= v1.17.3 扩池 26 条（id 59..=84） =================
+// ================= v1.16.9 扩池 15 条（id 85..=99） =================
+
+#[cfg(test)]
+mod event_batch_v1169_tests {
+    use super::revenge_tests::{game_with, neme};
+    use super::*;
+
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // 新批次良构：id 85..=99 每条 ≥2 且 ≤3 选项、标题正文非空，选第一项不 panic
+    //（含宿敌卡具名路径 85..=87、fight 臂 97 opt0 可能战死——每轮重置 sim 照
+    //  59..=84 模板；build_event 直建无门控，门控语义另有专测）
+    #[test]
+    fn batch_cards_well_formed() {
+        let mut g = game_with(Life::default(), None);
+        g.meta.neme = Some(neme(5));
+        for id in 85..=99 {
+            let mut s = Life::default();
+            s.realm = 5;
+            s.luck = 40.0;
+            g.sim = Some(s);
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂（白抽）", id));
+            assert!(matches!(card.kind, CardKind::Npc));
+            assert!(!card.title.is_empty());
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两个选项", id);
+            assert!(card.opts.len() <= 3, "卡面几何至多三选项（draw.rs:1706）");
+            g.choose_option(0); // apply_eff 全链不 panic（含置链臂/fight/injure 臂）
+        }
+    }
+
+    // 宿敌卡兜底路径：meta.neme=None（链中宿敌被 sim_neme/寻仇反杀后重建卡）
+    // 85 建链、86/87 具名落泛称——不 panic 不空文案；置链臂不受宿敌缺失影响
+    #[test]
+    fn neme_chain_cards_fallback_without_neme() {
+        let mut g = game_with(Life::default(), None);
+        assert!(g.meta.neme.is_none(), "前置：game_with 缺省无宿敌");
+        // 85 opt0（special35）置链
+        g.sim = Some(Life::default());
+        g.modal = None;
+        g.build_event(85);
+        let card = g.modal.as_ref().unwrap();
+        assert!(!card.text.is_empty() && !card.text.contains("（）"));
+        g.choose_option(0);
+        assert_eq!(g.chain, Some((6, 86, CHAIN_TTL)), "置链不受宿敌缺失影响");
+        // 86 opt0（special36）置链
+        g.modal = None;
+        g.sim_event();
+        let card = g.modal.as_ref().unwrap();
+        assert!(!card.text.is_empty() && !card.text.contains("（）"));
+        g.choose_option(0);
+        assert_eq!(g.chain, Some((6, 87, CHAIN_TTL)));
+        // 87 opt0 落通用臂 → 清链
+        g.modal = None;
+        g.sim_event();
+        let card = g.modal.as_ref().unwrap();
+        assert!(!card.text.is_empty() && !card.text.contains("（）"));
+        g.choose_option(0);
+        assert!(g.chain.is_none());
+    }
+
+    // 85 宿敌门控：无宿敌不入池；有宿敌 realm≥mr(2) 入池；realm 地板独立生效
+    #[test]
+    fn neme_chain_first_seg_gated_by_neme() {
+        let mut g = sim_game(5, 100.0);
+        let i85 = EVENTS.iter().position(|&(e, _, _, _)| e == 85).unwrap();
+        let (ws, _) = g.sim_event_weights(100.0, 5, false, false, false);
+        assert_eq!(ws[i85], 0.0, "无宿敌 85 不入池");
+        g.meta.neme = Some(neme(5));
+        let (ws, _) = g.sim_event_weights(100.0, 5, false, false, false);
+        assert!(ws[i85] > 0.0, "有宿敌 realm5 入池");
+        let (ws, _) = g.sim_event_weights(100.0, 1, false, false, false);
+        assert_eq!(ws[i85], 0.0, "realm1 < mr2：85 仍不入池（地板独立）");
+    }
+
+    // 88/89 将尽门控：寿元余量 ≤ELDER_LEFT_YEARS 才入池（Life::default 余量
+    // 59 载不入；拨到余量 5 载入池）——池内原零覆盖题材的门控口径钉死
+    #[test]
+    fn elder_events_gated_by_lifespan_left() {
+        let mut g = sim_game(2, 100.0);
+        let i88 = EVENTS.iter().position(|&(e, _, _, _)| e == 88).unwrap();
+        let i89 = EVENTS.iter().position(|&(e, _, _, _)| e == 89).unwrap();
+        let (ws, _) = g.sim_event_weights(100.0, 2, false, false, false);
+        assert_eq!(ws[i88], 0.0, "余量 59 载 88 不入池");
+        assert_eq!(ws[i89], 0.0, "余量 59 载 89 不入池");
+        let mut s = Life::default();
+        s.realm = 2;
+        s.luck = 100.0;
+        s.lifespan = s.age + 5.0; // 将尽：余量 5 载
+        g.sim = Some(s);
+        let (ws, _) = g.sim_event_weights(100.0, 2, false, false, false);
+        assert!(ws[i88] > 0.0, "余量 5 载 88 入池");
+        assert!(ws[i89] > 0.0, "余量 5 载 89 入池");
+    }
+
+    // 链6 全程：85 首段建链（待分支）→ special35 → 86 直取 → special36 → 87 直取
+    // → 通用臂清链 + 大事记「血债血偿·缘了」（CHAIN_NAMES[6] 尾名；双段窗口判定
+    // 置链侧回归——35/36 不落「落臂即清链」）
+    #[test]
+    fn chain6_full_run_and_highlight() {
+        let mut g = sim_game(5, 100.0);
+        g.meta.neme = Some(neme(5));
+        g.modal = None;
+        g.build_event(85);
+        assert_eq!(g.chain, Some((6, 0, CHAIN_TTL)), "首段建链待分支");
+        g.choose_option(0); // 循踪暗记（special35）
+        assert_eq!(g.chain, Some((6, 86, CHAIN_TTL)), "第二段窗口置链");
+        g.modal = None;
+        g.sim_event(); // 链活跃 → 直取 86
+        assert_eq!(g.modal.as_ref().unwrap().title, "仇踪暗访·续");
+        g.choose_option(0); // 布饵设伏（special36）
+        assert_eq!(g.chain, Some((6, 87, CHAIN_TTL)));
+        g.modal = None;
+        g.sim_event(); // 直取 87
+        assert_eq!(g.modal.as_ref().unwrap().title, "乘虚夺积·续");
+        g.choose_option(0); // 取匣而走（无 special）→ 链终局
+        assert!(g.chain.is_none(), "落通用臂即链终局（双段判定 else 侧）");
+        let hl = g.sim.as_ref().unwrap().highlights.join("|");
+        assert!(hl.contains("血债血偿·缘了"), "链6 完成记事缺失: {}", hl);
+    }
+
+    // 链6 中段弃链：86 opt1（就此罢手，无置链臂）→ 立即清链，87 永不再入正常池
+    #[test]
+    fn chain6_broken_option_closes_chain() {
+        let mut g = sim_game(5, 100.0);
+        g.meta.neme = Some(neme(5));
+        g.modal = None;
+        g.build_event(85);
+        g.choose_option(0); // special35
+        g.modal = None;
+        g.sim_event(); // 直取 86
+        g.choose_option(1); // 就此罢手
+        assert!(g.chain.is_none(), "非推链选项即链终局");
+        g.modal = None;
+        g.recent_events = vec![85, 86]; // 排除首中段，防弃链后偶发重建干扰断言
+        g.sim_event(); // 不应抽出链内段 87（权重 0）
+        assert_ne!(g.modal.as_ref().unwrap().title, "乘虚夺积·续");
+        assert!(g.chain.is_none());
+    }
+
+    // 链6 首段 opt0 必置链（skip 模式自动选 option0 直推约定）；opt1 弃链走
+    // chain2/chain4 broken 先例（覆土掩碑/折返离楼同款），不设双置链要求
+    #[test]
+    fn chain6_first_seg_primary_option_advances() {
+        let mut g = sim_game(5, 100.0);
+        g.meta.neme = Some(neme(5));
+        g.modal = None;
+        g.build_event(85);
+        let card = g.modal.as_ref().unwrap();
+        let s0 = card.opts[0].1.special;
+        assert!(
+            (CHAIN6_SPECIAL_LO..=CHAIN6_SPECIAL_HI).contains(&s0),
+            "链6 首段 opt0 必经第二段窗口置链"
+        );
+    }
+
+    // 高境界/常规新普通条目入池：90..=99 realm5 全部入池（97/98 恶事件 luck=100
+    // 乘区后仍 >0）；86/87 链内段除外（另测）；85/88/89 有专属门控（另测）
+    #[test]
+    fn new_normal_events_in_pool_at_realm5() {
+        let g = sim_game(5, 100.0);
+        let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
+        for id in 90..=99 {
+            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
+            assert!(ws[i] > 0.0, "普通事件 {} realm5 应入池", id);
+        }
+    }
+
+    // v1.16.9 对账修复：无面镜客（id57）输臂寿元 -10.0 与卡面「输，留十年寿数」
+    // 文案统一（原实现 -12.0 与文案差 2 年）。检定 p=0.5 五五开——循环重掷至出现
+    // 输分支（injured=6 标记），断言寿元恰减 10
+    #[test]
+    fn mirror_guest_loss_deducts_ten_years() {
+        let mut g = sim_game(5, 100.0);
+        let mut seen_loss = false;
+        for _ in 0..400 {
+            let mut s = Life::default();
+            s.realm = 5;
+            s.luck = 100.0;
+            g.sim = Some(s);
+            g.modal = None;
+            g.build_event(57);
+            g.choose_option(0); // 赌命（special26）
+            let s = g.sim.as_ref().unwrap();
+            if s.injured == 6 {
+                assert!(
+                    (s.lifespan - 65.0).abs() < 1e-9,
+                    "输臂寿元恰减 10（默认 75）：{}",
+                    s.lifespan
+                );
+                seen_loss = true;
+                break;
+            }
+        }
+        assert!(seen_loss, "400 次检定未见输分支（p=0.5 下概率≈8e-121，不可能）");
+    }
+}
+
+// ================= v1.16.8 扩池 26 条（id 59..=84） =================
 
 #[cfg(test)]
 mod event_batch_v1173_tests {
@@ -9840,7 +10595,7 @@ mod event_batch_v1173_tests {
     fn new_chain_only_ids_never_in_pool() {
         let g = sim_game(5, 100.0);
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
-        for id in [77, 78, 80, 81] {
+        for id in [77, 78, 80, 81, 86, 87] {
             let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
             assert_eq!(ws[i], 0.0, "链内段 {} 权重恒 0", id);
         }
@@ -9941,7 +10696,7 @@ mod event_batch_v1173_tests {
             let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
             assert!(ws[i] > 0.0, "普通事件 {} realm5 应入池", id);
         }
-        // EVENTS 总数与权重预算断言（扩池后 85 条；稀有基权合计口径见 data.rs 注释）
-        assert_eq!(EVENTS.len(), 85);
+        // EVENTS 总数与权重预算断言（v1.16.9 扩池后 100 条；稀有基权合计口径见 data.rs 注释）
+        assert_eq!(EVENTS.len(), 100);
     }
 }
