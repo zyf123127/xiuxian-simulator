@@ -535,6 +535,15 @@ async fn main() {
         if g.tier_flash > 0.0 {
             g.tier_flash = (g.tier_flash - dt).max(0.0);
         }
+        // 剧情演出包：卡面/终局页入场动效计时递减（会话态，draw_modal_card/
+        // draw_ending_page 相位反推消费）。挂主循环而非 update_sim——modal 开启期
+        // update_sim 冻结（收起暂避期间计时照走，重开卡面不二次闪动），照 tier_flash 先例
+        if g.modal_anim > 0.0 {
+            g.modal_anim = (g.modal_anim - dt).max(0.0);
+        }
+        if g.ending_anim > 0.0 {
+            g.ending_anim = (g.ending_anim - dt).max(0.0);
+        }
         if debug {
             autopilot(&mut g, frame, &mut shots);
         }

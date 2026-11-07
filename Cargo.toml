@@ -1,6 +1,6 @@
 [package]
 name = "xiuxian"
-version = "1.16.5"
+version = "1.16.6"
 edition = "2021"
 
 [dependencies]
@@ -24,8 +24,11 @@ miniquad = { path = "vendor/miniquad" }
 
 # v1.9.24 内存/体积优化：LTO+单编译单元+去符号让 wasm 从 2.3MB 显著瘦身
 # （手机上下载/解析/编译的峰值内存同步下降）；strip 去符号不碍 panic 钩子输出。
+# 加载提速①：opt-level 3→"z"（体积优先）。本作回合制 UI，热点在 boot 期
+# 程序纹理逐像素循环与仿真 tick，z 档减速可承受；lto/codegen-units/panic/
+# strip 四项不动（构建管线既有口径）。
 [profile.release]
-opt-level = 3
+opt-level = "z"
 lto = "fat"
 codegen-units = 1
 panic = "abort"

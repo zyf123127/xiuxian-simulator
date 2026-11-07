@@ -51,11 +51,32 @@ pub fn button(
     sub: Option<&str>,
     enabled: bool,
 ) -> bool {
+    button_accent(x, y, w, h, label, sub, enabled, false)
+}
+
+/// 剧情演出包④：带主选项金描边变体（accent=true 描边 C_GOLD，终战推荐位/道途
+/// 首钮用）；其余行为与 button 逐比特一致。同帧新增按压态：hot 且左键按住
+///（触屏 hot 即手指落在钮上，等效按压）底色提亮 + 内衬高亮线，松开/移出即还原。
+pub fn button_accent(
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    label: &str,
+    sub: Option<&str>,
+    enabled: bool,
+    accent: bool,
+) -> bool {
     // v1.5.0：经信箱相机回虚拟坐标（桌面恒等，H5 任意屏比例正确命中）
     let (mx, my) = crate::cam::mouse();
     let hot = mx >= x && mx <= x + w && my >= y && my <= y + h;
+    // 按压态用 is_mouse_button_down（持续态）而非 pressed（边沿）——手指还压着
+    // 与「点了立即弹开」视觉可辨；仅影响底色/内衬线，命中与点击判定不变
+    let press = hot && enabled && is_mouse_button_down(MouseButton::Left);
     let base = if !enabled {
         Color::from_rgba(38, 32, 56, 225)
+    } else if press {
+        Color::from_rgba(108, 78, 140, 245)
     } else if hot {
         Color::from_rgba(92, 66, 122, 245)
     } else {
@@ -68,13 +89,26 @@ pub fn button(
         w,
         h,
         2.0,
-        if enabled {
-            C_GOLD_D
-        } else {
+        if !enabled {
             // v1.8.0 A6：禁用描边提亮（66,56,88→96,82,124），弱可用态一眼可辨
             Color::from_rgba(96, 82, 124, 255)
+        } else if accent {
+            C_GOLD
+        } else {
+            C_GOLD_D
         },
     );
+    if press {
+        // 内缩 2px 的高亮内衬：按压「陷下去」的视觉锚点（纯矩形零分配）
+        draw_rectangle_lines(
+            x + 2.0,
+            y + 2.0,
+            w - 4.0,
+            h - 4.0,
+            1.0,
+            Color::from_rgba(160, 128, 200, 130),
+        );
+    }
     if let Some(s) = sub {
         txt_c(
             label,
@@ -127,19 +161,32 @@ pub fn bar(x: f32, y: f32, w: f32, h: f32, frac: f32, c: Color) {
 }
 
 pub(crate) fn panel_card(x: f32, y: f32, w: f32, h: f32) {
-    draw_rectangle(x, y, w, h, C_PANEL);
-    draw_rectangle_lines(x, y, w, h, 2.5, C_GOLD_D);
+    panel_card_a(x, y, w, h, 1.0);
+}
+
+// 剧情演出包：色相不变、alpha 乘算（纯算术零分配；a=1.0 时与原色逐比特一致）
+fn fade(c: Color, a: f32) -> Color {
+    Color::new(c.r, c.g, c.b, c.a * a.clamp(0.0, 1.0))
+}
+
+/// 带透明度卡面（剧情演出包①：入场淡入用）。alpha=1.0 时逐像素等同 panel_card；
+/// 底/描边/内衬/角饰同步乘 α，全 30+ 既有调用点经 panel_card 包装零改动。
+pub(crate) fn panel_card_a(x: f32, y: f32, w: f32, h: f32, alpha: f32) {
+    let a = alpha.clamp(0.0, 1.0);
+    draw_rectangle(x, y, w, h, fade(C_PANEL, a));
+    draw_rectangle_lines(x, y, w, h, 2.5, fade(C_GOLD_D, a));
     draw_rectangle_lines(
         x + 5.0,
         y + 5.0,
         w - 10.0,
         h - 10.0,
         1.0,
-        Color::from_rgba(96, 76, 130, 160),
+        Color::new(96.0 / 255.0, 76.0 / 255.0, 130.0 / 255.0, 160.0 / 255.0 * a),
     );
     // 四角金色 L 形角饰
     let cl = 16.0f32;
     let t = 3.0f32;
+    let gold = fade(C_GOLD, a);
     for (cx, cy, dx, dy) in [
         (x, y, 1.0, 1.0),
         (x + w, y, -1.0, 1.0),
@@ -151,16 +198,31 @@ pub(crate) fn panel_card(x: f32, y: f32, w: f32, h: f32) {
             cy - if dy < 0.0 { t } else { 0.0 },
             cl,
             t,
-            C_GOLD,
+            gold,
         );
         draw_rectangle(
             cx - if dx < 0.0 { t } else { 0.0 },
             cy - if dy < 0.0 { cl } else { 0.0 },
             t,
             cl,
-            C_GOLD,
+            gold,
         );
     }
+}
+
+// 剧情演出包⑤：标题分隔线金饰——中央菱形金点（三层递变矩形叠合，纯矩形无旋转）
+// + 两侧短金线（照 draw_banner 装饰线先例）。零分配零新字形；alpha 随卡面入场淡入，
+// 稳态 alpha=1.0。分隔线跨度最窄 520（普通版式），饰线总宽 128 居中恒不出界。
+fn title_ornament(cx: f32, cy: f32, alpha: f32) {
+    let gold = fade(C_GOLD, alpha);
+    let line = fade(C_GOLD_D, alpha);
+    // 菱形：宽 10 高 2 / 宽 6 高 4 / 宽 2 高 8 三层叠合
+    draw_rectangle(cx - 5.0, cy - 1.0, 10.0, 2.0, gold);
+    draw_rectangle(cx - 3.0, cy - 2.0, 6.0, 4.0, gold);
+    draw_rectangle(cx - 1.0, cy - 4.0, 2.0, 8.0, gold);
+    // 两侧短金线：16px 留白 + 48px 线长，1.5px 高与分隔线同语
+    draw_rectangle(cx - 64.0, cy - 0.75, 48.0, 1.5, line);
+    draw_rectangle(cx + 16.0, cy - 0.75, 48.0, 1.5, line);
 }
 
 // 修士脚下旋转法阵（透视椭圆 + 双圈刻度反向旋转）
@@ -1645,7 +1707,19 @@ pub fn draw_modal_card(g: &mut Game) {
         (t.as_str(), x.as_str(), d.as_slice())
     };
 
-    draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.5));
+    // 剧情演出包①：入场淡入+轻滑（modal_anim 0.18→0 剩余秒，各开启口置值、主循环
+    // 递减；稳态 modal_anim==0 → k=0，下方全部相位恒等旧版式逐像素不变）。相位反推
+    // 照 banner 先例（draw.rs k=1-t/T）；动画期命中几何随卡体同步偏移 dy，0.18s 后
+    // 精确复位——动画期照常可点，命中=所见
+    let k = (g.modal_anim / 0.18).clamp(0.0, 1.0); // 1=开启帧 → 0=稳态
+    let p = 1.0 - k; // 入场进度 0→1
+    let dim = 0.5 * (0.3 + 0.7 * p); // 暗幕先行：开启帧即压暗 0.15，随进度至 0.5
+    let dy = 14.0 * k; // 卡体轻滑 y+14→0
+    let card_a = p; // 卡体 alpha
+    // ③ 立绘滞后 0.05s 分层入画；⑥ 正文滞后 0.08s 浮现（纯算术相位，零分配零新字形）
+    let art_a = (((0.18 - g.modal_anim) - 0.05) / 0.13).clamp(0.0, 1.0);
+    let text_a = (((0.18 - g.modal_anim) - 0.08) / 0.10).clamp(0.0, 1.0);
+    draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, dim));
     // v1.16.3 邂逅版式：卡带 actor（模拟「同页天成」/现实好感事件）且有真立绘时
     // 改宽卡 800×520——立绘收左 contain 220×420（复用 npc_portrait_box 人物页同
     // 语言），正文/抉择钮右移。真机反馈「模拟中结识人物看不到画像，立绘作用没体现」。
@@ -1662,35 +1736,64 @@ pub fn draw_modal_card(g: &mut Game) {
     // v1.16.4 暂避钮命中先采样：title/descs 只读借用横跨绘制段直到选项循环结束，
     // g.modal_min 的 &mut 移到段尾执行，免 E0502（钮面在两版式分支内照常绘出）
     let (mxp, myp) = crate::cam::mouse();
-    let (hx, hy) = if meeting { (920.0, 122.0) } else { (820.0, 174.0) };
+    let (hx, hy) = if meeting {
+        (920.0, 122.0 + dy)
+    } else {
+        (820.0, 174.0 + dy)
+    };
     let hide_hit = is_mouse_button_pressed(MouseButton::Left)
         && mxp >= hx
         && mxp <= hx + 110.0
         && myp >= hy
         && myp <= hy + 26.0;
     if meeting {
-        panel_card(240.0, 100.0, 800.0, 520.0);
-        txt_c(title, V_W * 0.5, 128.0, 24, C_GOLD);
-        draw_rectangle(270.0, 148.0, 740.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+        panel_card_a(240.0, 100.0 + dy, 800.0, 520.0, card_a);
+        txt_c(title, V_W * 0.5, 128.0 + dy, 24, fade(C_GOLD, card_a));
+        draw_rectangle(
+            270.0,
+            148.0 + dy,
+            740.0,
+            1.5,
+            Color::new(
+                96.0 / 255.0,
+                76.0 / 255.0,
+                130.0 / 255.0,
+                160.0 / 255.0 * card_a,
+            ),
+        );
+        title_ornament(V_W * 0.5, 148.0 + dy, card_a);
         // 立绘盒 (270,160) 220×420、底边锚 580（box_h=bottom_off=420：顶 = 580−dh ≥ 160，
         // 恒落 npc_clip_band 116..616 视口内不裁）；AI 图缺失时 portrait 为 None 已走旧版式
-        crate::charpanel::npc_portrait_box(
+        crate::charpanel::npc_portrait_box_a(
             portrait.as_ref(),
             &crate::art::art().icon_yun,
             270.0,
-            160.0,
+            160.0 + dy,
             220.0,
             420.0,
             420.0,
+            art_a,
         );
-        wrap_draw(text, 530.0, 170.0, 16, 480.0, 28.0, C_TEXT);
-        button(920.0, 122.0, 110.0, 26.0, "暂 避", None, true);
+        wrap_draw(text, 530.0, 170.0 + dy, 16, 480.0, 28.0, fade(C_TEXT, text_a));
+        button(920.0, 122.0 + dy, 110.0, 26.0, "暂 避", None, true);
     } else {
-        panel_card(340.0, 160.0, 600.0, 400.0);
-        txt_c(title, V_W * 0.5, 188.0, 24, C_GOLD);
-        draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
-        wrap_draw(text, 380.0, 224.0, 16, 520.0, 28.0, C_TEXT);
-        button(820.0, 174.0, 110.0, 26.0, "暂 避", None, true);
+        panel_card_a(340.0, 160.0 + dy, 600.0, 400.0, card_a);
+        txt_c(title, V_W * 0.5, 188.0 + dy, 24, fade(C_GOLD, card_a));
+        draw_rectangle(
+            380.0,
+            208.0 + dy,
+            520.0,
+            1.5,
+            Color::new(
+                96.0 / 255.0,
+                76.0 / 255.0,
+                130.0 / 255.0,
+                160.0 / 255.0 * card_a,
+            ),
+        );
+        title_ornament(V_W * 0.5, 208.0 + dy, card_a);
+        wrap_draw(text, 380.0, 224.0 + dy, 16, 520.0, 28.0, fade(C_TEXT, text_a));
+        button(820.0, 174.0 + dy, 110.0, 26.0, "暂 避", None, true);
     }
     // 命中先收集、借还后再分派（&mut）——免整卡克隆
     let mut picked: Option<usize> = None;
@@ -1704,6 +1807,9 @@ pub fn draw_modal_card(g: &mut Game) {
         .or(g.modal.as_ref())
         .is_some_and(|c| c.kind == crate::game::CardKind::Finale);
     let (step, bh) = if fin { (58.0, 58.0) } else { (74.0, 62.0) };
+    // 剧情演出包④：主选项金描边（终战推荐位=下标 1「《留白》·撕稿」副标「推荐」、
+    // 道途首钮=下标 0「剑修」——推荐/默认路径的可扫视性提升）
+    let kind_acc = g.rmodal.as_ref().or(g.modal.as_ref()).map(|c| c.kind);
 
     for (i, (label, _)) in g
         .rmodal
@@ -1716,11 +1822,13 @@ pub fn draw_modal_card(g: &mut Game) {
     {
         let (bx, by, bw, bhh) = if meeting {
             // 邂逅版式：右列纵排（正文 ≥2 行至 282、钮起 330；3 钮末底 540 < 卡底 620）
-            (530.0, 330.0 + i as f32 * 74.0, 480.0, 62.0)
+            (530.0, 330.0 + dy + i as f32 * 74.0, 480.0, 62.0)
         } else {
-            (380.0, 316.0 + i as f32 * step, 520.0, bh)
+            (380.0, 316.0 + dy + i as f32 * step, 520.0, bh)
         };
-        if button(bx, by, bw, bhh, label, Some(descs[i].1.as_str()), true) {
+        let accent = matches!(kind_acc, Some(crate::game::CardKind::Path) if i == 0)
+            || matches!(kind_acc, Some(crate::game::CardKind::Finale) if i == 1);
+        if button_accent(bx, by, bw, bhh, label, Some(descs[i].1.as_str()), true, accent) {
             picked = Some(i);
         }
     }
@@ -2672,23 +2780,62 @@ fn draw_guide_panel(g: &mut Game) {
 pub fn draw_ending_page(g: &mut Game, idx: usize, from_book: bool) {
     let i = idx.min(3);
     let e = &crate::game::ENDINGS[i];
-    draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(8, 5, 16, 242));
-    panel_card(190.0, 80.0, 900.0, 560.0);
+    // 剧情演出包②：入场节奏 0.6s（choose_ending 事件帧置 ending_anim，主循环递减；
+    // 字号 32/17/16/18 已在该事件帧一次预热，动画期零新字形零图集重传）。相位链：
+    // 暗幕先行 → 卡体 0.10s 起浮现 → 标题 0.25s 起淡入 → 正文 0.40s 起 → 收益行
+    // 0.55s 起 → 合页钮动画结束后解禁（禁点期 enabled=false 灰显，不吞 Esc/暂避外输入）。
+    // 书志重读（from_book）与稳态（ending_anim==0）k=0 → 全相位=1，逐像素等同旧版式
+    let k = if from_book {
+        0.0
+    } else {
+        (g.ending_anim / 0.6).clamp(0.0, 1.0)
+    };
+    let p = 1.0 - k; // 入场进度 0→1
+    let pe = p * p * (3.0 - 2.0 * p); // smoothstep 缓动（纯算术）
+    let dim_a = (242.0 * (0.35 + 0.65 * pe)) as u8; // 暗幕先行：开启帧 85，随进度至 242
+    let card_a = ((p - 0.10) / 0.30).clamp(0.0, 1.0);
+    let title_a = ((p - 0.25) / 0.30).clamp(0.0, 1.0);
+    let body_a = ((p - 0.40) / 0.30).clamp(0.0, 1.0);
+    let gain_a = ((p - 0.55) / 0.30).clamp(0.0, 1.0);
+    draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(8, 5, 16, dim_a));
+    panel_card_a(190.0, 80.0, 900.0, 560.0, card_a);
     txt_c(
         &format!("《{}》 · {}", e.name, e.alias),
         V_W * 0.5,
         130.0,
         32,
-        C_GOLD,
+        fade(C_GOLD, title_a),
     );
-    draw_rectangle(280.0, 162.0, 720.0, 1.5, Color::from_rgba(96, 76, 130, 160));
-    wrap_draw(e.body, 260.0, 186.0, 17, 760.0, 30.0, C_TEXT);
+    draw_rectangle(
+        280.0,
+        162.0,
+        720.0,
+        1.5,
+        Color::new(
+            96.0 / 255.0,
+            76.0 / 255.0,
+            130.0 / 255.0,
+            160.0 / 255.0 * card_a,
+        ),
+    );
+    title_ornament(V_W * 0.5, 162.0, card_a);
+    wrap_draw(e.body, 260.0, 186.0, 17, 760.0, 30.0, fade(C_TEXT, body_a));
     for (j, ln) in e.gain.lines().enumerate() {
-        txt_c(ln, V_W * 0.5, 412.0 + j as f32 * 26.0, 16, C_CYAN);
+        txt_c(ln, V_W * 0.5, 412.0 + j as f32 * 26.0, 16, fade(C_CYAN, gain_a));
     }
     // 合页钮 y470..518：书志重看路径下标题屏底层按钮带（开始 522-576/底排 592-636）
     // 先于本页做命中测试——立即模式下交互矩形不得与其重叠（烙印面板顿悟钮同款布局回避）
-    if button(V_W * 0.5 - 130.0, 470.0, 260.0, 48.0, "合上这一页", None, true) {
+    // 剧情演出包②：动画期禁点（enabled=false 灰显——视觉上预告「先读完这一页」）
+    let can_close = from_book || g.ending_anim <= 0.0;
+    if button(
+        V_W * 0.5 - 130.0,
+        470.0,
+        260.0,
+        48.0,
+        "合上这一页",
+        None,
+        can_close,
+    ) {
         g.play(crate::sounds::Which::Page);
         if from_book {
             g.book_view = None;

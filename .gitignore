@@ -3,3 +3,5 @@
 xiuxian_save.txt
 /.zcode
 *.pdb
+/tools/binaryen
+

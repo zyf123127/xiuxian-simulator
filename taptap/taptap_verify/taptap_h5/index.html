@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.16.5";</script>
+    <script>var GAME_VER = "1.16.6";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -247,7 +247,45 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.16.5"></script>
+    <!-- 加载提速④：compileStreaming MIME 兜底。bundle 的 load() 流式分支在
+         compileStreaming 拒绝时只 console.error 即死（老 Chromium 强制
+         application/wasm MIME，宿主静态服务器配错即黑屏无回退）。这里在该
+         分支外面包一层：失败时从 Response.url 重新 fetch 走 arrayBuffer +
+         compile（与其老内核分支同路径），bundle 本体零改动。仅当内核具备
+         compileStreaming 时才包装（没有则 bundle 本就走 arrayBuffer 分支）；
+         重拉走同一 URL，被下方 fetch 进度包装再次拦截，进度照常显示。 -->
+    <script>
+        (function () {
+            try {
+                if (!window.WebAssembly ||
+                    typeof WebAssembly.compileStreaming !== "function") return;
+                var _cs = WebAssembly.compileStreaming;
+                WebAssembly.compileStreaming = function (src) {
+                    var retry = function (err) {
+                        try {
+                            return Promise.resolve(src).then(function (res) {
+                                var url = (res && res.url) || "";
+                                if (!url) throw err;
+                                return fetch(url).then(function (r2) {
+                                    return r2.arrayBuffer();
+                                }).then(function (buf) {
+                                    return WebAssembly.compile(buf);
+                                });
+                            });
+                        } catch (e2) {
+                            return Promise.reject(err);
+                        }
+                    };
+                    try {
+                        return _cs.apply(this, arguments)["catch"](retry);
+                    } catch (e) {
+                        return retry(e);
+                    }
+                };
+            } catch (e) { /* 包装失败维持原状：流式可用则用，不可用走旧分支 */ }
+        })();
+    </script>
+    <script src="mq_js_bundle.js?v=1.16.6"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -408,6 +446,18 @@
                 };
                 importObject.env.xx_state = function (code) {
                     window.__xxState = code | 0;
+                    // 加载提速⑤：启动分段（main.rs st90-93）透出到加载层，消除
+                    // 「启动中…」黑箱期。与 Rust 阶段一一对应：exports 挂载→st90
+                    // 之间 = init_font+init_art（重头，见 instantiate 钩子的
+                    // 「初始化字体与场景…」）；st90→st92 = Game::new 含读档；
+                    // st92→st93 = 收尾；st93 后下一帧即上报场景码 0-6（首帧已
+                    // 渲染，加载层由 pollFirstFrame 的场景码判据揭幕）。场景码
+                    // 0-6 不改文案（运行期高频上报，加载层此时多已隐藏）。
+                    try {
+                        if (code === 90) xx_stage("读取存档，构建世界…");
+                        else if (code === 92) xx_stage("准备就绪…");
+                        else if (code === 93) xx_stage("进入游戏…");
+                    } catch (eS) {}
                 };
                 // v1.9.12 三通道（Rust xx_dbg 模块声明，须成对）：
                 // xx_click：Rust 每消费一次点击上报计数（桥看门狗数据源）
@@ -524,11 +574,14 @@
                 return _inst.apply(this, arguments).then(function (res) {
                     // 兼容两种就绪形态：规范 WebView 为 {module, instance}；个别内嵌
                     // 环境直接回裸 Instance（res.exports）——统一取 exports，取到即
-                    // 画「启动中…」并先行挂载（v1.8.2 修复语义在两种形态下都保持）
+                    // 画阶段文案并先行挂载（v1.8.2 修复语义在两种形态下都保持）。
+                    // 加载提速⑤：此点到 Rust st90 上报之间恰是 init_font+init_art
+                    //（541KB 字体解析 + 1280×720 背景逐像素生成，真机数秒），
+                    // 旧文案「启动中…」口径含糊，改为如实的「初始化字体与场景…」
                     var ex = res && (res.instance ? res.instance.exports : res.exports);
                     if (ex) {
                         window.wasm_exports = ex;
-                        try { if (typeof xx_stage === "function") xx_stage("启动中…"); } catch (e) {}
+                        try { if (typeof xx_stage === "function") xx_stage("初始化字体与场景…"); } catch (e) {}
                     }
                     return res;
                 });
@@ -1172,10 +1225,17 @@
                 __wdIv = setInterval(window.xxWdCheck, 2000);
             })();
         }
-        // 首帧检测：wasm 导出就绪（on_init 里 window.wasm_exports 被赋值）即隐藏
+        // 首帧检测：wasm 导出就绪（on_init 里 window.wasm_exports 被赋值）即揭幕
         // 加载覆盖层。用 setInterval 而非 rAF：页面不可见时 rAF 会被挂起。
         // v1.8.2：删除旧的"8 秒无条件隐藏"兜底——它会在 12MB 包还在编译时
         // 提前撤掉加载层，玩家面对黑屏点击（点按钮没反应的第一诱因）。
+        // 加载提速⑤：揭幕判据从「exports 就绪」收紧为「首帧场景码 0-6」——
+        // exports 挂载后 Rust 还要跑 init_font+init_art 数秒才出首帧，旧口径
+        // 此刻撤层让玩家面对黑画布；新口径加载层继续显示真实阶段文案
+        //（xx_state 90-93 透出）直到首帧渲染完成。r2 双加载判定与 screen_size
+        // 直通同步仍以 exports 就绪为时点（维持既有语义）；启动死兜底不变
+        //（下方 v1.15.0 启动死自救：exports 就绪 15s 无场景码自动重载，
+        // 其判定与加载层是否隐藏无关）。
         (function pollFirstFrame() {
             var loading = document.getElementById("loading");
             var synced = false;
@@ -1187,6 +1247,7 @@
                 // **不隐藏加载条、立即重载**，重载全程被加载界面盖住；r2 页面
                 // 缓存热秒开，加载条一闪即过。快加载直接进入（无白闪无重载）。
                 if (performance.now() - xxLoadStart > 1500 && !/[?&]r2=1/.test(location.search)) {
+                    synced = true; // 导航即将发生，r2 判定只走一次
                     try { document.getElementById("ld_msg").textContent =
                         "凡人模拟 v" + GAME_VER + " · 正在进入（已等待 " +
                         Math.round((performance.now() - xxLoadStart) / 1000) + " 秒）"; } catch (e) {}
@@ -1195,11 +1256,19 @@
                     return; // 加载层保持显示，导航即将发生
                 }
                 synced = true;
-                loading.classList.add("hidden");
                 // v1.9.7：只做 screen_size 直通同步。canvas 清零式 resyncBacking
                 // 已删除——它在 X5 上杀死帧回调（v1.9.6 真机 F:28 冻帧实锤）。
                 window.xxSyncScreen();
                 setTimeout(window.xxSyncScreen, 2000);
+                // 首帧揭幕：轮询场景码 0-6（首帧渲染完成的唯一信号）
+                (function pollScene() {
+                    var st = window.__xxState;
+                    if (typeof st === "number" && st >= 0 && st <= 6) {
+                        loading.classList.add("hidden");
+                        return;
+                    }
+                    setTimeout(pollScene, 100);
+                })();
             }
             var timer = setInterval(function () {
                 if (window.wasm_exports) onReady();

@@ -96,6 +96,10 @@ fn maybe_fav_event(g: &mut Game, i: usize) {
         return;
     }
     if let Some(card) = npc_event_card(i) {
+        // 剧情演出包①：事件帧预热（标题 24/正文 16，同 build_event 先例）+ 入场动效
+        crate::ui::prewarm_text(&card.title, &[24]);
+        crate::ui::prewarm_text(&card.text, &[16]);
+        g.modal_anim = 0.18;
         g.rmodal = Some(card);
         g.rmodal_npc = Some(i);
         g.log(format!("{}似有心事欲言，且听分说……", NPC_NAMES[i]), C_GOLD);

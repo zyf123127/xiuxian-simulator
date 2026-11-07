@@ -860,6 +860,13 @@ pub struct Game {
 
     pub modal_min: bool, // v1.16.4 事件卡暂避态：收起卡面先看日志，徽章点开重回抉择（不进存档）
 
+    // 剧情演出包：卡面/终局页入场动效剩余秒（会话态不进存档，照 tier_flash
+    // game.rs:815 口径——各开启口置值后向 0 收敛，0 = 无动画；旧档载入天然 0
+    // 不误触；暂避收起期间计时照走，重开卡面不会二次闪动）。计时递减挂主循环
+    //（modal 开启期 update_sim 冻结，照 tier_flash 的 main.rs 先例）
+    pub modal_anim: f32,   // 事件/道途/终战/好感/破境卡入场：0.18→0（draw_modal_card 消费）
+    pub ending_anim: f32,  // 终局演出页入场节奏：0.6→0（draw_ending_page 消费；书志重读不置位即无动画）
+
     pub speed: usize, // 模拟速度 0暂停 1慢 2快 3跳过
 
     pub acc: f32,
@@ -1290,6 +1297,8 @@ impl Game {
             zoom_art: None,
 
             modal_min: false,
+            modal_anim: 0.0,
+            ending_anim: 0.0,
 
             speed: 2,
 
@@ -1689,7 +1698,8 @@ impl Game {
         if self.rmodal.is_some() {
             return;
         }
-        self.rmodal = Some(EventCard {
+        // 剧情演出包①：事件帧预热（标题 24/正文 16，同 build_event 先例）+ 入场动效
+        let card = EventCard {
             kind: CardKind::Path,
             actor: None, // 道途卡无人物立绘，维持 600×400 原版式
             title: "成行择道 · 三途分流".into(),
@@ -1699,7 +1709,11 @@ impl Game {
                 ("气修 · 修为 ×1.25 破境 +6%".into(), Eff::new()),
                 ("丹修 · 服丹 ×1.35 灵田 ×1.6".into(), Eff::new()),
             ],
-        });
+        };
+        crate::ui::prewarm_text(&card.title, &[24]);
+        crate::ui::prewarm_text(&card.text, &[16]);
+        self.modal_anim = 0.18;
+        self.rmodal = Some(card);
         self.rmodal_npc = None; // 道途卡不归属 NPC
     }
 
@@ -1746,13 +1760,18 @@ impl Game {
         if self.meta.endings_seen & 0b0010 != 0 {
             opts.push(("《合订》 · 收册人（隐藏）".to_string(), Eff::new()));
         }
-        self.rmodal = Some(EventCard {
+        // 剧情演出包①：事件帧预热（标题 24/正文 16，同 build_event 先例）+ 入场动效
+        let card = EventCard {
             kind: CardKind::Finale,
             actor: None, // 终战卡无人物立绘，维持 600×400 原版式
             title: "终卷 · 执笔人递笔".into(),
             text: "你赢了封卷吏。执笔人递笔：「字不错。入正文吧。」\n「我还能改自己吗？」「一字不改。永生换的。」\n别等他写，字自己跑。六牒已齐（讨牒 6/6），问笔在即。".into(),
             opts,
-        });
+        };
+        crate::ui::prewarm_text(&card.title, &[24]);
+        crate::ui::prewarm_text(&card.text, &[16]);
+        self.modal_anim = 0.18;
+        self.rmodal = Some(card);
         self.rmodal_npc = None; // 终战卡不归属 NPC
     }
 
@@ -1772,6 +1791,14 @@ impl Game {
         let ed = &ENDINGS[e];
         self.log(format!("【结局达成】{}——{}", ed.name, ed.alias), C_GOLD);
         self.show_banner(format!("结 局 · 《{}》", ed.name), C_GOLD);
+        // 剧情演出包②：终局页入场节奏 0.6s（暗幕先行→标题→正文→合页钮解禁）。
+        // 演出页全部字号（32 标题/17 正文/16 收益/18 合页钮）在事件帧一次预热，
+        // 动画期零新字形——32/17 不在 UI_SIZES/PANEL_WARM 覆盖内，必须此处灌
+        crate::ui::prewarm_text(&format!("《{}》 · {}", ed.name, ed.alias), &[32]);
+        crate::ui::prewarm_text(ed.body, &[17]);
+        crate::ui::prewarm_text(ed.gain, &[16]);
+        crate::ui::prewarm_text("合上这一页", &[18]);
+        self.ending_anim = 0.6;
         self.ending_show = Some(e);
         self.play(crate::sounds::Which::Page);
         self.sync_save();
@@ -2545,6 +2572,10 @@ impl Game {
                 card.opts.push(("继续蓄势".into(), e2));
             }
 
+            // 剧情演出包①：破境卡与普通事件卡同款入场动效（预热同 build_event 先例）
+            crate::ui::prewarm_text(&card.title, &[24]);
+            crate::ui::prewarm_text(&card.text, &[16]);
+            self.modal_anim = 0.18;
             self.modal = Some(card);
         }
     }
@@ -3895,6 +3926,8 @@ impl Game {
             crate::ui::prewarm_text(&card.title, &[24]);
             crate::ui::prewarm_text(&card.text, &[16]);
 
+            // 剧情演出包①：开启帧置卡面入场动效（0.18→0 会话态，主循环递减）
+            self.modal_anim = 0.18;
             self.modal = Some(card);
         }
     }
@@ -6521,6 +6554,8 @@ mod revenge_tests {
             zoom_art: None,
 
             modal_min: false,
+            modal_anim: 0.0,
+            ending_anim: 0.0,
 
             speed: 0,
 
@@ -6957,6 +6992,82 @@ mod revenge_tests {
         g.ending_show = None;
         g.choose_ending(1);
         assert_eq!(g.meta.endings_seen & 0b0010, 0b0010);
+    }
+
+    // ================= 剧情演出包：入场动效（会话态计时） =================
+
+    // 卡面各开启口统一置 modal_anim=0.18（道途/终战/好感事件），会话态默认 0
+    //（旧档口径：载入天然无动画）；卫语句拒绝的开启口不得置值
+    #[test]
+    fn card_open_sets_modal_anim() {
+        let mut g = game_with(Life::default(), None);
+        assert_eq!(g.modal_anim, 0.0, "会话态默认无动画（旧档载入口径）");
+
+        g.open_path_card();
+        assert!(g.rmodal.is_some());
+        assert_eq!(g.modal_anim, 0.18, "道途卡开启帧置入场动效");
+
+        g.rmodal = None;
+        g.open_finale_card();
+        assert!(g.rmodal.is_some());
+        assert_eq!(g.modal_anim, 0.18, "终战卡开启帧置入场动效");
+
+        // 好感事件口：好感达标 + 未抉择过 + 非模拟 + 无悬空卡 → add_fav 触发
+        g.rmodal = None;
+        g.meta.npc_ev = [false, false, false, false];
+        g.meta.npc_fav[0] = crate::data::NPC_EVENT_FAV;
+        crate::npc::add_fav(&mut g, 0, 0);
+        assert!(g.rmodal.is_some(), "好感达标应触发事件卡");
+        assert_eq!(g.modal_anim, 0.18, "好感事件卡开启帧置入场动效");
+
+        // 卫语句拒绝口：rmodal 已占时 open_path_card 不置值、不动既有卡
+        g.modal_anim = 0.0;
+        g.open_path_card();
+        assert_eq!(g.modal_anim, 0.0, "rmodal 被占时不得重启动效");
+    }
+
+    // 终局演出页：choose_ending 置 ending_anim=0.6（动画期合页钮禁点的数据基础，
+    // 禁点判定在 draw 侧 can_close）；卫语句拒绝路径（未解锁 D 位）不得置值；
+    // 书志重读路径不置位（from_book 在 draw 侧跳过演出）
+    #[test]
+    fn ending_open_sets_ending_anim() {
+        let mut g = game_with(Life::default(), None);
+        assert_eq!(g.ending_anim, 0.0);
+        g.rmodal = Some(EventCard {
+            kind: CardKind::Finale,
+            actor: None,
+            title: "终卷 · 执笔人递笔".into(),
+            text: "".into(),
+            opts: vec![
+                ("《定稿》 · 认写".into(), Eff::new()),
+                ("《留白》 · 撕稿".into(), Eff::new()),
+                ("《执笔》 · 夺笔".into(), Eff::new()),
+            ],
+        });
+        g.choose_ending(1);
+        assert_eq!(g.ending_show, Some(1));
+        assert_eq!(g.ending_anim, 0.6, "终局页开启帧置入场节奏");
+
+        // 未解锁 D 位：卫语句拒绝，不置演出页不置动效
+        //（先清 endings_seen——上一步 choose_ending(1) 已置 bit1，会使 D 解锁）
+        g.ending_show = None;
+        g.ending_anim = 0.0;
+        g.meta.endings_seen = 0;
+        g.rmodal = Some(EventCard {
+            kind: CardKind::Finale,
+            actor: None,
+            title: "终卷 · 执笔人递笔".into(),
+            text: "".into(),
+            opts: vec![
+                ("《定稿》 · 认写".into(), Eff::new()),
+                ("《留白》 · 撕稿".into(), Eff::new()),
+                ("《执笔》 · 夺笔".into(), Eff::new()),
+                ("《合订》 · 收册人（隐藏）".into(), Eff::new()),
+            ],
+        });
+        g.choose_ending(3);
+        assert!(g.ending_show.is_none());
+        assert_eq!(g.ending_anim, 0.0, "卫语句拒绝不得启动演出节奏");
     }
 
     // ================= v1.12.1 讨牒/缝页 =================

@@ -216,6 +216,23 @@ pub(crate) fn npc_portrait_box(
     box_h: f32,
     bottom_off: f32,
 ) {
+    npc_portrait_box_a(tex, icon, x, card_y, box_w, box_h, bottom_off, 1.0);
+}
+
+/// 剧情演出包③：带透明度立绘（邂逅卡入场「入画」淡入，滞后卡体 0.05s 分层显现）。
+/// alpha=1.0 时 tint=WHITE，与原 npc_portrait_box 逐像素一致；人物页/图鉴既有
+/// 调用点经包装零改动。
+pub(crate) fn npc_portrait_box_a(
+    tex: Option<&Texture2D>,
+    icon: &Texture2D,
+    x: f32,
+    card_y: f32,
+    box_w: f32,
+    box_h: f32,
+    bottom_off: f32,
+    alpha: f32,
+) {
+    let a = alpha.clamp(0.0, 1.0);
     let (dw, dh) = match tex {
         Some(t) => {
             let ar = t.width() / t.height().max(1.0);
@@ -236,7 +253,7 @@ pub(crate) fn npc_portrait_box(
         tex.unwrap_or(icon),
         x + (box_w - dw) * 0.5,
         vy,
-        WHITE,
+        Color::new(1.0, 1.0, 1.0, a),
         DrawTextureParams {
             source: Some(Rect::new(0.0, (vy - top) / dh * th, tw, vh / dh * th)),
             dest_size: Some(vec2(dw, vh)),
