@@ -225,6 +225,51 @@ fn title_ornament(cx: f32, cy: f32, alpha: f32) {
     draw_rectangle(cx + 16.0, cy - 0.75, 48.0, 1.5, line);
 }
 
+// v1.17.1 事件正文分段绘制（复审②修正：收秒标度 t=0.18-g.modal_anim，不再把
+// 归一化 p 当秒用——段 0 相位 (t-0.08)/0.10 与旧 text_a 逐像素一致，「80ms 后
+// 开始、100ms 淡满」的原节奏保留，段间 40ms）。段 i 除数取 0.10-i*0.04 压缩后续
+// 段淡入时长：0.18s 入场窗口物理上装不下「0.08+0.04+0.10」的段 1 全程（复审定
+// 稿原式 (t-0.08-i*0.04)/0.10 在 t=0.18 稳态时段 1 alpha 恒 0.6 半透明），压缩后
+// t=0.18 时全段恒 1——稳态逐像素不变红线优先，段 1 变为 120ms 后开始、60ms 淡满。
+// 按 '\n' 迭代分段（split 迭代器零分配），段间 8px；单段卡无段距，返回值与
+// wrap_draw 相等。段落各入 wrap 缓存（key=段文本），段数少无膨胀；动画期变色不
+// 触发字形重栅格（颜色不入缓存 key，ui.rs WrapKey 先例）
+fn draw_event_text(
+    s: &str,
+    x: f32,
+    y: f32,
+    size: u16,
+    maxw: f32,
+    line_h: f32,
+    c: Color,
+    t: f32,
+) -> f32 {
+    let mut yy = y;
+    let mut total = 0.0f32;
+    for (i, seg) in s.split('\n').enumerate() {
+        let dur = (0.10 - i as f32 * 0.04).max(0.02); // 防御：段数>2 时除数不归零
+        let seg_a = ((t - 0.08 - i as f32 * 0.04) / dur).clamp(0.0, 1.0);
+        let h = wrap_draw(seg, x, yy, size, maxw, line_h, fade(c, seg_a));
+        yy += h + 8.0; // 段间距
+        total += h + 8.0;
+    }
+    total - 8.0 // 末段无尾距（单段卡 total==行高*行数，与旧版式一致）
+}
+
+// v1.17.1 复审④：链段阶段徽标文本——取值域固定 5 种，match 产 &'static str
+// 零分配（原每帧 format! 违反「每帧绘制路径禁止新增堆分配」红线）；5 串在
+// build_event 尾 prewarm_text(&[16])
+fn stage_label(seg: u8, total: u8) -> &'static str {
+    match (seg, total) {
+        (1, 2) => "1/2",
+        (2, 2) => "2/2",
+        (1, 3) => "1/3",
+        (2, 3) => "2/3",
+        (3, 3) => "3/3",
+        _ => "",
+    }
+}
+
 // 修士脚下旋转法阵（透视椭圆 + 双圈刻度反向旋转）
 fn draw_magic_circle(cx: f32, cy: f32, t: f32, c: Color) {
     let squash = 0.42f32;
@@ -265,7 +310,19 @@ fn draw_magic_circle(cx: f32, cy: f32, t: f32, c: Color) {
 }
 
 pub fn draw_bg(art: &Art) {
-    draw_texture(&art.bg, 0.0, 0.0, WHITE);
+    // v1.17.1 加载小刀：bg 纹理降采样 640×360（build_bg 省靴期 75% 像素写），
+    // 此处 Linear 放大到全屏 1280×720——唯一消费点，原 draw_texture 按纹理原
+    // 尺寸 1:1 贴屏，改 dest_size 后观感等位
+    draw_texture_ex(
+        &art.bg,
+        0.0,
+        0.0,
+        WHITE,
+        DrawTextureParams {
+            dest_size: Some(Vec2::new(V_W, V_H)),
+            ..Default::default()
+        },
+    );
 }
 
 // 云雾带 + 仙鹤剪影（纯函数绘制，零分配）
@@ -1732,14 +1789,33 @@ pub fn draw_modal_card(g: &mut Game) {
             None => None,
         }
     };
+    // v1.17.1 稀有/链段标记采样（纯会话态随卡生灭；rare=EVENTS w≤RARE_W、
+    // stage=链段进度，build_event 尾统一置位）
+    let (card_rare, card_stage) = {
+        let card = g.rmodal.as_ref().or(g.modal.as_ref()).unwrap();
+        (card.rare, card.stage)
+    };
     let meeting = portrait.is_some();
+    // v1.17.1 复审①：tall/cy 判定上移到暂避钮命中采样之前——hide_hit 与绘制
+    // 必须同源（原 hit 固定采样 (820,174+dy) 而 tall 卡按钮画在 cy+14=154，点可见
+    // 钮无效、点下方空白反而触发暂避，仅 tall 版式错位 20px）。kind/行数只读
+    // 采样在 modal_desc 借用前完成，与分支内原式逐值一致
+    let kind_is_npc = g
+        .rmodal
+        .as_ref()
+        .or(g.modal.as_ref())
+        .is_some_and(|c| c.kind == crate::game::CardKind::Npc);
+    let lines = crate::ui::wrap_lines(text, 16, 520.0);
+    let segs = text.matches('\n').count() + 1;
+    let tall = !meeting && kind_is_npc && lines + segs - 1 > 3; // 加高容量 ≤4 行（4*28+段距8 ≤132px）
+    let cy = if tall { 140.0 } else { 160.0 };
     // v1.16.4 暂避钮命中先采样：title/descs 只读借用横跨绘制段直到选项循环结束，
     // g.modal_min 的 &mut 移到段尾执行，免 E0502（钮面在两版式分支内照常绘出）
     let (mxp, myp) = crate::cam::mouse();
     let (hx, hy) = if meeting {
         (920.0, 122.0 + dy)
     } else {
-        (820.0, 174.0 + dy)
+        (820.0, cy + 14.0 + dy) // 与下方 button(820, cy+14+dy) 同源（复审①）
     };
     let hide_hit = is_mouse_button_pressed(MouseButton::Left)
         && mxp >= hx
@@ -1748,7 +1824,33 @@ pub fn draw_modal_card(g: &mut Game) {
         && myp <= hy + 26.0;
     if meeting {
         panel_card_a(240.0, 100.0 + dy, 800.0, 520.0, card_a);
+        // v1.17.1 稀有/链段卡描边：叠于 panel_card_a 金描边之上（2.5 同位覆盖）——
+        // 链段卡青、稀有卡紫，链首段 50 两者兼有时链段优先；稳态随卡面全显
+        let edge = if card_stage.is_some() {
+            Some(C_CYAN)
+        } else if card_rare {
+            Some(C_PURPLE)
+        } else {
+            None
+        };
+        if let Some(ec) = edge {
+            draw_rectangle_lines(240.0, 100.0 + dy, 800.0, 520.0, 2.5, fade(ec, card_a));
+        }
         txt_c(title, V_W * 0.5, 128.0 + dy, 24, fade(C_GOLD, card_a));
+        // v1.17.1 链段阶段徽标（复用品级徽标 68×26 半透明底+16px 字语言）：标题
+        // 右侧 x=736..804，与暂避钮（920,122）不交
+        if let Some((seg, total)) = card_stage {
+            let (bx, by) = (736.0, 122.0 + dy);
+            draw_rectangle(bx, by, 68.0, 26.0, fade(Color::from_rgba(130, 220, 230, 60), card_a));
+            draw_rectangle_lines(bx, by, 68.0, 26.0, 1.0, fade(C_CYAN, card_a));
+            txt_c(
+                stage_label(seg, total), // 复审④：&'static str 零分配
+                bx + 34.0,
+                by + 4.0,
+                16,
+                fade(C_CYAN, card_a),
+            );
+        }
         draw_rectangle(
             270.0,
             148.0 + dy,
@@ -1774,14 +1876,57 @@ pub fn draw_modal_card(g: &mut Game) {
             420.0,
             art_a,
         );
-        wrap_draw(text, 530.0, 170.0 + dy, 16, 480.0, 28.0, fade(C_TEXT, text_a));
+        draw_event_text(
+            text,
+            530.0,
+            170.0 + dy,
+            16,
+            480.0,
+            28.0,
+            C_TEXT,
+            0.18 - g.modal_anim,
+        );
         button(920.0, 122.0 + dy, 110.0, 26.0, "暂 避", None, true);
     } else {
-        panel_card_a(340.0, 160.0 + dy, 600.0, 400.0, card_a);
-        txt_c(title, V_W * 0.5, 188.0 + dy, 24, fade(C_GOLD, card_a));
+        // v1.17.1 多段正文承载：普通 600×400 文本区（224..316）仅 3 行；模拟事件卡
+        //（kind=Npc）正文 >3 行走 600×440 加高变体（卡顶 140/文本 204/钮 336，
+        // 3 钮末底 546 < 卡底 580 合规）——Finale/Path 恒走原几何逐像素不变
+        //（终战特判 step(58,58) 不与此相交；kind/lines/segs/tall/cy 已上移至
+        // 命中采样段，此处直接消费）
+        panel_card_a(
+            340.0,
+            cy + dy,
+            600.0,
+            if tall { 440.0 } else { 400.0 },
+            card_a,
+        );
+        let edge = if card_stage.is_some() {
+            Some(C_CYAN)
+        } else if card_rare {
+            Some(C_PURPLE)
+        } else {
+            None
+        };
+        if let Some(ec) = edge {
+            draw_rectangle_lines(340.0, cy + dy, 600.0, if tall { 440.0 } else { 400.0 }, 2.5, fade(ec, card_a));
+        }
+        txt_c(title, V_W * 0.5, cy + 28.0 + dy, 24, fade(C_GOLD, card_a));
+        // v1.17.1 链段阶段徽标：标题右侧（x=736..804），与暂避钮（820, cy+14）不交
+        if let Some((seg, total)) = card_stage {
+            let (bx, by) = (736.0, cy + 13.0 + dy);
+            draw_rectangle(bx, by, 68.0, 26.0, fade(Color::from_rgba(130, 220, 230, 60), card_a));
+            draw_rectangle_lines(bx, by, 68.0, 26.0, 1.0, fade(C_CYAN, card_a));
+            txt_c(
+                stage_label(seg, total), // 复审④：&'static str 零分配
+                bx + 34.0,
+                by + 4.0,
+                16,
+                fade(C_CYAN, card_a),
+            );
+        }
         draw_rectangle(
             380.0,
-            208.0 + dy,
+            cy + 48.0 + dy,
             520.0,
             1.5,
             Color::new(
@@ -1791,9 +1936,25 @@ pub fn draw_modal_card(g: &mut Game) {
                 160.0 / 255.0 * card_a,
             ),
         );
-        title_ornament(V_W * 0.5, 208.0 + dy, card_a);
-        wrap_draw(text, 380.0, 224.0 + dy, 16, 520.0, 28.0, fade(C_TEXT, text_a));
-        button(820.0, 174.0 + dy, 110.0, 26.0, "暂 避", None, true);
+        title_ornament(V_W * 0.5, cy + 48.0 + dy, card_a);
+        if kind_is_npc {
+            // 分段淡入正文（复审②：秒标度 t，稳态全段恒 1 与旧单次 wrap_draw
+            // 逐像素一致）
+            draw_event_text(
+                text,
+                380.0,
+                cy + 64.0 + dy,
+                16,
+                520.0,
+                28.0,
+                C_TEXT,
+                0.18 - g.modal_anim,
+            );
+        } else {
+            // Finale/Path 卡维持 v1.16.6 动效原样（单次 wrap_draw，逐像素不变）
+            wrap_draw(text, 380.0, 224.0 + dy, 16, 520.0, 28.0, fade(C_TEXT, text_a));
+        }
+        button(820.0, cy + 14.0 + dy, 110.0, 26.0, "暂 避", None, true);
     }
     // 命中先收集、借还后再分派（&mut）——免整卡克隆
     let mut picked: Option<usize> = None;

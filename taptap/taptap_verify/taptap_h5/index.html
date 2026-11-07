@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.16.6";</script>
+    <script>var GAME_VER = "1.16.7";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -285,7 +285,7 @@
             } catch (e) { /* 包装失败维持原状：流式可用则用，不可用走旧分支 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.16.6"></script>
+    <script src="mq_js_bundle.js?v=1.16.7"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -576,7 +576,7 @@
                     // 环境直接回裸 Instance（res.exports）——统一取 exports，取到即
                     // 画阶段文案并先行挂载（v1.8.2 修复语义在两种形态下都保持）。
                     // 加载提速⑤：此点到 Rust st90 上报之间恰是 init_font+init_art
-                    //（541KB 字体解析 + 1280×720 背景逐像素生成，真机数秒），
+                    //（~450KB 字体解析 + 640×360 背景降采样生成，真机数秒），
                     // 旧文案「启动中…」口径含糊，改为如实的「初始化字体与场景…」
                     var ex = res && (res.instance ? res.instance.exports : res.exports);
                     if (ex) {

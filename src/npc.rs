@@ -143,6 +143,8 @@ pub fn npc_event_card(i: usize) -> Option<EventCard> {
         kind: CardKind::Npc,
         // v1.16.3 邂逅卡立绘：现实好感事件卡主角即该 NPC（i 0..=3，draw 侧再 clamp）
         actor: Some(crate::game::CardActor::Npc(i)),
+        rare: false,
+        stage: None,
         title: format!("【{}】{}", NPC_NAMES[i], def.title),
         text: def.text.to_string(),
         opts: Vec::new(),

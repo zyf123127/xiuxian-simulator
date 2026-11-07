@@ -126,6 +126,12 @@ pub fn save_text(m: &Meta) -> String {
             r.comp,
             r.cause
         ));
+        // v1.17.1 本世剧情摘要：additive 平行行，紧跟其 h=（解析按「hq 挂最近一条
+        // h=」的文件序约定；缺 story 不写行——旧档旧行格式逐字节不变）
+        if let Some(st) = &r.story {
+            s.push_str(&format!("hq={}
+", st));
+        }
     }
     if let Some(n) = &m.neme {
         s.push_str(&format!("neme={} {} {}\n", n.title, n.name, n.realm));
@@ -400,6 +406,7 @@ fn parse_save(text: &str) -> Meta {
                             255
                         },
                         cause: p[8].trim().to_string(),
+                        story: None, // v1.17.1 hq= 平行行补挂（缺行 → None 零迁移）
                     });
                 }
             }
@@ -413,6 +420,17 @@ fn parse_save(text: &str) -> Meta {
                 has_neme = !neme_title.is_empty();
             }
             // v1.12.0 留行批注：note= 行（空串/缺键 → None；缺键回退照 zt= 先例）
+            // v1.17.1 本世剧情摘要：hq= 平行行挂最近一条 h=（文件序约定：hq 紧跟
+            // 其 h=）。hist 空（手改档错位）则整行丢弃——不影响 9 段主档；坏值/空串
+            // 不置 story（保持 None 渲染跳过）
+            "hq" => {
+                let t = v.trim();
+                if !t.is_empty() {
+                    if let Some(r) = m.hist.last_mut() {
+                        r.story = Some(t.to_string());
+                    }
+                }
+            }
             "note" => {
                 m.note_line = if v.trim().is_empty() {
                     None
@@ -981,6 +999,7 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
                 stones: -1200,
                 comp: 255,
                 cause: "九问皆妄，你于镜前枯坐而终。".into(),
+                story: None,
             },
             SimRecord {
                 life_no: 3,
@@ -992,6 +1011,7 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
                 stones: 42000,
                 comp: 3,
                 cause: "寿元自然耗尽".into(),
+                story: None,
             },
         ];
         let text = save_text(&m);
@@ -1023,6 +1043,63 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
         assert_eq!(m2.hist[0].comp, 255, "comp 77 界外 → 255 无伴");
         assert_eq!(m2.hist[1].comp, 2);
         assert_eq!(m2.hist[1].cause, "命殒于外 一身道果散入天地", "cause 空格余量不截断");
+    }
+
+    // v1.17.1 剧情摘要 hq= 平行行：回环（紧跟 h= → 挂对一条）、旧行缺 hq → None、
+    // hist 空错位丢弃、hq 在两条 h= 之间挂前一条（文件序约定）
+    #[test]
+    fn hq_roundtrip_missing_and_misplaced() {
+        // 写端回环：带 story 的记录 → hq= 紧跟 h=
+        let mut m = Meta::default();
+        m.hist = vec![SimRecord {
+            life_no: 2,
+            run_no: 5,
+            max_realm: 6,
+            age: 90.0,
+            years: 74,
+            dy: 900,
+            stones: 5000,
+            comp: 1,
+            cause: "纸寿尽了".into(),
+            story: Some("遇【江底墨匣】；沉墨遗匣·缘了".into()),
+        }];
+        let text = save_text(&m);
+        let mut hq_after_h = false;
+        for (a, b) in text.lines().zip(text.lines().skip(1)) {
+            if a.starts_with("h=") {
+                hq_after_h = b.starts_with("hq=");
+            }
+        }
+        assert!(hq_after_h, "hq= 必须紧跟其 h= 行");
+        let back = parse_save(&text);
+        assert_eq!(
+            back.hist[0].story.as_deref(),
+            Some("遇【江底墨匣】；沉墨遗匣·缘了")
+        );
+        // 旧行（无 hq=）→ None，9 段主档照常解析
+        let old = format!("{}h=1 2 3 50.0 40 100 800 255 老死因
+", OLD_BASE);
+        let m2 = parse_save(&old);
+        assert_eq!(m2.hist.len(), 1);
+        assert_eq!(m2.hist[0].cause, "老死因");
+        assert!(m2.hist[0].story.is_none(), "旧档旧行缺 hq → None");
+        // hq 错位（hist 空）→ 整行丢弃，不 panic 不挂错
+        let orphan = format!("{}hq=孤儿摘要
+", OLD_BASE);
+        let m3 = parse_save(&orphan);
+        assert!(m3.hist.is_empty());
+        // hq 在两条 h= 之间 → 挂前一条（last_mut 语义）
+        let mid = format!(
+            "{}h=1 1 3 50.0 40 100 800 255 甲
+hq=甲的剧情
+h=1 2 3 50.0 40 100 800 255 乙
+",
+            OLD_BASE
+        );
+        let m4 = parse_save(&mid);
+        assert_eq!(m4.hist.len(), 2);
+        assert_eq!(m4.hist[0].story.as_deref(), Some("甲的剧情"));
+        assert!(m4.hist[1].story.is_none());
     }
 
     // 防御性截断：脏档 7 条 h= → 只留最近 5 条（尾部保留）

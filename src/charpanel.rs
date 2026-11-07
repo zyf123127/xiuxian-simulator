@@ -1578,6 +1578,11 @@ pub(crate) fn prewarm_hist(g: &Game) {
     }
     for r in &g.meta.hist {
         prewarm_text(&r.cause, &[14]);
+        // v1.17.1 剧情摘要 @14 同口径预热（漏挂会复现旧稿页首开 2048² 图集整图
+        // 重传——ui.rs 首帧栅格化先例）
+        if let Some(st) = &r.story {
+            prewarm_text(st, &[14]);
+        }
     }
 }
 
@@ -1645,6 +1650,12 @@ fn draw_hist_page(g: &Game) {
             y + 36.0, 14,
             if r.comp != 255 { C_PURPLE } else { C_DIM },
         );
+        // v1.17.1 剧情摘要行：数值行右侧 x620..1120（本为空档）单行 14px 紫；
+        // None（旧档缺 hq= 行）完全跳过零位移。≤28 字 ×14px ≈392px 不越卡右缘；
+        // prewarm_hist 同循环补挂防首帧栅格化整图重传
+        if let Some(st) = &r.story {
+            txt(st, 620.0, y + 36.0, 14, C_PURPLE);
+        }
         wrap_draw(&r.cause, 176.0, y + 58.0, 14, 920.0, 20.0, C_DIM);
     }
     // 页脚（y630 固定视口外，照 gallery.rs:162-170 每帧 1 次 format! 口径）

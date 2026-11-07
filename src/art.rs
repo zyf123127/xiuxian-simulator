@@ -586,15 +586,18 @@ fn build_relic_icon(idx: usize) -> Texture2D {
     g.to_texture()
 }
 
-// 1280×720 夜空仙山背景，启动时生成一次
+// v1.17.1 加载小刀：boot 唯一大像素项降采样——640×360 生成（像素写省 75%），
+// 消费侧 draw_bg 传 dest_size 1280×720 由既有 set_filter(Linear) 放大（Linear
+// 先例 art.rs:115/295）。bg 是渐变夜空+山影剪影非像素细节：星星坐标随域减半
+// 位移、月晕环带宽度减半（勘察 risk② 预期，真机截图验收口径），远景观感不变
 fn build_bg() -> Texture2D {
-    let (iw, ih) = (1280u16, 720u16);
-    let w = 1280i32;
-    let h = 720i32;
+    let (iw, ih) = (640u16, 360u16);
+    let w = 640i32;
+    let h = 360i32;
     let mut img = Image::gen_image_color(iw, ih, Color::from_rgba(0, 0, 0, 255));
     {
         let d = img.get_image_data_mut();
-        // 纵向渐变夜空
+        // 纵向渐变夜空（t=y/h 归一，随域自适应）
         for y in 0..h {
             let t = y as f32 / h as f32;
             let r = (16.0 + 34.0 * t) as u8;
@@ -604,7 +607,7 @@ fn build_bg() -> Texture2D {
                 d[(y * w + x) as usize] = [r, g, b, 255];
             }
         }
-        // 星星（确定性伪随机）
+        // 星星（确定性伪随机；数量保留、坐标随域减半——密度×4 夜空更繁）
         let mut seed = 20261008u32;
         let mut rnd = || {
             seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
@@ -623,22 +626,22 @@ fn build_bg() -> Texture2D {
                 }
             }
         }
-        // 月亮 + 月晕
-        let (mx, my) = (1040i32, 120i32);
-        for y in (my - 60)..=(my + 60) {
-            for x in (mx - 60)..=(mx + 60) {
+        // 月亮 + 月晕（圆心/半径全部 ×0.5：34/36/58 → 17/18/29）
+        let (mx, my) = (520i32, 60i32);
+        for y in (my - 30)..=(my + 30) {
+            for x in (mx - 30)..=(mx + 30) {
                 if x < 0 || y < 0 || x >= w || y >= h {
                     continue;
                 }
                 let dx = (x - mx) as f32;
                 let dy = (y - my) as f32;
                 let dist = (dx * dx + dy * dy).sqrt();
-                if dist <= 34.0 {
+                if dist <= 17.0 {
                     d[(y * w + x) as usize] = [246, 238, 210, 255];
-                } else if dist <= 36.0 {
+                } else if dist <= 18.0 {
                     d[(y * w + x) as usize] = [255, 244, 214, 255];
-                } else if dist <= 58.0 {
-                    let a = (1.0 - (dist - 36.0) / 22.0) * 46.0;
+                } else if dist <= 29.0 {
+                    let a = (1.0 - (dist - 18.0) / 11.0) * 46.0;
                     let idx = (y * w + x) as usize;
                     let old = d[idx];
                     d[idx] = [
@@ -650,17 +653,17 @@ fn build_bg() -> Texture2D {
                 }
             }
         }
-        // 月面阴影
-        for y in (my - 20)..=(my + 20) {
-            for x in (mx - 20)..=(mx + 20) {
-                let dx = (x - mx - 8) as f32;
-                let dy = (y - my - 6) as f32;
-                if dx * dx + dy * dy < 90.0 {
+        // 月面阴影（偏移 (-4,-3)、r²=90/4）
+        for y in (my - 10)..=(my + 10) {
+            for x in (mx - 10)..=(mx + 10) {
+                let dx = (x - mx - 4) as f32;
+                let dy = (y - my - 3) as f32;
+                if dx * dx + dy * dy < 22.5 {
                     d[(y * w + x) as usize] = [224, 214, 188, 255];
                 }
             }
         }
-        // 三层远山
+        // 三层远山（base_y/amp ×0.5，t=x/w 归一相位不变）
         let layer = |d: &mut [[u8; 4]], base_y: f32, amp: f32, col: [u8; 4], ph: f32| {
             for x in 0..w {
                 let t = x as f32 / w as f32;
@@ -673,14 +676,14 @@ fn build_bg() -> Texture2D {
                 }
             }
         };
-        layer(d, 470.0, 90.0, [42, 30, 78, 255], 1.3);
-        // 楼阁剪影（画在中景山上）
-        layer(d, 560.0, 70.0, [32, 22, 60, 255], 4.1);
-        let (px0, py0) = (180i32, 445i32);
+        layer(d, 235.0, 45.0, [42, 30, 78, 255], 1.3);
+        // 楼阁剪影（画在中景山上；基点/尺寸 ×0.5）
+        layer(d, 280.0, 35.0, [32, 22, 60, 255], 4.1);
+        let (px0, py0) = (90i32, 222i32);
         for (rx, ry, rw, rh) in [
-            (px0 - 14, py0 + 0, 28, 40),
-            (px0 - 10, py0 - 16, 20, 18),
-            (px0 - 5, py0 - 30, 10, 16),
+            (px0 - 7, py0 + 0, 14, 20),
+            (px0 - 5, py0 - 8, 10, 9),
+            (px0 - 3, py0 - 15, 5, 8),
         ] {
             for y in ry..ry + rh {
                 for x in rx..rx + rw {
@@ -690,15 +693,15 @@ fn build_bg() -> Texture2D {
                 }
             }
         }
-        // 飞檐
+        // 飞檐（水平延伸 8→4，垂直步进 i/3→i/2 保斜率）
         for i in 0..8 {
-            for (xx, yy) in [(px0 - 14 - i, py0 + i / 3), (px0 + 14 + i, py0 + i / 3)] {
+            for (xx, yy) in [(px0 - 7 - i, py0 + i / 2), (px0 + 7 + i, py0 + i / 2)] {
                 if xx >= 0 && xx < w && yy >= 0 && yy < h {
                     d[(yy * w + xx) as usize] = [12, 8, 26, 255];
                 }
             }
         }
-        layer(d, 640.0, 60.0, [22, 14, 42, 255], 7.7);
+        layer(d, 320.0, 30.0, [22, 14, 42, 255], 7.7);
     }
     let tex = Texture2D::from_image(&img);
     tex.set_filter(FilterMode::Linear);
