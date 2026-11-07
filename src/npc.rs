@@ -137,6 +137,8 @@ pub fn npc_event_card(i: usize) -> Option<EventCard> {
     let def = NPC_EVENTS.get(i)?;
     let mut card = EventCard {
         kind: CardKind::Npc,
+        // v1.16.3 邂逅卡立绘：现实好感事件卡主角即该 NPC（i 0..=3，draw 侧再 clamp）
+        actor: Some(crate::game::CardActor::Npc(i)),
         title: format!("【{}】{}", NPC_NAMES[i], def.title),
         text: def.text.to_string(),
         opts: Vec::new(),

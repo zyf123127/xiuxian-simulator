@@ -1293,7 +1293,11 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
             true,
             portrait_tier(g.meta.best_realm),
         );
-        if hot && is_mouse_button_pressed(MouseButton::Left) {
+        if hot && is_mouse_button_pressed(MouseButton::Left) && click_debounced(mx, my) {
+            // v1.16.3 接入同点去抖：天赋卡是开合型交互却用裸 pressed——真机一击
+            // 双派发（触摸桥+compat 两路 pressed 边沿落不同帧）会把「选中→取消」
+            // 一拍吃掉，玩家体感正是「点了天赋就无法改变选择」（v1.15.0 同根因
+            // 先例：button() 全量接去抖，charpanel 裸判定当时无开合钮不接）
             g.toggle_pick(i);
         }
     }
@@ -1565,15 +1569,47 @@ pub fn draw_modal_card(g: &mut Game) {
     };
 
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.5));
-    panel_card(340.0, 160.0, 600.0, 400.0);
-    txt_c(title, V_W * 0.5, 188.0, 24, C_GOLD);
-    draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
-    wrap_draw(text, 380.0, 224.0, 16, 520.0, 28.0, C_TEXT);
+    // v1.16.3 邂逅版式：卡带 actor（模拟「同页天成」/现实好感事件）且有真立绘时
+    // 改宽卡 800×520——立绘收左 contain 220×420（复用 npc_portrait_box 人物页同
+    // 语言），正文/抉择钮右移。真机反馈「模拟中结识人物看不到画像，立绘作用没体现」。
+    // Finale/Path/破境等无 actor 卡维持 600×400 原版式逐像素不变
+    let portrait: Option<Texture2D> = {
+        let card = g.rmodal.as_ref().or(g.modal.as_ref()).unwrap();
+        match card.actor {
+            Some(crate::game::CardActor::Comp(i)) => crate::art::art().comp_tex(i.min(9)),
+            Some(crate::game::CardActor::Npc(i)) => crate::art::art().npc_tex(i.min(3)),
+            None => None,
+        }
+    };
+    let meeting = portrait.is_some();
+    if meeting {
+        panel_card(240.0, 100.0, 800.0, 520.0);
+        txt_c(title, V_W * 0.5, 128.0, 24, C_GOLD);
+        draw_rectangle(270.0, 148.0, 740.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+        // 立绘盒 (270,160) 220×420、底边锚 580（box_h=bottom_off=420：顶 = 580−dh ≥ 160，
+        // 恒落 npc_clip_band 116..616 视口内不裁）；AI 图缺失时 portrait 为 None 已走旧版式
+        crate::charpanel::npc_portrait_box(
+            portrait.as_ref(),
+            &crate::art::art().icon_yun,
+            270.0,
+            160.0,
+            220.0,
+            420.0,
+            420.0,
+        );
+        wrap_draw(text, 530.0, 170.0, 16, 480.0, 28.0, C_TEXT);
+    } else {
+        panel_card(340.0, 160.0, 600.0, 400.0);
+        txt_c(title, V_W * 0.5, 188.0, 24, C_GOLD);
+        draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+        wrap_draw(text, 380.0, 224.0, 16, 520.0, 28.0, C_TEXT);
+    }
     // 命中先收集、借还后再分派（&mut）——免整卡克隆
     let mut picked: Option<usize> = None;
 
     // v1.12.1 终战卡四钮几何特判：默认步距 74/高 62 时 3 钮末底 526 合规、4 钮末底
     // 600 溢出 panel_card 底 560——Finale 收紧为步距 58/高 58，4 钮末底 548 合规
+    // （Finale/Path 无 actor 恒走旧版式，特判不与邂逅版式相交）
     let fin = g
         .rmodal
         .as_ref()
@@ -1590,15 +1626,13 @@ pub fn draw_modal_card(g: &mut Game) {
         .iter()
         .enumerate()
     {
-        if button(
-            380.0,
-            316.0 + i as f32 * step,
-            520.0,
-            bh,
-            label,
-            Some(descs[i].1.as_str()),
-            true,
-        ) {
+        let (bx, by, bw, bhh) = if meeting {
+            // 邂逅版式：右列纵排（正文 ≥2 行至 282、钮起 330；3 钮末底 540 < 卡底 620）
+            (530.0, 330.0 + i as f32 * 74.0, 480.0, 62.0)
+        } else {
+            (380.0, 316.0 + i as f32 * step, 520.0, bh)
+        };
+        if button(bx, by, bw, bhh, label, Some(descs[i].1.as_str()), true) {
             picked = Some(i);
         }
     }

@@ -219,6 +219,15 @@ pub enum CardKind {
             // 现有三路分派 else 落 choose_roption，rmodal_npc=None 时静默挂死）
 }
 
+// v1.16.3 邂逅卡立绘：卡面主角（模拟侧「同页天成」/现实侧好感事件）——
+// draw_modal_card 据此取 AI 立绘入卡（真机反馈「模拟中结识人物看不到画像，
+// 立绘作用没体现」）。纹理不持有，绘制时经 art 懒取；纯会话态随卡生灭不进存档
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum CardActor {
+    Comp(usize), // 同页人道侣（comp_0..9）
+    Npc(usize),  // 文狱四友（npc_elder/merchant/senior/drunk）
+}
+
 pub struct EventCard {
     pub title: String,
 
@@ -227,6 +236,8 @@ pub struct EventCard {
     pub opts: Vec<(String, Eff)>,
 
     pub kind: CardKind,
+
+    pub actor: Option<CardActor>, // v1.16.3：卡面主角立绘（None=无人物卡，原版式）
 }
 
 #[derive(Clone)]
@@ -1646,6 +1657,7 @@ impl Game {
         }
         self.rmodal = Some(EventCard {
             kind: CardKind::Path,
+            actor: None, // 道途卡无人物立绘，维持 600×400 原版式
             title: "成行择道 · 三途分流".into(),
             text: "成行之上道途分三，一经择定终身不改（模拟推演不携道途）：剑修战力×1.35；气修每载修为×1.25、破境率+6%；丹修服丹效果×1.35、灵田岁入×1.6。你将何以证道？".into(),
             opts: vec![
@@ -1702,6 +1714,7 @@ impl Game {
         }
         self.rmodal = Some(EventCard {
             kind: CardKind::Finale,
+            actor: None, // 终战卡无人物立绘，维持 600×400 原版式
             title: "终卷 · 执笔人递笔".into(),
             text: "你赢了封卷吏。执笔人递笔：「字不错。入正文吧。」\n「我还能改自己吗？」「一字不改。永生换的。」\n别等他写，字自己跑。六牒已齐（讨牒 6/6），问笔在即。".into(),
             opts,
@@ -1838,6 +1851,12 @@ impl Game {
         if let Some(pos) = self.picked.iter().position(|&x| x == t) {
             self.picked.remove(pos);
         } else if self.picked.len() < max {
+            self.picked.push(t);
+        } else {
+            // v1.16.3 满选时点新天赋 = 直接换选（挤掉最早一个）。真机反馈「点了一个
+            // 天赋就无法改变选择」：旧版忽略点击，玩家必须先点掉旧选才能换新——
+            // 落笔（launch_sim）前候选永远可自由切换
+            self.picked.remove(0);
             self.picked.push(t);
         }
 
@@ -2414,6 +2433,8 @@ impl Game {
                 text: String::new(),
 
                 opts: Vec::new(),
+
+                actor: None,
             };
 
             if target == 10 {
@@ -2986,12 +3007,18 @@ impl Game {
             text: String::new(),
 
             opts: Vec::new(),
+
+            actor: None,
         };
 
         match id {
             28 => {
                 card.title = "同页天成".into();
-                let cn = COMPANION_NAMES[gen_range(0, COMPANION_NAMES.len())];
+                let ci = gen_range(0, COMPANION_NAMES.len());
+                let cn = COMPANION_NAMES[ci];
+                // v1.16.3 邂逅卡立绘：卡面主角即递稿之人（卡面文本与立绘同源同名；
+                // 认下后的掷名/缝页人重逢逻辑在 special 17，与卡面立绘无涉）
+                card.actor = Some(CardActor::Comp(ci));
                 card.text = format!(
                     "晒书日，{}于书摊间递来半页残稿：\"两页相贴，缝作同页——可愿？\"",
                     cn
@@ -6623,6 +6650,7 @@ mod revenge_tests {
         let mut g = game_with(Life::default(), None);
         g.rmodal = Some(EventCard {
             kind: CardKind::Finale,
+            actor: None,
             title: "终卷 · 执笔人递笔".into(),
             text: "".into(),
             opts: vec![
@@ -7017,6 +7045,7 @@ mod gallery_bond_chain_tests {
         e.special = 17;
         EventCard {
             kind: CardKind::Npc,
+            actor: None,
             title: "同页天成".into(),
             text: "两页相贴，缝作同页——可愿？".into(),
             opts: vec![("认下这页".into(), e)],
