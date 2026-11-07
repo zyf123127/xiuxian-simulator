@@ -10,11 +10,11 @@
 // * 好感/结缘状态展示口径与既有设定一致：当前道侣卡显 Life.comp_fav 实时值；
 //   历世卡显 comp_bonds 次数；NPC 卡全用既有 meta.npc_fav/npc_ev（好感挂玩家体系
 //   不挂具体人名，game.rs apply_eff special17 原注释口径），不加 per-人好感键。
-// * 性能红线：整卡剔除（卡 200/步距 212、视口 500 → 判活区间宽 700=3×212+64：
-//   首开 scroll=0 时 ≤3 卡在画、滚动中峰值 ≤4——第 4 张为滚动临时进视口、出视口
+// * 性能红线：整卡剔除（v1.16.2 卡 280/步距 292、视口 500 → 判活区间宽 780：
+//   首开 scroll=0 时 ≤2 卡在画、滚动中峰值 ≤3——第 3 张为滚动临时进视口、出视口
 //   即被剔除且立绘查询随剔除跳过；LazyTex 懒解码含 None 缓存、纹理句柄缓存复用）。
-//   首开最多解码 3 张可见位立绘、严禁预解码全部 10 张（v1.9.24 内存四板斧）；
-//   format! 仅限动态数值行且 ≤ 可见卡数（首开 ≤3、滚动峰值 ≤4）。
+//   首开最多解码 2 张可见位立绘、严禁预解码全部 10 张（v1.9.24 内存四板斧）；
+//   format! 仅限动态数值行且 ≤ 可见卡数（首开 ≤2、滚动峰值 ≤3）。
 //   （评审修正 gallery#6：原注释『任意帧 ≤3』失准——吸附静止位与拖动中均为峰值 4）
 use crate::charpanel::{
     npc_card_chrome, npc_portrait_box, npc_row_vis, prewarm_zoom_text, scroll_list_tick,
@@ -29,14 +29,14 @@ use macroquad::prelude::*;
 // 视口/遮幅与人物页逐值一致（charpanel.rs NPC_VIEW_Y0/Y1 同值，本页独立常量便于对账）
 const GAL_VIEW_Y0: f32 = 116.0;
 const GAL_VIEW_Y1: f32 = 616.0;
-const GAL_CARD_H: f32 = 200.0; // 卡高
-const GAL_STEP: f32 = 212.0; // 卡高 + 间距 12
+const GAL_CARD_H: f32 = 280.0; // 卡高（v1.16.2：200→280——真机反馈图鉴立绘太小，照人物页 330→430 同款向下延伸）
+const GAL_STEP: f32 = 292.0; // 卡高 + 间距 12
 const GAL_TOP_PAD: f32 = 40.0; // 内容首卡前留白
-// 内容高 3088 = 顶白 40 + 10×212（同页人区）+ 40（分节行）+ 12 + 4×212−12（NPC 区，
-// 末卡底 3048）+ 底白 40 → 滚动钳 [0, 2588]（3088 − 视口 500）
-const GAL_SECTION_OFF: f32 = 2160.0; // 分节行顶（= TOP_PAD + 10×212）
-const GAL_NPC_OFF: f32 = 2212.0; // NPC 首卡顶（= 分节行底 2200 + 12 间隙）
-const GAL_SCROLL_MAX: f32 = 2588.0;
+// 内容高 4208 = 顶白 40 + 10×292（同页人区）+ 40（分节行）+ 12 + 4×292−12（NPC 区，
+// 末卡底 4168）+ 底白 40 → 滚动钳 [0, 3708]（4208 − 视口 500）
+const GAL_SECTION_OFF: f32 = 2960.0; // 分节行顶（= TOP_PAD + 10×292）
+const GAL_NPC_OFF: f32 = 3012.0; // NPC 首卡顶（= 分节行底 3000 + 12 间隙）
+const GAL_SCROLL_MAX: f32 = 3708.0;
 
 // 首开预热语料（PanelAct::Tab(4) 执行帧一次性灌字形，字号档 [14,16,20] 均既有离散档；
 // 仅静态标签——动态数值行的 ASCII 数字/符号由菜单期 panel_warm_chars 保底覆盖）
@@ -101,15 +101,15 @@ pub fn draw_gallery_page(g: &mut Game) {
             continue;
         }
         draw_gal_comp_card(g, i, y, cur_comp == Some(i));
-        // v1.16.1 点立绘放大（已识真图才开；立绘盒 176..326 × y+12..y+188）
+        // v1.16.1 点立绘放大（已识真图才开；v1.16.2 盒加大：176..396 × y+12..y+268）
         let known = g.meta.comp_bonds[i] > 0 || cur_comp == Some(i);
         if tap
             && known
             && crate::art::art().comp_tex(i).is_some()
             && mx >= 176.0
-            && mx <= 326.0
+            && mx <= 396.0
             && my >= y + 12.0
-            && my <= y + 188.0
+            && my <= y + 268.0
         {
             let z = ZoomArt::Comp(i);
             prewarm_zoom_text(g, &z);
@@ -136,13 +136,13 @@ pub fn draw_gallery_page(g: &mut Game) {
             continue;
         }
         draw_gal_npc_card(g, i, y);
-        // v1.16.1 点立绘放大（AI 立绘才开；像素兜底不进鉴赏；几何同上）
+        // v1.16.1 点立绘放大（AI 立绘才开；像素兜底不进鉴赏；v1.16.2 盒加大同上）
         if tap
             && crate::art::art().npc_tex(i).is_some()
             && mx >= 176.0
-            && mx <= 326.0
+            && mx <= 396.0
             && my >= y + 12.0
-            && my <= y + 188.0
+            && my <= y + 268.0
         {
             let z = ZoomArt::Npc(i);
             prewarm_zoom_text(g, &z);
@@ -171,8 +171,9 @@ pub fn draw_gallery_page(g: &mut Game) {
 }
 
 // 同页人卡（i=0..=9）：已识 rgba(42,26,52,210)+C_PURPLE 边（现道侣卡语言）、
-// 未识 rgba(26,22,42,190)+灰边；立绘 150×176 contain 底边对齐（bottom_off 188 = 卡高
-// 200 − 内缩 12）。已识显真名+真立绘+历世次数；当前道侣卡另显实时情谊条与小传。
+// 未识 rgba(26,22,42,190)+灰边；立绘 220×256 contain 底边对齐（bottom_off 268 = 卡高
+// 280 − 内缩 12；v1.16.2 真机反馈图鉴立绘太小，照人物页向下延伸同款加大）。
+// 已识显真名+真立绘+历世次数；当前道侣卡另显实时情谊条与小传。
 fn draw_gal_comp_card(g: &Game, i: usize, y: f32, cur: bool) {
     let x = 160.0;
     let bonds = g.meta.comp_bonds[i]; // i 循环界内（0..COMPANION_NAMES.len()），恒界内
@@ -203,15 +204,15 @@ fn draw_gal_comp_card(g: &Game, i: usize, y: f32, cur: bool) {
         &crate::art::art().icon_pill,
         x + 16.0,
         y,
-        150.0,
-        176.0,
-        188.0,
+        220.0,
+        256.0,
+        268.0,
     );
-    // v1.16.1 立绘鉴赏入口徽标（已识真图才显示）
+    // v1.16.1 立绘鉴赏入口徽标（已识真图才显示）；v1.16.2 盒加大 (220,268)
     if known && crate::art::art().comp_tex(i).is_some() {
-        zoom_badge(x + 16.0, y, 150.0, 188.0);
+        zoom_badge(x + 16.0, y, 220.0, 268.0);
     }
-    let col = x + 190.0; // 立绘位 150 宽 + 24 间隙（人物页 x+260 同构）
+    let col = x + 260.0; // 立绘位 220 宽 + 24 间隙（人物页 x+260 同构）
     if npc_row_vis(y + 14.0) {
         if known {
             txt(COMPANION_NAMES[i], col, y + 14.0, 20, C_PURPLE);
@@ -270,6 +271,7 @@ fn draw_gal_comp_card(g: &Game, i: usize, y: f32, cur: bool) {
 // 文狱 NPC 卡（i=0..=3）：像素/AI 立绘（缺 AI 图回退像素立绘，v1.14.0 语言）、
 // 档次、好感条+档次刻度（照人物页 draw_npc_card）、增益行（npc::eff_line 单口）、
 // 事件徽标（npc_ev 已抉择→心结已解 / 达标未抉择→有心事待叙）。
+// v1.16.2：立绘盒 220×256（bottom_off 268）、文本列 x+260，与同页人卡/人物页同构。
 fn draw_gal_npc_card(g: &Game, i: usize, y: f32) {
     let x = 160.0;
     let fav = g.meta.npc_fav[i]; // i 循环界内（0..NPC_COUNT），恒界内
@@ -282,15 +284,15 @@ fn draw_gal_npc_card(g: &Game, i: usize, y: f32) {
         &crate::art::art().icon_yun,
         x + 16.0,
         y,
-        150.0,
-        176.0,
-        188.0,
+        220.0,
+        256.0,
+        268.0,
     );
-    // v1.16.1 立绘鉴赏入口徽标（仅 AI 立绘显示；像素兜底不进鉴赏）
+    // v1.16.1 立绘鉴赏入口徽标（仅 AI 立绘显示；像素兜底不进鉴赏）；v1.16.2 盒加大 (220,268)
     if crate::art::art().npc_tex(i).is_some() {
-        zoom_badge(x + 16.0, y, 150.0, 188.0);
+        zoom_badge(x + 16.0, y, 220.0, 268.0);
     }
-    let col = x + 190.0;
+    let col = x + 260.0;
     if npc_row_vis(y + 14.0) {
         txt(NPC_NAMES[i], col, y + 14.0, 20, C_GOLD);
     }
