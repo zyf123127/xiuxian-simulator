@@ -832,6 +832,8 @@ pub struct Game {
 
     pub zoom_art: Option<ZoomArt>, // v1.16.1 立绘鉴赏覆层（模态独占输入；不进存档）
 
+    pub modal_min: bool, // v1.16.4 事件卡暂避态：收起卡面先看日志，徽章点开重回抉择（不进存档）
+
     pub speed: usize, // 模拟速度 0暂停 1慢 2快 3跳过
 
     pub acc: f32,
@@ -1258,6 +1260,8 @@ impl Game {
             guide_last: None,
 
             zoom_art: None,
+
+            modal_min: false,
 
             speed: 2,
 
@@ -6233,6 +6237,8 @@ mod revenge_tests {
             guide_last: None,
 
             zoom_art: None,
+
+            modal_min: false,
 
             speed: 0,
 

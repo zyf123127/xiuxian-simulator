@@ -591,7 +591,10 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         return;
     }
     // v1.8.0 D2：现实侧好感事件卡——模态独占输入（罩层在 draw_modal_card 内）
-    if g.rmodal.is_some() {
+    // v1.16.4：暂避收起态（modal_min）不再独占早退——场景照画（日志/面板可见），
+    // 尾部 draw_modal_card 只画「待抉择」徽章；抉择仍独占（Esc 吞/C·M 避让守卫
+    // 与 npc_ev 未消耗不变），赠礼等再触发被 maybe_fav_event 的 rmodal 守卫挡住
+    if g.rmodal.is_some() && !g.modal_min {
         draw_bg(art);
         draw_modal_card(g);
         version_mark();
@@ -969,6 +972,10 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     if g.submenu.is_some() {
         crate::menu::draw_sub(g);
     }
+    // v1.16.4：暂避收起态补画「待抉择」徽章（非收起态上方早退链已独占渲染卡面）
+    if g.rmodal.is_some() {
+        draw_modal_card(g);
+    }
     draw_banner(g);
     draw_toast(g);
     version_mark();
@@ -1319,6 +1326,14 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
 
 // ================= 模拟播放 =================
 pub fn draw_sim(g: &mut Game, art: &Art) {
+    // v1.16.4 立绘鉴赏覆层（道侣随行小像点按开启）：模态独占输入，照 draw_reality
+    // 早退先例——下层不绘不响应；事件卡/模拟冻结不受影响（modal 仍在，合页即回）
+    if g.zoom_art.is_some() {
+        draw_bg(art);
+        crate::charpanel::draw_zoom_overlay(g);
+        version_mark();
+        return;
+    }
     // v1.9.25 卡顿修复（根因2）：去每帧整 Life 深克隆——只读绘制段借 sim 不可变引用，
     // 速度/退出/事件弹窗等 &mut 交互统一挪到借还之后；按钮区（y≤47）与日志区（y≥68）
     // 像素无重叠，绘制次序对调不影响画面
@@ -1495,6 +1510,50 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
     if button(1240.0, 8.0, 36.0, 36.0, "×", None, true) {
         g.quit_sim_redraft();
     }
+    // v1.16.4 道侣随行小像：结识道侣后顶栏右侧常驻小卡（头像+名+情谊）——
+    // 真机反馈「结识道侣之后有关道侣的信息旁看不到人像，立绘作用没体现」。
+    // 点按整卡 → zoom_art 全屏鉴赏（本函数头部早退链独占）。头像取立绘顶部
+    // 35% 方形头裁剪（人物页头像条同语言）。sim 视图本就逐帧 format!（年龄/
+    // 境界行），本芯片的动态情谊行不新增分配纪律负担。
+    if let Some(ci) = g
+        .sim
+        .as_ref()
+        .and_then(|x| x.companion.as_deref())
+        .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn))
+    {
+        let (cx, cy) = (1000.0, 52.0);
+        draw_rectangle(cx, cy, 268.0, 40.0, Color::from_rgba(26, 18, 42, 220));
+        draw_rectangle_lines(cx, cy, 268.0, 40.0, 1.5, C_PURPLE);
+        if let Some(t) = crate::art::art().comp_tex(ci) {
+            let side = (t.height().max(1.0) * 0.35).min(t.width());
+            draw_texture_ex(
+                &t,
+                cx + 4.0,
+                cy + 4.0,
+                WHITE,
+                DrawTextureParams {
+                    source: Some(Rect::new((t.width() - side) * 0.5, 0.0, side, side)),
+                    dest_size: Some(vec2(32.0, 32.0)),
+                    ..Default::default()
+                },
+            );
+        }
+        txt(COMPANION_NAMES[ci], cx + 42.0, cy + 3.0, 16, C_PURPLE);
+        let fav = g.sim.as_ref().map_or(0, |x| x.comp_fav);
+        txt(&format!("情谊 {}/100 · 点看立绘", fav), cx + 42.0, cy + 22.0, 14, C_DIM);
+        let (mx, my) = crate::cam::mouse();
+        if is_mouse_button_pressed(MouseButton::Left)
+            && mx >= cx
+            && mx <= cx + 268.0
+            && my >= cy
+            && my <= cy + 40.0
+        {
+            let z = crate::game::ZoomArt::Comp(ci);
+            crate::charpanel::prewarm_zoom_text(g, &z);
+            g.zoom_art = Some(z);
+            g.play(crate::sounds::Which::Click);
+        }
+    }
     // 事件弹窗（v1.6.0 B：卡面加高、选项纵排带机制摘要副标签）
     // v1.8.0 D2：抽取为 draw_modal_card（模拟侧 modal 与现实侧 rmodal 共用卡面）
     draw_modal_card(g);
@@ -1507,6 +1566,24 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
 // Scene::Sim → choose_option（模拟侧结算），否则 → npc::choose_roption（现实侧结算）。
 pub fn draw_modal_card(g: &mut Game) {
     if g.modal.is_none() && g.rmodal.is_none() {
+        return;
+    }
+    // v1.16.4 暂避收起态（真机反馈「卡片一直挡着对话，想先看日志再选」）：
+    // 只画顶栏下居中小徽章，点按重回卡面抉择。收起期间模拟冻结不动（update_sim
+    // 对 modal.is_some() 早退——modal 仍在，选项与结算零失真），日志随便翻。
+    if g.modal_min {
+        if button(
+            V_W * 0.5 - 120.0,
+            54.0,
+            240.0,
+            30.0,
+            "待抉择 · 展开卡面",
+            None,
+            true,
+        ) {
+            g.modal_min = false;
+            g.play(crate::sounds::Which::Page);
+        }
         return;
     }
     // v1.9.25 卡顿修复（根因2）：卡面文本/eff_desc 不再每帧克隆+重建——按卡面内容
@@ -1582,6 +1659,15 @@ pub fn draw_modal_card(g: &mut Game) {
         }
     };
     let meeting = portrait.is_some();
+    // v1.16.4 暂避钮命中先采样：title/descs 只读借用横跨绘制段直到选项循环结束，
+    // g.modal_min 的 &mut 移到段尾执行，免 E0502（钮面在两版式分支内照常绘出）
+    let (mxp, myp) = crate::cam::mouse();
+    let (hx, hy) = if meeting { (920.0, 122.0) } else { (820.0, 174.0) };
+    let hide_hit = is_mouse_button_pressed(MouseButton::Left)
+        && mxp >= hx
+        && mxp <= hx + 110.0
+        && myp >= hy
+        && myp <= hy + 26.0;
     if meeting {
         panel_card(240.0, 100.0, 800.0, 520.0);
         txt_c(title, V_W * 0.5, 128.0, 24, C_GOLD);
@@ -1598,11 +1684,13 @@ pub fn draw_modal_card(g: &mut Game) {
             420.0,
         );
         wrap_draw(text, 530.0, 170.0, 16, 480.0, 28.0, C_TEXT);
+        button(920.0, 122.0, 110.0, 26.0, "暂 避", None, true);
     } else {
         panel_card(340.0, 160.0, 600.0, 400.0);
         txt_c(title, V_W * 0.5, 188.0, 24, C_GOLD);
         draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
         wrap_draw(text, 380.0, 224.0, 16, 520.0, 28.0, C_TEXT);
+        button(820.0, 174.0, 110.0, 26.0, "暂 避", None, true);
     }
     // 命中先收集、借还后再分派（&mut）——免整卡克隆
     let mut picked: Option<usize> = None;
@@ -1635,6 +1723,13 @@ pub fn draw_modal_card(g: &mut Game) {
         if button(bx, by, bw, bhh, label, Some(descs[i].1.as_str()), true) {
             picked = Some(i);
         }
+    }
+
+    // v1.16.4 暂避执行：段尾统一 &mut（title/descs 借用已还）。同一帧不可能同时
+    // 命中选项与暂避钮（几何不相交），先暂避不互斥
+    if hide_hit {
+        g.modal_min = true;
+        g.play(crate::sounds::Which::Page);
     }
 
     if let Some(i) = picked {
