@@ -26,6 +26,10 @@ pub const AUTO_CULT_SECS: f32 = 1.6;
 
 pub const SIM_SPEEDS: [f32; 4] = [0.0, 0.16, 0.06, 0.0]; // 每年间隔秒；0 数值档=瞬间跳到结局
 
+// v1.16.5 模拟事件防重复窗口 K：本世最近 6 次抽过的事件不再抽（事件 13%/年
+// 频率下约 46 年不见同卡）；可用池小于 K（低境界）由 sim_event 退化分支清池兜底
+pub const RECENT_EVENT_K: usize = 6;
+
 #[derive(PartialEq, Clone, Copy)]
 
 pub enum Scene {
@@ -525,6 +529,8 @@ pub struct Meta {
     pub feng_blv: u8, // v1.12.1 缝页缘 0..=3，一世同页至终 +1（键 blv=；缘一/二数值 perk，缘三纯叙事）
 
     pub comp_bonds: [u8; 10], // v1.16.0 交游图鉴：十同页人历世结缘次数（键 gbd=；0=未识，saturating 封顶 255；下标即 COMPANION_NAMES 下标）
+
+    pub hist: Vec<SimRecord>, // v1.16.5 旧稿档案：近 5 次模拟结算快照（键 h= 每条一行；旧档缺键=空表零迁移，超量解析端截断）
 }
 
 impl Default for Meta {
@@ -597,6 +603,8 @@ impl Default for Meta {
             feng_blv: 0,
 
             comp_bonds: [0; 10],
+
+            hist: Vec::new(),
         }
     }
 }
@@ -671,6 +679,24 @@ pub struct SimResult {
     pub comp: Option<String>, // v1.6.0 D：道侣（遗泽 idx 8 承接现实）
     pub comp_fav: i32,        // v1.6.0 D：模拟一世落幕时的道侣好感
 }
+
+// v1.16.5 旧稿档案：单次模拟结算快照（近 HIST_MAX 条滚动；meta additive 持久，
+// 旧档缺键 = 空表零迁移）。comp 存 COMPANION_NAMES 下标（255=无伴，照 bn= 惯例）。
+#[derive(Clone)]
+pub struct SimRecord {
+    pub life_no: u32,     // 第几世（sim_die 时 meta.lives）
+    pub run_no: u32,      // 第几稿（sim_die 时 meta.total_sims；一世可开多稿）
+    pub max_realm: usize, // 最高境界（渲染处 .min(14)，照 draw.rs:1782 先例）
+    pub age: f64,         // 享年（sr.age）
+    pub years: i64,       // 历经（sr.age - sim_start_age）
+    pub dy: i64,          // 本稿道韵（含结缘 +50 加成后的当稿值）
+    pub stones: i64,      // 终局灵石
+    pub comp: u8,         // 道侣下标（255=无）
+    pub cause: String,    // 结局/死因全文（代码字面量，无换行）
+}
+
+// 旧稿档案保留条数（写满弹最旧；save.rs 解析端同此截断）
+pub const HIST_MAX: usize = 5;
 
 pub fn gain_qi(l: &mut Life, amount: f64) {
     l.qi += amount;
@@ -859,6 +885,8 @@ pub struct Game {
     pub book_view: Option<usize>, // v1.12.1 书志重看覆层：panel=6 书志页点开已达成的结局条目，复用演出页绘制（不进存档）
 
     pub blank_used: bool, // v1.12.0 空白行：每稿至多一次门闩（瞬态，不进存档；launch_sim 清零）
+
+    pub recent_events: Vec<usize>, // v1.16.5 防重复排除池：本世最近 K 次抽过的模拟事件 id（瞬态，不进存档；launch_sim 清零）
 
     pub time: f32,
 
@@ -1288,6 +1316,8 @@ impl Game {
             book_view: None,
 
             blank_used: false,
+
+            recent_events: Vec::new(),
 
             time: 0.0,
 
@@ -1914,6 +1944,9 @@ impl Game {
 
         // v1.12.0 空白行：每稿至多一次门闩随开稿清零
         self.blank_used = false;
+
+        // v1.16.5 防重复排除池随新稿清零（「本世最近 K 次」的口径就是一世）
+        self.recent_events.clear();
 
         self.sim = Some(s);
 
@@ -2937,6 +2970,7 @@ impl Game {
     }
 
     pub fn sim_event(&mut self) {
+
         let (luck, realm, sect, lingmai) = {
             let s = self.sim.as_ref().unwrap();
 
@@ -2945,6 +2979,52 @@ impl Game {
             (lk, s.realm, s.sect, s.lingmai)
         };
 
+        let (ws, total) = self.sim_event_weights(luck, realm, sect, lingmai);
+
+        // v1.16.5 退化兜底：排除池把小池清零（低境界常见）→ 清空排除池重算，
+        // 宁可重复也不静默无卡（旧逻辑 total<=0.01 直接 return）
+        let (ws, total) = if total <= 0.01 {
+            self.recent_events.clear();
+
+            let (ws, total) = self.sim_event_weights(luck, realm, sect, lingmai);
+
+            if total <= 0.01 {
+                return;
+            }
+
+            (ws, total)
+        } else {
+            (ws, total)
+        };
+
+        let mut roll = gen_range(0.0, total);
+
+        let mut chosen = 0;
+
+        for (i, w) in ws.iter().enumerate() {
+            roll -= w;
+
+            if roll <= 0.0 {
+                chosen = i;
+
+                break;
+            }
+        }
+
+        // v1.16.5 记入防重复排除池并裁剪至 K（仅事件年调用一次，非帧路径）
+        let cid = EVENTS[chosen].0;
+
+        self.recent_events.push(cid);
+
+        if self.recent_events.len() > RECENT_EVENT_K {
+            self.recent_events.remove(0);
+        }
+
+        self.build_event(cid);
+    }
+
+    // v1.16.5 抽取权重一行一算（sim_event 退化重算复用；仅事件年调用，非帧路径）
+    fn sim_event_weights(&self, luck: f32, realm: usize, sect: bool, lingmai: bool) -> (Vec<f32>, f32) {
         let mut total = 0.0f32;
 
         let mut ws: Vec<f32> = Vec::new();
@@ -2954,6 +3034,11 @@ impl Game {
 
             // v1.12.0 空白行：每稿至多一次——门闩置位后权重归零（照 sect/lingmai 先例）
             if (id == 6 && sect) || (id == 9 && lingmai) || (id == 30 && self.blank_used) {
+                ww = 0.0;
+            }
+
+            // v1.16.5 防重复：本世最近 K 次抽过 → 权重归零（全灭由 sim_event 退化兜底）
+            if self.recent_events.contains(&id) {
                 ww = 0.0;
             }
 
@@ -2975,25 +3060,7 @@ impl Game {
             total += ww;
         }
 
-        if total <= 0.01 {
-            return;
-        }
-
-        let mut roll = gen_range(0.0, total);
-
-        let mut chosen = 0;
-
-        for (i, w) in ws.iter().enumerate() {
-            roll -= w;
-
-            if roll <= 0.0 {
-                chosen = i;
-
-                break;
-            }
-        }
-
-        self.build_event(EVENTS[chosen].0);
+        (ws, total)
     }
 
     fn build_event(&mut self, id: usize) {
@@ -3630,10 +3697,204 @@ impl Game {
                 card.opts.push(("捐些香火".into(), e2));
             }
 
+            // ---------- v1.16.5 扩池 13 条（id 31..=43）----------
+            // 题材覆盖：奇遇得宝/危机考验/人情往来/修行顿悟/市井奇闻/秘境探索；
+            // 每条 ≥2 选项且各有得失。全部只用通用 Eff 字段（不新增 special：
+            // 1/2/3/7 型臂带 return 会跳过通用结算段），赌局走普通 fight
+            // （sim_fight 内建胜缴获/败重伤）—— eff_desc 副标签自动生成
+            31 => {
+                card.title = "雨夜借宿".into();
+                card.text =
+                    "山雨骤至，你叩响山腰人家的柴门。老丈披衣开门：「道友不嫌简陋，同吃一锅热粥。」"
+                        .into();
+                let mut e1 = Eff::new();
+                e1.dao = 4.0;
+                e1.luck = 1.0;
+                e1.msg = vec!["柴水劈满缸，老丈讲了一夜山中旧事。道心+4，气运+1".into()];
+                card.opts.push(("帮劈柴水".into(), e1));
+                let g = (60.0 * ss) as i64;
+                let mut e2 = Eff::new();
+                e2.stones = -g;
+                e2.luck = 2.0;
+                e2.msg = vec!["你留下一袋灵石作谢，此后路过必有热茶。气运+2".into()];
+                card.opts.push(("留下谢仪".into(), e2));
+            }
+            32 => {
+                card.title = "古碑残字".into();
+                card.text =
+                    "荒径尽头立着半截古碑，苔痕下残字若隐若现，似是一篇未写完的行功总纲。".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.08;
+                e1.dao = 3.0;
+                e1.msg = vec!["残字入心，如春水化冰。修为+8%，道心+3".into()];
+                card.opts.push(("拂苔细读".into(), e1));
+                let g = (70.0 * ss * gen_range(0.7, 1.4)) as i64;
+                let mut e2 = Eff::new();
+                e2.stones = g;
+                e2.msg = vec![format!("拓片售予坊市书坊，碑中真意却错过了。灵石+{}", fmt_int(g))];
+                card.opts.push(("拓印售卖".into(), e2));
+            }
+            33 => {
+                card.title = "雾锁迷林".into();
+                card.text = "白雾灌林，方向尽失。雾深处有人低低唤你的名字，一声比一声近。".into();
+                let mut e1 = Eff::new();
+                e1.fight = 0.85;
+                e1.good = false;
+                card.opts.push(("循声而去".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 3.0;
+                e2.stones_pct = -0.08;
+                e2.msg = vec!["你枯坐守心，雾散时天已放晴。道心+3".into()];
+                card.opts.push(("原地守心".into(), e2));
+            }
+            34 => {
+                card.title = "墨市笔坊".into();
+                card.text = "坊市新张一家笔坊，掌柜拍胸脯：「我这兽毫，一笔落纸可定千行！」案上笔杆根根乌亮。".into();
+                let g = (100.0 * ss) as i64;
+                let mut e1 = Eff::new();
+                e1.stones = -g;
+                e1.qi_pct = 0.10;
+                e1.msg = vec!["新笔饱墨，行气如虹。修为+10%".into()];
+                card.opts.push(("重金购笔".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.msg = vec!["你看掌柜制笔半日，悟得几分运笔之要。道心+2".into()];
+                card.opts.push(("观摩制笔".into(), e2));
+            }
+            35 => {
+                card.title = "断桥济人".into();
+                card.text = "溪桥塌了半边，一位货郎守着翻倒的担子发愁。你袖袍一卷，把货担稳稳送上对岸。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 3.0;
+                e1.luck = 3.0;
+                e1.msg = vec!["货郎千恩万谢，逢人便说你仁义。道心+3，气运+3".into()];
+                card.opts.push(("分文不取".into(), e1));
+                let g = (40.0 * ss * gen_range(0.9, 1.5)) as i64;
+                let mut e2 = Eff::new();
+                e2.stones = g;
+                e2.msg = vec![format!("货郎硬塞了脚钱。灵石+{}", fmt_int(g))];
+                card.opts.push(("收些脚钱".into(), e2));
+            }
+            36 => {
+                card.title = "瘴谷寻药".into();
+                card.text = "瘴气谷口石碑刻着「药王留谷，取之有度」，谷底灵药成片，雾气泛着幽绿。".into();
+                let mut e1 = Eff::new();
+                e1.fight = 1.05;
+                e1.pill = Some((0, 2));
+                e1.good = false;
+                card.opts.push(("深入谷心".into(), e1));
+                let g = (50.0 * ss * gen_range(0.7, 1.4)) as i64;
+                let mut e2 = Eff::new();
+                e2.stones = g;
+                e2.msg = vec![format!("你拾得谷口自然枯落的药草，售得灵石 {}", fmt_int(g))];
+                card.opts.push(("谷口拾遗".into(), e2));
+            }
+            37 => {
+                card.title = "渡灵舟".into();
+                card.text = "灵舟行至江心，墨色巨浪忽然立起，船家面色发白：「水妖翻浪——稳住！」".into();
+                let mut e1 = Eff::new();
+                e1.fight = 1.0;
+                e1.good = false;
+                card.opts.push(("协助退妖".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.stones_pct = -0.10;
+                e2.msg = vec!["船身颠簸如筛，行囊湿了大半。道心+2".into()];
+                card.opts.push(("闭舱守心".into(), e2));
+            }
+            38 => {
+                card.title = "残卷拍卖".into();
+                card.text = "拍卖行压轴一幅无名残卷，起拍百灵石——据说落款处藏着一篇功法总纲。".into();
+                let g = (180.0 * ss) as i64;
+                let mut e1 = Eff::new();
+                e1.stones = -g;
+                e1.qi_pct = 0.15;
+                e1.dao = 2.0;
+                e1.msg = vec!["你连夜参详，卷中总纲果然不凡。修为+15%，道心+2".into()];
+                card.opts.push(("举牌竞得".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.msg = vec!["残卷被锦衣修士天价拍走。不动心，也是修行。道心+2".into()];
+                card.opts.push(("袖手旁观".into(), e2));
+            }
+            39 => {
+                card.title = "灵田佃户".into();
+                card.text = "灵田佃户老周拦路作揖：「仙长，田里灵谷一夜白穗，您给瞧瞧是何缘故？」".into();
+                let mut e1 = Eff::new();
+                e1.dao = 4.0;
+                e1.luck = 2.0;
+                e1.msg = vec!["你以灵力驱尽谷虫，老周赠新米一斗。道心+4，气运+2".into()];
+                card.opts.push(("亲往除虫".into(), e1));
+                let g = (35.0 * ss) as i64;
+                let mut e2 = Eff::new();
+                e2.stones = g;
+                e2.msg = vec![format!("你教他烟熏护田之法，老周塞来谢礼。灵石+{}", fmt_int(g))];
+                card.opts.push(("指点几句".into(), e2));
+            }
+            40 => {
+                card.title = "酒楼斗法".into();
+                card.text = "坊市酒楼里两名外乡修士斗法，桌椅横飞波及无辜，掌柜朝你直使眼色。".into();
+                let mut e1 = Eff::new();
+                e1.fight = 1.15;
+                e1.good = false;
+                card.opts.push(("出手镇场".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 3.0;
+                e2.stones_pct = -0.05;
+                e2.msg = vec!["你护着凡人客人撤到街外，毁了一身行头。道心+3".into()];
+                card.opts.push(("掩护撤离".into(), e2));
+            }
+            41 => {
+                card.title = "前人手札".into();
+                card.text = "旧书摊的线装手札里夹着几页批注，墨迹已淡，隐约指着一处行功捷径。".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.20;
+                e1.dao = 3.0;
+                e1.msg = vec!["你按批注行功一月，水到渠成。修为+20%，道心+3".into()];
+                card.opts.push(("依注苦修".into(), e1));
+                let g = (150.0 * ss * gen_range(0.8, 1.5)) as i64;
+                let mut e2 = Eff::new();
+                e2.stones = g;
+                e2.msg = vec![format!("手札被藏经楼高价收走。灵石+{}", fmt_int(g))];
+                card.opts.push(("高价转售".into(), e2));
+            }
+            42 => {
+                card.title = "废墟道场".into();
+                card.text = "山雾散处露出一座废弃道场，蒲团积尘盈寸，梁上剑痕犹新。".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.12;
+                e1.life_y = 8.0;
+                e1.msg = vec!["你入定七日，出关时步履生风。修为+12%，寿元+8".into()];
+                card.opts.push(("蒲团参悟".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 5.0;
+                e2.msg = vec!["你替道场扫尘七日——扫地亦是修行。道心+5".into()];
+                card.opts.push(("扫塔七日".into(), e2));
+            }
+            43 => {
+                card.title = "沙暴藏窟".into();
+                card.text = "沙暴过后，崖壁上裸出一处洞窟，铁链断了一半，深处隐隐透出陈年墨香。".into();
+                let mut e1 = Eff::new();
+                e1.fight = 1.2;
+                e1.good = false;
+                card.opts.push(("斩链入窟".into(), e1));
+                let g = (120.0 * ss * gen_range(0.8, 1.4)) as i64;
+                let mut e2 = Eff::new();
+                e2.stones = g;
+                e2.msg = vec![format!("外洞石案上散着前人遗落的灵石。灵石+{}", fmt_int(g))];
+                card.opts.push(("只探外洞".into(), e2));
+            }
+
             _ => {}
         }
 
         if !card.opts.is_empty() {
+            // v1.16.5 事件卡字形预热（照 show_banner 事件帧预热先例）：卡面标题 24/
+            // 正文 16 在卡构建帧一次栅格化，弹卡帧只命中缓存——新文案不在
+            // PANEL_WARM_CHARS 时避免首帧栅格化触发 2048² 图集整图重传
+            crate::ui::prewarm_text(&card.title, &[24]);
+            crate::ui::prewarm_text(&card.text, &[16]);
+
             self.modal = Some(card);
         }
     }
@@ -4460,6 +4721,27 @@ impl Game {
 
             comp_fav,
         });
+
+        // v1.16.5 旧稿档案：唯一写入点（sim_die 全死因漏斗；此后进继承屏，
+        // finish_inherit 清 sim_result 前必须落账）。尾部插入、超量弹最旧；
+        // 随本函数尾既有 sync_save 入档（save_flush 去抖），零额外落盘调用
+        let ci = comp
+            .as_deref()
+            .and_then(|c| COMPANION_NAMES.iter().position(|&n| n == c));
+        self.meta.hist.push(SimRecord {
+            life_no: self.meta.lives,
+            run_no: self.meta.total_sims,
+            max_realm,
+            age,
+            years,
+            dy,
+            stones,
+            comp: ci.map_or(255, |i| i as u8),
+            cause: cause.to_string(),
+        });
+        if self.meta.hist.len() > HIST_MAX {
+            self.meta.hist.remove(0);
+        }
 
         self.sim = None;
 
@@ -6266,6 +6548,8 @@ mod revenge_tests {
 
             blank_used: false,
 
+            recent_events: Vec::new(),
+
             time: 0.0,
 
             sfx_ok: None,
@@ -7083,5 +7367,86 @@ mod gallery_bond_chain_tests {
         g.quit_sim_redraft();
         assert!(g.sim.is_none());
         assert_eq!(g.meta.comp_bonds.iter().sum::<u8>(), total, "重掷不回退历世账");
+    }
+}
+
+// ================= v1.16.5 模拟事件扩池 + 防重复排除池 =================
+
+#[cfg(test)]
+mod recent_event_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // K 窗口不变式：连抽 300 次，recent_events 恒 ≤K 且窗口内无重复 id
+    #[test]
+    fn no_repeat_within_k_window() {
+        let mut g = sim_game(5, 100.0);
+        for _ in 0..300 {
+            g.modal = None;
+            g.sim_event();
+            assert!(g.modal.is_some(), "realm5 大池不该退化到无卡可出");
+            assert!(g.recent_events.len() <= RECENT_EVENT_K, "窗口恒 ≤K");
+            let mut seen = g.recent_events.clone();
+            seen.sort_unstable();
+            seen.dedup();
+            assert_eq!(seen.len(), g.recent_events.len(), "K 窗口内不得重复");
+        }
+    }
+
+    // 排除后小池全灭 → 退化：清空排除池重抽（而非旧逻辑静默无卡）
+    #[test]
+    fn degenerate_pool_clears_and_draws() {
+        let mut g = sim_game(0, 40.0);
+        g.recent_events = (0..EVENTS.len()).collect(); // 最坏情形：全池被排除
+        g.modal = None;
+        g.sim_event();
+        assert!(g.modal.is_some(), "全排除退化后仍须出卡");
+        assert_eq!(g.recent_events.len(), 1, "退化清空后仅记录本次");
+    }
+
+    // 本世口径：launch_sim 必须清空排除池（照 blank_used_resets_per_sim 先例）
+    #[test]
+    fn recent_events_reset_per_sim() {
+        let mut g = game_with(Life::default(), None);
+        g.picked = vec![0]; // launch_sim 卫语句
+        g.meta.sim_points = 5;
+        g.recent_events.push(3);
+        g.launch_sim();
+        assert!(g.recent_events.is_empty(), "launch_sim 必须清空排除池");
+    }
+
+    // 新事件卡齐全：id 31..=43 每条 ≥2 且 ≤3 选项、标题正文非空，选第一项不 panic
+    #[test]
+    fn new_event_cards_well_formed() {
+        let mut g = game_with(Life::default(), None);
+        for id in 31..=43 {
+            // 每轮重新置稿：fight 类选项 8% 战死（sim_fight→sim_die 置 sim=None），
+            // 不重置则下一轮 build_event 的 sim.unwrap() 必炸
+            let mut s = Life::default();
+            s.realm = 5;
+            s.luck = 40.0;
+            g.sim = Some(s);
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂（白抽）", id));
+            assert!(matches!(card.kind, CardKind::Npc));
+            assert!(!card.title.is_empty());
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两个选项", id);
+            assert!(card.opts.len() <= 3, "卡面几何至多三选项（draw.rs:1706）");
+            g.choose_option(0); // apply_eff 全链不 panic（sync_save 仅置脏不落盘）
+        }
     }
 }

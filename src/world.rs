@@ -1046,8 +1046,21 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                 62.0,
                 Color::from_rgba(255, 255, 255, 5),
             );
-            txt(good.name, 276.0, y + 10.0, 18, C_GOLD);
-            txt(good.desc, 410.0, y + 10.0, 14, C_TEXT);
+            // v1.16.5 法宝行补专属像素画，名/desc 右移 28px（其余货目原位）
+            let icon_dx = match good.kind {
+                SectGoodKind::Relic(ri) => {
+                    draw_texture(
+                        &crate::art::art().relic_icons[ri.min(crate::data::RELICS.len() - 1)],
+                        276.0,
+                        y + 6.0,
+                        WHITE,
+                    );
+                    28.0
+                }
+                _ => 0.0,
+            };
+            txt(good.name, 276.0 + icon_dx, y + 10.0, 18, C_GOLD);
+            txt(good.desc, 410.0 + icon_dx, y + 10.0, 14, C_TEXT);
             txt_r(
                 &format!("{} 贡献", good.cost),
                 930.0,

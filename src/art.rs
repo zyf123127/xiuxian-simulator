@@ -11,7 +11,13 @@ pub struct Art {
     pub icon_stone: Texture2D,
     pub icon_yun: Texture2D,
     pub icon_pill: Texture2D,
+    // v1.16.5 起两处法宝位改 relic_icons 专属像素画，通用剑图标暂无渲染消费
+    // （照 portrait 的 allow(dead_code) 先例保留资产，don't delete—调试/新点位可用）
+    #[allow(dead_code)]
     pub icon_sword: Texture2D,
+    // v1.16.5 法宝像素画：RELICS 每件专属 12×12 图标（下标即 RELICS 下标；
+    // 启动期 eager 生成，勿调序/插入 RELICS 数组——8 件下标语义漂移风险见勘察⑤）
+    pub relic_icons: [Texture2D; 8],
     pub bg: Texture2D,
     // v1.6.0 C：map_bg 移除固定字段——改 map_bg_for(region, seed) 按主题参数化 + 缓存
     pub map_icons: [Texture2D; 6],
@@ -197,6 +203,7 @@ pub fn build_art() -> Art {
     let icon_yun = build_icon_yun();
     let icon_pill = build_icon_pill();
     let icon_sword = build_icon_sword();
+    let relic_icons = std::array::from_fn(build_relic_icon); // v1.16.5 法宝像素画
     let bg = build_bg();
     let map_icons = std::array::from_fn(build_map_icon);
     let mut a = Art {
@@ -205,6 +212,7 @@ pub fn build_art() -> Art {
         icon_yun,
         icon_pill,
         icon_sword,
+        relic_icons,
         bg,
         map_icons,
         portraits,
@@ -470,6 +478,110 @@ fn build_icon_sword() -> Texture2D {
     g.rect(3, 9, 3, 1, gd);
     g.set(3, 10, rgba(90, 70, 40, 255));
     g.set(2, 11, rgba(90, 70, 40, 255));
+    g.outline(O);
+    g.to_texture()
+}
+
+// v1.16.5 法宝像素画：RELICS 每件专属 12×12 图标（与 icon_sword 同规格，两处显示位
+// 1:1 零缩放），逐件独立轮廓与主色相；纯数据 relic_pixels 与纹理化 build_relic_icon
+// 分离可单测（先例 person_pixels / name_seed_fixed）。启动期 build_art 一次生成
+// 8 张（约 4.5KB RGBA），行囊恒渲染 8 行——eager 模式无需预热纪律。
+fn relic_pixels(idx: usize) -> PixGrid {
+    let mut g = PixGrid::new(12, 12);
+    match idx {
+        // 0 呵霜毫：斜杆毛笔白毫锋 + 青霜一点（青白）
+        0 => {
+            let shaft = rgba(122, 90, 56, 255);
+            let shaft_hi = rgba(158, 122, 78, 255);
+            for i in 0..5 {
+                g.set(9 - i, 1 + i, shaft);
+                g.set(8 - i, 1 + i, shaft_hi);
+            }
+            let tip = rgba(238, 242, 246, 255);
+            g.set(4, 6, tip);
+            g.set(3, 7, tip);
+            g.set(2, 8, tip);
+            g.set(3, 6, rgba(214, 222, 230, 255));
+            g.set(2, 7, rgba(214, 222, 230, 255));
+            g.fill_circle(3, 9, 1, rgba(150, 208, 228, 255)); // 呵气成霜
+        }
+        // 1 裁云笺：斜置纸笺 + 裂金缘（米金）
+        1 => {
+            let paper = rgba(238, 228, 200, 255);
+            let paper_sh = rgba(214, 200, 168, 255);
+            g.rect(3, 2, 5, 8, paper);
+            g.rect(3, 2, 5, 1, paper_sh);
+            for (x, y) in [(8, 3), (9, 4), (8, 6), (9, 7), (8, 9)] {
+                g.set(x, y, rgba(212, 178, 106, 255)); // 裁云金缘
+            }
+            g.rect(4, 5, 3, 1, paper_sh); // 折行
+        }
+        // 2 镇行钉：金帽铁身竖钉（铁灰）
+        2 => {
+            g.rect(4, 1, 4, 2, rgba(222, 186, 110, 255)); // 金帽
+            g.rect(5, 3, 2, 6, rgba(140, 148, 160, 255)); // 钉身
+            g.set(5, 9, rgba(110, 116, 128, 255));
+            g.set(6, 9, rgba(110, 116, 128, 255));
+            g.tri([(5, 9), (7, 9), (6, 11)], rgba(96, 102, 112, 255)); // 钉尖
+        }
+        // 3 墨骨伞：半开伞骨辐 + 弯柄（墨黑）
+        3 => {
+            g.fill_ellipse(5, 4, 5, 3, rgba(38, 34, 46, 255)); // 伞面
+            g.rect(4, 1, 3, 1, rgba(38, 34, 46, 255)); // 伞尖
+            for i in 1..4 {
+                g.set(5 - i, 2 + i, rgba(70, 64, 80, 255)); // 伞骨
+                g.set(5 + i, 2 + i, rgba(70, 64, 80, 255));
+            }
+            g.rect(8, 4, 1, 6, rgba(96, 70, 44, 255)); // 伞柄
+            g.set(7, 10, rgba(96, 70, 44, 255)); // 柄钩
+        }
+        // 4 曝书炉：三足炉 + 墨香汽（铜褐）
+        4 => {
+            let bronze = rgba(158, 106, 62, 255);
+            let bronze_hi = rgba(196, 140, 84, 255);
+            g.fill_circle(5, 6, 3, bronze); // 炉身
+            g.rect(2, 3, 7, 1, bronze_hi); // 炉口沿
+            g.set(5, 2, rgba(200, 196, 190, 255)); // 墨香汽
+            g.set(6, 1, rgba(170, 166, 160, 255));
+            for x in [3, 5, 7] {
+                g.set(x, 9, rgba(120, 78, 44, 255)); // 三足
+            }
+        }
+        // 5 闲章：方印十字篆纹（朱红）
+        5 => {
+            g.rect(3, 2, 6, 7, rgba(186, 54, 44, 255)); // 印身
+            g.rect(4, 3, 4, 5, rgba(240, 232, 220, 255)); // 印面留白
+            g.rect(5, 3, 1, 5, rgba(186, 54, 44, 255)); // 篆纹·竖
+            g.rect(4, 5, 4, 1, rgba(186, 54, 44, 255)); // 篆纹·横
+            g.rect(4, 9, 4, 1, rgba(140, 40, 34, 255)); // 印座
+        }
+        // 6 洗笔江：坎卦三水纹（青碧）
+        6 => {
+            let w1 = rgba(64, 158, 148, 255);
+            let w2 = rgba(120, 202, 190, 255);
+            g.rect(1, 3, 10, 1, w1);
+            g.rect(1, 6, 4, 1, w2); // 中断
+            g.rect(7, 6, 4, 1, w2);
+            g.rect(1, 9, 10, 1, w1);
+        }
+        // 7 无字簿：摊开空白簿页（纸白）
+        7 => {
+            let page = rgba(240, 236, 226, 255);
+            let spine = rgba(176, 166, 150, 255);
+            g.rect(2, 3, 4, 7, page); // 左页
+            g.rect(6, 3, 4, 7, page); // 右页
+            for y in 3..10 {
+                g.set(5, y, spine); // 书脊
+            }
+            g.rect(2, 10, 8, 1, rgba(110, 84, 56, 255)); // 封底
+        }
+        _ => {}
+    }
+    g
+}
+
+fn build_relic_icon(idx: usize) -> Texture2D {
+    let mut g = relic_pixels(idx);
     g.outline(O);
     g.to_texture()
 }
@@ -1163,6 +1275,18 @@ mod pixel_fallback_tests {
         assert_eq!(name_seed("醉道人"), 3873566653);
         assert_eq!(name_seed("玄诚长老"), 987919751);
         assert_eq!(name_seed("胡掌柜"), 2651355892);
+    }
+
+    // v1.16.5 法宝像素画：8 张 12×12 图标非空且两两不同（纯 PixGrid 数据，不触 GPU）
+    #[test]
+    fn relic_pixels_eight_distinct_nonempty() {
+        let mut sigs: std::collections::HashSet<Vec<[u8; 4]>> = std::collections::HashSet::new();
+        for i in 0..8 {
+            let g = relic_pixels(i);
+            let n = g.px.iter().filter(|p| p[3] > 0).count();
+            assert!(n > 0, "relic {} 空像素图", i);
+            assert!(sigs.insert(g.px.clone()), "relic {} 与前件重复", i);
+        }
     }
 
     // 同种子两次构建逐字节相等（纯 PixGrid 数据比较，不触 GPU）

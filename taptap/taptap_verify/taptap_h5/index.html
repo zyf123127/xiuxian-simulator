@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.16.0";</script>
+    <script>var GAME_VER = "1.16.5";</script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -247,7 +247,7 @@
             } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.16.0"></script>
+    <script src="mq_js_bundle.js?v=1.16.5"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -1253,9 +1253,15 @@
                 // fixed 定位跟随 body 变换，左下角是真机可见的稳定角落。
                 // z-index 150：必须压过 errlog(99)——X5 实测恐慌刷屏时
                 // errlog(max-height:100%) 会盖满整页，HUD 从此恒可读
-                "position:fixed;left:2px;bottom:64px;z-index:150;color:#9f9;" +
-                "background:rgba(0,0,0,.6);font:10px/1.25 Consolas,monospace;" +
-                "white-space:pre;pointer-events:none;padding:1px 4px;opacity:.95;";
+                // v1.16.5 ?dbg=1 保持原遥测样式；正式包降为纯版本徽章
+                // （无底色、低不透明度，不与调试输出混淆）
+                (XX_DBG ?
+                    "position:fixed;left:2px;bottom:64px;z-index:150;color:#9f9;" +
+                    "background:rgba(0,0,0,.6);font:10px/1.25 Consolas,monospace;" +
+                    "white-space:pre;pointer-events:none;padding:1px 4px;opacity:.95;" :
+                    "position:fixed;left:2px;bottom:64px;z-index:150;color:#9f9;" +
+                    "font:10px/1.25 Consolas,monospace;" +
+                    "white-space:pre;pointer-events:none;padding:1px 2px;opacity:.6;");
             document.body.appendChild(hud);
             setInterval(function () {
                 try {
@@ -1269,8 +1275,10 @@
                     }
                     window.__xxFFP = ffp;
                     window.__xxFFD = ffd;
-                    hud.textContent =
-                        "v" + GAME_VER + " " +
+                    // v1.16.5 调试遥测默认隐藏（?dbg=1 才显全串）：正式包只留版本徽章，
+                    // 版本号必须保留——缓存穿透靠改 GAME_VER 认版本、防设备吃旧缓存
+                    hud.textContent = XX_DBG ?
+                        ("v" + GAME_VER + " " +
                         "触" + (window.__xxTouches || 0) +
                         " 消" + (window.__xxClicksSeen || 0) +
                         " 应" + (window.__xxTapLat == null ? "-" : (window.__xxTapLat | 0) + "ms") +
@@ -1282,11 +1290,14 @@
                         " FF" + (window.__xxFFP >> 10) + "k/" + (window.__xxFFD >> 10) + "k" +
                         " 劫" + (window.__xxCbSteal | 0) +
                         " 钟 mc/w/st=" + (ck.mc | 0) + "/" + (ck.w | 0) + "/" + (ck.st | 0) +
-                        " 帧ok/err=" + (window.__xxFrameOk | 0) + "/" + (window.__xxFrameErr | 0);
+                        " 帧ok/err=" + (window.__xxFrameOk | 0) + "/" + (window.__xxFrameErr | 0)) :
+                        ("v" + GAME_VER);
                     // v1.15.0 标题诊断：errlog/HUD 会被遮挡或淡化，标题在浏览器
                     // URL 栏恒可见（旋转布局截图考古的终结手段）
+                    // v1.16.5 遥测标题同样收进 ?dbg=1，正式包回落静态标题
+                    // 「凡人模拟·轮回模拟器」（panic 标题覆盖 index.html:405 不受影响）
                     try {
-                        document.title = "F" + (window.__xxAlive ? window.__xxAlive.n : -1) +
+                        if (XX_DBG) document.title = "F" + (window.__xxAlive ? window.__xxAlive.n : -1) +
                             " 活" + (window.__xxKeepAlive ? 1 : 0) +
                             " 触" + (window.__xxTouches || 0) +
                             " 消" + (window.__xxClicksSeen || 0) +

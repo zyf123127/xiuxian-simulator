@@ -30,6 +30,8 @@ pub fn draw_char_panel(g: &mut Game) {
             3 => act = draw_npc_page(g), // v1.6.0 D：好感度页（v1.10.2 单列滚动列表）
             // v1.16.0 交游图鉴：同页人 10 卡 + 文狱四 NPC 卡（纯只读滚动，无 &mut 交互）
             4 => crate::gallery::draw_gallery_page(g),
+            // v1.16.5 旧稿档案：近 5 稿结算快照（纯只读固定列表，无滚动无 &mut 交互）
+            5 => draw_hist_page(g),
             // v1.10.2：总览页纯只读，整页持 life 借用（防御 None：面板仅在 Reality 打开）
             1 => {}
             _ => {
@@ -76,6 +78,11 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             if i == 4 {
                 crate::gallery::prewarm_corpus();
             }
+            // v1.16.5 旧稿页首开帧预热（同图鉴先例；C 键带陈旧 char_tab=5 直开的
+            // 首帧温开可接受——与 Tab(4) 同一口径）
+            if i == 5 {
+                prewarm_hist(g);
+            }
             g.char_tab = i;
             g.play(crate::sounds::Which::Page);
         }
@@ -105,16 +112,16 @@ fn draw_panel_chrome_act(g: &Game) -> Option<PanelAct> {
     if button(1064.0, 74.0, 44.0, 36.0, "×", None, true) {
         return Some(PanelAct::Close);
     }
-    // ---------- 页签（v1.6.0 D：第 4 页「人物」；v1.16.0：第 5 页「图鉴」） ----------
-    // 5 钮 x=300+i*150：第 5 钮 900..1040，与 × 钮（1064..1108）净空 24px 不重叠
-    let tabs = ["总览", "法宝", "成就·称号", "人物", "图鉴"];
+    // ---------- 页签（v1.6.0 D：第 4 页「人物」；v1.16.0：第 5 页「图鉴」；v1.16.5：第 6 页「旧稿」） ----------
+    // 6 钮 x=300+i*116（宽 140→116）：末钮 880..996，与 × 钮（1064..1108）净空 68px 不重叠
+    let tabs = ["总览", "法宝", "成就·称号", "人物", "图鉴", "旧稿"];
     for (i, t) in tabs.iter().enumerate() {
-        let x = 300.0 + i as f32 * 150.0;
-        if button(x, 74.0, 140.0, 34.0, t, None, true) {
+        let x = 300.0 + i as f32 * 116.0;
+        if button(x, 74.0, 116.0, 34.0, t, None, true) {
             return Some(PanelAct::Tab(i as u8));
         }
         if g.char_tab == i as u8 {
-            draw_rectangle(x, 108.0, 140.0, 3.0, C_GOLD);
+            draw_rectangle(x, 108.0, 116.0, 3.0, C_GOLD);
         }
     }
     None
@@ -425,6 +432,27 @@ pub(crate) fn scroll_list_tick(g: &mut Game, max: f32, step: f32) -> bool {
     tap
 }
 
+// v1.16.5 人物页道侣卡立绘下标判定（纯函数便于单测）：此生 companion 优先；
+// 未伴时走历世账兜底——缝页缘定之人（feng_bn，save.rs 键 bn= 持久化）优先，
+// 否则历世结缘账 comp_bonds 首个已识者；全 0 返回 None → 书卷剪影路径原样
+// （未结缘玩家画面零变化）。索引全部双卫（≠FENG_UNSET 且 <len，panic=abort 纪律）。
+// 语义对齐图鉴 known 判定（gallery.rs「comp_bonds[i]>0 || cur」的历世半边）。
+fn comp_portrait_idx(l: Option<&Life>, meta: &Meta) -> Option<usize> {
+    if let Some(ci) = l.and_then(|x| {
+        x.companion
+            .as_deref()
+            .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn))
+    }) {
+        return Some(ci);
+    }
+    let n = COMPANION_NAMES.len();
+    let fb = meta.feng_bn;
+    if fb != FENG_UNSET && (fb as usize) < n && meta.comp_bonds[fb as usize] > 0 {
+        return Some(fb as usize);
+    }
+    (0..n).find(|&i| meta.comp_bonds[i] > 0)
+}
+
 // v1.10.2 借用化：签名去 l——滚动状态机/页点/头像条为 &mut 直写；仅卡片绘制段
 // 借 life 不可变引用（块尾归还），命中赠礼以 PanelAct::Gift 跨借用传出
 fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
@@ -439,11 +467,10 @@ fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
     // v1.16.1 立绘点按命中以 Zoom 传出（赠礼钮在文本列 x+260 起与立绘盒无像素重叠）
     let (comp_tex, gifted, zoom_hit) = {
         let l = g.life.as_ref();
-        let comp_idx = l.and_then(|x| {
-            x.companion
-                .as_deref()
-                .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn))
-        });
+        // v1.16.5 补历世半边（原只读此生 companion）：模拟中结缘、落幕未带回现实
+        // （life.companion 唯一写点=遗泽 idx8）或旧档缺 Lcomp 键时，凭 feng_bn /
+        // comp_bonds 历世账兜底显真立绘；未结缘仍 None → 剪影
+        let comp_idx = comp_portrait_idx(l, &g.meta);
         let comp_tex = comp_idx.and_then(|ci| crate::art::art().comp_tex(ci));
         let mut gifted = None;
         let mut zoom_hit: Option<crate::game::ZoomArt> = None;
@@ -846,12 +873,24 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
                 );
             }
             if npc_row_vis(gy + 50.0) {
-                txt(
-                    "结缘后，她的立绘、情谊与双修加成都会在此卡显现。",
-                    gx + 16.0,
-                    gy + 50.0, 16,
-                    C_TEXT,
-                );
+                // v1.16.5 复审修复：历世兜底真图已同框显现，原行「结缘后…都会在此卡
+                // 显现」自相矛盾（同 :912 下缘小字一处口径）——兜底态改历世承缘提示；
+                // 未结缘无图态（剪影）原行照旧
+                if comp_tex.is_some() {
+                    txt(
+                        "此绘承自历世之缘，此生再遇『同页天成』可再续。",
+                        gx + 16.0,
+                        gy + 50.0, 16,
+                        C_TEXT,
+                    );
+                } else {
+                    txt(
+                        "结缘后，她的立绘、情谊与双修加成都会在此卡显现。",
+                        gx + 16.0,
+                        gy + 50.0, 16,
+                        C_TEXT,
+                    );
+                }
             }
             if npc_row_vis(y + 156.0) {
                 txt(
@@ -872,7 +911,8 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
             }
             // 剪影下缘小字一行（直接回应「女角色立绘丢了」的误读；v1.16.1 随卡加高
             // 下沉：y+286/290 → y+386/390，仍盖在立绘盒底边上方）
-            if npc_row_vis(y + 390.0) {
+            // v1.16.5 历世兜底显真图时不再画本行（否则「立绘自会在此显现」与真立绘同框矛盾）
+            if comp_tex.is_none() && npc_row_vis(y + 390.0) {
                 draw_rectangle(
                     x + 16.0,
                     y + 386.0,
@@ -1185,7 +1225,8 @@ fn draw_relic_page(g: &Game) -> Option<PanelAct> {
             if filled { C_GOLD_D } else { Color::from_rgba(70, 60, 96, 255) },
         );
         if filled {
-            draw_texture(&crate::art::art().icon_sword, 196.0, y + 18.0, WHITE);
+            // v1.16.5 专属像素画替代共用剑图标（r 即 RELICS 下标，filled 臂内恒有效）
+            draw_texture(&crate::art::art().relic_icons[r], 196.0, y + 18.0, WHITE);
             txt(&format!("【{}】", RELICS[r].name), 228.0, y + 14.0, 16, C_GOLD);
             // v1.8.0 E3：灵纹等级徽标
             let lv = g.life.as_ref().map(|x| x.relic_lv[r.min(7)]).unwrap_or(0);
@@ -1256,9 +1297,12 @@ fn draw_relic_page(g: &Game) -> Option<PanelAct> {
                 Color::from_rgba(70, 60, 96, 255)
             },
         );
+        // v1.16.5 包内列表补图标（原纯文本无图）：12×12 @616，名/lv/desc 右移 24px；
+        // 点击命中区 600..1120 不动（与图标无冲突）
+        draw_texture(&crate::art::art().relic_icons[k], 616.0, y + 6.0, WHITE);
         txt(
             &format!("【{}】", rl.name),
-            616.0,
+            640.0,
             y + 6.0,
             16,
             if owned { C_GOLD } else { C_DIM },
@@ -1266,11 +1310,11 @@ fn draw_relic_page(g: &Game) -> Option<PanelAct> {
         // v1.8.0 E3：灵纹等级徽标
         let lv = g.life.as_ref().map_or(0, |x| x.relic_lv[k.min(7)]);
         if lv > 0 {
-            txt(&format!("+{}", lv), 734.0, y + 8.0, 14, C_PURPLE);
+            txt(&format!("+{}", lv), 758.0, y + 8.0, 14, C_PURPLE);
         }
         txt(
             rl.desc,
-            780.0,
+            804.0,
             y + 8.0, 14,
             if owned { C_TEXT } else { C_DIM },
         );
@@ -1417,4 +1461,184 @@ fn draw_ach_title_page(g: &Game) -> Option<PanelAct> {
         C_DIM,
     );
     None
+}
+
+// ---------------- v1.16.5 人物页道侣立绘判定：历世账兜底（纯函数单测） ----------------
+
+#[cfg(test)]
+mod comp_portrait_tests {
+    use super::*;
+
+    // 未结缘（bonds 全 0、feng_bn 未定）→ None → 书卷剪影路径（画面零变化）
+    #[test]
+    fn no_bond_yields_none() {
+        let meta = Meta::default();
+        assert_eq!(comp_portrait_idx(Some(&Life::default()), &meta), None);
+        assert_eq!(comp_portrait_idx(None, &meta), None);
+    }
+
+    // 此生 companion 优先（历世账无论先后都让位）
+    #[test]
+    fn current_companion_wins() {
+        let mut meta = Meta::default();
+        meta.comp_bonds[5] = 1;
+        let mut l = Life::default();
+        l.companion = Some(COMPANION_NAMES[2].to_string());
+        assert_eq!(comp_portrait_idx(Some(&l), &meta), Some(2));
+    }
+
+    // 模拟结缘落幕未带回现实（life.companion=None、comp_bonds[i]>0）→ 历世兜底显真图
+    #[test]
+    fn historical_bond_fallback() {
+        let mut meta = Meta::default();
+        meta.comp_bonds[6] = 1;
+        assert_eq!(comp_portrait_idx(Some(&Life::default()), &meta), Some(6));
+        assert_eq!(comp_portrait_idx(None, &meta), Some(6));
+    }
+
+    // 缝页缘定之人（feng_bn）优先于按下标序的首个已识者
+    #[test]
+    fn feng_bn_takes_priority() {
+        let mut meta = Meta::default();
+        meta.comp_bonds[3] = 1;
+        meta.comp_bonds[8] = 2;
+        meta.feng_bn = 8;
+        assert_eq!(comp_portrait_idx(Some(&Life::default()), &meta), Some(8));
+    }
+
+    // 越界纪律：feng_bn 越界（99 ≥ 10）不 panic，落回按下标序（panic=abort 防御）
+    #[test]
+    fn feng_bn_out_of_range_falls_through() {
+        let mut meta = Meta::default();
+        meta.comp_bonds[1] = 1;
+        meta.feng_bn = 99;
+        assert_eq!(comp_portrait_idx(None, &meta), Some(1));
+    }
+
+    // feng_bn 已定但历世账为 0（旧档 bn= 有值、gbd= 全 0）→ 不显真图，剪影兜底
+    #[test]
+    fn feng_bn_without_bond_stays_none() {
+        let mut meta = Meta::default();
+        meta.feng_bn = 4;
+        assert_eq!(comp_portrait_idx(None, &meta), None);
+    }
+}
+
+// ---------- 页 5：旧稿（v1.16.5 近 5 次模拟结算快照；纯只读固定列表）----------
+// meta.hist（save.rs h= 键，sim_die 唯一写入点）逐条一行卡：头行（世/稿/境界/享年）
+// + 数值行（道韵/灵石/道侣）+ 死因 wrap；最新一条金描边区分新旧（iter().rev() 先例
+// draw.rs:1797）。行数恒 ≤5（HIST_MAX），无滚动/会话态/遮幅/整卡剔除；panel_card
+// 底板由调用方 draw_char_panel 统一绘制。动态行 format! 口径照勘察（draw_inherit
+// 每帧 ≥8 处先例）：可见 5 卡 × 2 行 + 固定页脚 1 次。
+const HIST_PREWARM_STRS: &[&str] = &[
+    "旧稿",
+    "第",
+    "世·第",
+    "稿",
+    "境",
+    "享年",
+    "载·历",
+    "年",
+    "道韵+",
+    "灵石",
+    "侣：",
+    "无",
+    "旧稿录 · 只记近 5 稿，最新在最上。",
+    "尚无旧稿——模拟一世落幕后方有记录。",
+];
+
+/// 旧稿页首开帧预热（exec_panel_act Tab(5) 单点调用，照 gallery::prewarm_corpus 先例）：
+/// 静态语料 + 境界名 + 十道侣名 + 各稿死因（≤5 条）——防冷字形首帧栅格化触发图集重传
+pub(crate) fn prewarm_hist(g: &Game) {
+    for s in HIST_PREWARM_STRS {
+        prewarm_text(s, &[14, 16]);
+    }
+    for r in REALMS.iter() {
+        prewarm_text(r.name, &[14, 16]);
+    }
+    for n in COMPANION_NAMES.iter() {
+        prewarm_text(n, &[14]);
+    }
+    for r in &g.meta.hist {
+        prewarm_text(&r.cause, &[14]);
+    }
+}
+
+fn draw_hist_page(g: &Game) {
+    if g.meta.hist.is_empty() {
+        txt("尚无旧稿——模拟一世落幕后方有记录。", 180.0, 160.0, 16, C_DIM);
+        return;
+    }
+    // 最新在顶（rev 首条即最新，照继承屏大事记 rev().take(7) 先例）
+    for (i, r) in g.meta.hist.iter().rev().enumerate() {
+        let y = 126.0 + i as f32 * 98.0;
+        let latest = i == 0;
+        draw_rectangle(
+            160.0,
+            y,
+            960.0,
+            92.0,
+            if latest {
+                Color::from_rgba(58, 44, 92, 235)
+            } else {
+                Color::from_rgba(44, 34, 70, 235)
+            },
+        );
+        draw_rectangle_lines(
+            160.0,
+            y,
+            960.0,
+            92.0,
+            1.5,
+            if latest {
+                C_GOLD_D
+            } else {
+                Color::from_rgba(70, 60, 96, 255)
+            },
+        );
+        // 头行：第N世·第M稿 境界 享年/历经（max_realm .min(14) 照 draw.rs:1782 先例）
+        txt(
+            &format!(
+                "第{}世·第{}稿  {}境  享年{}载·历{}年",
+                r.life_no,
+                r.run_no,
+                REALMS[r.max_realm.min(14)].name,
+                fmt_num(r.age),
+                fmt_num(r.years as f64)
+            ),
+            176.0,
+            y + 10.0, 16,
+            C_TEXT,
+        );
+        // 数值行两段：道韵/灵石（道韵>0 金）+ 道侣（紫）
+        txt(
+            &format!("道韵+{}  灵石{}", fmt_int(r.dy), fmt_int(r.stones)),
+            176.0,
+            y + 36.0, 14,
+            if r.dy > 0 { C_GOLD } else { C_TEXT },
+        );
+        let comp_name = if (r.comp as usize) < COMPANION_NAMES.len() {
+            COMPANION_NAMES[r.comp as usize]
+        } else {
+            "无"
+        };
+        txt(
+            &format!("侣：{}", comp_name),
+            480.0,
+            y + 36.0, 14,
+            if r.comp != 255 { C_PURPLE } else { C_DIM },
+        );
+        wrap_draw(&r.cause, 176.0, y + 58.0, 14, 920.0, 20.0, C_DIM);
+    }
+    // 页脚（y630 固定视口外，照 gallery.rs:162-170 每帧 1 次 format! 口径）
+    txt(
+        &format!(
+            "旧稿 {} 条 · 只记近 {} 稿，最新在最上。",
+            g.meta.hist.len(),
+            crate::game::HIST_MAX
+        ),
+        170.0,
+        630.0, 14,
+        C_DIM,
+    );
 }

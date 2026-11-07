@@ -4,7 +4,7 @@
 // （xx_save_len / xx_save_read / xx_save_write，长度一律 UTF-8 字节数），
 // 存档格式与解析逻辑两端完全一致（照 GetFish src/save.rs 已验证实现平移）。
 use crate::data::{RELICS, RELIC_EQUIP_MAX};
-use crate::game::{Life, Meta, Nemes};
+use crate::game::{Life, Meta, Nemes, SimRecord};
 
 // v1.5.0 wasm 后端不使用文件路径（键名由 JS 插件持有），此常量供桌面后端与文档引用
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -110,6 +110,23 @@ pub fn save_text(m: &Meta) -> String {
     s.push_str(&format!("blv={}\n", m.feng_blv));
     // v1.16.0 交游图鉴：十同页人历世结缘次数（旧档缺键 → [0;10] + 当前道侣位补 1，见 parse 尾）
     s.push_str(&format!("gbd={:?}\n", m.comp_bonds));
+    // v1.16.5 旧稿档案：近 5 次模拟结算快照，每条一行 h=（前 8 段空格分隔照 Lstat=
+    // 先例，cause 取第 9 段整段余量照 note= 自由文本先例——死因含空格不能全切；
+    // 缺键 → 空表 = 默认值，零迁移）
+    for r in &m.hist {
+        s.push_str(&format!(
+            "h={} {} {} {} {} {} {} {} {}\n",
+            r.life_no,
+            r.run_no,
+            r.max_realm,
+            r.age,
+            r.years,
+            r.dy,
+            r.stones,
+            r.comp,
+            r.cause
+        ));
+    }
     if let Some(n) = &m.neme {
         s.push_str(&format!("neme={} {} {}\n", n.title, n.name, n.realm));
     }
@@ -356,6 +373,36 @@ fn parse_save(text: &str) -> Meta {
                 }
                 has_gbd = true;
             }
+            // v1.16.5 旧稿档案：h=<life> <run> <realm> <age> <years> <dy> <stones> <comp> <cause…>
+            // splitn(9,' ') 取余量（cause 含空格照 note= 先例不能全切；值内 '=' 安全——
+            // split_once 只切首对）。数字坏值 unwrap_or 回退；realm clamp 0..=14、
+            // comp 界外归 255（无伴）；段数不足整行丢弃（不臆造半条记录）
+            "h" => {
+                let p: Vec<&str> = v.trim().splitn(9, ' ').collect();
+                if p.len() >= 9 {
+                    let num = |i: usize| -> f64 {
+                        p.get(i)
+                            .and_then(|x| x.parse::<f64>().ok())
+                            .unwrap_or(0.0)
+                    };
+                    let c = p.get(7).and_then(|x| x.parse::<u8>().ok()).unwrap_or(255);
+                    m.hist.push(SimRecord {
+                        life_no: num(0) as u32,
+                        run_no: num(1) as u32,
+                        max_realm: (num(2) as usize).min(14),
+                        age: num(3),
+                        years: num(4) as i64,
+                        dy: num(5) as i64,
+                        stones: num(6) as i64,
+                        comp: if (c as usize) < crate::data::COMPANION_NAMES.len() {
+                            c
+                        } else {
+                            255
+                        },
+                        cause: p[8].trim().to_string(),
+                    });
+                }
+            }
             "music" => m.music = v.trim().split(' ').next().map_or(true, |x| x == "1"),
             "sfx" => m.sfx = v.trim().split(' ').nth(1).map_or(true, |x| x == "1"),
             "neme" => {
@@ -526,6 +573,12 @@ fn parse_save(text: &str) -> Meta {
         if let Some(idx) = cur {
             m.comp_bonds[idx] = 1;
         }
+    }
+    // v1.16.5 防御性截断：脏档塞了超量 h= 行也只留最近 5 条（hist[0]=最旧，
+    // 尾部=最新；写端 sim_die 同步超量 remove(0)，此处仅防手改档）
+    if m.hist.len() > crate::game::HIST_MAX {
+        let extra = m.hist.len() - crate::game::HIST_MAX;
+        m.hist.drain(0..extra);
     }
     m
 }
@@ -909,5 +962,80 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
         assert_eq!((m3.taodie, m3.feng_bn, m3.feng_blv), (0, crate::data::FENG_UNSET, 0));
         let m4 = parse_save(&format!("{}dp=9\nbn=77\nblv=9\n", OLD_BASE));
         assert_eq!((m4.taodie, m4.feng_bn, m4.feng_blv), (6, crate::data::FENG_UNSET, 3));
+    }
+
+    // ---------------- v1.16.5 旧稿档案：h= 键（回环/缺键/坏值截断） ----------------
+
+    // 回环：save_text→parse_save hist 逐条相等（含空格死因、负灵石、无伴 255）
+    #[test]
+    fn hist_roundtrip_bitwise() {
+        let mut m = Meta::default();
+        m.hist = vec![
+            SimRecord {
+                life_no: 3,
+                run_no: 7,
+                max_realm: 4,
+                age: 76.5,
+                years: 60,
+                dy: 320,
+                stones: -1200,
+                comp: 255,
+                cause: "九问皆妄，你于镜前枯坐而终。".into(),
+            },
+            SimRecord {
+                life_no: 3,
+                run_no: 8,
+                max_realm: 5,
+                age: 88.0,
+                years: 72,
+                dy: 500,
+                stones: 42000,
+                comp: 3,
+                cause: "寿元自然耗尽".into(),
+            },
+        ];
+        let text = save_text(&m);
+        let back = parse_save(&text);
+        assert_eq!(back.hist.len(), 2);
+        assert_eq!(back.hist[0].life_no, 3);
+        assert_eq!(back.hist[0].max_realm, 4);
+        assert_eq!(back.hist[0].age, 76.5);
+        assert_eq!(back.hist[0].stones, -1200);
+        assert_eq!(back.hist[0].comp, 255);
+        assert_eq!(back.hist[0].cause, "九问皆妄，你于镜前枯坐而终。");
+        assert_eq!(back.hist[1].comp, 3);
+        assert_eq!(back.hist[1].cause, "寿元自然耗尽");
+    }
+
+    // 缺键默认空表（旧档零迁移）；坏行（段数不足）整行丢弃、界外值钳制
+    #[test]
+    fn hist_missing_default_and_dirty_clamped() {
+        let m = parse_save(OLD_BASE);
+        assert!(m.hist.is_empty(), "旧档无 h= 键 → 空表");
+        let t = format!(
+            "{}h=9 9 99 1.5 2 3 4 77 只留两段\nh=1 2 3 太短\nh=2 5 6 60.0 55 300 900 2 命殒于外 一身道果散入天地\n",
+            OLD_BASE
+        );
+        let m2 = parse_save(&t);
+        // 「太短」行丢弃；两条有效记录均入账
+        assert_eq!(m2.hist.len(), 2);
+        assert_eq!(m2.hist[0].max_realm, 14, "realm 99 → clamp 14");
+        assert_eq!(m2.hist[0].comp, 255, "comp 77 界外 → 255 无伴");
+        assert_eq!(m2.hist[1].comp, 2);
+        assert_eq!(m2.hist[1].cause, "命殒于外 一身道果散入天地", "cause 空格余量不截断");
+    }
+
+    // 防御性截断：脏档 7 条 h= → 只留最近 5 条（尾部保留）
+    #[test]
+    fn hist_overflow_keeps_latest_five() {
+        let mut t = OLD_BASE.to_string();
+        for i in 0..7 {
+            t.push_str(&format!("h=1 {} 3 50.0 40 100 800 255 死因{}\n", i, i));
+        }
+        let m = parse_save(&t);
+        assert_eq!(m.hist.len(), 5);
+        assert_eq!(m.hist[0].run_no, 2, "弹最旧，保 2..=6");
+        assert_eq!(m.hist[4].run_no, 6);
+        assert_eq!(m.hist[4].cause, "死因6");
     }
 }

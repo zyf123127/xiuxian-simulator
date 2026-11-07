@@ -2231,7 +2231,9 @@ fn draw_bag(g: &mut Game) {
         for i in 0..6 {
             let y = 188.0 + i as f32 * 62.0;
             let p = &PILLS[i];
-            txt(p.name, 180.0, y + 4.0, 18, C_GOLD);
+            // v1.16.5 顺带补图（照法宝行节奏：图标 172、名 196，丹药 6 种共用 icon_pill）
+            draw_texture(&crate::art::art().icon_pill, 172.0, y + 3.0, WHITE);
+            txt(p.name, 196.0, y + 4.0, 18, C_GOLD);
             txt(&format!("×{}", pills[i]), 300.0, y + 4.0, 16, C_TEXT);
             txt(p.desc, 360.0, y + 4.0, 14, C_TEXT);
             if button(
@@ -2284,7 +2286,7 @@ fn draw_bag(g: &mut Game) {
                     Color::from_rgba(26, 22, 42, 160)
                 },
             );
-            draw_texture(&crate::art::art().icon_sword, 172.0, y - 2.0, WHITE);
+            draw_texture(&crate::art::art().relic_icons[k], 172.0, y - 2.0, WHITE); // v1.16.5 专属像素画替代共用剑图标
             txt(
                 &format!("【{}】", rl.name),
                 196.0,
