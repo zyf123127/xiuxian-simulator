@@ -56,3 +56,20 @@ args = [
 subset.main(args)
 sz = os.path.getsize(OUT)
 print(f"written {OUT} ({sz/1024:.0f} KB)")
+
+# v1.16.8 加载小刀③：产 raw-deflate 版字体（assets/font.ttf.deflate）——
+# ui.rs init_font include_bytes 此文件 + miniz_oxide inflate 同步解压（boot 首帧
+# 一次，几 ms 级，无启动竞态）。font.ttf 仍照常产出供 fontcov_full.py/check_chars.py
+# 等工具读 cmap（容器变、内容不变）。raw deflate（zlib wbits=-15，非 gzip 容器）
+# 与 miniz_oxide::inflate::decompress_to_vec 对口；mtime 不进 deflate 流，输出确定。
+import zlib
+defl = zlib.compressobj(9, zlib.DEFLATED, -15)
+data = open(OUT, "rb").read()
+blob = defl.compress(data) + defl.flush()
+OUT_DEFLATE = os.path.join(ROOT, "assets", "font.ttf.deflate")
+with open(OUT_DEFLATE, "wb") as f:
+    f.write(blob)
+# 回环自检：解压必须逐字节还原，否则宁可不发
+back = zlib.decompress(blob, -15)
+assert back == data, "font deflate roundtrip mismatch"
+print(f"written {OUT_DEFLATE} ({len(blob)/1024:.0f} KB, ttf {len(data)} B -> deflate {len(blob)} B)")

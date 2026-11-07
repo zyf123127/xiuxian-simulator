@@ -1,2263 +1,1697 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <title>凡人模拟·轮回模拟器</title>
-    <meta name="description" content="凡人模拟·轮回模拟器 —— 修仙放置 H5 游戏：轮回镜中推演一生、天赋抽取、造化继承、宿敌血仇、山河图志六大地点、洞府经营与四时气象。Rust + WebAssembly，打开即玩。" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%E2%98%AF%3C/text%3E%3C/svg%3E" />
-    <style>
-        html, body, canvas {
-            margin: 0; padding: 0;
-            width: 100%; height: 100%;
-            overflow: hidden;
-            background: #000;
-            z-index: 0;
-        }
-        canvas {
-            touch-action: none;
-            user-select: none;
-            -webkit-user-select: none;
-            overscroll-behavior: none;
-            -webkit-tap-highlight-color: transparent;
-            cursor: pointer;
-            /* v1.6.0 B 清晰度：wasm 侧已开 high_dpi，backing store = CSS×dpr 恰好
-               1:1 物理像素，无需任何 image-rendering 处理；此前 pixelated 在 dpr>1
-               时对 1× 位图做非整数倍最近邻放大反而导致文字发虚，已移除。 */
-        }
-        #loading {
-            position: fixed;
-            inset: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            align-items: center;
-            justify-content: center;
-            color: #ffd782;
-            font-family: "Microsoft YaHei", sans-serif;
-            font-size: 16px;
-            background: #0a0818;
-            z-index: 10;
-            opacity: 1;
-            transition: opacity .6s ease;
-        }
-        #loading.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-        #loading .bar {
-            width: 180px; height: 6px;
-            border-radius: 3px;
-            background: rgba(255,255,255,.12);
-            overflow: hidden;
-        }
-        #loading .bar i {
-            display: block; height: 100%; width: 40%;
-            border-radius: 3px;
-            background: #ffd782;
-            animation: slide 1.1s ease-in-out infinite alternate;
-        }
-        @keyframes slide { from { margin-left: 0; } to { margin-left: 60%; } }
-        #errlog {
-            position: fixed; top: 0; left: 0;
-            color: #f66; background: rgba(0,0,0,.85);
-            font: 12px/1.4 Consolas, monospace;
-            white-space: pre-wrap; z-index: 99; padding: 4px;
-            max-width: 100%; max-height: 100%; overflow: auto;
-            transition: opacity 1.2s;
-            /* v1.9.23 调试开关：默认隐藏——?dbg=1 或真错误（[ERR]/[PANIC]）才显示 */
-            display: none;
-        }
-        #errlog.xx-on { display: block; }
-        /* v1.9.17 诊断日志自动淡化：满屏 [诊断]/[SIM] 红字对玩家就是"报错"——
-           加载 30 秒后淡至 0.12（正常游玩不被打扰，真机排障截图仍可辨读）；
-           一旦出现 [ERR]/[PANIC]/重载类关键行立刻恢复全显。 */
-        #errlog.xx-dim { opacity: 0.12; }
-        #errlog.xx-alert { opacity: 1; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>凡人模拟·轮回模拟器</title>
+<meta name="description" content="凡人模拟·轮回模拟器 —— 修仙放置 H5 游戏：轮回镜中推演一生、天赋抽取、造化继承、宿敌血仇、山河图志六大地点、洞府经营与四时气象。Rust + WebAssembly，打开即玩。" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%E2%98%AF%3C/text%3E%3C/svg%3E" />
+<style>
+html, body, canvas {
+margin: 0; padding: 0;
+width: 100%; height: 100%;
+overflow: hidden;
+background: #000;
+z-index: 0;
+}
+canvas {
+touch-action: none;
+user-select: none;
+-webkit-user-select: none;
+overscroll-behavior: none;
+-webkit-tap-highlight-color: transparent;
+cursor: pointer;
+/* v1.6.0 B 清晰度：wasm 侧已开 high_dpi，backing store = CSS×dpr 恰好
+1:1 物理像素，无需任何 image-rendering 处理；此前 pixelated 在 dpr>1
+时对 1× 位图做非整数倍最近邻放大反而导致文字发虚，已移除。 */
+}
+#loading {
+position: fixed;
+inset: 0;
+display: flex;
+flex-direction: column;
+gap: 10px;
+align-items: center;
+justify-content: center;
+color: #ffd782;
+font-family: "Microsoft YaHei", sans-serif;
+font-size: 16px;
+background: #0a0818;
+z-index: 10;
+opacity: 1;
+transition: opacity .6s ease;
+}
+#loading.hidden {
+opacity: 0;
+pointer-events: none;
+}
+#loading .bar {
+width: 180px; height: 6px;
+border-radius: 3px;
+background: rgba(255,255,255,.12);
+overflow: hidden;
+}
+#loading .bar i {
+display: block; height: 100%; width: 40%;
+border-radius: 3px;
+background: #ffd782;
+animation: slide 1.1s ease-in-out infinite alternate;
+}
+@keyframes slide { from { margin-left: 0; } to { margin-left: 60%; } }
+#errlog {
+position: fixed; top: 0; left: 0;
+color: #f66; background: rgba(0,0,0,.85);
+font: 12px/1.4 Consolas, monospace;
+white-space: pre-wrap; z-index: 99; padding: 4px;
+max-width: 100%; max-height: 100%; overflow: auto;
+transition: opacity 1.2s;
+/* v1.9.23 调试开关：默认隐藏——?dbg=1 或真错误（[ERR]/[PANIC]）才显示 */
+display: none;
+}
+#errlog.xx-on { display: block; }
+/* v1.9.17 诊断日志自动淡化：满屏 [诊断]/[SIM] 红字对玩家就是"报错"——
+加载 30 秒后淡至 0.12（正常游玩不被打扰，真机排障截图仍可辨读）；
+一旦出现 [ERR]/[PANIC]/重载类关键行立刻恢复全显。 */
+#errlog.xx-dim { opacity: 0.12; }
+#errlog.xx-alert { opacity: 1; }
+</style>
 </head>
 <body>
-    <div id="loading">
-        <div id="ld_msg">凡人模拟 · 加载中…</div>
-        <div class="bar"><i></i></div>
-        <div style="font-size:12px;color:#b8a8e0;">首次加载约需 10~40 秒，二次进入将快很多</div>
-    </div>
-    <div id="errlog"></div>
-    <canvas id="glcanvas" tabindex='1'></canvas>
-    <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
-    <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.16.7";</script>
-    <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
-         的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
-         覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
-         miniquad 自己的启动/resize 路径（setup_canvas_size→resize() 里
-         clientWidth×dpi_scale()）据此把 backing 开到 CSS×3：与 v1.9.8 真机跑通
-         的 2772x1280 完全同一条代码路径（X5 已验证 60fps），且发生在 GL 建上下文
-         之后的常规初始化阶段，无运行中 canvas 手术（v1.9.6 冻帧教训）。
-         SS 是确定性常数而非 devicePixelRatio：本地与手机同构不被破坏；
-         Rust 侧零 dpi 乘除、cam.rs 零改动，坐标仍在唯一坐标系（backing）。
-         ?ss=1 可临时回到 v1.9.9 观感做 A/B（本地回归用）。 -->
-    <script>
-        // v1.15.0 音频保活：包装 AudioContext 构造器捕获实例——容器（X5/TapTap）
-        // 的自动播放策略会把 AudioContext 挂起（suspended），页面随之处于
-        // "静音"态、失去 intensive-throttling 的可听页豁免（帧泵被钳 →
-        // 点按钮迟钝）。触摸处理器每次 touchstart 对挂起的实例 resume。
-        (function () {
-            try {
-                var _AC = window.AudioContext || window.webkitAudioContext;
-                if (!_AC) return;
-                function WrappedAC() {
-                    var ctx = new (Function.prototype.bind.apply(_AC, [null].concat(Array.prototype.slice.call(arguments))))();
-                    (window.__xxACs = window.__xxACs || []).push(ctx);
-                    return ctx;
-                }
-                WrappedAC.prototype = _AC.prototype;
-                window.AudioContext = WrappedAC;
-                window.webkitAudioContext = WrappedAC;
-            } catch (e) { /* 捕获失败不影响音频功能本身 */ }
-        })();
-        // v1.15.0 可听保活：真 X5 内核（QQ浏览器/MuMu 2026-10-31）实测——触摸
-        // 唤醒后帧率仅 0.9fps（车夫 1s 拍恰=0.9fps）：容器对"静音页"施加
-        // intensive throttling，钳死 rAF/定时器/MessageChannel 一切时钟；触摸
-        // burst 只能一击 +8 帧。对策：用页面上首个 AudioContext 循环播放
-        // 近无声脉冲（增益 0.004，物理不可闻），使页面处于 audible 态——
-        // Chromium 系对可听页豁免 intensive throttling。游戏自身 BGM 亦可，
-        // 但 X5 上音频解码可能永不完成（见 sounds.rs 懒加载），保活须独立于它。
-        window.xxStartKeepAlive = function () {
-            // v1.15.0 启动失败可见化：任何一步异常/挂起都写 errlog（节流）——
-            // 真机截图即得失败原因，不再盲查
-            var kaLog = function (s) {
-                try {
-                    var now = performance.now();
-                    if (window.__xxKaLogAt && now - window.__xxKaLogAt < 10000) return;
-                    window.__xxKaLogAt = now;
-                    var el = document.getElementById("errlog");
-                    if (el) el.textContent += "[保活] " + s + "\n";
-                } catch (e0) {}
-            };
-            try {
-                if (window.__xxKeepAlive) return;
-                var acs = window.__xxACs || [];
-                var ctx = null;
-                for (var i = 0; i < acs.length; i++) {
-                    var c0 = acs[i];
-                    if (c0 && c0.state === "running") { ctx = c0; break; }
-                    if (c0 && c0.state === "suspended" && c0.resume) {
-                        try {
-                            var r = c0.resume();
-                            if (r && r["catch"]) r["catch"](function () {});
-                        } catch (eR) { kaLog("resume 异常: " + eR); }
-                    }
-                }
-                if (!ctx) {
-                    // X5 实测：quad-snd 的上下文 suspended 且 resume/解码可能永不
-                    // 完成；而探针实证 X5 上 new AudioContext() 直接 running——
-                    // 无条件自建专用保活上下文（构造器已包装，自动入捕获表）
-                    var AC = window.AudioContext || window.webkitAudioContext;
-                    if (!AC) { kaLog("无 AudioContext 构造器"); return; }
-                    ctx = new AC();
-                    if (ctx.state !== "running" && ctx.resume) {
-                        try {
-                            var r2 = ctx.resume();
-                            if (r2 && r2["catch"]) r2["catch"](function () {});
-                        } catch (eR2) { kaLog("自建 ctx resume 异常: " + eR2); }
-                    }
-                    if (ctx.state !== "running") {
-                        kaLog("等待 ctx running（state=" + ctx.state + "）");
-                        return;
-                    }
-                }
-                var sr = ctx.sampleRate || 44100;
-                var buf = ctx.createBuffer(1, sr, sr); // 1s 循环
-                var d = buf.getChannelData(0);
-                d[0] = 0.03;
-                d[1] = -0.03; // 仅头两样本有幅值：周期性近无声咔哒
-                var src = ctx.createBufferSource();
-                src.buffer = buf;
-                src.loop = true;
-                var gn = ctx.createGain();
-                gn.gain.value = 0.004;
-                src.connect(gn);
-                gn.connect(ctx.destination);
-                src.start();
-                window.__xxKeepAlive = 1;
-                try {
-                    var el3 = document.getElementById("errlog");
-                    if (el3) el3.textContent += "[保活] 音频保活已启动（ctx running，near-silent loop）\n";
-                } catch (e5) {}
-            } catch (e) {
-                kaLog("启动异常: " + (e && e.message ? e.message : e));
-            }
-        };
-        // ctx 就绪时机不定（用户手势后才 running）：随触摸调用外，每秒补试
-        setInterval(function () { if (window.xxStartKeepAlive) window.xxStartKeepAlive(); }, 1000);
-        // v1.15.0 屏幕 Wake Lock：游戏场景屏幕常亮（体验正确性）+ 部分容器对
-        // 持屏页面的节流策略更宽松。特征检测静默降级，失败零影响。
-        window.xxWakeLock = function () {
-            try {
-                if (window.__xxWakeLockOn || !navigator.wakeLock || !navigator.wakeLock.request) return;
-                navigator.wakeLock.request("screen").then(function (l) {
-                    window.__xxWakeLockOn = 1;
-                    l.addEventListener("release", function () { window.__xxWakeLockOn = 0; });
-                    try {
-                        var el = document.getElementById("errlog");
-                        if (el) el.textContent += "[保活] 屏幕 Wake Lock 已持有\n";
-                    } catch (e2) {}
-                })["catch"](function () {});
-            } catch (e) {}
-        };
-        document.addEventListener("touchstart", function () { window.xxWakeLock(); }, { passive: true, once: true });
-        // v1.10.2 默认 SS 3→2（内存/帧率修复）：收益 = GPU backing 720p 类屏
-        // 3840x2160(66MB 双缓冲)→2560x1440(29MB)，-37MB；填充率 9x→4x（-56% fragment），
-        // 全屏 alpha 叠加型 UI（背景+日志底+面板+模态罩层）直接受益。
-        // 画质折中：dpr<=2 设备 SS=2 恰好 >=1:1 物理像素（dpr≈2 时 1:1 最优，无感知）；
-        // dpr>2（≥2.5 主流手机）维持 3 避免浏览器阶段 ~1.6x 整帧放大的发软回归
-        // （v1.9.10 教训）。?ss= 参数覆盖优先级不变（真机 A/B 仍可 ?ss=3 对照）。
-        var XX_SS = (window.devicePixelRatio || 1) > 2 ? 3 : 2;
-        try {
-            var __ssq = new URLSearchParams(location.search).get("ss");
-            if (__ssq) XX_SS = Math.max(1, Math.min(4, parseInt(__ssq, 10) || 1));
-        } catch (e) {}
-        (function () {
-            try {
-                var c = document.getElementById("glcanvas");
-                var cap = function (v) { return Math.min(4096, Math.max(1, Math.round(v))); };
-                // clientWidth/clientHeight 定义在 Element.prototype（部分内核在更
-                // 深层）——沿原型链找原生 getter，找不到则维持 v1.9.9 尺寸不硬来
-                var findGetter = function (name) {
-                    var p = c;
-                    while (p) {
-                        var d = Object.getOwnPropertyDescriptor(p, name);
-                        if (d && d.get) return d.get;
-                        p = Object.getPrototypeOf(p);
-                    }
-                    return null;
-                };
-                var gw = findGetter("clientWidth");
-                var gh = findGetter("clientHeight");
-                if (!gw || !gh) return;
-                Object.defineProperty(c, "clientWidth", {
-                    get: function () { return cap(gw.call(c) * XX_SS); },
-                    configurable: true
-                });
-                Object.defineProperty(c, "clientHeight", {
-                    get: function () { return cap(gh.call(c) * XX_SS); },
-                    configurable: true
-                });
-            } catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
-        })();
-    </script>
-    <!-- 加载提速④：compileStreaming MIME 兜底。bundle 的 load() 流式分支在
-         compileStreaming 拒绝时只 console.error 即死（老 Chromium 强制
-         application/wasm MIME，宿主静态服务器配错即黑屏无回退）。这里在该
-         分支外面包一层：失败时从 Response.url 重新 fetch 走 arrayBuffer +
-         compile（与其老内核分支同路径），bundle 本体零改动。仅当内核具备
-         compileStreaming 时才包装（没有则 bundle 本就走 arrayBuffer 分支）；
-         重拉走同一 URL，被下方 fetch 进度包装再次拦截，进度照常显示。 -->
-    <script>
-        (function () {
-            try {
-                if (!window.WebAssembly ||
-                    typeof WebAssembly.compileStreaming !== "function") return;
-                var _cs = WebAssembly.compileStreaming;
-                WebAssembly.compileStreaming = function (src) {
-                    var retry = function (err) {
-                        try {
-                            return Promise.resolve(src).then(function (res) {
-                                var url = (res && res.url) || "";
-                                if (!url) throw err;
-                                return fetch(url).then(function (r2) {
-                                    return r2.arrayBuffer();
-                                }).then(function (buf) {
-                                    return WebAssembly.compile(buf);
-                                });
-                            });
-                        } catch (e2) {
-                            return Promise.reject(err);
-                        }
-                    };
-                    try {
-                        return _cs.apply(this, arguments)["catch"](retry);
-                    } catch (e) {
-                        return retry(e);
-                    }
-                };
-            } catch (e) { /* 包装失败维持原状：流式可用则用，不可用走旧分支 */ }
-        })();
-    </script>
-    <script src="mq_js_bundle.js?v=1.16.7"></script>
-    <script>
-        // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
-        // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
-        // Rust 侧 save.rs 的 wasm 后端按固定键读写，存档内容与桌面版 xiuxian_save.txt 完全同格式；
-        // 长度一律 UTF-8 字节数（Rust 侧按字节分配缓冲区，中文字段 3 字节/字）。
-        window.miniquad_add_plugin({
-            name: "xx_storage",
-            version: 1,
-            register_plugin: function (importObject) {
-                var XX_KEY = "xiuxian_save";
-                importObject.env.xx_save_len = function () {
-                    try {
-                        var v = localStorage.getItem(XX_KEY);
-                        return v == null ? -1 : new TextEncoder().encode(v).length;
-                    } catch (e) { return -1; }
-                };
-                importObject.env.xx_save_read = function (ptr, len) {
-                    try {
-                        var v = localStorage.getItem(XX_KEY) || "";
-                        var bytes = new TextEncoder().encode(v);
-                        var arr = new Uint8Array(wasm_memory.buffer, ptr, len);
-                        arr.set(bytes.subarray(0, len));
-                    } catch (e) { console.error("xx_save_read:", e); }
-                };
-                importObject.env.xx_save_write = function (ptr, len) {
-                    try {
-                        var bytes = new Uint8Array(wasm_memory.buffer, ptr, len);
-                        localStorage.setItem(XX_KEY, new TextDecoder("utf-8").decode(bytes));
-                    } catch (e) { console.error("xx_save_write:", e); }
-                };
-            },
-            on_init: function () {}
-        });
-
-        // v1.6.0 B 清晰度（移植自 GetFish v7.9.6）：GPU 能力懒探测。vendor/macroquad
-        // 图集封顶补丁在 wasm 首次询问 gf_max_texture_size 时——此时 miniquad 已在
-        // glcanvas 上建好渲染上下文——直接查询 MAX_TEXTURE_SIZE，图集按
-        // min(设备上限) 动态封顶，配合 high_dpi 支撑 dpr>1 设备的原生字形栅格。
-        // 必须在 load() 之前注册（与 xx_storage 同理）。
-        var XX_GPU_OK = !!(window.WebGLRenderingContext || window.WebGL2RenderingContext);
-        var XX_MAX_TEX = 0; // 0 = 未探测
-        function xx_probe_max_tex() {
-            if (XX_MAX_TEX) return XX_MAX_TEX;
-            try {
-                var c = document.getElementById("glcanvas");
-                var gl = c.getContext("webgl2") || c.getContext("webgl") ||
-                         c.getContext("experimental-webgl");
-                if (gl) {
-                    var v = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-                    if (typeof v === "number" && v > 0) XX_MAX_TEX = v;
-                }
-            } catch (e) { /* 探测失败走默认，图集侧另有 512 下限兜底 */ }
-            if (!XX_MAX_TEX) XX_MAX_TEX = 8192;
-            return XX_MAX_TEX;
-        }
-        window.miniquad_add_plugin({
-            name: "xx_gpu",
-            version: 1,
-            register_plugin: function (importObject) {
-                importObject.env.gf_max_texture_size = function () { return xx_probe_max_tex() | 0; };
-            },
-            // v1.8.2 注意：on_init 是无参调用（bundle: e[t].on_init()），拿不到
-            // exports；就绪信号改由下方 WebAssembly.instantiate 钩子赋值。
-            on_init: function () {}
-        });
-
-        // v1.9.10 wasm 陷阱可见化 + 回归断言信号（Rust 侧 main.rs xx_dbg 模块声明
-        // 了这两个 env 导入——wasm 实例化会校验导入存在，二者必须成对出现）：
-        // xx_panic：Rust panic hook 把 panic 原文写入 errlog（[PANIC] 前缀）并改
-        //   document.title——此前 wasm 陷阱在真机上完全静默（F 冻结但 errlog 无记录，
-        //   无法区分"容器时钟停摆"与"Rust 陷阱/互斥锁中毒"，十轮真机排查的盲区）。
-        // xx_state：场景变化上报（0=Menu 1=Reality 2=Draft 3=Sim …），供 ?tap=
-        //   自动回归断言"点按钮 → __xxState 离开 0（进游戏）"。
-        window.__xxState = -1;
-        window.miniquad_add_plugin({
-            name: "xx_dbg",
-            version: 1,
-            register_plugin: function (importObject) {
-                importObject.env.xx_panic = function (ptr, len) {
-                    try {
-                        var mem =
-                            window.wasm_memory && window.wasm_memory.buffer
-                                ? window.wasm_memory.buffer
-                                : window.wasm_exports && window.wasm_exports.memory
-                                  ? window.wasm_exports.memory.buffer
-                                  : null;
-                        if (mem) {
-                            var msg = new TextDecoder("utf-8", { fatal: false }).decode(
-                                new Uint8Array(mem, ptr, Math.min(len | 0, 512)),
-                            );
-                            var el = document.getElementById("errlog");
-                            if (el) el.textContent += "[PANIC] " + msg + "\n";
-                            // v1.15.1 首 panic 钉死：风暴期 errlog 8KB 封顶会把首条
-                            // （真根因）刷掉，只留 "already borrowed" 尾巴。首条原文
-                            // 存全局并钉进 panic 面板——真机截图即得首击根因。
-                            if (window.__xxFirstPanic == null) {
-                                window.__xxFirstPanic = msg;
-                                try {
-                                    var pd0 = document.getElementById("xx_panic_stack");
-                                    if (pd0) pd0.textContent = "[首PANIC] " + msg + "\n" + pd0.textContent;
-                                } catch (e5) {}
-                            }
-                            // v1.15.1 panic 风暴断路器：panic=abort 下主循环体的
-                            // panic 会逐帧重 panic（异步 future 重入同一循环体）=
-                            // 永久楔死（真机实证：errlog 刷屏、触摸全灭、"按按钮
-                            // 毫无反应"）。3 秒内 ≥3 次 panic 判定真死——此时不
-                            // 重载必然卡死，重载至少保住现实进度（存档已落盘）。
-                            // prl=N 参数防重载循环（同 wd 语义，上限 2 次）。
-                            try {
-                                var pn = performance.now();
-                                window.__xxPanicStamps = (window.__xxPanicStamps || []).filter(
-                                    function (t) {
-                                        return pn - t < 3000;
-                                    },
-                                );
-                                window.__xxPanicStamps.push(pn);
-                                if (window.__xxPanicStamps.length >= 3) {
-                                    var pm = location.search.match(/[?&]prl=(\d+)/);
-                                    var prl = pm ? parseInt(pm[1], 10) : 0;
-                                    if (prl < 2) {
-                                        var ph = location.href.replace(/[?&]prl=\d+/, "");
-                                        ph += (ph.indexOf("?") >= 0 ? "&" : "?") + "prl=" + (prl + 1);
-                                        try {
-                                            if (el)
-                                                el.textContent +=
-                                                    "[PANIC-风暴] 3s内" + window.__xxPanicStamps.length + "次 panic，断路重载（第 " + (prl + 1) + "/2 次）\n";
-                                        } catch (e6) {}
-                                        location.replace(ph);
-                                    }
-                                }
-                            } catch (e7) {}
-                            // v1.15.0 重入定位：panic 时刻的 JS 同步栈——若 panic 由
-                            // "帧中重入 wasm 导出"引起，栈会显示重入的 JS 中转函数。
-                            // 打到独立全屏面板（errlog 8KB 封顶会把栈截掉）
-                            if (!window.__xxPanicStacked) {
-                                window.__xxPanicStacked = 1;
-                                try {
-                                    var st = String(new Error().stack || "").slice(0, 1200);
-                                    if (el) el.textContent += "[PANIC@JS] " + st + "\n";
-                                    var pd = document.getElementById("xx_panic_stack");
-                                    if (!pd) {
-                                        pd = document.createElement("div");
-                                        pd.id = "xx_panic_stack";
-                                        pd.style.cssText =
-                                            "position:fixed;left:0;top:0;right:0;z-index:200;" +
-                                            "background:rgba(60,0,0,.92);color:#ffd9d9;" +
-                                            "font:9px/1.3 Consolas,monospace;white-space:pre-wrap;" +
-                                            "word-break:break-all;padding:4px;max-height:45%;" +
-                                            "overflow:hidden;pointer-events:none;";
-                                        document.body.appendChild(pd);
-                                    }
-                                    pd.textContent = "[PANIC@JS]\n" + st;
-                                } catch (e3) {}
-                            }
-                            try { document.title = "PANIC " + msg.slice(0, 60); } catch (e2) {}
-                        }
-                    } catch (e) {}
-                };
-                importObject.env.xx_state = function (code) {
-                    window.__xxState = code | 0;
-                    // 加载提速⑤：启动分段（main.rs st90-93）透出到加载层，消除
-                    // 「启动中…」黑箱期。与 Rust 阶段一一对应：exports 挂载→st90
-                    // 之间 = init_font+init_art（重头，见 instantiate 钩子的
-                    // 「初始化字体与场景…」）；st90→st92 = Game::new 含读档；
-                    // st92→st93 = 收尾；st93 后下一帧即上报场景码 0-6（首帧已
-                    // 渲染，加载层由 pollFirstFrame 的场景码判据揭幕）。场景码
-                    // 0-6 不改文案（运行期高频上报，加载层此时多已隐藏）。
-                    try {
-                        if (code === 90) xx_stage("读取存档，构建世界…");
-                        else if (code === 92) xx_stage("准备就绪…");
-                        else if (code === 93) xx_stage("进入游戏…");
-                    } catch (eS) {}
-                };
-                // v1.9.12 三通道（Rust xx_dbg 模块声明，须成对）：
-                // xx_click：Rust 每消费一次点击上报计数（桥看门狗数据源）
-                // xx_js_fr：JS 帧时钟心跳年龄 ms（Rust 画进菜单自检面板）
-                // xx_js_touches：JS 侧累计触摸组数（同上）
-                importObject.env.xx_click = function (n) {
-                    window.__xxClicksSeen = n | 0;
-                    // v1.15.0 触→消费延迟：用户反馈"点按钮很卡"的真机直接度量——
-                    // 从 touchstart 到 Rust 消费 pressed 边沿的墙钟时间。
-                    if (window.__xxTapAt != null) {
-                        var dt = performance.now() - window.__xxTapAt;
-                        window.__xxTapLat = dt | 0;
-                        if (dt > (window.__xxTapLatMax || 0)) window.__xxTapLatMax = dt | 0;
-                        window.__xxTapAt = null;
-                    }
-                };
-                importObject.env.xx_js_fr = function () {
-                    return Math.min(999999, Math.round(performance.now() - (window.__xxFrameAt || 0)));
-                };
-                importObject.env.xx_js_touches = function () {
-                    return window.__xxTouches || 0;
-                };
-                // v1.9.13 循环心跳（Rust 每 30 帧上报帧号）——JS 看门狗据此
-                // 识别"循环死亡"（真机实证：首次真触摸杀死 async 主循环，
-                // frame() 照常返回、fr 恒新鲜，唯一死证是 Rust 帧号停止前进）
-                importObject.env.xx_alive = function (n) {
-                    window.__xxAlive = { n: n | 0, at: performance.now() };
-                };
-            },
-            on_init: function () {}
-        });
-
-        // v1.10.2 存档落盘去抖的强制兜底：Rust 侧 sync_save 置脏后延迟落盘
-        // （主循环 ≥3s 或场景/弹窗边界才写），手机 WebView 切后台/被强杀时 rAF
-        // 停摆、3s 定时不再到来——本钩子在 pagehide / visibilitychange(hidden)
-        // 时经 wasm_exports 读取 Rust 侧最近一次 sync_save 的存档快照写入
-        // localStorage（键与 xx_storage 插件的 XX_KEY 一致），丢档窗口 ≤3s。
-        // wasm_exports 由下方 WebAssembly.instantiate 钩子挂载；兜底失败静默
-        // （localStorage 配额/解码异常不阻断页面卸载）。
-        function xxFlushPendingSave() {
-            try {
-                var e = window.wasm_exports;
-                if (!e || !e.xx_save_pending_len || !e.xx_save_pending_ptr) return;
-                var len = e.xx_save_pending_len() | 0;
-                if (len <= 0) return;
-                var ptr = e.xx_save_pending_ptr();
-                if (!ptr) return;
-                var bytes = new Uint8Array(e.memory.buffer, ptr, len);
-                localStorage.setItem("xiuxian_save", new TextDecoder("utf-8").decode(bytes));
-            } catch (err) { /* 兜底失败不阻断卸载 */ }
-        }
-        window.addEventListener("pagehide", xxFlushPendingSave);
-        document.addEventListener("visibilitychange", function () {
-            if (document.visibilityState === "hidden") xxFlushPendingSave();
-        });
-
-        // v1.8.2 关键修复：加载层"就绪"信号。此前 window.wasm_exports 从未被
-        // 任何人赋值——12 秒看门狗必然把加载层变成"加载失败·点击重试"覆盖层
-        //（pointer-events:auto + reload），玩家一点就无限重载：手机上表现为
-        // "点按钮没反应/再也加载不进去"。这里包装 WebAssembly.instantiate，
-        // 实例化完成即把 exports 挂到 window（bundle 的 load 走 compileStreaming
-        // + WebAssembly.instantiate 两步，本钩子先于 bundle 的 then 执行）。
-        // v1.15.1 防 trap 第二层：任何 env import 抛出的 JS 异常都会变成 wasm
-        // trap；若发生在 frame() 持有事件处理器借用期间，即触发"already
-        // borrowed"永久风暴（真机 TapTap 实证：模拟中点跳过/选项 → 一次
-        // panic → 触摸/frame 全灭）。这里在 instantiate 入口把 importObject
-        // 里的全部函数包一层 try/catch：异常进 errlog + 标题可见化（首个抛
-        // 异常的 import 即首击根因），返回 0 兜底——JS 异常永远不再穿透成
-        // wasm trap。
-        function xxWrapImports(imp) {
-            try {
-                if (!imp || typeof imp !== "object" || imp.__xxWrapped) return;
-                Object.keys(imp).forEach(function (ns) {
-                    var o = imp[ns];
-                    if (!o || typeof o !== "object") return;
-                    Object.keys(o).forEach(function (k) {
-                        var f = o[k];
-                        if (typeof f !== "function" || f.__xxSafe) return;
-                        var g = function () {
-                            try {
-                                return f.apply(null, arguments);
-                            } catch (e) {
-                                try {
-                                    var el = document.getElementById("errlog");
-                                    if (el)
-                                        el.textContent +=
-                                            "[ENV@" + ns + "." + k + "] " + (e && e.message ? e.message : e) + "\n";
-                                    if (!window.__xxEnvThrew) {
-                                        window.__xxEnvThrew = ns + "." + k;
-                                        try { document.title = "ENV-THROW " + ns + "." + k; } catch (e3) {}
-                                    }
-                                } catch (e2) {}
-                                return 0;
-                            }
-                        };
-                        g.__xxSafe = 1;
-                        o[k] = g;
-                    });
-                });
-                imp.__xxWrapped = 1;
-            } catch (e) {}
-        }
-        (function () {
-            var _inst = WebAssembly.instantiate;
-            WebAssembly.instantiate = function () {
-                try {
-                    for (var wi = 0; wi < arguments.length; wi++) xxWrapImports(arguments[wi]);
-                } catch (we) {}
-                // v1.14.0 阶段感知：本钩子在 bundle 的 compileStreaming 完成、
-                // instantiate 开始时同步触发——「下载游戏包 N%」在此交棒「编译中…」；
-                // exports 就绪（bundle 的 main() 初始化前一刻）再交棒「启动中…」，
-                // 终结"下载 10~40 秒全挂编译名头"的口径错位。
-                try { if (typeof xx_stage === "function") xx_stage("编译中…"); } catch (e) {}
-                return _inst.apply(this, arguments).then(function (res) {
-                    // 兼容两种就绪形态：规范 WebView 为 {module, instance}；个别内嵌
-                    // 环境直接回裸 Instance（res.exports）——统一取 exports，取到即
-                    // 画阶段文案并先行挂载（v1.8.2 修复语义在两种形态下都保持）。
-                    // 加载提速⑤：此点到 Rust st90 上报之间恰是 init_font+init_art
-                    //（~450KB 字体解析 + 640×360 背景降采样生成，真机数秒），
-                    // 旧文案「启动中…」口径含糊，改为如实的「初始化字体与场景…」
-                    var ex = res && (res.instance ? res.instance.exports : res.exports);
-                    if (ex) {
-                        window.wasm_exports = ex;
-                        try { if (typeof xx_stage === "function") xx_stage("初始化字体与场景…"); } catch (e) {}
-                    }
-                    return res;
-                });
-            };
-            // v1.15.1：同包裹 instantiateStreaming（个别内核 bundle 走流式编译）
-            var _instS = WebAssembly.instantiateStreaming;
-            if (_instS) {
-                WebAssembly.instantiateStreaming = function () {
-                    try {
-                        for (var si = 0; si < arguments.length; si++) xxWrapImports(arguments[si]);
-                    } catch (se) {}
-                    return _instS.apply(this, arguments);
-                };
-            }
-        })();
-
-
-        // 打不开诊断：无 WebGL / 无 WebAssembly 时给出可见提示，而不是无限白屏
-        function xx_gpu_report() {
-            var el = document.getElementById("errlog");
-            var msgs = "";
-            if (!XX_GPU_OK) {
-                msgs += "诊断：此设备的 WebView 未开启 WebGL 硬件加速，游戏画面无法创建。\n" +
-                        "请到系统/浏览器设置开启「硬件加速」后重试。\n";
-            }
-            if (!window.WebAssembly) {
-                msgs += "诊断：此设备的 WebView 过旧、不支持 WebAssembly，无法运行游戏。\n" +
-                        "请升级系统 WebView 或更换设备。\n";
-            }
-            if (msgs) {
-                el.textContent += msgs;
-                var m = document.getElementById("ld_msg");
-                if (m) m.textContent = "设备不支持，无法运行（详见页面诊断信息）";
-            }
-        }
-        xx_gpu_report();
-    </script>
-    <script>
-        var errlog = document.getElementById("errlog");
-        // 加载阶段标记：写在加载层的消息节点上，真机"打不开"时能看出卡在哪一步。
-        // v1.9.1：所有阶段提示统一走 ld_msg 节点（此前直接覆盖 #loading 的
-        // textContent 会连进度条一起抹掉），并叠加"已等待 N 秒"——手机上大包
-        // 首次下载+编译要 10~40 秒，让玩家确认页面没死、不再乱点黑屏。
-        var xxLoading = document.getElementById("loading");
-        var xxMsg = document.getElementById("ld_msg");
-        // v1.14.0 预期管理：r2 双加载页（首载 >1.5s 后带 r2=1 热缓存重进，见下方
-        // pollFirstFrame）秒开，初始文案口径与体验一致；首开页保持中性「加载中…」，
-        // 到 load() 处再分「下载游戏包…」（v1.14.0 下载进度感知）
-        var XX_R2 = /[?&]r2=1/.test(location.search);
-        var xxStageMsg = XX_R2 ? "缓存热身中，马上就好…" : "加载中…";
-        var xxLoadStart = performance.now();
-        function xx_paint_stage() {
-            if (xxMsg && xxLoading && !xxLoading.classList.contains("hidden")) {
-                var s = Math.round((performance.now() - xxLoadStart) / 1000);
-                xxMsg.textContent =
-                    "凡人模拟 v" + GAME_VER + " · " + xxStageMsg + "（已等待 " + s + " 秒）";
-            }
-            // v1.12.1 加载停滞看门狗：计秒 interval（下方 setInterval 每秒）执行即刷
-            // 心跳——真机观测特征"计秒先走后停"被直接编码为心跳年龄，供下方 wd
-            // 看门狗 D1 判据读取。正常慢载期间本 interval 每秒照跑、心跳恒新，
-            // 结构性不触发；心跳停刷 ≥30s（v1.14.0 自 20s 放宽）= 主线程死滞。
-            window.__xxLdBeat = performance.now();
-        }
-        function xx_stage(msg) {
-            xxStageMsg = msg;
-            xx_paint_stage();
-        }
-        setInterval(xx_paint_stage, 1000);
-        // 诊断区盖上版本号：真机反馈时一眼确认跑的是哪版（防"上传了但设备吃旧缓存"）
-        errlog.textContent = "v" + GAME_VER + (errlog.textContent ? "\n" + errlog.textContent : "");
-        // v1.9.23 调试开关：?dbg=1 才显示诊断区（默认隐藏，见 CSS display:none）；
-        // 真错误行出现时强制显示（排障信息不能被开关吞掉）
-        var XX_DBG = /[?&]dbg=1/.test(location.search);
-        if (XX_DBG) errlog.classList.add("xx-on");
-        // v1.9.17 日志自动淡化 + 关键行唤醒（实现见 CSS .xx-dim/.xx-alert）
-        (function () {
-            var el = errlog;
-            var armed = false;
-            setInterval(function () {
-                if (armed) return;
-                if (performance.now() > 30000 && window.wasm_exports) {
-                    armed = true;
-                    el.classList.add("xx-dim");
-                }
-            }, 2000);
-            // 新日志若是关键行（错误/panic/重载）恢复全显并强制可见，普通诊断不吵人
-            var orig = el.textContent;
-            setInterval(function () {
-                if (el.textContent !== orig) {
-                    orig = el.textContent;
-                    if (/\[ERR\]|\[PANIC\]|重载|WARN/.test(el.textContent.slice(-200))) {
-                        el.classList.remove("xx-dim");
-                        el.classList.add("xx-alert");
-                        el.classList.add("xx-on");
-                    }
-                }
-            }, 500);
-        })();
-        // v1.9.24 诊断日志封顶：textContent += 是 O(n) 整串拷贝，长时间游玩诊断
-        // 行无限累积（内存与追加耗时双涨，手机更敏感）。8KB 触发、保底留最近 6KB。
-        setInterval(function () {
-            var s = errlog.textContent;
-            if (s.length > 8000) {
-                var cut = s.indexOf("\n", s.length - 6000);
-                errlog.textContent = cut > 0 ? s.slice(cut + 1) : s.slice(-6000);
-            }
-        }, 5000);
-        // v1.9.13 死因穿越：上次会话若被自愈看门狗重载，这里把死因快照打出来
-        // （一张截图即可读到"死于第几帧/触达几次/消费几次"），随后清除。
-        try {
-            var __post = sessionStorage.getItem("xxpost");
-            if (__post) {
-                sessionStorage.removeItem("xxpost");
-                var __pj = JSON.parse(__post);
-                errlog.textContent += "[上次] " + (__pj.reason === "manual" ? "手动" : "自动") +
-                    "重载：循环停于第" + __pj.frame + "帧 触达" + __pj.touches +
-                    " 已收" + __pj.clicks + " st" + __pj.st + "\n";
-            }
-        } catch (e) {}
-        // v1.12.1 加载停滞看门狗·死因穿越：wd 自动重载后的新页把上次死因打到
-        // errlog（新键 xxwd，不复用 xxpost——避免与运行期循环死因混淆），读完即清。
-        // 行含"重载"关键词会触发上方淡化唤醒全显，与 xxpost 行同口径。注意个别
-        // 内核（夸克实测）sessionStorage 跨重载会丢——丢的只是这行显示，wd 计数
-        // 在 URL 参数里，预算功能不受影响。
-        try {
-            var __wdPost = sessionStorage.getItem("xxwd");
-            if (__wdPost) {
-                sessionStorage.removeItem("xxwd");
-                var __wdPj = JSON.parse(__wdPost);
-                errlog.textContent += "[上次] 加载停滞自救重载（" +
-                    (__wdPj.reason === "cap" ? "cap·超长" : "stall·计秒停摆") +
-                    "，第 " + __wdPj.wd + " 次，等待 " + __wdPj.waited + "s）\n";
-            }
-        } catch (e) {}
-
-        // v1.9.7：canvas 清零式重同步（resyncBacking）已整体移除——真机 X5 上
-        // canvas.width=0 会杀死 WebGL 帧回调（v1.9.6 真机 F:28 冻帧实锤：启动后
-        // ~2 秒恰好是就绪钩子的 +2s resync 时刻，之后 F 永不增长），本地 Chromium
-        // 却无恙（历轮本地测试全部测不出）。screen_size 同步由下方 xxSyncScreen
-        // （直调 wasm_exports.resize）独立承担，不再需要任何 canvas 手术。
-
-        // v1.9.4 直通同步：不再绕 bundle 的 resize()（其"值未变不通知"的短路在
-        // 真机上被证实仍会漏），直接调 wasm_exports.resize(backing)——miniquad
-        // 的 resize 导入就是 wasm 侧 screen_size 的唯一写入者，直调即强同步。
-        // 触摸处理器在每次映射前也会调用：保证输入瞬间 screen_size == canvas。
-        var __xxSentW = -1, __xxSentH = -1;
-        window.xxSyncScreen = function () {
-            if (!window.wasm_exports) return false;
-            var cv = document.getElementById("glcanvas");
-            var w = cv.width | 0, h = cv.height | 0;
-            if (w === __xxSentW && h === __xxSentH) return false;
-            __xxSentW = w;
-            __xxSentH = h;
-            try { window.wasm_exports.resize(w, h); } catch (e) { /* 实例化竞态 */ }
-            return true;
-        };
-
-        // v1.9.4 左下角调试面板：真机一张截图即可拿到全部坐标系关键数字
-        // （视口/dpr/backing/CSS/已发送 screen/fit/最近一次触摸的映射）。
-        // v1.9.23 受调试开关控制：默认 display:none，?dbg=1 才显示。
-        var __xxDbg = document.createElement("div");
-        __xxDbg.style.cssText =
-            "position:fixed;left:2px;bottom:2px;z-index:98;color:#7f7;" +
-            "background:rgba(0,0,0,.55);font:10px/1.35 Consolas,monospace;" +
-            "white-space:pre;pointer-events:none;padding:2px;" +
-            (XX_DBG ? "" : "display:none;");
-        document.body.appendChild(__xxDbg);
-        var __xxLastTouch = null;
-        window.xxPaintDbg = function () {
-            if (!window.wasm_exports) return;
-            var cv = document.getElementById("glcanvas");
-            var rect = cv.getBoundingClientRect();
-            var env = window.importObject && window.importObject.env ? window.importObject.env : null;
-            var lines = [
-                "v" + GAME_VER + " ss" + XX_SS,
-                "inner " + window.innerWidth + "x" + window.innerHeight +
-                    " dpr " + (window.devicePixelRatio || 1).toFixed(2) +
-                    " hdp=" + (window.high_dpi ? 1 : 0) +
-                    " env=" + (env ? env.dpi_scale().toFixed(2) : "?"),
-                "cv " + cv.width + "x" + cv.height +
-                    " css " + Math.round(rect.width) + "x" + Math.round(rect.height) +
-                    " sent " + __xxSentW + "x" + __xxSentH,
-                "fit " + Math.min(cv.width / 1280, cv.height / 720).toFixed(3) +
-                    // fr：距上次成功 wasm 帧的毫秒数（>200 即帧停摆，混沌仿真/真机判读用）
-                    // t/k：JS 触摸组数 / Rust 已消费点击数（t 涨 k 不涨 = 输入桥断开）
-                    " fr" + Math.round(performance.now() - (window.__xxFrameAt || 0)) +
-                    "ms st" + window.__xxState +
-                    " t" + (window.__xxTouches || 0) + " k" + (window.__xxClicksSeen || 0)
-            ];
-            if (__xxLastTouch) {
-                lines.push("t c(" + __xxLastTouch[0] + "," + __xxLastTouch[1] + ")->m(" +
-                    __xxLastTouch[2] + "," + __xxLastTouch[3] + ")");
-            }
-            __xxDbg.textContent = lines.join("\n");
-        };
-        setInterval(window.xxPaintDbg, 1000);
-        window.onerror = function (msg, src, line, col, err) {
-            errlog.textContent += "ERR: " + msg + " @" + (src || "") + ":" + line + "\n" +
-                (err && err.stack ? err.stack : "") + "\n";
-        };
-        // v1.15.0 X5 排障①：bundle 的启动失败链是 .catch(console.error)——不经过
-        // window.onerror，errlog 只能看到被内核掩码的 "Script error."。劫持
-        // console.error 把启动期真错（含 stack）带进 errlog。QQ浏览器/X5 实测
-        // （MuMu 2026-10-31）：X5 上 main() 启动失败后 errlog 只有掩码错误，
-        // 真因永远不可见——此钩子是 X5 类内核排障的先决条件。
-        (function () {
-            var origError = console.error ? console.error.bind(console) : function () {};
-            console.error = function () {
-                try {
-                    var parts = Array.prototype.slice.call(arguments).map(function (a) {
-                        if (a && a.stack) return String(a.stack).slice(0, 400);
-                        return String(a).slice(0, 250);
-                    });
-                    var el = document.getElementById("errlog");
-                    if (el && el.textContent.length < 6000) {
-                        el.textContent += "[console.error] " + parts.join(" | ") + "\n";
-                    }
-                } catch (e) {}
-                origError.apply(null, arguments);
-            };
-        })();
-        // v1.15.0 X5 排障②：WebGL 能力预探测（丢弃式 canvas，不碰游戏 canvas，
-        // 不影响 miniquad 稍后自建上下文的属性）。X5 系内核缺 OES_vertex_array_object /
-        // WEBGL_depth_texture 时 mq_js_bundle 的 init_webgl 会 alert+抛错（游戏侧
-        // 表现为"加载完但黑屏、点哪都没反应"）——提前一行把缺失项写上 errlog。
-        (function () {
-            try {
-                var t = document.createElement("canvas");
-                var gl = t.getContext("webgl") || t.getContext("experimental-webgl");
-                if (!gl) {
-                    errlog.textContent += "ERR: WebGL1 不可用（探测 getContext 返回 null）——游戏无法启动\n";
-                    return;
-                }
-                var need = ["OES_vertex_array_object", "WEBGL_depth_texture", "ANGLE_instanced_arrays"];
-                var miss = [];
-                for (var i = 0; i < need.length; i++) {
-                    try { if (!gl.getExtension(need[i])) miss.push(need[i]); } catch (e2) {}
-                }
-                if (miss.length) {
-                    errlog.textContent += "WARN: WebGL 缺扩展 " + miss.join(",") +
-                        "（mq_js_bundle init_webgl 可能 alert 后中止启动）\n";
-                }
-                t.width = 0; t.height = 0; // 释放探测上下文占位
-            } catch (e) {}
-        })();
-        // Promise 链上的失败（如 wasm 实例化被拒）不经过 window.onerror，单独兜底
-        window.addEventListener("unhandledrejection", function (ev) {
-            var r = ev && ev.reason;
-            errlog.textContent += "ERR(promise): " + (r && (r.message || r) || "unknown") + "\n" +
-                (r && r.stack ? r.stack + "\n" : "");
-        });
-        var isFile = location.protocol === "file:";
-        if (isFile) {
-            // 浏览器禁止 file:// 加载 WASM，直接给出提示而不是一片空白
-            errlog.textContent = "无法以 file:// 方式运行游戏（浏览器禁止 file:// 加载 WASM）。\n\n" +
-                "【手动】先启动本地服务器：\n" +
-                "  cd E:\\Rust_Game\\Daoism_Game\\web\n" +
-                "  python -m http.server 8124\n\n" +
-                "然后浏览器打开：http://localhost:8124/";
-            document.getElementById("loading").textContent = "请通过 http://localhost:8124/ 访问";
-        } else {
-            // 点击/触摸时聚焦 canvas，保证进入游戏后键盘输入立即可用
-            var glcanvas = document.getElementById("glcanvas");
-            ["pointerdown", "touchstart", "click"].forEach(function (ev) {
-                glcanvas.addEventListener(ev, function () { glcanvas.focus(); }, { passive: true });
-            });
-            // WebGL 上下文丢失处理：miniquad 不注册任何 handler，手机 WebView
-            // 切后台被系统回收 GL 上下文后恢复时纹理全空 → 整个 UI 变黑。
-            // contextlost 必须 preventDefault 才允许恢复；restored 后 miniquad 不会
-            // 重建任何纹理，唯一可靠做法是整页重载（存档已在关键操作时落盘，进度不丢）
-            glcanvas.addEventListener("webglcontextlost", function (e) {
-                e.preventDefault();
-                errlog.textContent += "WARN: WebGL 上下文丢失（切后台/显存回收），等待恢复…\n";
-            }, false);
-            glcanvas.addEventListener("webglcontextrestored", function () {
-                location.reload();
-            }, false);
-            // v1.8.4 关键修复：把帧循环的 requestAnimationFrame 底座换成
-            // setTimeout——TapTap 容器会把页面标记为不可见从而挂起 rAF，
-            // 主循环停摆后画面定格、所有点击无人消费（红米 K80 Pro 实测
-            // "点按钮没反应"的最终根因）。setTimeout 前台 ~16ms ≈ 60fps，
-            // 且不受可见性挂起影响。单帧源、零逻辑改动。
-            (function () {
-                // v1.8.8 帧驱动 v2：多时钟共存 + 全局帧门闩 + 停摆自愈。
-                // 背景：TapTap 容器对不可见页面会挂起 rAF、钳制定时器、静默禁用
-                // blob Worker——任何单一时钟都可能停摆（实测：启动 53fps 后定格）。
-                // 现在所有时钟同时启动，帧率由全局门闩统一限制（~60fps）：
-                // 任一时钟被挂起，其余自动补位；全部停摆超过 800ms 时重建
-                // MessageChannel 通道自愈。输入处理见 pointer/touch/mouse 接管段。
-                var el = document.getElementById("errlog");
-                var cb = null;
-                var frames = 0;
-                var last = 0;
-                var lastFrameAt = 0;
-                var rebuilt = 0;
-                var curSrc = "o"; // v1.15.0 最近一次调 tick 的时钟源标记
-                window.requestAnimationFrame = function (f) {
-                    cb = f;
-                    return 0;
-                };
-                window.cancelAnimationFrame = function () {};
-                var tick = function (now) {
-                    if (window.__xxClockGate) return; // ?chaos=1 仿真：人为冻结全部时钟
-                    if (now - last < 14) return; // 全局帧门闩：~60fps 上限，多时钟共存不叠加
-                    last = now;
-                    lastFrameAt = now;
-                    frames += 1;
-                    // v1.15.0 时钟源计数：X5 上哪个时钟活着一眼可辨
-                    window.__xxClocks = window.__xxClocks || { mc: 0, w: 0, st: 0, o: 0 };
-                    window.__xxClocks[curSrc] = (window.__xxClocks[curSrc] || 0) + 1;
-                    var f = cb;
-                    // v1.15.3 cb 夺回锁（真机 v1.15.2 首进也卡的根因）：rAF 劫持是
-                    // 单槽——TapTap 容器 SDK 横幅等任何外来 rAF 调用一发生就把 cb
-                    // 偷走；miniquad 的 animation 闭包只在"自己跑起来时"才重注册
-                    // （bundle 不暴露 window.animation，被偷即永久哑火），而真机
-                    // rAF 本就被容器钳死 → animation 全靠本泵驱动 → wasm 挨饿：
-                    // F 冻结、FF 冻结、帧ok 照涨（外来回调不抛错）、err=0、点击
-                    // 全部堆积。桌面不复现＝桌面真 rAF 活着会持续驱动 animation
-                    // 夺回 cb。对策：wasm_exports 就绪后帧驱动直接锁定 frame 导出
-                    // （animation 只多做一次 rAF 重注册，在本劫持下无意义），cb 每
-                    // 拍强制归还——外来回调最多占位 14ms、永不执行。
-                    if (window.wasm_exports && window.wasm_exports.frame) {
-                        // __xxCbWasFrame：首次 animation→frame 锁定是正常切换，
-                        // 不计劫持；此后 cb≠frame 才是真被外来回调偷走
-                        if (f && f !== window.wasm_exports.frame && window.__xxCbWasFrame &&
-                            (window.__xxFrameOk | 0) > 10) {
-                            window.__xxCbSteal = (window.__xxCbSteal || 0) + 1;
-                            if (window.__xxCbSteal === 1 || window.__xxCbSteal % 100 === 0) {
-                                try {
-                                    el.textContent += "[cb劫持] 第" + window.__xxCbSteal +
-                                        "次夺回：外来 rAF 回调偷走帧泵（容器 SDK/横幅组件嫌疑）\n";
-                                } catch (eS) {}
-                            }
-                        }
-                        f = window.wasm_exports.frame;
-                        cb = f;
-                        window.__xxCbWasFrame = 1;
-                    }
-                    // v1.9.7 cb 自愈：帧回调丢失（真机 canvas 手术/GL 异常后 bundle
-                    // 不再重挂 animation）时从 bundle 顶层函数复活，时钟继续出帧。
-                    // 必须等 wasm 就绪——过早调 animation 会在 bundle 赋值
-                    // wasm_exports 之前抛 TypeError（本地实测启动噪音）。
-                    if (!f && window.animation && window.wasm_exports) {
-                        f = window.animation;
-                        cb = f;
-                    }
-                    // v1.9.10 最后生路：bundle 顶层 animation 也不可用（加载残缺/
-                    // 极端容器）时直调 wasm frame 导出——绕开一切 JS 中间层，只要
-                    // wasm 实例活着帧就不断。
-                    if (!f && window.wasm_exports) {
-                        f = window.wasm_exports.frame;
-                        cb = f;
-                    }
-                    if (!f) return;
-                    try {
-                        f(now);
-                        // v1.15.0 帧调用成败计数：区分"frame() 抛异常"与"成功但不推进"，
-                        // X5 半死态定位的分水岭
-                        window.__xxFrameOk = (window.__xxFrameOk || 0) + 1;
-                        // v1.9.7 只在真正执行了 wasm 帧后才刷新帧时刻——回调死亡时
-                        // tick 空转不再冒充"刚出过帧"，触摸帧泵保持有效。
-                        window.__xxFrameAt = now;
-                        // v1.9.16 __xxTickAt：仅 tick（真 rAF/时钟链）出帧时刷新。
-                        // 车夫让路判据专用——触摸同步帧也刷 __xxFrameAt（v1.9.15
-                        // 真机实锤：频繁触摸会把车夫的 200ms 让路窗口无限重置，
-                        // 车夫从不补帧，帧率只剩触摸驱动 ~2fps，画面一卡一卡）。
-                        window.__xxTickAt = now;
-                    } catch (err) {
-                        window.__xxFrameErr = (window.__xxFrameErr || 0) + 1;
-                        if (frames < 100 || frames % 120 === 0) { // 限流防刷屏
-                            el.textContent += "[ERR] frame " + String(err).slice(0, 120);
-                        }
-                        cb = null;
-                    }
-                };
-                // 时钟 1：MessageChannel 自循环（hidden 不节流）
-                var chan = null;
-                function buildChan() {
-                    try {
-                        var ch = new MessageChannel();
-                        ch.port1.onmessage = function () {
-                            curSrc = "mc";
-                            tick(performance.now());
-                            // 4ms 心跳投递：port 消息不受可见性节流，帧率由 tick 门闩限制
-                            if (chan === ch) {
-                                setTimeout(function () {
-                                    if (chan === ch) ch.port2.postMessage(0);
-                                }, 4);
-                            }
-                        };
-                        ch.port2.postMessage(0);
-                        chan = ch;
-                        return true;
-                    } catch (e) {
-                        return false;
-                    }
-                }
-                // 时钟 2：Worker 定时器（worker 端不受可见性节流）
-                var worker = null;
-                function buildWorker() {
-                    try {
-                        var wcode = "setInterval(function(){postMessage(0)},16);";
-                        worker = new Worker(
-                            URL.createObjectURL(new Blob([wcode], { type: "application/javascript" })),
-                        );
-                        worker.onmessage = function () {
-                            curSrc = "w";
-                            tick(performance.now());
-                            // v1.12.1 加载停滞看门狗借道：worker postMessage 不受
-                            // 可见性节流，主线程一能跑宏任务判定即恢复（与帧驱动
-                            // v2 同一免疫力来源）。看门狗定义在下方 45s 看门狗后，
-                            // 早期消息时 window.xxWdCheck 尚未挂载，判空借用。
-                            if (window.xxWdCheck) window.xxWdCheck();
-                        };
-                        return true;
-                    } catch (e) {
-                        return false;
-                    }
-                }
-                // 时钟 3：setTimeout 循环（兜底，hidden 被钳 1fps 但绝不冻结）
-                setInterval(function () { curSrc = "st"; tick(performance.now()); }, 16);
-                buildChan();
-                buildWorker();
-                // 停摆看门狗：>800ms 无帧 → 重建 MessageChannel 并重发 rAF 循环
-                setInterval(function () {
-                    if (!window.wasm_exports) return;
-                    var since = performance.now() - lastFrameAt;
-                    if (since > 800 && rebuilt < 6) {
-                        rebuilt += 1;
-                        if (chan) {
-                            chan.port1.onmessage = null;
-                            chan = null;
-                        }
-                        buildChan();
-                        if (el && rebuilt === 1) {
-                            el.textContent += "[诊断] 帧驱动停摆，已自动重建时钟";
-                        }
-                    }
-                }, 500);
-            })();
-            // v1.14.0 下载进度感知：包装 fetch 拦截 xiuxian.wasm——body.tee() 一支
-            // 计数刷「下载游戏包 N%（x.x/2.1MB）」（~200ms 节流）并把进度条从假动画
-            // 切真宽度，一支原样包回 Response 交给 bundle（compileStreaming 主分支与
-            // 老内核 arrayBuffer() 回退分支均按 Response 消费，已核 mq_js_bundle.js
-            // load()：`var t=fetch(e)` 调用时解析全局 fetch，包装必被拾取）。
-            // 防御：res.body 为 null（老内核）/无 tee/Response 构造失败一律静默回原
-            // 响应，进度感知降级但加载功能不受损。只观察不改变加载机制本体。
-            (function () {
-                if (typeof window.fetch !== "function") return;
-                var _fetch = window.fetch;
-                window.__xxDlAt = 0; // 最近一次字节增长时刻（45s 门控：仍在推进不翻失败牌）
-                window.__xxDlActive = false; // 下载进行中（12s/30s 定时文案不抢屏）
-                window.fetch = function (input, init) {
-                    var url = "";
-                    try {
-                        url = typeof input === "string" ? input : (input && input.url) || "";
-                    } catch (e) {}
-                    if (url.indexOf("xiuxian.wasm") < 0) return _fetch.apply(this, arguments);
-                    var p = _fetch.apply(this, arguments);
-                    return p.then(function (res) {
-                        try {
-                            if (!res || !res.body || !res.body.tee) return res;
-                            var total = parseInt(res.headers.get("content-length") || "0", 10) || 0;
-                            var br = res.body.tee();
-                            var reader = br[0].getReader();
-                            var done = 0, lastPaint = 0;
-                            var bar = document.querySelector("#loading .bar i");
-                            window.__xxDlActive = true;
-                            window.__xxDlAt = performance.now();
-                            var paint = function (force) {
-                                var now = performance.now();
-                                if (!force && now - lastPaint < 200) return;
-                                lastPaint = now;
-                                if (total > 0) {
-                                    var pct = Math.min(100, Math.round((done / total) * 100));
-                                    xx_stage("下载游戏包 " + pct + "%（" +
-                                        (done / 1048576).toFixed(1) + "/" +
-                                        (total / 1048576).toFixed(1) + "MB）");
-                                    if (bar) { // 假动画 → 真宽度（无 content-length 保动画）
-                                        bar.style.animation = "none";
-                                        bar.style.marginLeft = "0";
-                                        bar.style.width = pct + "%";
-                                    }
-                                } else {
-                                    xx_stage("已下载 " + (done / 1048576).toFixed(1) + "MB…");
-                                }
-                            };
-                            var pump = function () {
-                                reader.read().then(function (r) {
-                                    if (r.done) {
-                                        window.__xxDlActive = false;
-                                        window.__xxDlAt = performance.now();
-                                        paint(true);
-                                        // 字节尽≠编译尽：末端文案与 instantiate 钩子衔接
-                                        xx_stage("下载完成，编译中…");
-                                        if (bar && total > 0) bar.style.width = "100%";
-                                        return;
-                                    }
-                                    done += r.value.byteLength;
-                                    window.__xxDlAt = performance.now();
-                                    paint(false);
-                                    pump();
-                                }).catch(function () {
-                                    window.__xxDlActive = false; // 计数支中断不影响交付支
-                                });
-                            };
-                            pump();
-                            return new Response(br[1], {
-                                status: res.status,
-                                statusText: res.statusText,
-                                headers: res.headers,
-                            });
-                        } catch (e) {
-                            // best-effort：仅兜"有 tee 但 Response 构造异常"的不存在组合
-                            //（现实内核有 Streams 必有 Response 构造器）；此时原响应流
-                            // 已被 tee 锁定可能不可再读，等价一次网络失败的既有兜底路径。
-                            // 会审点名的 body-null 老内核场景在 tee 之前就已直通。
-                            return res;
-                        }
-                    });
-                };
-            })();
-            xx_stage(XX_R2 ? "缓存热身中，马上就好…" : "下载游戏包…");
-            try {
-                load("xiuxian.wasm?v=" + GAME_VER);
-            } catch (e) {
-                errlog.textContent += "load() threw: " + (e && e.message ? e.message : e) + "\n";
-            }
-            // 加载分阶段提示：游戏包含内嵌立绘、体积较大，手机上首次下载+编译
-            // 需要 10~40 秒——中途给状态文字，避免玩家以为卡死。
-            // v1.14.0：下载百分比正在推进时不抢屏（__xxDlActive，百分比即最优状态
-            // 文案）；12s 文案追加二次进入预期（A3）
-            var stageTimers = [
-                [12, "游戏包较大，首次加载约需 10~40 秒，请稍候…（下次进入会快很多）"],
-                [30, "仍在编译游戏引擎（低端设备会慢一些），请继续等待…"],
-            ];
-            stageTimers.forEach(function (st) {
-                setTimeout(function () {
-                    if (!window.wasm_exports && !window.__xxDlActive) xx_stage(st[1]);
-                }, st[0] * 1000);
-            });
-            // 加载看门狗：45 秒仍未就绪（无 WebGL/无 WASM/网络失败都会卡在
-            // 白屏加载层）才把加载层变成可点的重试按钮。
-            // v1.8.2 前此值为 12 秒且 window.wasm_exports 恒为 undefined，
-            // 手机上必触发"加载失败→点击→reload"无限循环（玩家实测反馈）。
-            setTimeout(function () {
-                if (!window.wasm_exports && xxLoading &&
-                    !xxLoading.classList.contains("hidden")) {
-                    // v1.14.0 A2：慢载≠失败——下载近 10s 仍有字节增长则不翻失败牌
-                    //（跳过本次，进度百分比继续安抚；后续真停滞由 D2=120s 保险丝兜底）；
-                    // 真停滞才给可点重试，且文案软化——"已等待 N 秒"由计秒尾缀自带
-                    var fresh = window.__xxDlAt &&
-                        performance.now() - window.__xxDlAt < 10000;
-                    if (!fresh) {
-                        xx_stage("加载较慢，可点击重试");
-                        xxLoading.style.pointerEvents = "auto";
-                        xxLoading.onclick = function () { location.reload(); };
-                    }
-                }
-            }, 45000);
-            // v1.12.1 加载停滞看门狗：加载期主线程停滞（MuMu/X5 冷加载偶发卡死，
-            // 观测特征"计秒先走后停、页面零变化"）的自动自救盲区——上方 45s 看门狗
-            // 只挂人工点击不自动重载；运行期 xxWatch 全部以 wasm_exports 就绪为前提，
-            // wasm 编译期停滞则其判定链结构性不可达，加载期是共同盲区。双口径触发
-            // 自动重载兜底：
-            //   D1 计秒停摆 ≥30s（v1.14.0 自 20s 放宽，注释原案即自认偏敏）：xx_paint_stage
-            //     每秒刷 __xxLdBeat 心跳，停摆=观测特征直接编码。正常慢载（页面自述
-            //     首开 10~40s）期间计秒 interval 每秒照跑、心跳恒新，结构性不触发；
-            //     30s 连续无喘息=主线程死滞（仍远小于 D2——极慢设备一次性 >30s
-            //     同步编译阻塞与卡死在触发时刻不可区分，由 wd≤2+D2 保险丝+人工
-            //     终态三层兜住，最坏代价是慢设备多等两次重载）。
-            //   D2 加载层可见且无 wasm_exports 超 120s：2×正常最慢 60s 的纯保险丝，
-            //     绝不误伤 30-60s 正常慢载。
-            // 防循环：URL 参数 wd=N 累计硬上限 2 次自动重载，用尽降级为 45s 看门狗
-            // 同款"点击重试"人工终态（必有兜底）；不写 xxrlt、不查 xxRlUsed()——
-            // 运行期 wedge 预算独立满额保留，wd 重载后的新页仍带满 xxrlt 预算应对
-            // 进游戏后的卡顿；与 r2 无环路（r2 只在 wasm 就绪后追加且已存在不加，
-            // 与 wd≤2 相乘最坏 3 次导航即终态）。死因穿越走新键 xxwd（见上方读取块）。
-            (function () {
-                var m = location.search.match(/[?&]wd=(\d+)/) ||
-                        location.hash.match(/wd=(\d+)/); // 对齐 xxRlUsed：query 为主 hash 兜底
-                var wd = m ? (parseInt(m[1], 10) || 0) : 0;
-                var dead = false;
-                var __wdIv = 0;
-                // 手动终态：镜像 45s 看门狗的"点击重试"写法，预算用尽必有兜底
-                function manualExit() {
-                    xx_stage("加载受阻，点击此处重试");
-                    xxLoading.style.pointerEvents = "auto";
-                    xxLoading.onclick = function () { location.reload(); };
-                }
-                function doReload(reason, beatAge, elapsed) {
-                    try {
-                        errlog.textContent += "[诊断] 加载停滞自救（" +
-                            (reason === "cap"
-                                ? "超长 " + Math.round(elapsed / 1000) + "s"
-                                : "计秒停摆 " + Math.round(beatAge / 1000) + "s") +
-                            "），自动重载第 " + (wd + 1) + "/2 次\n";
-                    } catch (e) {}
-                    if (wd >= 2) { manualExit(); return; }
-                    try {
-                        sessionStorage.setItem("xxwd", JSON.stringify({
-                            v: window.GAME_VER, reason: reason, wd: wd + 1,
-                            waited: Math.round(elapsed / 1000),
-                        }));
-                    } catch (e) {}
-                    // 摘旧 wd 计数（保留 ?/& 锚）、摘 hash（对齐 xxReload 写法），
-                    // 再把新计数追加回 query 尾部——r2/xxrlt/ss/dbg 等既有参数原样保留
-                    var href = location.href
-                        .replace(/([?&])wd=\d+/, "$1")
-                        .replace(/#.*$/, "")
-                        .replace(/\?&/, "?")
-                        .replace(/[?&]$/, "");
-                    href += (href.indexOf("?") >= 0 ? "&" : "?") + "wd=" + (wd + 1);
-                    location.href = href;
-                }
-                // 判定函数挂 window：worker.onmessage（帧驱动时钟 2，postMessage
-                // 不受可见性节流）借道调用，主线程一能跑宏任务判定即恢复——与
-                // 帧驱动 v2 同一免疫力来源；本 interval 每 2s 兜底常规轮询。
-                window.xxWdCheck = function () {
-                    if (dead) { clearInterval(__wdIv); return; } // worker 借道防重入
-                    // 自毁：wasm 就绪或加载层已隐藏——使命结束，与运行期看门狗零交集
-                    if (window.wasm_exports ||
-                        (xxLoading && xxLoading.classList.contains("hidden"))) {
-                        dead = true;
-                        clearInterval(__wdIv);
-                        return;
-                    }
-                    var now = performance.now();
-                    var elapsed = now - xxLoadStart;
-                    if (elapsed < 10000) return; // 武装门槛：避开脚本解析/初始化抖动
-                    var beatAge = now - (window.__xxLdBeat || xxLoadStart);
-                    // v1.14.0 A2：D1 20s→30s（本注释 v1.12.1 即自认"真机实测偏敏可
-                    // 放宽至 30s"）——极慢设备一次性 >20s 的合法慢编译不再被误重载；
-                    // 停滞死滞最坏多挂 10s，仍远小于 D2=120s。wd≤2/D2/武装 10s 全不动。
-                    if (beatAge >= 30000 || elapsed >= 120000) {
-                        dead = true;
-                        clearInterval(__wdIv);
-                        doReload(beatAge >= 30000 ? "stall" : "cap", beatAge, elapsed);
-                    }
-                };
-                __wdIv = setInterval(window.xxWdCheck, 2000);
-            })();
-        }
-        // 首帧检测：wasm 导出就绪（on_init 里 window.wasm_exports 被赋值）即揭幕
-        // 加载覆盖层。用 setInterval 而非 rAF：页面不可见时 rAF 会被挂起。
-        // v1.8.2：删除旧的"8 秒无条件隐藏"兜底——它会在 12MB 包还在编译时
-        // 提前撤掉加载层，玩家面对黑屏点击（点按钮没反应的第一诱因）。
-        // 加载提速⑤：揭幕判据从「exports 就绪」收紧为「首帧场景码 0-6」——
-        // exports 挂载后 Rust 还要跑 init_font+init_art 数秒才出首帧，旧口径
-        // 此刻撤层让玩家面对黑画布；新口径加载层继续显示真实阶段文案
-        //（xx_state 90-93 透出）直到首帧渲染完成。r2 双加载判定与 screen_size
-        // 直通同步仍以 exports 就绪为时点（维持既有语义）；启动死兜底不变
-        //（下方 v1.15.0 启动死自救：exports 就绪 15s 无场景码自动重载，
-        // 其判定与加载层是否隐藏无关）。
-        (function pollFirstFrame() {
-            var loading = document.getElementById("loading");
-            var synced = false;
-            function onReady() {
-                if (synced) return;
-                // v1.9.21 双加载藏进加载层（用户定案体验流：加载界面→开始选项
-                // →进入游戏→流畅，重载界面绝不可见）：wasm 就绪时若本次加载
-                // 耗时 >1.5s（慢加载=首开高钳制风险）且 URL 无 r2 标记——
-                // **不隐藏加载条、立即重载**，重载全程被加载界面盖住；r2 页面
-                // 缓存热秒开，加载条一闪即过。快加载直接进入（无白闪无重载）。
-                if (performance.now() - xxLoadStart > 1500 && !/[?&]r2=1/.test(location.search)) {
-                    synced = true; // 导航即将发生，r2 判定只走一次
-                    try { document.getElementById("ld_msg").textContent =
-                        "凡人模拟 v" + GAME_VER + " · 正在进入（已等待 " +
-                        Math.round((performance.now() - xxLoadStart) / 1000) + " 秒）"; } catch (e) {}
-                    location.href = location.href.split("#")[0] +
-                        (location.search ? "&" : "?") + "r2=1";
-                    return; // 加载层保持显示，导航即将发生
-                }
-                synced = true;
-                // v1.9.7：只做 screen_size 直通同步。canvas 清零式 resyncBacking
-                // 已删除——它在 X5 上杀死帧回调（v1.9.6 真机 F:28 冻帧实锤）。
-                window.xxSyncScreen();
-                setTimeout(window.xxSyncScreen, 2000);
-                // 首帧揭幕：轮询场景码 0-6（首帧渲染完成的唯一信号）
-                (function pollScene() {
-                    var st = window.__xxState;
-                    if (typeof st === "number" && st >= 0 && st <= 6) {
-                        loading.classList.add("hidden");
-                        return;
-                    }
-                    setTimeout(pollScene, 100);
-                })();
-            }
-            var timer = setInterval(function () {
-                if (window.wasm_exports) onReady();
-            }, 250);            // v1.9.23 调试开关（Rust 侧）：?dbg=1 时把十字/诊断行/自检面板打开
-            (function () {
-                var iv = setInterval(function () {
-                    if (!window.wasm_exports) return;
-                    clearInterval(iv);
-                    if (XX_DBG) {
-                        try { window.wasm_exports.xx_set_debug(1); } catch (e) {}
-                    }
-                }, 250);
-            })();
-        })();
-        // v1.15.0 启动死自救：wasm exports 就绪但 Rust 主循环 15s 内未上报任何
-        // 场景码（st 恒缺/停在启动分段 90-93）——QQ浏览器/X5（MuMu 2026-10-31）
-        // 实测确定性卡死形态：加载层已撤、画面黑、点哪都没反应、无 panic 无
-        // console.error（主循环一帧未跑）。场景码 0-6 视为已启动；90-93 为启动
-        // 分段标记，停在其中即视为启动死。重载预算与主看门狗同口径（60s）。
-        (function () {
-            var bootedAt = -1;
-            setInterval(function () {
-                if (!window.wasm_exports) return;
-                if (bootedAt < 0) { bootedAt = performance.now(); return; }
-                var st = window.__xxState;
-                if (typeof st === "number" && st >= 0 && st <= 6) return; // 已启动
-                if (performance.now() - bootedAt <= 15000) return;
-                var used = false;
-                var m = location.search.match(/[?&]xxrlt=(\d+)/) || location.hash.match(/xxrlt=(\d+)/);
-                if (m && Date.now() - parseInt(m[1], 10) < 60000) used = true;
-                try {
-                    var el = document.getElementById("errlog");
-                    if (el) el.textContent += "[诊断] 启动死（exports 就绪 15s 无场景上报 st=" + st + "）" +
-                        (used ? "，重载预算已用转兜底" : "，自动重载") + "\n";
-                } catch (e0) {}
-                if (used) return;
-                try { sessionStorage.setItem("xxrlAt", String(Date.now())); } catch (e1) {}
-                var t = Date.now();
-                var href = location.href.replace(/[?&]xxrlt=\d+/, "").replace(/#.*$/, "");
-                href += (href.indexOf("?") >= 0 ? "&" : "?") + "xxrlt=" + t + "#r" + t;
-                location.href = href;
-            }, 1000);
-        })();
-        // v1.15.0 常驻响应仪表（真机遥测，默认显示、9px 半透明不遮挡）：
-        // 触摸数/消费数/最近触→消费延迟/峰值/JS 帧龄——用户一句"点按钮很卡"
-        // 的截图从此可直接读出：延迟多少、帧泵是否死透（帧龄 >1000ms 即死）。
-        (function () {
-            var hud = document.createElement("div");
-            hud.style.cssText =
-                // 位置：左下诊断块（?dbg）正上方——页面被 orientFix 旋转后
-                // fixed 定位跟随 body 变换，左下角是真机可见的稳定角落。
-                // z-index 150：必须压过 errlog(99)——X5 实测恐慌刷屏时
-                // errlog(max-height:100%) 会盖满整页，HUD 从此恒可读
-                // v1.16.5 ?dbg=1 保持原遥测样式；正式包降为纯版本徽章
-                // （无底色、低不透明度，不与调试输出混淆）
-                (XX_DBG ?
-                    "position:fixed;left:2px;bottom:64px;z-index:150;color:#9f9;" +
-                    "background:rgba(0,0,0,.6);font:10px/1.25 Consolas,monospace;" +
-                    "white-space:pre;pointer-events:none;padding:1px 4px;opacity:.95;" :
-                    "position:fixed;left:2px;bottom:64px;z-index:150;color:#9f9;" +
-                    "font:10px/1.25 Consolas,monospace;" +
-                    "white-space:pre;pointer-events:none;padding:1px 2px;opacity:.6;");
-            document.body.appendChild(hud);
-            setInterval(function () {
-                try {
-                    var gap = performance.now() - (window.__xxFrameAt || 0);
-                    var ck = window.__xxClocks || {};
-                    // v1.15.2 FF 计数读数（主 future 挂死判据数据源 + HUD 展示）
-                    var ffp = 0, ffd = 0;
-                    if (window.wasm_exports && window.wasm_exports.xx_ffp) {
-                        ffp = window.wasm_exports.xx_ffp() | 0;
-                        ffd = window.wasm_exports.xx_ffd() | 0;
-                    }
-                    window.__xxFFP = ffp;
-                    window.__xxFFD = ffd;
-                    // v1.16.5 调试遥测默认隐藏（?dbg=1 才显全串）：正式包只留版本徽章，
-                    // 版本号必须保留——缓存穿透靠改 GAME_VER 认版本、防设备吃旧缓存
-                    hud.textContent = XX_DBG ?
-                        ("v" + GAME_VER + " " +
-                        "触" + (window.__xxTouches || 0) +
-                        " 消" + (window.__xxClicksSeen || 0) +
-                        " 应" + (window.__xxTapLat == null ? "-" : (window.__xxTapLat | 0) + "ms") +
-                        " 峰" + (window.__xxTapLatMax | 0) + "ms" +
-                        " 帧龄" + Math.min(9999, gap | 0) +
-                        " 活" + (window.__xxKeepAlive ? 1 : 0) +
-                        " 心" + (window.__xxAlive ? Math.min(99, ((performance.now() - window.__xxAlive.at) / 1000) | 0) + "s" : "-") +
-                        " F" + (window.__xxAlive ? window.__xxAlive.n : -1) +
-                        " FF" + (window.__xxFFP >> 10) + "k/" + (window.__xxFFD >> 10) + "k" +
-                        " 劫" + (window.__xxCbSteal | 0) +
-                        " 钟 mc/w/st=" + (ck.mc | 0) + "/" + (ck.w | 0) + "/" + (ck.st | 0) +
-                        " 帧ok/err=" + (window.__xxFrameOk | 0) + "/" + (window.__xxFrameErr | 0)) :
-                        ("v" + GAME_VER);
-                    // v1.15.0 标题诊断：errlog/HUD 会被遮挡或淡化，标题在浏览器
-                    // URL 栏恒可见（旋转布局截图考古的终结手段）
-                    // v1.16.5 遥测标题同样收进 ?dbg=1，正式包回落静态标题
-                    // 「凡人模拟·轮回模拟器」（panic 标题覆盖 index.html:405 不受影响）
-                    try {
-                        if (XX_DBG) document.title = "F" + (window.__xxAlive ? window.__xxAlive.n : -1) +
-                            " 活" + (window.__xxKeepAlive ? 1 : 0) +
-                            " 触" + (window.__xxTouches || 0) +
-                            " 消" + (window.__xxClicksSeen || 0) +
-                            " 帧龄" + Math.min(999, gap | 0);
-                    } catch (e7) {}
-                } catch (e) {}
-            }, 1000);
-        })();
-        // v1.15.2 主 future 挂死判据 + 自动重载自愈：真机 TapTap 实测（v1.15.1）
-        // frame() 调用照常（ok 2810 持续增长）而 Rust 帧号 F 冻结（144）——
-        // 主 future 挂死，触摸 burst 推不动、点击全部堆积丢失 = "点选项卡顿、
-        // 过很久才可能有反应"，玩家只能手动重进。判据：每 2s 采样 F 与 FF
-        // polls——连续 3 次采样 F 零前进、而 FF polls 增长 ≥100（泵在投递、
-        // poll 被挂死的 future 吞掉）→ 挂死实锤 → 带死亡档案自动重载
-        // （frz 参数防循环上限 2）。泵死（FF 也冻结）不触发——那走触摸
-        // 唤醒链。死亡档案经 URL 传给下页打印进 errlog（errlog 重载即清）。
-        (function () {
-            var lastF = -1, lastP = -1, lastOk = -1, frozen = 0;
-            setInterval(function () {
-                try {
-                    if (!window.wasm_exports || !window.wasm_exports.xx_ffp) return;
-                    if (!window.__xxAlive) return; // 心跳未见（还没起循环）不判
-                    // ?frztest=1 测试钩子：强制走挂死判定分支（验证自动重载链）
-                    if (/[?&]frztest=1/.test(location.search)) {
-                        window.__xxAlive = { n: 777, at: performance.now() };
-                    }
-                    var f = window.__xxAlive.n;
-                    var p = window.wasm_exports.xx_ffp() | 0;
-                    var ok = window.__xxFrameOk | 0;
-                    if (f === lastF) {
-                        // 双模式判据：① FF 涨而 F 冻 = 主 future 挂死（v1.15.2）
-                        // ② F/FF 双冻而 帧ok 照涨 = 幽灵泵——帧泵在调用但 wasm
-                        // frame 未执行。v1.15.3 cb 夺回锁后正常不可能出现（外来
-                        // rAF 偷槽会在 14ms 内被夺回），触发即异常兜底重载。
-                        var ghost = (p - lastP) < 10 && (ok - lastOk) >= 40 && lastOk >= 0;
-                        if (p - lastP >= 100 || ghost) {
-                            frozen++;
-                            if (frozen >= 3) {
-                                var m = location.search.match(/[?&]frz=(\d+)/);
-                                var k = m ? parseInt(m[1], 10) : 0;
-                                if (k < 2) {
-                                    var st = window.__xxState == null ? -1 : window.__xxState;
-                                    var href = location.href.replace(/[?&]frz=\d+/, "").replace(/[?&](f_f|f_p|f_d|f_s|f_t|f_c|f_o|f_k)=\d+/g, "");
-                                    // v1.15.3 档案参数必须落在 search（哈希之前）：
-                                    // 真机 URL 常带 xxrlt#r 哈希，直接 append 会把
-                                    // f_* 追进 fragment，下页 search 匹配不到=档案丢失
-                                    var __h = href.indexOf("#");
-                                    var __base = __h >= 0 ? href.slice(0, __h) : href;
-                                    var __hash = __h >= 0 ? href.slice(__h) : "";
-                                    __base += (__base.indexOf("?") >= 0 ? "&" : "?") +
-                                        "frz=" + (k + 1) +
-                                        "&f_f=" + f + "&f_p=" + p + "&f_d=" + (window.__xxFFD | 0) +
-                                        "&f_s=" + st + "&f_t=" + (window.__xxTouches | 0) +
-                                        "&f_c=" + (window.__xxClicksSeen | 0) +
-                                        "&f_o=" + ok +
-                                        "&f_k=" + (window.__xxCbSteal | 0);
-                                    href = __base + __hash;
-                                    var el = document.getElementById("errlog");
-                                    if (el) el.textContent += "[主循环挂死] F冻结" + (frozen * 2) + "s而" +
-                                        (ghost ? "帧泵照涨+" + (ok - lastOk) + "（幽灵泵）" : "FF poll+" + (p - lastP)) +
-                                        " → 自动重载续玩（frz " + (k + 1) + "/2）\n";
-                                    frozen = -99; // 只判一次
-                                    setTimeout(function () { location.replace(href); }, 300);
-                                } else {
-                                    frozen = -99;
-                                    var el2 = document.getElementById("errlog");
-                                    if (el2) el2.textContent += "[主循环挂死] frz 预算已满（" + k + "），不再自动重载——请手动重进\n";
-                                }
-                            }
-                        } else {
-                            frozen = 0;
-                        }
-                    } else {
-                        frozen = 0;
-                    }
-                    lastF = f;
-                    lastP = p;
-                    lastOk = ok;
-                } catch (e) {}
-            }, 2000);
-        })();
-        // v1.15.2 前页死亡档案：上页主循环挂死自动重载时经 URL 带来的现场快照
-        (function () {
-            try {
-                var m = location.search.match(/[?&]f_f=(\d+)/) || location.hash.match(/f_f=(\d+)/);
-                if (!m) return;
-                // v1.15.3 search 优先、hash 兜底（与 xxrlt 双保险同哲学）：
-                // 个别路径历史页把 f_* 追进了 fragment，照样能打印
-                var g = function (k) {
-                    var mm = location.search.match(new RegExp("[?&]" + k + "=(\\d+)")) ||
-                        location.hash.match(new RegExp(k + "=(\\d+)"));
-                    return mm ? parseInt(mm[1], 10) : 0;
-                };
-                var el = document.getElementById("errlog");
-                if (el) el.textContent += "[前页死亡档案] F=" + g("f_f") + " FF=" + g("f_p") + "/" + g("f_d") +
-                    " 场景码=" + g("f_s") + " 触=" + g("f_t") + " 消=" + g("f_c") + " 帧ok=" + g("f_o") +
-                    " cb劫持=" + g("f_k") +
-                    "（重载续玩第 " + g("frz") + "/2 次）\n";
-            } catch (e) {}
-        })();
-        // v1.8.2 指针自愈（两条）：
-        // 1) dpr/backing 失步自愈——miniquad 只在 resize 事件重算 backing，若
-        //    devicePixelRatio 在实例化前后发生变化（浏览器缩放/分屏/机型切换），
-        //    backing 与指针缩放系数脱钩，所有点击错位。检测到失步就合成一次
-        //    resize（bundle 的 window.onresize 会重算双方），免重载自愈。
-        // 2) 竖屏旋转点击映射——orientFix 把整页 rotate(90deg) 后，视觉坐标系
-        //    与页面坐标系相差一个旋转，miniquad 的线性换算全部错位（竖持手机
-        //    点按钮没反应的第二诱因）。在 canvas 捕获阶段拦截鼠标/触摸事件，
-        //    旋转时先 stopImmediatePropagation 再派发"换算后的同型事件"
-        //    （clientX/clientY 对调并翻转），bundle 原处理逻辑零改动。
-        (function pointerSetup() {
-            var canvas = document.getElementById("glcanvas");
-            // v1.8.3 指针映射彻底接管：不再依赖 miniquad 基于 devicePixelRatio 的
-            // 线性换算（TapTap 容器缩放/顶部横幅占位/dpr 漂移都会让它失准，手机
-            // 实测点按钮没反应），改用 getBoundingClientRect 实测比例直接驱动
-            // wasm 导出。竖屏旋转（orientFix 的 90° 页面旋转）用归一坐标旋转逆
-            // 映射：(nx,ny) → (ny, 1-nx)。
-            var rotationAware = function (e) {
-                var r = canvas.getBoundingClientRect();
-                if (r.width < 1 || r.height < 1) return null;
-                var nx = (e.clientX - r.left) / r.width;
-                var ny = (e.clientY - r.top) / r.height;
-                if (!(nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1)) return null;
-                var portrait = window.innerHeight > window.innerWidth;
-                if (!portrait) return { x: nx * canvas.width, y: ny * canvas.height };
-                return { x: ny * canvas.width, y: (1 - nx) * canvas.height };
-            };
-            var btn = function (b) { return b === 1 ? 2 : b === 2 ? 1 : b | 0; };
-            var takeOver = function () {
-                if (!window.wasm_exports || canvas.__ptr_taken) return;
-                canvas.__ptr_taken = true;
-                var E = window.wasm_exports;
-                // v1.9.10 导出调用可见化：wasm 陷阱（panic/互斥锁中毒）会让后续每次
-                // 导出调用抛 RuntimeError——旧代码要么让异常裸奔（onerror 记录淹没在
-                // 堆栈里）、要么静默吞掉，真机十轮排查都拿不到失败原文。现在首例
-                // 异常按导出名记入 errlog（[ERR] mouse_move: unreachable …），之后
-                // 吞掉继续跑：单点坏死不再阻断同组后续调用与触摸帧泵。
-                var __xE = {};
-                var xxSafe = function (name) {
-                    var fn = E[name];
-                    return function () {
-                        try {
-                            fn.apply(null, arguments);
-                        } catch (err) {
-                            if (!__xE[name]) {
-                                __xE[name] = 1;
-                                var el2 = document.getElementById("errlog");
-                                if (el2)
-                                    el2.textContent +=
-                                        "[ERR] " + name + ": " +
-                                        String(err && err.message ? err.message : err).slice(0, 90) + "\n";
-                            }
-                        }
-                    };
-                };
-                var S_move = xxSafe("mouse_move");
-                var S_down = xxSafe("mouse_down");
-                var S_up = xxSafe("mouse_up");
-                var S_touch = xxSafe("touch");
-                var S_frame = xxSafe("frame");
-                canvas.onmousemove = function (e) {
-                    var p = rotationAware(e);
-                    if (p) S_move(p.x | 0, p.y | 0);
-                };
-                canvas.onmousedown = function (e) {
-                    var p = rotationAware(e);
-                    if (p) S_down(p.x | 0, p.y | 0, btn(e.button));
-                };
-                canvas.onmouseup = function (e) {
-                    var p = rotationAware(e);
-                    if (p) S_up(p.x | 0, p.y | 0, btn(e.button));
-                };
-                // 触摸：容器内核用 addEventListener（无法覆盖属性），在 window
-                // 捕获阶段拦下并直接调 wasm_exports.touch，坐标实测换算。
-                // v1.9.3 触控加固：真机容器（TapTap/X5）可能把触摸派发给 body
-                // 或注入的包装层而非 canvas——旧代码 e.target!==canvas 直接丢弃，
-                // 表现为"手机上按钮全部失效、桌面鼠标路径正常"。改为 window 捕获
-                // （先于 document 触发，防页面级拦截）+ 只按坐标过滤：触点落在
-                // 画布区域内一律接管；区域外（如诊断日志）放行不 preventDefault。
-                var el = document.getElementById("errlog");
-                var seenKinds = {};
-                var mark = function (kind) {
-                    if (!seenKinds[kind]) {
-                        seenKinds[kind] = true;
-                        if (el) el.textContent += "[诊断] 已收到输入事件（" + kind + "）\n";
-                    }
-                };
-                var TOUCH = { touchstart: 10, touchmove: 11, touchend: 12, touchcancel: 13 };
-                Object.keys(TOUCH).forEach(function (type) {
-                    window.addEventListener(
-                        type,
-                        function (e) {
-                            var pts = [];
-                            for (var i = 0; i < e.changedTouches.length; i++) {
-                                var p = rotationAware(e.changedTouches[i]);
-                                if (p) pts.push([e.changedTouches[i], p]);
-                            }
-                            if (!pts.length) return; // 触点不在画布内：放行页面默认行为
-                            e.preventDefault();
-                            e.stopImmediatePropagation();
-                            mark("touch");
-                            window.__xxTouches = (window.__xxTouches || 0) + 1;
-                            // v1.15.0 触→消费延迟起点 + 音频保活（见构造器捕获处注释）
-                            if (e.type === "touchstart") window.__xxTapAt = performance.now();
-                            // 保活启动必须在手势任务内同步先行（用户激活态创建的
-                            // AudioContext 直接 running）；且 resume 逐个防御——
-                            // 老内核 resume() 可能返回 undefined（无 promise），
-                            // `.catch` 会抛错并被外层 catch 吞掉，导致保活启动
-                            // 永远执行不到（X5 实测保活未启动的头号嫌疑）
-                            if (e.type === "touchstart" && window.xxStartKeepAlive) {
-                                try { window.xxStartKeepAlive(); } catch (ak) {}
-                            }
-                            try {
-                                var __acs = window.__xxACs;
-                                if (__acs) {
-                                    for (var ai = 0; ai < __acs.length; ai++) {
-                                        var ac = __acs[ai];
-                                        if (ac && ac.state === "suspended" && ac.resume) {
-                                            try {
-                                                var r = ac.resume();
-                                                if (r && r["catch"]) r["catch"](function () {});
-                                            } catch (ae2) {}
-                                        }
-                                    }
-                                }
-                                if (e.type !== "touchstart" && window.xxStartKeepAlive) {
-                                    window.xxStartKeepAlive();
-                                }
-                            } catch (ae) {}
-                            window.xxSyncScreen(); // 触摸瞬间强同步 screen_size == canvas
-                            for (var j = 0; j < pts.length; j++) {
-                                var t = pts[j][0];
-                                var p2 = pts[j][1];
-                                __xxLastTouch = [Math.round(t.clientX), Math.round(t.clientY), p2.x | 0, p2.y | 0];
-                                window.xxPaintDbg();
-                                // v1.9.8 恢复 E.touch：cam::mouse()（wasm）改为优先读
-                                // macroquad 的 touches 表（原样存储、零 dpi 参与），
-                                // 必须把触摸位置喂进去；E.mouse_* 保留作点击判定。
-                                S_touch(TOUCH[type], t.identifier, p2.x, p2.y);
-                                // 同步鼠标状态：游戏按钮判定走鼠标通路
-                                S_move(p2.x | 0, p2.y | 0);
-                                if (type === "touchstart") {
-                                    S_down(p2.x | 0, p2.y | 0, 0);
-                                    // v1.15.2 本击消费基线 + 合成消费上下文
-                                    window.__xxTapSeq = window.__xxClicksSeen | 0;
-                                    window.__xxTapDownAt = performance.now();
-                                }
-                                if (type === "touchend" || type === "touchcancel") {
-                                    // v1.15.2 合成消费：泵停滞期 down 边沿压在
-                                    // macroquad 事件状态里未被任何帧处理；若 up 先
-                                    // 批处理（同一批 down→up），pressed 边沿被抹掉
-                                    // 点击即丢（真机触60消4 的直接机理）。停滞时
-                                    // 延后 S_up：先推 2 帧消费 down，再补 up。
-                                    var __stall = performance.now() - (window.__xxFrameAt || 0) > 120;
-                                    if (
-                                        type === "touchend" && __stall &&
-                                        (window.__xxClicksSeen | 0) === (window.__xxTapSeq | 0)
-                                    ) {
-                                        (function (sx, sy) {
-                                            setTimeout(function () {
-                                                try {
-                                                    if (!window.wasm_exports) return;
-                                                    S_frame();
-                                                    S_frame();
-                                                    if ((window.__xxClicksSeen | 0) === (window.__xxTapSeq | 0)) {
-                                                        // 2 帧仍未消费（future 挂死/推不动）：
-                                                        // 重放 down→帧→up 全链，边沿必被
-                                                        // 后续任一活帧处理
-                                                        S_move(sx, sy);
-                                                        S_down(sx, sy, 0);
-                                                        S_frame();
-                                                        S_frame();
-                                                    }
-                                                    S_up(sx, sy, 0);
-                                                    S_frame();
-                                                    S_frame();
-                                                } catch (se) {}
-                                            }, 0);
-                                        })(p2.x | 0, p2.y | 0);
-                                    } else {
-                                        S_up(p2.x | 0, p2.y | 0, 0);
-                                    }
-                                }
-                            }
-                            // v1.9.19 触摸同步 burst（中期钳制点击卡 5 秒的根治）：
-                            // 真机视频定案：容器钳制不止首开——游戏中期（页面 idle
-                            // 一段时间后）再次钳制，"重载后必好"只在首开成立；
-                            // 点坊市卡 5 秒 = 同步 3 发推不动死透的 future、只能
-                            // 等看门狗 3 轮冲击后重载。burst 12 发做当拍唤醒。
-                            // v1.9.19 MuMu 实测修正：真实安卓 WebView 的手势回调
-                            // 栈内直调 frame() 推不动 future（本地 Chromium 有效、
-                            // 真机/模拟器无效——环境差异），必须 setTimeout(0)
-                            // 脱离手势栈再 burst（宏任务在钳制态可跑：v1.9.14
-                            // 真机 400ms 唤醒链实证）。两层都发：同步层兜本地，
-                            // 宏任务层保真机。tick 活着时（<60ms）零开销跳过。
-                            if (performance.now() - (window.__xxFrameAt || 0) > 60 && window.wasm_exports) {
-                                try {
-                                    var n0 = window.__xxAlive ? window.__xxAlive.n : -1;
-                                    for (var fi = 0; fi < 16; fi++) window.wasm_exports.frame();
-                                    window.__xxFrameAt = performance.now();
-                                    // v1.15.2 同步推进验证：16 发 = 8 迭代，n（每 8 帧
-                                    // 上报）必 +8；不变 = 手势栈内 frame() 推不动
-                                    // future（v1.9.19 结论）——一次性打标进 errlog
-                                    var n1 = window.__xxAlive ? window.__xxAlive.n : -1;
-                                    if (n0 >= 0 && n1 === n0 && !window.__xxSyncPushDead) {
-                                        window.__xxSyncPushDead = 1;
-                                        var sel = document.getElementById("errlog");
-                                        if (sel)
-                                            sel.textContent +=
-                                                "[触泵] 手势栈内 frame() 16 发未推进 F（v1.9.19 结论 v1.15.2 实证）——消费依赖宏任务层与触摸唤醒链\n";
-                                    }
-                                } catch (err) {}
-                                setTimeout(function () {
-                                    try {
-                                        for (var fj = 0; fj < 12; fj++) window.wasm_exports.frame();
-                                        window.__xxFrameAt = performance.now();
-                                        window.__xxRevivedAt = performance.now(); // burst 即复活：大旗静默
-                                        window.__xxWedged = 1; // 低帧率实锤，开启评估
-                                    } catch (e2) {}
-                                }, 0);
-                            }
-                            // v1.9.17 wedge 低帧率评估：触摸是 wedge 态唯一可靠
-                            // 事件源，评估挂在这里最可靠（interval 可能同样被钳）
-                            if (window.__xxWedgeCheck) window.__xxWedgeCheck();
-                            // v1.9.6 帧泵（降级为冗余路径）：同步帧已被上面抢先，
-                            // 正常不触发；万一同步帧抛异常，这里还有一次机会。
-                            // ?wedge=1 仿真禁用（真机 timer 死透时此泵同样不工作，
-                            // 保证快速唤醒链在仿真里与真机同路径触发）。
-                            if (performance.now() - (window.__xxFrameAt || 0) > 120 && !window.__xxSimWedge) {
-                                setTimeout(function () {
-                                    window.__xxFrameAt = performance.now();
-                                    S_frame();
-                                }, 0);
-                            }
-                            // v1.9.14 触摸驱动快速唤醒：v1.9.13 真机实证首触杀死
-                            // 主循环、且连续 frame() 叩击可唤醒（第 4 轮 +30 帧）。
-                            // 不再等 2.5s 看门狗——touchend 后 400ms 检查帧号是否
-                            // 前进（对比 touchstart 时刻），未前进立即进入连续叩击，
-                            // 唤醒后把用户这一击原坐标重放（第一击直接生效）。
-                            // v1.9.15 触摸同步帧已当拍消费点击（k 判据会先 return），
-                            // 此钩子降级为同步帧异常时的兜底；车夫接管后彻底让路。
-                            if (type === "touchstart" && window.__xxAlive && !window.__xxWaking && !window.__xxCoach) {
-                                var n0 = window.__xxAlive.n;
-                                var k0 = window.__xxClicksSeen || 0;
-                                var lt = __xxLastTouch;
-                                setTimeout(function () {
-                                    var a = window.__xxAlive;
-                                    if (!a || window.__xxWaking) return;
-                                    if ((window.__xxClicksSeen || 0) !== k0) return; // 已消费，循环活着
-                                    if (a.n > n0) return; // 帧号在涨，循环活着
-                                    window.__xxWakeReplay(lt);
-                                }, 400);
-                            }
-                        },
-                        true,
-                    );
-                });
-                // pointer 兜底：个别内核只派发 pointer 事件不发 compat mouse
-                var POINTER = { pointerdown: 0, pointermove: -1, pointerup: 0 };
-                Object.keys(POINTER).forEach(function (type) {
-                    canvas.addEventListener(type, function (e) {
-                        if (e.pointerType === "touch") return; // 触摸走上面通道
-                        mark("pointer");
-                        var p = rotationAware(e);
-                        if (!p) return;
-                        S_move(p.x | 0, p.y | 0);
-                        if (type === "pointermove") return;
-                        if (type === "pointerdown") S_down(p.x | 0, p.y | 0, 0);
-                        else S_up(p.x | 0, p.y | 0, 0);
-                    });
-                });
-                // 兼容 mouse 首达诊断
-                canvas.onmousemove = (function (orig) {
-                    return function (e) {
-                        mark("mouse");
-                        var p = rotationAware(e);
-                        if (p) S_move(p.x | 0, p.y | 0);
-                    };
-                })();
-                canvas.onmousedown = function (e) {
-                    var p = rotationAware(e);
-                    if (p) S_down(p.x | 0, p.y | 0, btn(e.button));
-                };
-                canvas.onmouseup = function (e) {
-                    var p = rotationAware(e);
-                    if (p) S_up(p.x | 0, p.y | 0, btn(e.button));
-                };
-            };
-            setInterval(takeOver, 500);
-            // v1.9.13 自愈看门狗（上接 v1.9.12 大旗实测数据：真机首次真触摸
-            // 杀死 async 主循环——F 冻在点击当帧（19/100/101 三次实测）、frame()
-            // 照常返回、fr 恒新鲜、无任何 [PANIC]/[ERR]；用户实证重载后必好：
-            // 缓存热秒开、循环存活）。两级处置：
-            //   ①循环心跳看门狗（主）：Rust 每 30 帧上报 xx_alive；>2.5s 无心跳
-            //     且 wasm 已就绪 = 循环死亡 → 立即静默自动重载（每会话一次），
-            //     死因快照存 sessionStorage 穿越到重载后的页面（errlog 首行可读）。
-            //   ②触摸桥看门狗（备）：心跳预算用尽或恢复后再次断桥时弹大旗 +
-            //     立即重载按钮（用户已实证手动重载有效）。
-            (function xxWatch() {
-                var lastSeen = -1, starved = 0, banner = null;
-                function xxPostmortem(reason) {
-                    try {
-                        sessionStorage.setItem("xxpost", JSON.stringify({
-                            v: window.GAME_VER, reason: reason,
-                            frame: window.__xxAlive ? window.__xxAlive.n : -1,
-                            touches: window.__xxTouches || 0,
-                            clicks: window.__xxClicksSeen || 0,
-                            st: window.__xxState
-                        }));
-                    } catch (e) {}
-                }
-                // v1.9.17 重载预算：URL 参数为主（?xxrl=1）+ sessionStorage 为辅。
-                // 实测夸克（MuMu）的 sessionStorage 在 location.reload() 后丢失
-                // ——预算标记一丢，wedge 页重载后又把自己冻结→循环死→又重载，
-                // 无限重载循环（用户看到"很卡进不去"的就是这个循环）。URL 参数
-                // 跨重载绝不丢失，任何内核都可靠。
-                // 挂 window：xxSim（另一 IIFE）的 wedge 分支也要查预算。
-                // v1.9.19 预算 60 秒化：真机视频定案"重载后必好"只在首开成立
-                // ——游戏中期（页面 idle 后）容器会再次钳制，"每会话一次"预算
-                // 导致第二次卡顿只能靠大旗兜底。改为 60 秒窗口（URL 时间戳
-                // xxrlt 为主 + sessionStorage 兜底）：既允许周期性换血，又防
-                // 循环重载。
-                window.xxRlUsed = function () {
-                    // 三层：URL 参数 / URL hash / sessionStorage（夸克实测会清
-                    // sessionStorage、个别内核规范化 query——hash 最稳）
-                    var m = location.search.match(/[?&]xxrlt=(\d+)/) || location.hash.match(/xxrlt=(\d+)/);
-                    if (m && Date.now() - parseInt(m[1], 10) < 60000) return true;
-                    try {
-                        var t = sessionStorage.getItem("xxrlAt");
-                        if (t && Date.now() - parseInt(t, 10) < 60000) return true;
-                    } catch (e) {}
-                    return false;
-                };
-                function xxReload(reason) {
-                    xxPostmortem(reason);
-                    try { sessionStorage.setItem("xxrlAt", String(Date.now())); } catch (e) {}
-                    var t = Date.now();
-                    var href = location.href.replace(/[?&]xxrlt=\d+/, "").replace(/#.*$/, "");
-                    href += (href.indexOf("?") >= 0 ? "&" : "?") + "xxrlt=" + t + "#r" + t;
-                    location.href = href;
-                }
-                // v1.9.20 首开双加载 → v1.9.21 移入加载层隐藏逻辑（pollFirstFrame
-                // 的 onReady 内决策）：v1.9.20 的独立 interval 与加载层隐藏存在
-                // 竞争（用户可能先看到菜单闪现再重载白屏）；v1.9.21 保证重载
-                // 全程被加载条盖住，用户体验流=加载界面→开始选项→进入游戏→流畅。
-                // 此处仅保留 r2 页面标记（真机截图确认双加载已发生）。
-                if (/[?&]r2=1/.test(location.search)) {
-                    var iv3 = setInterval(function () {
-                        if (!window.wasm_exports) return;
-                        clearInterval(iv3);
-                        try { errlog.textContent += "[诊断] r2 双加载就绪\n"; } catch (e) {}
-                    }, 200);
-                }
-                // v1.9.18 首开卡顿根治 → v1.9.19 滚动采样版：真机实锤"首开被
-                // 容器钳制、重载后缓存热秒开循环存活"。旧版固定窗口（2s 基准
-                // +3s 增量）有盲区——钳制若落在窗口关闭后才发生（本地复现实锤）
-                // 增量混入正常帧而漏检。改为每秒采样帧号、盯最近 2 秒增量
-                // （<25 帧 = <12.5fps，慢设备 20fps 不误触发），持续盯 35 秒
-                // 冷启期，任一 2 秒窗口低帧即热身重载。timer 若也被钳则本
-                // 检测静默（不误重载），兜底交给触摸 burst+评估链。
-                // v1.9.22 游戏内即停：进游戏后（st>0）冷启检测终止——真机实锤
-                // "菜单→游戏内→重载→回菜单"的断流体验来自游戏内预防性重载
-                // （丢当前进度踢回菜单）；游戏内低帧率由触摸 burst 当拍自救，
-                // 预防性重载只允许发生在菜单阶段（无进度可丢）。
-                (function () {
-                    var samples = [];
-                    var iv = setInterval(function () {
-                        if (!window.wasm_exports || !window.__xxAlive) return;
-                        if (xxRlUsed()) { clearInterval(iv); return; }
-                        if ((window.__xxState || 0) > 0) { clearInterval(iv); return; } // 已进游戏：不打扰
-                        samples.push(window.__xxAlive.n);
-                        if (samples.length > 6) samples.shift();
-                        if (samples.length >= 3) {
-                            var inc2 = samples[samples.length - 1] - samples[samples.length - 3];
-                            if (inc2 < 25) {
-                                clearInterval(iv);
-                                try { errlog.textContent += "[诊断] 首开卡顿（2 秒 +" + inc2 + " 帧），热身重载换满帧\n"; } catch (e) {}
-                                xxReload("coldstart");
-                            }
-                        }
-                    }, 1000);
-                    setTimeout(function () { clearInterval(iv); }, 35000);
-                })();
-                // v1.9.17 wedge 低帧率自动重载：MuMu+夸克模拟器实证游戏代码在
-                // 正常浏览器一击即进+满帧零噪音——"很卡"的唯一来源是 X5 容器
-                // 钳死一切定时器（v1.9.16 真机日志实锤：车夫 setInterval(1000)
-                // 也被钳，stale>6000 仍触发），wedge 态唯一可靠事件源=触摸。
-                // 既然用户三次实测"重载后必好"（缓存热秒开+循环存活），就把
-                // 重载从兜底升级为主路径：快速唤醒成功（=wedge 实锤）后，8 秒
-                // 窗口平均帧率 <8fps → 自动重载换满帧。重载预算每会话一次
-                // （xxrl），用完后车夫+触摸同步帧继续保底可玩。
-                window.__xxFpsWin = null;
-                window.__xxWedgeCheck = function () {
-                    // gate 不豁免：chaos 仿真下触摸同步帧让点击被消费、快速唤醒
-                    // 不触发、__xxWedged 不置位，本函数自然静默（标记即开关）
-                    if (!window.__xxWedged) return;
-                    // v1.9.22 游戏内不评估：预防性重载会丢当前进度踢回菜单（真机
-                    // 实锤"菜单→游戏内→重载→回菜单"断流）；游戏内低帧率由触摸
-                    // burst 当拍自救，真死由主看门狗 xxReload("loop") 处理
-                    if ((window.__xxState || 0) > 0) return;
-                    var now = performance.now();
-                    var a = window.__xxAlive;
-                    if (!a) return;
-                    if (!window.__xxFpsWin) { window.__xxFpsWin = { t: now, n: a.n }; return; }
-                    var w = window.__xxFpsWin;
-                    if (now - w.t < 8000) return; // 8 秒评估窗口
-                    var fps = ((a.n - w.n) * 1000) / (now - w.t);
-                    window.__xxFpsWin = { t: now, n: a.n };
-                    try { errlog.textContent += "[诊断] wedge 评估：" + fps.toFixed(1) + "fps\n"; } catch (e0) {}
-                    if (fps >= 15) return; // <15fps 体验即"卡"，重载换满帧
-                    if (xxRlUsed()) return; // 重载预算已用：车夫保底，不再折腾
-                    try { errlog.textContent += "[诊断] wedge 态帧率仅 " + fps.toFixed(1) + "fps，自动重载恢复满帧\n"; } catch (e3) {}
-                    xxReload("wedge-lowfps");
-                };
-                // ① 循环心跳：首见 xx_alive 后武装；>2.5s 停跳即死亡。
-                // 死亡处置三步（复现→定位→治疗，全部在设备现场执行）：
-                //   step1 复活冲击：连调 wasm frame 导出——若 async 主循环
-                //        只是"调度断了"（future 还活着），帧号立即恢复，零感知
-                //        复活（无重载无闪烁）；无效则 future 已 wedged。
-                //   step2 重载自愈：死因快照存 sessionStorage → location.reload()
-                //        （用户实证重载后必好：缓存热、循环存活）。
-                //   step3 大旗兜底：重载预算用尽后仍死 → 弹旗 + 手动重载按钮。
-                // v1.9.14 快速唤醒（xxWakeReplay）：触摸后 400ms 帧号未动即启动
-                // 连续叩击（不等 2.5s 看门狗），唤醒后按 __xxLastTouch 原坐标重放
-                // 完整点击（touch+mouse_down+frame+mouse_up）——真机"首击杀死循环"
-                // 的场景下用户第一击直接生效，无需再点。唤醒期间置 __xxWaking
-                // 防重入；复活成功后 4 秒内大旗静默（v1.9.13 真机误弹实锤修复）。
-                window.__xxRevivedAt = 0;
-                // v1.9.15 帧车夫：wedge 态的持续供血。真机实锤 wedge 后三时钟
-                // 全被容器钳死（tick ~1fps），rAF 底座名存实亡，但 ~1s 级
-                // setInterval 照常跑（主看门狗日志实证）、触摸事件照常派发。
-                // 唤醒成功不再"打一轮就撤"（v1.9.14 实测撤了又死、每次点击
-                // 都要再等 400ms 重唤醒）——车夫以 1s 拍持续补帧：每拍若 tick
-                // 没在出帧（__xxFrameAt >200ms 未刷新）则直调 8 发 frame()，
-                // 维持 ~8fps 底血；tick 恢复时逐拍让路，永不双驱。触摸路径
-                // 的即时性由"触摸同步帧"负责，车夫只保无输入时的画面推进。
-                window.__xxCoach = 0;
-                window.__xxCoachStart = function (why) {
-                    if (window.__xxCoach || !window.wasm_exports) return;
-                    // ?wedge=1 仿真：车夫 interval 模拟"同被容器钳死"——标志置位
-                    // （对齐真机"接管日志打了、interval 死了"的状态）但循环不跑
-                    if (window.__xxSimWedge) {
-                        window.__xxCoach = 1;
-                        try { errlog.textContent += "[SIM] 车夫启动被仿真拒绝（interval 被钳）\n"; } catch (e) {}
-                        return;
-                    }
-                    window.__xxCoach = 1;
-                    try { errlog.textContent += "[诊断] 帧车夫接管（" + why + "）：1s 补帧维持\n"; } catch (e) {}
-                    setInterval(function () {
-                        // v1.9.16 三处加固（v1.9.15 真机"一卡一卡"+大旗误弹的教训）：
-                        // ①让路判据改用 __xxTickAt——只有 tick 真出帧才让路，触摸
-                        //   同步帧不再屏蔽车夫（旧判据 __xxFrameAt 被触摸反复刷新，
-                        //   频繁点击时车夫永远在让路，帧率只剩触摸驱动 ~2fps）；
-                        // ②每拍 8→24 发：wedge 态维持 ~24fps 底血（文字游戏流畅线）；
-                        // ③gate 豁免删除：车夫是供血机制不是仿真对象，冻结仿真下
-                        //   也应补帧（chaos 回归断言的是点击被消费与解冻恢复，兼容）。
-                        if (performance.now() - (window.__xxTickAt || 0) < 300) return; // tick 活着，让路
-                        for (var i = 0; i < 24; i++) {
-                            try { window.wasm_exports.frame(); } catch (e) { break; }
-                        }
-                        try { window.__xxFrameAt = performance.now(); } catch (e) {}
-                    }, 1000);
-                };
-                window.__xxWakeReplay = function (lt) {
-                    if (window.__xxWaking || !window.wasm_exports) return;
-                    window.__xxWaking = true;
-                    var E = window.wasm_exports;
-                    var n0 = window.__xxAlive ? window.__xxAlive.n : -1;
-                    var bursts = 0;
-                    var log1 = false;
-                    (function burst() {
-                        for (var i = 0; i < 12; i++) {
-                            try { E.frame(); } catch (e) { break; }
-                        }
-                        bursts += 1;
-                        var a = window.__xxAlive;
-                        if (a && a.n > n0) {
-                            // 唤醒成功：重放用户这一击（touch + 鼠标按下 → 出帧消费 → 抬起）
-                            window.__xxRevivedAt = performance.now();
-                            try { errlog.textContent += "[诊断] 快速唤醒成功（第" + bursts + "轮，+" + (a.n - n0) + " 帧），重放点击\n"; } catch (e) {}
-                            try {
-                                if (lt) {
-                                    E.touch(10, 999001, lt[2], lt[3]);
-                                    E.mouse_move(lt[2] | 0, lt[3] | 0);
-                                    E.mouse_down(lt[2] | 0, lt[3] | 0, 0);
-                                    E.frame(); // 消费按下
-                                    E.touch(12, 999001, lt[2], lt[3]);
-                                    E.mouse_up(lt[2] | 0, lt[3] | 0, 0);
-                                }
-                            } catch (e2) {}
-                            window.__xxWaking = false;
-                            window.__xxWedged = 1; // v1.9.17：唤醒成功=wedge 实锤，开启低帧率重载评估
-                            window.__xxCoachStart("快速唤醒后"); // 不再"唤醒即撤"，持续供血
-                            return;
-                        }
-                        if (bursts < 12) {
-                            setTimeout(burst, 220); // 连续叩击，每轮 12 发
-                        } else {
-                            // 12 轮（约 2.6s）未醒——交回看门狗（重载兜底）
-                            try { errlog.textContent += "[诊断] 快速唤醒失败（12 轮），交由看门狗\n"; } catch (e) {}
-                            window.__xxWaking = false;
-                        }
-                    })();
-                };
-                var reviveTries = 0;
-                setInterval(function () {
-                    if (window.__xxWaking) return; // 快速唤醒进行中，让路
-                    if (window.__xxWedgeCheck) window.__xxWedgeCheck(); // v1.9.17 interval 活着时也评估
-                    if (!window.wasm_exports || !window.__xxAlive) return;
-                    // 车夫模式下上报间隔最坏 ~4s（1s 拍被钳 + 15 帧粒度），放宽死线防误杀
-                    var staleLimit = window.__xxCoach ? 6000 : 2500;
-                    var stale = performance.now() - window.__xxAlive.at;
-                    if (stale > staleLimit) {
-                        // step1：复活冲击（直接驱动 frame 导出 5 次）
-                        var before = window.__xxAlive.n;
-                        for (var i = 0; i < 5; i++) {
-                            try { window.wasm_exports.frame(); } catch (e) { break; }
-                        }
-                        if (window.__xxAlive.at > performance.now() - 1200 && window.__xxAlive.n > before) {
-                            window.__xxRevivedAt = performance.now();
-                            try { errlog.textContent += "[诊断] 循环复活成功（冲击 +" + (window.__xxAlive.n - before) + " 帧）\n"; } catch (e) {}
-                            reviveTries = 0; // 复活成功重置计数，允许下次再救
-                            window.__xxCoachStart("看门狗复活后"); // 冲击有效即接管，持续供血
-                            return;
-                        }
-                        reviveTries += 1;
-                        if (reviveTries <= 3) {
-                            try { errlog.textContent += "[诊断] 复活冲击无效（第" + reviveTries + "次）\n"; } catch (e) {}
-                            return; // 等下一轮再试（共 3 轮）
-                        }
-                        try { errlog.textContent += "[诊断] 循环心跳停止于第 " + window.__xxAlive.n + " 帧（future wedged），自动重载\n"; } catch (e) {}
-                        try {
-                            if (!xxRlUsed()) { xxReload("loop"); return; }
-                        } catch (e2) {}
-                        // 自动重载预算已用：仍无心跳 → 弹大旗（按钮走 ② 的样式）
-                        if (!banner) xxShowBanner();
-                    }
-                }, 1000);
-                // ② 触摸桥：点了但引擎零消费（心跳看门狗通常先一步处理）
-                function xxShowBanner() {
-                    if (banner) return;
-                    // v1.9.14 复活静默期：唤醒/复活成功后 4 秒内不弹旗（v1.9.13
-                    // 真机实锤：复活成功后触摸桥 starved 判定仍弹旗造成误报）
-                    if (window.__xxRevivedAt && performance.now() - window.__xxRevivedAt < 4000) return;
-                    // v1.9.16 车夫供血中不弹旗：车夫模式下帧号在推进（心跳上报
-                    // 只是 8 帧粒度、上报间隔可能拖长），画面活着，弹"引擎无响应"
-                    // 纯属误导（v1.9.15 真机又弹了一次，用户被误导点重载）
-                    if (window.__xxCoach) return;
-                    // v1.9.22 删除"wedge 弹旗前直接重载"分支：游戏内预防性重载
-                    // 会丢当前进度踢回菜单（真机实锤断流体验）；走到这里的都是
-                    // 真死态，由主看门狗 xxReload("loop") 预算内自动处理，大旗
-                    // 仅作视觉提示兜底。
-                    banner = document.createElement("div");
-                    banner.style.cssText =
-                        "position:fixed;left:8%;right:8%;top:36%;z-index:200;" +
-                        "background:rgba(120,10,10,.94);color:#fff;border:2px solid #f66;" +
-                        "border-radius:10px;padding:14px 18px;font:15px/1.5 sans-serif;" +
-                        "text-align:center;pointer-events:auto;";
-                    banner.innerHTML =
-                        "⚠ 游戏引擎已无响应（循环停于第 " + (window.__xxAlive ? window.__xxAlive.n : "?") +
-                        " 帧，已点 " + (window.__xxTouches || 0) + " 次）<br>" +
-                        "点下方按钮重载即可进入（已验证有效）。";
-                    var btn = document.createElement("button");
-                    btn.textContent = "立即重载游戏";
-                    btn.style.cssText =
-                        "margin-top:8px;padding:8px 22px;font:16px sans-serif;" +
-                        "background:#f66;color:#fff;border:0;border-radius:6px;";
-                    btn.onclick = function () { xxReload("manual"); };
-                    banner.appendChild(btn);
-                    document.body.appendChild(banner);
-                    try { errlog.textContent += "[诊断] 引擎无响应，已弹重载大旗\n"; } catch (e) {}
-                }
-                setInterval(function () {
-                    if (banner) return; // 大旗只由故障弹，不重复
-                    if (!window.wasm_exports) return;
-                    var seen = window.__xxClicksSeen || 0;
-                    var tch = window.__xxTouches || 0;
-                    if (seen !== lastSeen) { lastSeen = seen; starved = 0; return; }
-                    if (tch < 2) return;
-                    // v1.9.15 修误弹：心跳还在（Rust 循环活着、帧号在涨）就绝不
-                    // 弹旗——旧条件在"点过一次后挂机 4s"的健康页面也会弹（一次
-                    // tap = start+end 计 2 次触摸，之后无新点击即 starved≥2）。
-                    // 真机 v1.9.13/14 的"引擎无响应"大旗有一部分就是它误报的。
-                    // v1.9.16 死线 2.5s→5s：心跳 8 帧粒度在低帧率下上报间隔
-                    // 可达 3-4s，5s 死线只拦真正的心跳停滞。
-                    if (window.__xxAlive && performance.now() - window.__xxAlive.at < 5000) { starved = 0; return; }
-                    starved += 1;
-                    if (starved < 2) return; // 连续 2 轮（≥4s）零消费才弹旗
-                    xxShowBanner();
-                }, 2000);
-                // 消费恢复即撤旗（瞬时抖动自愈）
-                setInterval(function () {
-                    if (banner && (window.__xxClicksSeen || 0) > 0 &&
-                        window.__xxAlive && performance.now() - window.__xxAlive.at < 2500) {
-                        banner.remove && banner.remove();
-                        banner = null; starved = 0;
-                    }
-                }, 1000);
-            })();
-            // v1.9.7 差异检测：backing ≠ CSS×dpr（容器缩放/dpr 漂移）时直接把
-            // backing 写正并直通同步 wasm——不清零画布（X5 上清零会杀死帧回调，
-            // v1.9.6 真机冻帧实锤）、不派发 resize 事件。
-            var heals = 0;
-            setInterval(function () {
-                if (!window.wasm_exports) return;
-                var dpr = window.high_dpi ? window.devicePixelRatio || 1 : 1;
-                var w = Math.floor(canvas.clientWidth * dpr);
-                var h = Math.floor(canvas.clientHeight * dpr);
-                if ((canvas.width !== w || canvas.height !== h) && heals < 30) {
-                    heals += 1;
-                    canvas.width = w;
-                    canvas.height = h;
-                    window.xxSyncScreen();
-                }
-            }, 1500);
-            // 竖持提示：横版游戏竖持时世界两侧出屏、按钮不可见——给出引导而不是
-            // 让玩家以为"点了没反应"
-            var rot = document.createElement("div");
-            rot.id = "rot_hint";
-            rot.textContent = "请横持设备游玩";
-            rot.style.cssText =
-                "position:fixed;left:0;top:0;width:100%;height:100%;display:none;" +
-                "align-items:center;justify-content:center;background:#141024;color:#d8c48a;" +
-                "font:24px sans-serif;z-index:50;pointer-events:none;";
-            document.body.appendChild(rot);
-            function rotHint() {
-                // ?landscape=1：模拟器验证用——竖窗里靠 orientFix 旋转视野游玩，
-                // 不弹横持引导（真机 TapTap 物理横屏不受影响）
-                var skip = false;
-                try { skip = /[?&]landscape=1/.test(location.search); } catch (e) {}
-                rot.style.display =
-                    window.innerHeight > window.innerWidth && window.wasm_exports && !skip ? "flex" : "none";
-            }
-            window.addEventListener("resize", rotHint, true);
-            setInterval(rotHint, 800);
-        })();
-        // 手机竖持时强制横屏视野：整页旋转 90°（TapTap/X5 内核横屏不旋转页面的标准解法）。
-        // 缩放交由 Rust 侧信箱相机（src/cam.rs）等比适配，此处原样 JS 零缩放。
-        function orientFix() {
-            var b = document.body;
-            if (window.innerHeight > window.innerWidth) {
-                b.style.transformOrigin = "left top";
-                b.style.transform = "rotate(90deg) translate(0px, -100%)";
-                b.style.width = window.innerHeight + "px";
-                b.style.height = window.innerWidth + "px";
-            } else {
-                b.style.transform = "";
-                b.style.width = "100%";
-                b.style.height = "100%";
-            }
-            var c = document.getElementById("glcanvas");
-            if (c) {
-                c.style.width = "100%";
-                c.style.height = "100%";
-            }
-        }
-        window.addEventListener("resize", orientFix);
-        window.addEventListener("orientationchange", function () { setTimeout(orientFix, 120); });
-        window.addEventListener("load", orientFix);
-
-        // ------------------------------------------------------------------
-        // v1.9.10 TapTap 容器仿真回归（?chaos=1 / ?tap=1 才激活，生产零影响）。
-        // 背景：本地 dpr=1 的 Chromium 与 X5 真机的差异已两次躲过全部本地测试
-        // （v1.9.5 时钟冻结、v1.9.8 dpr 乘 3.25）。此工具把两类真机毒环境在本地
-        // 复现成可回归的确定性场景：
-        //   chaos：每 6s 把三种帧时钟全部冻结 2.5s（等价 X5 可见性钳制/时钟停摆），
-        //          验证触摸帧泵 + tick 直调兜底能让游戏在冻结结束后照常进。
-        //   tap：每 3.5s 在「开始新的人生」按钮中心派发真实 TouchEvent（Touch
-        //        构造器 + 冒泡，与真机同路径），并断言 __xxState 离开 0（进游戏）。
-        // 世界→CSS 换算与 cam.rs view_cam 互逆（v1.9.9 本地注入 315→(469,547)
-        // 实测校准过）。
-        // ------------------------------------------------------------------
-            (function xxSim() {
-            var q;
-            try { q = new URLSearchParams(location.search); } catch (e) { return; }
-            if (!q.get("chaos") && !q.get("tap") && !q.get("flow") && !q.get("wedge")) return;
-            var el = document.getElementById("errlog");
-            var log = function (s) { if (el) el.textContent += s + "\n"; };
-            // 世界坐标 -> 页面 CSS 坐标（与 cam.rs view_cam 互逆；v1.9.9 本地注入
-            // 315→(469,547) 实测校准）。canvas 满窗时 rect.left/top≈0。
-            var w2c = function (wx, wy) {
-                var c = document.getElementById("glcanvas");
-                var r = c.getBoundingClientRect();
-                var fit = Math.min(r.width / 1280, r.height / 720);
-                var dw = r.width / fit, dh = r.height / fit;
-                return [r.left + (wx - (640 - dw / 2)) * fit, r.top + (wy - (360 - dh / 2)) * fit];
-            };
-            // 真机同路径派发触摸；compat=true 时再补 X5 兼容鼠标事件
-            // （mousedown→mouseup→click，v1.9.10 真机 [诊断](mouse) 标记证实 X5 会发）
-            var fireTap = function (wx, wy, compat, cb) {
-                var c = document.getElementById("glcanvas");
-                var xy = w2c(wx, wy);
-                var id = Date.now() % 1000000;
-                try {
-                    var t = new Touch({ identifier: id, target: c, clientX: xy[0], clientY: xy[1] });
-                    c.dispatchEvent(new TouchEvent("touchstart", { cancelable: true, bubbles: true, changedTouches: [t], touches: [t] }));
-                    setTimeout(function () {
-                        c.dispatchEvent(new TouchEvent("touchend", { cancelable: true, bubbles: true, changedTouches: [t], touches: [] }));
-                        if (compat) {
-                            setTimeout(function () {
-                                var ev = { clientX: xy[0], clientY: xy[1], button: 0, bubbles: true, cancelable: true };
-                                try {
-                                    c.dispatchEvent(new MouseEvent("mousedown", ev));
-                                    c.dispatchEvent(new MouseEvent("mouseup", ev));
-                                    c.dispatchEvent(new MouseEvent("click", ev));
-                                } catch (e3) {}
-                            }, 120);
-                        }
-                        if (cb) cb(xy);
-                    }, 90);
-                } catch (e2) {
-                    log("[SIM] 事件派发失败: " + e2.message);
-                }
-            };
-            if (q.get("chaos")) {
-                window.__xxClockGate = false;
-                setInterval(function () {
-                    if (!window.wasm_exports) return;
-                    window.__xxClockGate = true;
-                    log("[SIM] 冻结全部帧时钟 2.5s（模拟 X5 钳制）…");
-                    setTimeout(function () {
-                        window.__xxClockGate = false;
-                        log("[SIM] 解冻。fr=" + Math.round(performance.now() - (window.__xxFrameAt || 0)) + "ms");
-                    }, 2500);
-                }, 6000);
-            }
-            // v1.9.17 wedge 仿真 → v1.9.19 周期性钳制：真机视频定案容器会反复
-            // 钳制（首开+游戏中期 idle 后），仿真在 60 秒重载预算解锁后再次
-            // 冻结——完整模拟"冻结→触摸 burst 当拍自救→评估重载→60 秒新鲜
-            // 期→再冻结"周期（每 5 秒轮询预算状态）。
-            if (q.get("wedge")) {
-                setInterval(function () {
-                    if (!window.wasm_exports || window.__xxSimWedge) return;
-                    if (window.xxRlUsed && window.xxRlUsed()) return; // 预算内=重载后新鲜期
-                    window.__xxClockGate = true; // 三时钟死
-                    window.__xxSimWedge = 1; // 车夫禁启
-                    log("[SIM] wedge：冻结三时钟+车夫禁启（模拟 X5 钳制）");
-                }, 5000);
-            }
-            if (q.get("tap")) {
-                setInterval(function () {
-                    if (!window.wasm_exports || window.__xxClockGate) return;
-                    if (window.__xxState !== 0 && window.__xxState !== -1) return; // 已进游戏，停止
-                    var s0 = window.__xxState;
-                    fireTap(470, 549, false, function (xy) {
-                        setTimeout(function () {
-                            log("[SIM] tap @css(" + Math.round(xy[0]) + "," + Math.round(xy[1]) + ") st " +
-                                s0 + "→" + window.__xxState +
-                                (window.__xxState > 0 ? " ✓进游戏" : " ✗未进"));
-                        }, 800);
-                    });
-                }, 3500);
-            }
-            // v1.9.10 真机"进去过一次、重进页面后点开始无效"——入口自动回归：
-            // 菜单点「开始新的人生」→ Scene::Reality（begin_mortal 直达现实场景，
-            // Draft 是轮回镜选天赋屏、不在首命入口链上）。每步带 X5 兼容鼠标事件，
-            // early=1 模拟真机"一就绪就点"（用户实测在 F≈100 即点）。
-            if (q.get("flow")) {
-                var early = q.get("flow") === "early";
-                var fired = false, tries = 0;
-                var compat = q.get("compat") !== "0"; // 默认带兼容鼠标事件
-                var iv = setInterval(function () {
-                    if (!window.wasm_exports) return;
-                    tries++;
-                    var st = window.__xxState;
-                    if (st === 1) {
-                        clearInterval(iv);
-                        log("[FLOW] ✓✓ 进入 Reality（进游戏成功）compat=" + compat +
-                            (early ? " 早期时序" : "") + " 第" + tries + "次轮询确认");
-                    } else if (st > 1) {
-                        clearInterval(iv);
-                        log("[FLOW] ？意外场景 st" + st);
-                    } else if (tries === 3 && !fired) {
-                        fired = true;
-                        log("[FLOW] ①点「开始新的人生」(compat=" + compat + (early ? " 早期时序" : "") + ")");
-                        fireTap(470, 549, compat);
-                    } else if (tries > 200) {
-                        clearInterval(iv);
-                        log("[FLOW] ✗ 超时：点击后未进游戏，末态 st" + st);
-                    }
-                }, 300);
-            }
-        })();
-
-        // v1.9.1 关键修复：删除 macroquad 模板遗留的"load 事件隐藏加载层"。
-        // window.load 只等文档资源就绪，不等 wasm（fetch 不阻塞 load）——加载层
-        // 在页面打开约 1 秒内就被 display:none 撤掉，之后手机上 wasm 下载+编译的
-        // 10~40 秒里玩家面对纯黑画布：分阶段提示与 45s 重试看门狗全部被废，
-        // 点哪都没反应（TapTap 真机"无法进入游戏、点击没反应"的最终根因）。
-        // 加载层的隐藏只由 pollFirstFrame 负责：window.wasm_exports 就绪才撤。
-
-    </script>
+<div id="loading">
+<div id="ld_msg">凡人模拟 · 加载中…</div>
+<div class="bar"><i></i></div>
+<div style="font-size:12px;color:#b8a8e0;">首次加载约需 10~40 秒，二次进入将快很多</div>
+</div>
+<div id="errlog"></div>
+<canvas id="glcanvas" tabindex='1'></canvas>
+<script>var GAME_VER = "1.16.8";</script>
+<script>
+(function () {
+try {
+var _AC = window.AudioContext || window.webkitAudioContext;
+if (!_AC) return;
+function WrappedAC() {
+var ctx = new (Function.prototype.bind.apply(_AC, [null].concat(Array.prototype.slice.call(arguments))))();
+(window.__xxACs = window.__xxACs || []).push(ctx);
+return ctx;
+}
+WrappedAC.prototype = _AC.prototype;
+window.AudioContext = WrappedAC;
+window.webkitAudioContext = WrappedAC;
+} catch (e) { /* 捕获失败不影响音频功能本身 */ }
+})();
+window.xxStartKeepAlive = function () {
+var kaLog = function (s) {
+try {
+var now = performance.now();
+if (window.__xxKaLogAt && now - window.__xxKaLogAt < 10000) return;
+window.__xxKaLogAt = now;
+var el = document.getElementById("errlog");
+if (el) el.textContent += "[保活] " + s + "\n";
+} catch (e0) {}
+};
+try {
+if (window.__xxKeepAlive) return;
+var acs = window.__xxACs || [];
+var ctx = null;
+for (var i = 0; i < acs.length; i++) {
+var c0 = acs[i];
+if (c0 && c0.state === "running") { ctx = c0; break; }
+if (c0 && c0.state === "suspended" && c0.resume) {
+try {
+var r = c0.resume();
+if (r && r["catch"]) r["catch"](function () {});
+} catch (eR) { kaLog("resume 异常: " + eR); }
+}
+}
+if (!ctx) {
+var AC = window.AudioContext || window.webkitAudioContext;
+if (!AC) { kaLog("无 AudioContext 构造器"); return; }
+ctx = new AC();
+if (ctx.state !== "running" && ctx.resume) {
+try {
+var r2 = ctx.resume();
+if (r2 && r2["catch"]) r2["catch"](function () {});
+} catch (eR2) { kaLog("自建 ctx resume 异常: " + eR2); }
+}
+if (ctx.state !== "running") {
+kaLog("等待 ctx running（state=" + ctx.state + "）");
+return;
+}
+}
+var sr = ctx.sampleRate || 44100;
+var buf = ctx.createBuffer(1, sr, sr); // 1s 循环
+var d = buf.getChannelData(0);
+d[0] = 0.03;
+d[1] = -0.03; // 仅头两样本有幅值：周期性近无声咔哒
+var src = ctx.createBufferSource();
+src.buffer = buf;
+src.loop = true;
+var gn = ctx.createGain();
+gn.gain.value = 0.004;
+src.connect(gn);
+gn.connect(ctx.destination);
+src.start();
+window.__xxKeepAlive = 1;
+try {
+var el3 = document.getElementById("errlog");
+if (el3) el3.textContent += "[保活] 音频保活已启动（ctx running，near-silent loop）\n";
+} catch (e5) {}
+} catch (e) {
+kaLog("启动异常: " + (e && e.message ? e.message : e));
+}
+};
+setInterval(function () { if (window.xxStartKeepAlive) window.xxStartKeepAlive(); }, 1000);
+window.xxWakeLock = function () {
+try {
+if (window.__xxWakeLockOn || !navigator.wakeLock || !navigator.wakeLock.request) return;
+navigator.wakeLock.request("screen").then(function (l) {
+window.__xxWakeLockOn = 1;
+l.addEventListener("release", function () { window.__xxWakeLockOn = 0; });
+try {
+var el = document.getElementById("errlog");
+if (el) el.textContent += "[保活] 屏幕 Wake Lock 已持有\n";
+} catch (e2) {}
+})["catch"](function () {});
+} catch (e) {}
+};
+document.addEventListener("touchstart", function () { window.xxWakeLock(); }, { passive: true, once: true });
+var XX_SS = (window.devicePixelRatio || 1) > 2 ? 3 : 2;
+try {
+var __ssq = new URLSearchParams(location.search).get("ss");
+if (__ssq) XX_SS = Math.max(1, Math.min(4, parseInt(__ssq, 10) || 1));
+} catch (e) {}
+(function () {
+try {
+var c = document.getElementById("glcanvas");
+var cap = function (v) { return Math.min(4096, Math.max(1, Math.round(v))); };
+var findGetter = function (name) {
+var p = c;
+while (p) {
+var d = Object.getOwnPropertyDescriptor(p, name);
+if (d && d.get) return d.get;
+p = Object.getPrototypeOf(p);
+}
+return null;
+};
+var gw = findGetter("clientWidth");
+var gh = findGetter("clientHeight");
+if (!gw || !gh) return;
+Object.defineProperty(c, "clientWidth", {
+get: function () { return cap(gw.call(c) * XX_SS); },
+configurable: true
+});
+Object.defineProperty(c, "clientHeight", {
+get: function () { return cap(gh.call(c) * XX_SS); },
+configurable: true
+});
+} catch (e) { /* 覆盖失败则维持 v1.9.9 尺寸，功能不受影响 */ }
+})();
+</script>
+<script>
+(function () {
+try {
+if (!window.WebAssembly ||
+typeof WebAssembly.compileStreaming !== "function") return;
+var _cs = WebAssembly.compileStreaming;
+WebAssembly.compileStreaming = function (src) {
+var retry = function (err) {
+try {
+return Promise.resolve(src).then(function (res) {
+var url = (res && res.url) || "";
+if (!url) throw err;
+return fetch(url).then(function (r2) {
+return r2.arrayBuffer();
+}).then(function (buf) {
+return WebAssembly.compile(buf);
+});
+});
+} catch (e2) {
+return Promise.reject(err);
+}
+};
+try {
+return _cs.apply(this, arguments)["catch"](retry);
+} catch (e) {
+return retry(e);
+}
+};
+} catch (e) { /* 包装失败维持原状：流式可用则用，不可用走旧分支 */ }
+})();
+</script>
+<script src="mq_js_bundle.js?v=1.16.8"></script>
+<script>
+window.miniquad_add_plugin({
+name: "xx_storage",
+version: 1,
+register_plugin: function (importObject) {
+var XX_KEY = "xiuxian_save";
+importObject.env.xx_save_len = function () {
+try {
+var v = localStorage.getItem(XX_KEY);
+return v == null ? -1 : new TextEncoder().encode(v).length;
+} catch (e) { return -1; }
+};
+importObject.env.xx_save_read = function (ptr, len) {
+try {
+var v = localStorage.getItem(XX_KEY) || "";
+var bytes = new TextEncoder().encode(v);
+var arr = new Uint8Array(wasm_memory.buffer, ptr, len);
+arr.set(bytes.subarray(0, len));
+} catch (e) { console.error("xx_save_read:", e); }
+};
+importObject.env.xx_save_write = function (ptr, len) {
+try {
+var bytes = new Uint8Array(wasm_memory.buffer, ptr, len);
+localStorage.setItem(XX_KEY, new TextDecoder("utf-8").decode(bytes));
+} catch (e) { console.error("xx_save_write:", e); }
+};
+},
+on_init: function () {}
+});
+var XX_GPU_OK = !!(window.WebGLRenderingContext || window.WebGL2RenderingContext);
+var XX_MAX_TEX = 0; // 0 = 未探测
+function xx_probe_max_tex() {
+if (XX_MAX_TEX) return XX_MAX_TEX;
+try {
+var c = document.getElementById("glcanvas");
+var gl = c.getContext("webgl2") || c.getContext("webgl") ||
+c.getContext("experimental-webgl");
+if (gl) {
+var v = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+if (typeof v === "number" && v > 0) XX_MAX_TEX = v;
+}
+} catch (e) { /* 探测失败走默认，图集侧另有 512 下限兜底 */ }
+if (!XX_MAX_TEX) XX_MAX_TEX = 8192;
+return XX_MAX_TEX;
+}
+window.miniquad_add_plugin({
+name: "xx_gpu",
+version: 1,
+register_plugin: function (importObject) {
+importObject.env.gf_max_texture_size = function () { return xx_probe_max_tex() | 0; };
+},
+on_init: function () {}
+});
+window.__xxState = -1;
+window.miniquad_add_plugin({
+name: "xx_dbg",
+version: 1,
+register_plugin: function (importObject) {
+importObject.env.xx_panic = function (ptr, len) {
+try {
+var mem =
+window.wasm_memory && window.wasm_memory.buffer
+? window.wasm_memory.buffer
+: window.wasm_exports && window.wasm_exports.memory
+? window.wasm_exports.memory.buffer
+: null;
+if (mem) {
+var msg = new TextDecoder("utf-8", { fatal: false }).decode(
+new Uint8Array(mem, ptr, Math.min(len | 0, 512)),
+);
+var el = document.getElementById("errlog");
+if (el) el.textContent += "[PANIC] " + msg + "\n";
+if (window.__xxFirstPanic == null) {
+window.__xxFirstPanic = msg;
+try {
+var pd0 = document.getElementById("xx_panic_stack");
+if (pd0) pd0.textContent = "[首PANIC] " + msg + "\n" + pd0.textContent;
+} catch (e5) {}
+}
+try {
+var pn = performance.now();
+window.__xxPanicStamps = (window.__xxPanicStamps || []).filter(
+function (t) {
+return pn - t < 3000;
+},
+);
+window.__xxPanicStamps.push(pn);
+if (window.__xxPanicStamps.length >= 3) {
+var pm = location.search.match(/[?&]prl=(\d+)/);
+var prl = pm ? parseInt(pm[1], 10) : 0;
+if (prl < 2) {
+var ph = location.href.replace(/[?&]prl=\d+/, "");
+ph += (ph.indexOf("?") >= 0 ? "&" : "?") + "prl=" + (prl + 1);
+try {
+if (el)
+el.textContent +=
+"[PANIC-风暴] 3s内" + window.__xxPanicStamps.length + "次 panic，断路重载（第 " + (prl + 1) + "/2 次）\n";
+} catch (e6) {}
+location.replace(ph);
+}
+}
+} catch (e7) {}
+if (!window.__xxPanicStacked) {
+window.__xxPanicStacked = 1;
+try {
+var st = String(new Error().stack || "").slice(0, 1200);
+if (el) el.textContent += "[PANIC@JS] " + st + "\n";
+var pd = document.getElementById("xx_panic_stack");
+if (!pd) {
+pd = document.createElement("div");
+pd.id = "xx_panic_stack";
+pd.style.cssText =
+"position:fixed;left:0;top:0;right:0;z-index:200;" +
+"background:rgba(60,0,0,.92);color:#ffd9d9;" +
+"font:9px/1.3 Consolas,monospace;white-space:pre-wrap;" +
+"word-break:break-all;padding:4px;max-height:45%;" +
+"overflow:hidden;pointer-events:none;";
+document.body.appendChild(pd);
+}
+pd.textContent = "[PANIC@JS]\n" + st;
+} catch (e3) {}
+}
+try { document.title = "PANIC " + msg.slice(0, 60); } catch (e2) {}
+}
+} catch (e) {}
+};
+importObject.env.xx_state = function (code) {
+window.__xxState = code | 0;
+try {
+if (code === 90) xx_stage("读取存档，构建世界…");
+else if (code === 92) xx_stage("准备就绪…");
+else if (code === 93) xx_stage("进入游戏…");
+} catch (eS) {}
+};
+importObject.env.xx_click = function (n) {
+window.__xxClicksSeen = n | 0;
+if (window.__xxTapAt != null) {
+var dt = performance.now() - window.__xxTapAt;
+window.__xxTapLat = dt | 0;
+if (dt > (window.__xxTapLatMax || 0)) window.__xxTapLatMax = dt | 0;
+window.__xxTapAt = null;
+}
+};
+importObject.env.xx_js_fr = function () {
+return Math.min(999999, Math.round(performance.now() - (window.__xxFrameAt || 0)));
+};
+importObject.env.xx_js_touches = function () {
+return window.__xxTouches || 0;
+};
+importObject.env.xx_alive = function (n) {
+window.__xxAlive = { n: n | 0, at: performance.now() };
+};
+},
+on_init: function () {}
+});
+function xxFlushPendingSave() {
+try {
+var e = window.wasm_exports;
+if (!e || !e.xx_save_pending_len || !e.xx_save_pending_ptr) return;
+var len = e.xx_save_pending_len() | 0;
+if (len <= 0) return;
+var ptr = e.xx_save_pending_ptr();
+if (!ptr) return;
+var bytes = new Uint8Array(e.memory.buffer, ptr, len);
+localStorage.setItem("xiuxian_save", new TextDecoder("utf-8").decode(bytes));
+} catch (err) { /* 兜底失败不阻断卸载 */ }
+}
+window.addEventListener("pagehide", xxFlushPendingSave);
+document.addEventListener("visibilitychange", function () {
+if (document.visibilityState === "hidden") xxFlushPendingSave();
+});
+function xxWrapImports(imp) {
+try {
+if (!imp || typeof imp !== "object" || imp.__xxWrapped) return;
+Object.keys(imp).forEach(function (ns) {
+var o = imp[ns];
+if (!o || typeof o !== "object") return;
+Object.keys(o).forEach(function (k) {
+var f = o[k];
+if (typeof f !== "function" || f.__xxSafe) return;
+var g = function () {
+try {
+return f.apply(null, arguments);
+} catch (e) {
+try {
+var el = document.getElementById("errlog");
+if (el)
+el.textContent +=
+"[ENV@" + ns + "." + k + "] " + (e && e.message ? e.message : e) + "\n";
+if (!window.__xxEnvThrew) {
+window.__xxEnvThrew = ns + "." + k;
+try { document.title = "ENV-THROW " + ns + "." + k; } catch (e3) {}
+}
+} catch (e2) {}
+return 0;
+}
+};
+g.__xxSafe = 1;
+o[k] = g;
+});
+});
+imp.__xxWrapped = 1;
+} catch (e) {}
+}
+(function () {
+var _inst = WebAssembly.instantiate;
+WebAssembly.instantiate = function () {
+try {
+for (var wi = 0; wi < arguments.length; wi++) xxWrapImports(arguments[wi]);
+} catch (we) {}
+try { if (typeof xx_stage === "function") xx_stage("编译中…"); } catch (e) {}
+return _inst.apply(this, arguments).then(function (res) {
+var ex = res && (res.instance ? res.instance.exports : res.exports);
+if (ex) {
+window.wasm_exports = ex;
+try { if (typeof xx_stage === "function") xx_stage("初始化字体与场景…"); } catch (e) {}
+}
+return res;
+});
+};
+var _instS = WebAssembly.instantiateStreaming;
+if (_instS) {
+WebAssembly.instantiateStreaming = function () {
+try {
+for (var si = 0; si < arguments.length; si++) xxWrapImports(arguments[si]);
+} catch (se) {}
+return _instS.apply(this, arguments);
+};
+}
+})();
+function xx_gpu_report() {
+var el = document.getElementById("errlog");
+var msgs = "";
+if (!XX_GPU_OK) {
+msgs += "诊断：此设备的 WebView 未开启 WebGL 硬件加速，游戏画面无法创建。\n" +
+"请到系统/浏览器设置开启「硬件加速」后重试。\n";
+}
+if (!window.WebAssembly) {
+msgs += "诊断：此设备的 WebView 过旧、不支持 WebAssembly，无法运行游戏。\n" +
+"请升级系统 WebView 或更换设备。\n";
+}
+if (msgs) {
+el.textContent += msgs;
+var m = document.getElementById("ld_msg");
+if (m) m.textContent = "设备不支持，无法运行（详见页面诊断信息）";
+}
+}
+xx_gpu_report();
+</script>
+<script>
+var errlog = document.getElementById("errlog");
+var xxLoading = document.getElementById("loading");
+var xxMsg = document.getElementById("ld_msg");
+var XX_R2 = /[?&]r2=1/.test(location.search);
+var xxStageMsg = XX_R2 ? "缓存热身中，马上就好…" : "加载中…";
+var xxLoadStart = performance.now();
+function xx_paint_stage() {
+if (xxMsg && xxLoading && !xxLoading.classList.contains("hidden")) {
+var s = Math.round((performance.now() - xxLoadStart) / 1000);
+xxMsg.textContent =
+"凡人模拟 v" + GAME_VER + " · " + xxStageMsg + "（已等待 " + s + " 秒）";
+}
+window.__xxLdBeat = performance.now();
+}
+function xx_stage(msg) {
+xxStageMsg = msg;
+xx_paint_stage();
+}
+setInterval(xx_paint_stage, 1000);
+errlog.textContent = "v" + GAME_VER + (errlog.textContent ? "\n" + errlog.textContent : "");
+var XX_DBG = /[?&]dbg=1/.test(location.search);
+if (XX_DBG) errlog.classList.add("xx-on");
+(function () {
+var el = errlog;
+var armed = false;
+setInterval(function () {
+if (armed) return;
+if (performance.now() > 30000 && window.wasm_exports) {
+armed = true;
+el.classList.add("xx-dim");
+}
+}, 2000);
+var orig = el.textContent;
+setInterval(function () {
+if (el.textContent !== orig) {
+orig = el.textContent;
+if (/\[ERR\]|\[PANIC\]|重载|WARN/.test(el.textContent.slice(-200))) {
+el.classList.remove("xx-dim");
+el.classList.add("xx-alert");
+el.classList.add("xx-on");
+}
+}
+}, 500);
+})();
+setInterval(function () {
+var s = errlog.textContent;
+if (s.length > 8000) {
+var cut = s.indexOf("\n", s.length - 6000);
+errlog.textContent = cut > 0 ? s.slice(cut + 1) : s.slice(-6000);
+}
+}, 5000);
+try {
+var __post = sessionStorage.getItem("xxpost");
+if (__post) {
+sessionStorage.removeItem("xxpost");
+var __pj = JSON.parse(__post);
+errlog.textContent += "[上次] " + (__pj.reason === "manual" ? "手动" : "自动") +
+"重载：循环停于第" + __pj.frame + "帧 触达" + __pj.touches +
+" 已收" + __pj.clicks + " st" + __pj.st + "\n";
+}
+} catch (e) {}
+try {
+var __wdPost = sessionStorage.getItem("xxwd");
+if (__wdPost) {
+sessionStorage.removeItem("xxwd");
+var __wdPj = JSON.parse(__wdPost);
+errlog.textContent += "[上次] 加载停滞自救重载（" +
+(__wdPj.reason === "cap" ? "cap·超长" : "stall·计秒停摆") +
+"，第 " + __wdPj.wd + " 次，等待 " + __wdPj.waited + "s）\n";
+}
+} catch (e) {}
+var __xxSentW = -1, __xxSentH = -1;
+window.xxSyncScreen = function () {
+if (!window.wasm_exports) return false;
+var cv = document.getElementById("glcanvas");
+var w = cv.width | 0, h = cv.height | 0;
+if (w === __xxSentW && h === __xxSentH) return false;
+__xxSentW = w;
+__xxSentH = h;
+try { window.wasm_exports.resize(w, h); } catch (e) { /* 实例化竞态 */ }
+return true;
+};
+var __xxDbg = document.createElement("div");
+__xxDbg.style.cssText =
+"position:fixed;left:2px;bottom:2px;z-index:98;color:#7f7;" +
+"background:rgba(0,0,0,.55);font:10px/1.35 Consolas,monospace;" +
+"white-space:pre;pointer-events:none;padding:2px;" +
+(XX_DBG ? "" : "display:none;");
+document.body.appendChild(__xxDbg);
+var __xxLastTouch = null;
+window.xxPaintDbg = function () {
+if (!window.wasm_exports) return;
+var cv = document.getElementById("glcanvas");
+var rect = cv.getBoundingClientRect();
+var env = window.importObject && window.importObject.env ? window.importObject.env : null;
+var lines = [
+"v" + GAME_VER + " ss" + XX_SS,
+"inner " + window.innerWidth + "x" + window.innerHeight +
+" dpr " + (window.devicePixelRatio || 1).toFixed(2) +
+" hdp=" + (window.high_dpi ? 1 : 0) +
+" env=" + (env ? env.dpi_scale().toFixed(2) : "?"),
+"cv " + cv.width + "x" + cv.height +
+" css " + Math.round(rect.width) + "x" + Math.round(rect.height) +
+" sent " + __xxSentW + "x" + __xxSentH,
+"fit " + Math.min(cv.width / 1280, cv.height / 720).toFixed(3) +
+" fr" + Math.round(performance.now() - (window.__xxFrameAt || 0)) +
+"ms st" + window.__xxState +
+" t" + (window.__xxTouches || 0) + " k" + (window.__xxClicksSeen || 0)
+];
+if (__xxLastTouch) {
+lines.push("t c(" + __xxLastTouch[0] + "," + __xxLastTouch[1] + ")->m(" +
+__xxLastTouch[2] + "," + __xxLastTouch[3] + ")");
+}
+__xxDbg.textContent = lines.join("\n");
+};
+setInterval(window.xxPaintDbg, 1000);
+window.onerror = function (msg, src, line, col, err) {
+errlog.textContent += "ERR: " + msg + " @" + (src || "") + ":" + line + "\n" +
+(err && err.stack ? err.stack : "") + "\n";
+};
+(function () {
+var origError = console.error ? console.error.bind(console) : function () {};
+console.error = function () {
+try {
+var parts = Array.prototype.slice.call(arguments).map(function (a) {
+if (a && a.stack) return String(a.stack).slice(0, 400);
+return String(a).slice(0, 250);
+});
+var el = document.getElementById("errlog");
+if (el && el.textContent.length < 6000) {
+el.textContent += "[console.error] " + parts.join(" | ") + "\n";
+}
+} catch (e) {}
+origError.apply(null, arguments);
+};
+})();
+(function () {
+try {
+var t = document.createElement("canvas");
+var gl = t.getContext("webgl") || t.getContext("experimental-webgl");
+if (!gl) {
+errlog.textContent += "ERR: WebGL1 不可用（探测 getContext 返回 null）——游戏无法启动\n";
+return;
+}
+var need = ["OES_vertex_array_object", "WEBGL_depth_texture", "ANGLE_instanced_arrays"];
+var miss = [];
+for (var i = 0; i < need.length; i++) {
+try { if (!gl.getExtension(need[i])) miss.push(need[i]); } catch (e2) {}
+}
+if (miss.length) {
+errlog.textContent += "WARN: WebGL 缺扩展 " + miss.join(",") +
+"（mq_js_bundle init_webgl 可能 alert 后中止启动）\n";
+}
+t.width = 0; t.height = 0; // 释放探测上下文占位
+} catch (e) {}
+})();
+window.addEventListener("unhandledrejection", function (ev) {
+var r = ev && ev.reason;
+errlog.textContent += "ERR(promise): " + (r && (r.message || r) || "unknown") + "\n" +
+(r && r.stack ? r.stack + "\n" : "");
+});
+var isFile = location.protocol === "file:";
+if (isFile) {
+errlog.textContent = "无法以 file:// 方式运行游戏（浏览器禁止 file:// 加载 WASM）。\n\n" +
+"【手动】先启动本地服务器：\n" +
+"  cd E:\\Rust_Game\\Daoism_Game\\web\n" +
+"  python -m http.server 8124\n\n" +
+"然后浏览器打开：http://localhost:8124/";
+document.getElementById("loading").textContent = "请通过 http://localhost:8124/ 访问";
+} else {
+var glcanvas = document.getElementById("glcanvas");
+["pointerdown", "touchstart", "click"].forEach(function (ev) {
+glcanvas.addEventListener(ev, function () { glcanvas.focus(); }, { passive: true });
+});
+glcanvas.addEventListener("webglcontextlost", function (e) {
+e.preventDefault();
+errlog.textContent += "WARN: WebGL 上下文丢失（切后台/显存回收），等待恢复…\n";
+}, false);
+glcanvas.addEventListener("webglcontextrestored", function () {
+location.reload();
+}, false);
+(function () {
+var el = document.getElementById("errlog");
+var cb = null;
+var frames = 0;
+var last = 0;
+var lastFrameAt = 0;
+var rebuilt = 0;
+var curSrc = "o"; // v1.15.0 最近一次调 tick 的时钟源标记
+window.requestAnimationFrame = function (f) {
+cb = f;
+return 0;
+};
+window.cancelAnimationFrame = function () {};
+var tick = function (now) {
+if (window.__xxClockGate) return; // ?chaos=1 仿真：人为冻结全部时钟
+if (now - last < 14) return; // 全局帧门闩：~60fps 上限，多时钟共存不叠加
+last = now;
+lastFrameAt = now;
+frames += 1;
+window.__xxClocks = window.__xxClocks || { mc: 0, w: 0, st: 0, o: 0 };
+window.__xxClocks[curSrc] = (window.__xxClocks[curSrc] || 0) + 1;
+var f = cb;
+if (window.wasm_exports && window.wasm_exports.frame) {
+if (f && f !== window.wasm_exports.frame && window.__xxCbWasFrame &&
+(window.__xxFrameOk | 0) > 10) {
+window.__xxCbSteal = (window.__xxCbSteal || 0) + 1;
+if (window.__xxCbSteal === 1 || window.__xxCbSteal % 100 === 0) {
+try {
+el.textContent += "[cb劫持] 第" + window.__xxCbSteal +
+"次夺回：外来 rAF 回调偷走帧泵（容器 SDK/横幅组件嫌疑）\n";
+} catch (eS) {}
+}
+}
+f = window.wasm_exports.frame;
+cb = f;
+window.__xxCbWasFrame = 1;
+}
+if (!f && window.animation && window.wasm_exports) {
+f = window.animation;
+cb = f;
+}
+if (!f && window.wasm_exports) {
+f = window.wasm_exports.frame;
+cb = f;
+}
+if (!f) return;
+try {
+f(now);
+window.__xxFrameOk = (window.__xxFrameOk || 0) + 1;
+window.__xxFrameAt = now;
+window.__xxTickAt = now;
+} catch (err) {
+window.__xxFrameErr = (window.__xxFrameErr || 0) + 1;
+if (frames < 100 || frames % 120 === 0) { // 限流防刷屏
+el.textContent += "[ERR] frame " + String(err).slice(0, 120);
+}
+cb = null;
+}
+};
+var chan = null;
+function buildChan() {
+try {
+var ch = new MessageChannel();
+ch.port1.onmessage = function () {
+curSrc = "mc";
+tick(performance.now());
+if (chan === ch) {
+setTimeout(function () {
+if (chan === ch) ch.port2.postMessage(0);
+}, 4);
+}
+};
+ch.port2.postMessage(0);
+chan = ch;
+return true;
+} catch (e) {
+return false;
+}
+}
+var worker = null;
+function buildWorker() {
+try {
+var wcode = "setInterval(function(){postMessage(0)},16);";
+worker = new Worker(
+URL.createObjectURL(new Blob([wcode], { type: "application/javascript" })),
+);
+worker.onmessage = function () {
+curSrc = "w";
+tick(performance.now());
+if (window.xxWdCheck) window.xxWdCheck();
+};
+return true;
+} catch (e) {
+return false;
+}
+}
+setInterval(function () { curSrc = "st"; tick(performance.now()); }, 16);
+buildChan();
+buildWorker();
+setInterval(function () {
+if (!window.wasm_exports) return;
+var since = performance.now() - lastFrameAt;
+if (since > 800 && rebuilt < 6) {
+rebuilt += 1;
+if (chan) {
+chan.port1.onmessage = null;
+chan = null;
+}
+buildChan();
+if (el && rebuilt === 1) {
+el.textContent += "[诊断] 帧驱动停摆，已自动重建时钟";
+}
+}
+}, 500);
+})();
+(function () {
+if (typeof window.fetch !== "function") return;
+var _fetch = window.fetch;
+window.__xxDlAt = 0; // 最近一次字节增长时刻（45s 门控：仍在推进不翻失败牌）
+window.__xxDlActive = false; // 下载进行中（12s/30s 定时文案不抢屏）
+window.fetch = function (input, init) {
+var url = "";
+try {
+url = typeof input === "string" ? input : (input && input.url) || "";
+} catch (e) {}
+if (url.indexOf("xiuxian.wasm") < 0) return _fetch.apply(this, arguments);
+var p = _fetch.apply(this, arguments);
+return p.then(function (res) {
+try {
+if (!res || !res.body || !res.body.tee) return res;
+var total = parseInt(res.headers.get("content-length") || "0", 10) || 0;
+var br = res.body.tee();
+var reader = br[0].getReader();
+var done = 0, lastPaint = 0;
+var bar = document.querySelector("#loading .bar i");
+window.__xxDlActive = true;
+window.__xxDlAt = performance.now();
+var paint = function (force) {
+var now = performance.now();
+if (!force && now - lastPaint < 200) return;
+lastPaint = now;
+if (total > 0) {
+var pct = Math.min(100, Math.round((done / total) * 100));
+xx_stage("下载游戏包 " + pct + "%（" +
+(done / 1048576).toFixed(1) + "/" +
+(total / 1048576).toFixed(1) + "MB）");
+if (bar) { // 假动画 → 真宽度（无 content-length 保动画）
+bar.style.animation = "none";
+bar.style.marginLeft = "0";
+bar.style.width = pct + "%";
+}
+} else {
+xx_stage("已下载 " + (done / 1048576).toFixed(1) + "MB…");
+}
+};
+var pump = function () {
+reader.read().then(function (r) {
+if (r.done) {
+window.__xxDlActive = false;
+window.__xxDlAt = performance.now();
+paint(true);
+xx_stage("下载完成，编译中…");
+if (bar && total > 0) bar.style.width = "100%";
+return;
+}
+done += r.value.byteLength;
+window.__xxDlAt = performance.now();
+paint(false);
+pump();
+}).catch(function () {
+window.__xxDlActive = false; // 计数支中断不影响交付支
+});
+};
+pump();
+return new Response(br[1], {
+status: res.status,
+statusText: res.statusText,
+headers: res.headers,
+});
+} catch (e) {
+return res;
+}
+});
+};
+})();
+xx_stage(XX_R2 ? "缓存热身中，马上就好…" : "下载游戏包…");
+try {
+load("xiuxian.wasm?v=" + GAME_VER);
+} catch (e) {
+errlog.textContent += "load() threw: " + (e && e.message ? e.message : e) + "\n";
+}
+var stageTimers = [
+[12, "游戏包较大，首次加载约需 10~40 秒，请稍候…（下次进入会快很多）"],
+[30, "仍在编译游戏引擎（低端设备会慢一些），请继续等待…"],
+];
+stageTimers.forEach(function (st) {
+setTimeout(function () {
+if (!window.wasm_exports && !window.__xxDlActive) xx_stage(st[1]);
+}, st[0] * 1000);
+});
+setTimeout(function () {
+if (!window.wasm_exports && xxLoading &&
+!xxLoading.classList.contains("hidden")) {
+var fresh = window.__xxDlAt &&
+performance.now() - window.__xxDlAt < 10000;
+if (!fresh) {
+xx_stage("加载较慢，可点击重试");
+xxLoading.style.pointerEvents = "auto";
+xxLoading.onclick = function () { location.reload(); };
+}
+}
+}, 45000);
+(function () {
+var m = location.search.match(/[?&]wd=(\d+)/) ||
+location.hash.match(/wd=(\d+)/); // 对齐 xxRlUsed：query 为主 hash 兜底
+var wd = m ? (parseInt(m[1], 10) || 0) : 0;
+var dead = false;
+var __wdIv = 0;
+function manualExit() {
+xx_stage("加载受阻，点击此处重试");
+xxLoading.style.pointerEvents = "auto";
+xxLoading.onclick = function () { location.reload(); };
+}
+function doReload(reason, beatAge, elapsed) {
+try {
+errlog.textContent += "[诊断] 加载停滞自救（" +
+(reason === "cap"
+? "超长 " + Math.round(elapsed / 1000) + "s"
+: "计秒停摆 " + Math.round(beatAge / 1000) + "s") +
+"），自动重载第 " + (wd + 1) + "/2 次\n";
+} catch (e) {}
+if (wd >= 2) { manualExit(); return; }
+try {
+sessionStorage.setItem("xxwd", JSON.stringify({
+v: window.GAME_VER, reason: reason, wd: wd + 1,
+waited: Math.round(elapsed / 1000),
+}));
+} catch (e) {}
+var href = location.href
+.replace(/([?&])wd=\d+/, "$1")
+.replace(/#.*$/, "")
+.replace(/\?&/, "?")
+.replace(/[?&]$/, "");
+href += (href.indexOf("?") >= 0 ? "&" : "?") + "wd=" + (wd + 1);
+location.href = href;
+}
+window.xxWdCheck = function () {
+if (dead) { clearInterval(__wdIv); return; } // worker 借道防重入
+if (window.wasm_exports ||
+(xxLoading && xxLoading.classList.contains("hidden"))) {
+dead = true;
+clearInterval(__wdIv);
+return;
+}
+var now = performance.now();
+var elapsed = now - xxLoadStart;
+if (elapsed < 10000) return; // 武装门槛：避开脚本解析/初始化抖动
+var beatAge = now - (window.__xxLdBeat || xxLoadStart);
+if (beatAge >= 30000 || elapsed >= 120000) {
+dead = true;
+clearInterval(__wdIv);
+doReload(beatAge >= 30000 ? "stall" : "cap", beatAge, elapsed);
+}
+};
+__wdIv = setInterval(window.xxWdCheck, 2000);
+})();
+}
+(function pollFirstFrame() {
+var loading = document.getElementById("loading");
+var synced = false;
+function onReady() {
+if (synced) return;
+if (performance.now() - xxLoadStart > 1500 && !/[?&]r2=1/.test(location.search)) {
+synced = true; // 导航即将发生，r2 判定只走一次
+try { document.getElementById("ld_msg").textContent =
+"凡人模拟 v" + GAME_VER + " · 正在进入（已等待 " +
+Math.round((performance.now() - xxLoadStart) / 1000) + " 秒）"; } catch (e) {}
+location.href = location.href.split("#")[0] +
+(location.search ? "&" : "?") + "r2=1";
+return; // 加载层保持显示，导航即将发生
+}
+synced = true;
+window.xxSyncScreen();
+setTimeout(window.xxSyncScreen, 2000);
+(function pollScene() {
+var st = window.__xxState;
+if (typeof st === "number" && st >= 0 && st <= 6) {
+loading.classList.add("hidden");
+return;
+}
+setTimeout(pollScene, 100);
+})();
+}
+var timer = setInterval(function () {
+if (window.wasm_exports) onReady();
+}, 250);            // v1.9.23 调试开关（Rust 侧）：?dbg=1 时把十字/诊断行/自检面板打开
+(function () {
+var iv = setInterval(function () {
+if (!window.wasm_exports) return;
+clearInterval(iv);
+if (XX_DBG) {
+try { window.wasm_exports.xx_set_debug(1); } catch (e) {}
+}
+}, 250);
+})();
+})();
+(function () {
+var bootedAt = -1;
+setInterval(function () {
+if (!window.wasm_exports) return;
+if (bootedAt < 0) { bootedAt = performance.now(); return; }
+var st = window.__xxState;
+if (typeof st === "number" && st >= 0 && st <= 6) return; // 已启动
+if (performance.now() - bootedAt <= 15000) return;
+var used = false;
+var m = location.search.match(/[?&]xxrlt=(\d+)/) || location.hash.match(/xxrlt=(\d+)/);
+if (m && Date.now() - parseInt(m[1], 10) < 60000) used = true;
+try {
+var el = document.getElementById("errlog");
+if (el) el.textContent += "[诊断] 启动死（exports 就绪 15s 无场景上报 st=" + st + "）" +
+(used ? "，重载预算已用转兜底" : "，自动重载") + "\n";
+} catch (e0) {}
+if (used) return;
+try { sessionStorage.setItem("xxrlAt", String(Date.now())); } catch (e1) {}
+var t = Date.now();
+var href = location.href.replace(/[?&]xxrlt=\d+/, "").replace(/#.*$/, "");
+href += (href.indexOf("?") >= 0 ? "&" : "?") + "xxrlt=" + t + "#r" + t;
+location.href = href;
+}, 1000);
+})();
+(function () {
+var hud = document.createElement("div");
+hud.style.cssText =
+(XX_DBG ?
+"position:fixed;left:2px;bottom:64px;z-index:150;color:#9f9;" +
+"background:rgba(0,0,0,.6);font:10px/1.25 Consolas,monospace;" +
+"white-space:pre;pointer-events:none;padding:1px 4px;opacity:.95;" :
+"position:fixed;left:2px;bottom:64px;z-index:150;color:#9f9;" +
+"font:10px/1.25 Consolas,monospace;" +
+"white-space:pre;pointer-events:none;padding:1px 2px;opacity:.6;");
+document.body.appendChild(hud);
+setInterval(function () {
+try {
+var gap = performance.now() - (window.__xxFrameAt || 0);
+var ck = window.__xxClocks || {};
+var ffp = 0, ffd = 0;
+if (window.wasm_exports && window.wasm_exports.xx_ffp) {
+ffp = window.wasm_exports.xx_ffp() | 0;
+ffd = window.wasm_exports.xx_ffd() | 0;
+}
+window.__xxFFP = ffp;
+window.__xxFFD = ffd;
+hud.textContent = XX_DBG ?
+("v" + GAME_VER + " " +
+"触" + (window.__xxTouches || 0) +
+" 消" + (window.__xxClicksSeen || 0) +
+" 应" + (window.__xxTapLat == null ? "-" : (window.__xxTapLat | 0) + "ms") +
+" 峰" + (window.__xxTapLatMax | 0) + "ms" +
+" 帧龄" + Math.min(9999, gap | 0) +
+" 活" + (window.__xxKeepAlive ? 1 : 0) +
+" 心" + (window.__xxAlive ? Math.min(99, ((performance.now() - window.__xxAlive.at) / 1000) | 0) + "s" : "-") +
+" F" + (window.__xxAlive ? window.__xxAlive.n : -1) +
+" FF" + (window.__xxFFP >> 10) + "k/" + (window.__xxFFD >> 10) + "k" +
+" 劫" + (window.__xxCbSteal | 0) +
+" 钟 mc/w/st=" + (ck.mc | 0) + "/" + (ck.w | 0) + "/" + (ck.st | 0) +
+" 帧ok/err=" + (window.__xxFrameOk | 0) + "/" + (window.__xxFrameErr | 0)) :
+("v" + GAME_VER);
+try {
+if (XX_DBG) document.title = "F" + (window.__xxAlive ? window.__xxAlive.n : -1) +
+" 活" + (window.__xxKeepAlive ? 1 : 0) +
+" 触" + (window.__xxTouches || 0) +
+" 消" + (window.__xxClicksSeen || 0) +
+" 帧龄" + Math.min(999, gap | 0);
+} catch (e7) {}
+} catch (e) {}
+}, 1000);
+})();
+(function () {
+var lastF = -1, lastP = -1, lastOk = -1, frozen = 0;
+setInterval(function () {
+try {
+if (!window.wasm_exports || !window.wasm_exports.xx_ffp) return;
+if (!window.__xxAlive) return; // 心跳未见（还没起循环）不判
+if (/[?&]frztest=1/.test(location.search)) {
+window.__xxAlive = { n: 777, at: performance.now() };
+}
+var f = window.__xxAlive.n;
+var p = window.wasm_exports.xx_ffp() | 0;
+var ok = window.__xxFrameOk | 0;
+if (f === lastF) {
+var ghost = (p - lastP) < 10 && (ok - lastOk) >= 40 && lastOk >= 0;
+if (p - lastP >= 100 || ghost) {
+frozen++;
+if (frozen >= 3) {
+var m = location.search.match(/[?&]frz=(\d+)/);
+var k = m ? parseInt(m[1], 10) : 0;
+if (k < 2) {
+var st = window.__xxState == null ? -1 : window.__xxState;
+var href = location.href.replace(/[?&]frz=\d+/, "").replace(/[?&](f_f|f_p|f_d|f_s|f_t|f_c|f_o|f_k)=\d+/g, "");
+var __h = href.indexOf("#");
+var __base = __h >= 0 ? href.slice(0, __h) : href;
+var __hash = __h >= 0 ? href.slice(__h) : "";
+__base += (__base.indexOf("?") >= 0 ? "&" : "?") +
+"frz=" + (k + 1) +
+"&f_f=" + f + "&f_p=" + p + "&f_d=" + (window.__xxFFD | 0) +
+"&f_s=" + st + "&f_t=" + (window.__xxTouches | 0) +
+"&f_c=" + (window.__xxClicksSeen | 0) +
+"&f_o=" + ok +
+"&f_k=" + (window.__xxCbSteal | 0);
+href = __base + __hash;
+var el = document.getElementById("errlog");
+if (el) el.textContent += "[主循环挂死] F冻结" + (frozen * 2) + "s而" +
+(ghost ? "帧泵照涨+" + (ok - lastOk) + "（幽灵泵）" : "FF poll+" + (p - lastP)) +
+" → 自动重载续玩（frz " + (k + 1) + "/2）\n";
+frozen = -99; // 只判一次
+setTimeout(function () { location.replace(href); }, 300);
+} else {
+frozen = -99;
+var el2 = document.getElementById("errlog");
+if (el2) el2.textContent += "[主循环挂死] frz 预算已满（" + k + "），不再自动重载——请手动重进\n";
+}
+}
+} else {
+frozen = 0;
+}
+} else {
+frozen = 0;
+}
+lastF = f;
+lastP = p;
+lastOk = ok;
+} catch (e) {}
+}, 2000);
+})();
+(function () {
+try {
+var m = location.search.match(/[?&]f_f=(\d+)/) || location.hash.match(/f_f=(\d+)/);
+if (!m) return;
+var g = function (k) {
+var mm = location.search.match(new RegExp("[?&]" + k + "=(\\d+)")) ||
+location.hash.match(new RegExp(k + "=(\\d+)"));
+return mm ? parseInt(mm[1], 10) : 0;
+};
+var el = document.getElementById("errlog");
+if (el) el.textContent += "[前页死亡档案] F=" + g("f_f") + " FF=" + g("f_p") + "/" + g("f_d") +
+" 场景码=" + g("f_s") + " 触=" + g("f_t") + " 消=" + g("f_c") + " 帧ok=" + g("f_o") +
+" cb劫持=" + g("f_k") +
+"（重载续玩第 " + g("frz") + "/2 次）\n";
+} catch (e) {}
+})();
+(function pointerSetup() {
+var canvas = document.getElementById("glcanvas");
+var rotationAware = function (e) {
+var r = canvas.getBoundingClientRect();
+if (r.width < 1 || r.height < 1) return null;
+var nx = (e.clientX - r.left) / r.width;
+var ny = (e.clientY - r.top) / r.height;
+if (!(nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1)) return null;
+var portrait = window.innerHeight > window.innerWidth;
+if (!portrait) return { x: nx * canvas.width, y: ny * canvas.height };
+return { x: ny * canvas.width, y: (1 - nx) * canvas.height };
+};
+var btn = function (b) { return b === 1 ? 2 : b === 2 ? 1 : b | 0; };
+var takeOver = function () {
+if (!window.wasm_exports || canvas.__ptr_taken) return;
+canvas.__ptr_taken = true;
+var E = window.wasm_exports;
+var __xE = {};
+var xxSafe = function (name) {
+var fn = E[name];
+return function () {
+try {
+fn.apply(null, arguments);
+} catch (err) {
+if (!__xE[name]) {
+__xE[name] = 1;
+var el2 = document.getElementById("errlog");
+if (el2)
+el2.textContent +=
+"[ERR] " + name + ": " +
+String(err && err.message ? err.message : err).slice(0, 90) + "\n";
+}
+}
+};
+};
+var S_move = xxSafe("mouse_move");
+var S_down = xxSafe("mouse_down");
+var S_up = xxSafe("mouse_up");
+var S_touch = xxSafe("touch");
+var S_frame = xxSafe("frame");
+canvas.onmousemove = function (e) {
+var p = rotationAware(e);
+if (p) S_move(p.x | 0, p.y | 0);
+};
+canvas.onmousedown = function (e) {
+var p = rotationAware(e);
+if (p) S_down(p.x | 0, p.y | 0, btn(e.button));
+};
+canvas.onmouseup = function (e) {
+var p = rotationAware(e);
+if (p) S_up(p.x | 0, p.y | 0, btn(e.button));
+};
+var el = document.getElementById("errlog");
+var seenKinds = {};
+var mark = function (kind) {
+if (!seenKinds[kind]) {
+seenKinds[kind] = true;
+if (el) el.textContent += "[诊断] 已收到输入事件（" + kind + "）\n";
+}
+};
+var TOUCH = { touchstart: 10, touchmove: 11, touchend: 12, touchcancel: 13 };
+Object.keys(TOUCH).forEach(function (type) {
+window.addEventListener(
+type,
+function (e) {
+var pts = [];
+for (var i = 0; i < e.changedTouches.length; i++) {
+var p = rotationAware(e.changedTouches[i]);
+if (p) pts.push([e.changedTouches[i], p]);
+}
+if (!pts.length) return; // 触点不在画布内：放行页面默认行为
+e.preventDefault();
+e.stopImmediatePropagation();
+mark("touch");
+window.__xxTouches = (window.__xxTouches || 0) + 1;
+if (e.type === "touchstart") window.__xxTapAt = performance.now();
+if (e.type === "touchstart" && window.xxStartKeepAlive) {
+try { window.xxStartKeepAlive(); } catch (ak) {}
+}
+try {
+var __acs = window.__xxACs;
+if (__acs) {
+for (var ai = 0; ai < __acs.length; ai++) {
+var ac = __acs[ai];
+if (ac && ac.state === "suspended" && ac.resume) {
+try {
+var r = ac.resume();
+if (r && r["catch"]) r["catch"](function () {});
+} catch (ae2) {}
+}
+}
+}
+if (e.type !== "touchstart" && window.xxStartKeepAlive) {
+window.xxStartKeepAlive();
+}
+} catch (ae) {}
+window.xxSyncScreen(); // 触摸瞬间强同步 screen_size == canvas
+for (var j = 0; j < pts.length; j++) {
+var t = pts[j][0];
+var p2 = pts[j][1];
+__xxLastTouch = [Math.round(t.clientX), Math.round(t.clientY), p2.x | 0, p2.y | 0];
+window.xxPaintDbg();
+S_touch(TOUCH[type], t.identifier, p2.x, p2.y);
+S_move(p2.x | 0, p2.y | 0);
+if (type === "touchstart") {
+S_down(p2.x | 0, p2.y | 0, 0);
+window.__xxTapSeq = window.__xxClicksSeen | 0;
+window.__xxTapDownAt = performance.now();
+}
+if (type === "touchend" || type === "touchcancel") {
+var __stall = performance.now() - (window.__xxFrameAt || 0) > 120;
+if (
+type === "touchend" && __stall &&
+(window.__xxClicksSeen | 0) === (window.__xxTapSeq | 0)
+) {
+(function (sx, sy) {
+setTimeout(function () {
+try {
+if (!window.wasm_exports) return;
+S_frame();
+S_frame();
+if ((window.__xxClicksSeen | 0) === (window.__xxTapSeq | 0)) {
+S_move(sx, sy);
+S_down(sx, sy, 0);
+S_frame();
+S_frame();
+}
+S_up(sx, sy, 0);
+S_frame();
+S_frame();
+} catch (se) {}
+}, 0);
+})(p2.x | 0, p2.y | 0);
+} else {
+S_up(p2.x | 0, p2.y | 0, 0);
+}
+}
+}
+if (performance.now() - (window.__xxFrameAt || 0) > 60 && window.wasm_exports) {
+try {
+var n0 = window.__xxAlive ? window.__xxAlive.n : -1;
+for (var fi = 0; fi < 16; fi++) window.wasm_exports.frame();
+window.__xxFrameAt = performance.now();
+var n1 = window.__xxAlive ? window.__xxAlive.n : -1;
+if (n0 >= 0 && n1 === n0 && !window.__xxSyncPushDead) {
+window.__xxSyncPushDead = 1;
+var sel = document.getElementById("errlog");
+if (sel)
+sel.textContent +=
+"[触泵] 手势栈内 frame() 16 发未推进 F（v1.9.19 结论 v1.15.2 实证）——消费依赖宏任务层与触摸唤醒链\n";
+}
+} catch (err) {}
+setTimeout(function () {
+try {
+for (var fj = 0; fj < 12; fj++) window.wasm_exports.frame();
+window.__xxFrameAt = performance.now();
+window.__xxRevivedAt = performance.now(); // burst 即复活：大旗静默
+window.__xxWedged = 1; // 低帧率实锤，开启评估
+} catch (e2) {}
+}, 0);
+}
+if (window.__xxWedgeCheck) window.__xxWedgeCheck();
+if (performance.now() - (window.__xxFrameAt || 0) > 120 && !window.__xxSimWedge) {
+setTimeout(function () {
+window.__xxFrameAt = performance.now();
+S_frame();
+}, 0);
+}
+if (type === "touchstart" && window.__xxAlive && !window.__xxWaking && !window.__xxCoach) {
+var n0 = window.__xxAlive.n;
+var k0 = window.__xxClicksSeen || 0;
+var lt = __xxLastTouch;
+setTimeout(function () {
+var a = window.__xxAlive;
+if (!a || window.__xxWaking) return;
+if ((window.__xxClicksSeen || 0) !== k0) return; // 已消费，循环活着
+if (a.n > n0) return; // 帧号在涨，循环活着
+window.__xxWakeReplay(lt);
+}, 400);
+}
+},
+true,
+);
+});
+var POINTER = { pointerdown: 0, pointermove: -1, pointerup: 0 };
+Object.keys(POINTER).forEach(function (type) {
+canvas.addEventListener(type, function (e) {
+if (e.pointerType === "touch") return; // 触摸走上面通道
+mark("pointer");
+var p = rotationAware(e);
+if (!p) return;
+S_move(p.x | 0, p.y | 0);
+if (type === "pointermove") return;
+if (type === "pointerdown") S_down(p.x | 0, p.y | 0, 0);
+else S_up(p.x | 0, p.y | 0, 0);
+});
+});
+canvas.onmousemove = (function (orig) {
+return function (e) {
+mark("mouse");
+var p = rotationAware(e);
+if (p) S_move(p.x | 0, p.y | 0);
+};
+})();
+canvas.onmousedown = function (e) {
+var p = rotationAware(e);
+if (p) S_down(p.x | 0, p.y | 0, btn(e.button));
+};
+canvas.onmouseup = function (e) {
+var p = rotationAware(e);
+if (p) S_up(p.x | 0, p.y | 0, btn(e.button));
+};
+};
+setInterval(takeOver, 500);
+(function xxWatch() {
+var lastSeen = -1, starved = 0, banner = null;
+function xxPostmortem(reason) {
+try {
+sessionStorage.setItem("xxpost", JSON.stringify({
+v: window.GAME_VER, reason: reason,
+frame: window.__xxAlive ? window.__xxAlive.n : -1,
+touches: window.__xxTouches || 0,
+clicks: window.__xxClicksSeen || 0,
+st: window.__xxState
+}));
+} catch (e) {}
+}
+window.xxRlUsed = function () {
+var m = location.search.match(/[?&]xxrlt=(\d+)/) || location.hash.match(/xxrlt=(\d+)/);
+if (m && Date.now() - parseInt(m[1], 10) < 60000) return true;
+try {
+var t = sessionStorage.getItem("xxrlAt");
+if (t && Date.now() - parseInt(t, 10) < 60000) return true;
+} catch (e) {}
+return false;
+};
+function xxReload(reason) {
+xxPostmortem(reason);
+try { sessionStorage.setItem("xxrlAt", String(Date.now())); } catch (e) {}
+var t = Date.now();
+var href = location.href.replace(/[?&]xxrlt=\d+/, "").replace(/#.*$/, "");
+href += (href.indexOf("?") >= 0 ? "&" : "?") + "xxrlt=" + t + "#r" + t;
+location.href = href;
+}
+if (/[?&]r2=1/.test(location.search)) {
+var iv3 = setInterval(function () {
+if (!window.wasm_exports) return;
+clearInterval(iv3);
+try { errlog.textContent += "[诊断] r2 双加载就绪\n"; } catch (e) {}
+}, 200);
+}
+(function () {
+var samples = [];
+var iv = setInterval(function () {
+if (!window.wasm_exports || !window.__xxAlive) return;
+if (xxRlUsed()) { clearInterval(iv); return; }
+if ((window.__xxState || 0) > 0) { clearInterval(iv); return; } // 已进游戏：不打扰
+samples.push(window.__xxAlive.n);
+if (samples.length > 6) samples.shift();
+if (samples.length >= 3) {
+var inc2 = samples[samples.length - 1] - samples[samples.length - 3];
+if (inc2 < 25) {
+clearInterval(iv);
+try { errlog.textContent += "[诊断] 首开卡顿（2 秒 +" + inc2 + " 帧），热身重载换满帧\n"; } catch (e) {}
+xxReload("coldstart");
+}
+}
+}, 1000);
+setTimeout(function () { clearInterval(iv); }, 35000);
+})();
+window.__xxFpsWin = null;
+window.__xxWedgeCheck = function () {
+if (!window.__xxWedged) return;
+if ((window.__xxState || 0) > 0) return;
+var now = performance.now();
+var a = window.__xxAlive;
+if (!a) return;
+if (!window.__xxFpsWin) { window.__xxFpsWin = { t: now, n: a.n }; return; }
+var w = window.__xxFpsWin;
+if (now - w.t < 8000) return; // 8 秒评估窗口
+var fps = ((a.n - w.n) * 1000) / (now - w.t);
+window.__xxFpsWin = { t: now, n: a.n };
+try { errlog.textContent += "[诊断] wedge 评估：" + fps.toFixed(1) + "fps\n"; } catch (e0) {}
+if (fps >= 15) return; // <15fps 体验即"卡"，重载换满帧
+if (xxRlUsed()) return; // 重载预算已用：车夫保底，不再折腾
+try { errlog.textContent += "[诊断] wedge 态帧率仅 " + fps.toFixed(1) + "fps，自动重载恢复满帧\n"; } catch (e3) {}
+xxReload("wedge-lowfps");
+};
+window.__xxRevivedAt = 0;
+window.__xxCoach = 0;
+window.__xxCoachStart = function (why) {
+if (window.__xxCoach || !window.wasm_exports) return;
+if (window.__xxSimWedge) {
+window.__xxCoach = 1;
+try { errlog.textContent += "[SIM] 车夫启动被仿真拒绝（interval 被钳）\n"; } catch (e) {}
+return;
+}
+window.__xxCoach = 1;
+try { errlog.textContent += "[诊断] 帧车夫接管（" + why + "）：1s 补帧维持\n"; } catch (e) {}
+setInterval(function () {
+if (performance.now() - (window.__xxTickAt || 0) < 300) return; // tick 活着，让路
+for (var i = 0; i < 24; i++) {
+try { window.wasm_exports.frame(); } catch (e) { break; }
+}
+try { window.__xxFrameAt = performance.now(); } catch (e) {}
+}, 1000);
+};
+window.__xxWakeReplay = function (lt) {
+if (window.__xxWaking || !window.wasm_exports) return;
+window.__xxWaking = true;
+var E = window.wasm_exports;
+var n0 = window.__xxAlive ? window.__xxAlive.n : -1;
+var bursts = 0;
+var log1 = false;
+(function burst() {
+for (var i = 0; i < 12; i++) {
+try { E.frame(); } catch (e) { break; }
+}
+bursts += 1;
+var a = window.__xxAlive;
+if (a && a.n > n0) {
+window.__xxRevivedAt = performance.now();
+try { errlog.textContent += "[诊断] 快速唤醒成功（第" + bursts + "轮，+" + (a.n - n0) + " 帧），重放点击\n"; } catch (e) {}
+try {
+if (lt) {
+E.touch(10, 999001, lt[2], lt[3]);
+E.mouse_move(lt[2] | 0, lt[3] | 0);
+E.mouse_down(lt[2] | 0, lt[3] | 0, 0);
+E.frame(); // 消费按下
+E.touch(12, 999001, lt[2], lt[3]);
+E.mouse_up(lt[2] | 0, lt[3] | 0, 0);
+}
+} catch (e2) {}
+window.__xxWaking = false;
+window.__xxWedged = 1; // v1.9.17：唤醒成功=wedge 实锤，开启低帧率重载评估
+window.__xxCoachStart("快速唤醒后"); // 不再"唤醒即撤"，持续供血
+return;
+}
+if (bursts < 12) {
+setTimeout(burst, 220); // 连续叩击，每轮 12 发
+} else {
+try { errlog.textContent += "[诊断] 快速唤醒失败（12 轮），交由看门狗\n"; } catch (e) {}
+window.__xxWaking = false;
+}
+})();
+};
+var reviveTries = 0;
+setInterval(function () {
+if (window.__xxWaking) return; // 快速唤醒进行中，让路
+if (window.__xxWedgeCheck) window.__xxWedgeCheck(); // v1.9.17 interval 活着时也评估
+if (!window.wasm_exports || !window.__xxAlive) return;
+var staleLimit = window.__xxCoach ? 6000 : 2500;
+var stale = performance.now() - window.__xxAlive.at;
+if (stale > staleLimit) {
+var before = window.__xxAlive.n;
+for (var i = 0; i < 5; i++) {
+try { window.wasm_exports.frame(); } catch (e) { break; }
+}
+if (window.__xxAlive.at > performance.now() - 1200 && window.__xxAlive.n > before) {
+window.__xxRevivedAt = performance.now();
+try { errlog.textContent += "[诊断] 循环复活成功（冲击 +" + (window.__xxAlive.n - before) + " 帧）\n"; } catch (e) {}
+reviveTries = 0; // 复活成功重置计数，允许下次再救
+window.__xxCoachStart("看门狗复活后"); // 冲击有效即接管，持续供血
+return;
+}
+reviveTries += 1;
+if (reviveTries <= 3) {
+try { errlog.textContent += "[诊断] 复活冲击无效（第" + reviveTries + "次）\n"; } catch (e) {}
+return; // 等下一轮再试（共 3 轮）
+}
+try { errlog.textContent += "[诊断] 循环心跳停止于第 " + window.__xxAlive.n + " 帧（future wedged），自动重载\n"; } catch (e) {}
+try {
+if (!xxRlUsed()) { xxReload("loop"); return; }
+} catch (e2) {}
+if (!banner) xxShowBanner();
+}
+}, 1000);
+function xxShowBanner() {
+if (banner) return;
+if (window.__xxRevivedAt && performance.now() - window.__xxRevivedAt < 4000) return;
+if (window.__xxCoach) return;
+banner = document.createElement("div");
+banner.style.cssText =
+"position:fixed;left:8%;right:8%;top:36%;z-index:200;" +
+"background:rgba(120,10,10,.94);color:#fff;border:2px solid #f66;" +
+"border-radius:10px;padding:14px 18px;font:15px/1.5 sans-serif;" +
+"text-align:center;pointer-events:auto;";
+banner.innerHTML =
+"⚠ 游戏引擎已无响应（循环停于第 " + (window.__xxAlive ? window.__xxAlive.n : "?") +
+" 帧，已点 " + (window.__xxTouches || 0) + " 次）<br>" +
+"点下方按钮重载即可进入（已验证有效）。";
+var btn = document.createElement("button");
+btn.textContent = "立即重载游戏";
+btn.style.cssText =
+"margin-top:8px;padding:8px 22px;font:16px sans-serif;" +
+"background:#f66;color:#fff;border:0;border-radius:6px;";
+btn.onclick = function () { xxReload("manual"); };
+banner.appendChild(btn);
+document.body.appendChild(banner);
+try { errlog.textContent += "[诊断] 引擎无响应，已弹重载大旗\n"; } catch (e) {}
+}
+setInterval(function () {
+if (banner) return; // 大旗只由故障弹，不重复
+if (!window.wasm_exports) return;
+var seen = window.__xxClicksSeen || 0;
+var tch = window.__xxTouches || 0;
+if (seen !== lastSeen) { lastSeen = seen; starved = 0; return; }
+if (tch < 2) return;
+if (window.__xxAlive && performance.now() - window.__xxAlive.at < 5000) { starved = 0; return; }
+starved += 1;
+if (starved < 2) return; // 连续 2 轮（≥4s）零消费才弹旗
+xxShowBanner();
+}, 2000);
+setInterval(function () {
+if (banner && (window.__xxClicksSeen || 0) > 0 &&
+window.__xxAlive && performance.now() - window.__xxAlive.at < 2500) {
+banner.remove && banner.remove();
+banner = null; starved = 0;
+}
+}, 1000);
+})();
+var heals = 0;
+setInterval(function () {
+if (!window.wasm_exports) return;
+var dpr = window.high_dpi ? window.devicePixelRatio || 1 : 1;
+var w = Math.floor(canvas.clientWidth * dpr);
+var h = Math.floor(canvas.clientHeight * dpr);
+if ((canvas.width !== w || canvas.height !== h) && heals < 30) {
+heals += 1;
+canvas.width = w;
+canvas.height = h;
+window.xxSyncScreen();
+}
+}, 1500);
+var rot = document.createElement("div");
+rot.id = "rot_hint";
+rot.textContent = "请横持设备游玩";
+rot.style.cssText =
+"position:fixed;left:0;top:0;width:100%;height:100%;display:none;" +
+"align-items:center;justify-content:center;background:#141024;color:#d8c48a;" +
+"font:24px sans-serif;z-index:50;pointer-events:none;";
+document.body.appendChild(rot);
+function rotHint() {
+var skip = false;
+try { skip = /[?&]landscape=1/.test(location.search); } catch (e) {}
+rot.style.display =
+window.innerHeight > window.innerWidth && window.wasm_exports && !skip ? "flex" : "none";
+}
+window.addEventListener("resize", rotHint, true);
+setInterval(rotHint, 800);
+})();
+function orientFix() {
+var b = document.body;
+if (window.innerHeight > window.innerWidth) {
+b.style.transformOrigin = "left top";
+b.style.transform = "rotate(90deg) translate(0px, -100%)";
+b.style.width = window.innerHeight + "px";
+b.style.height = window.innerWidth + "px";
+} else {
+b.style.transform = "";
+b.style.width = "100%";
+b.style.height = "100%";
+}
+var c = document.getElementById("glcanvas");
+if (c) {
+c.style.width = "100%";
+c.style.height = "100%";
+}
+}
+window.addEventListener("resize", orientFix);
+window.addEventListener("orientationchange", function () { setTimeout(orientFix, 120); });
+window.addEventListener("load", orientFix);
+(function xxSim() {
+var q;
+try { q = new URLSearchParams(location.search); } catch (e) { return; }
+if (!q.get("chaos") && !q.get("tap") && !q.get("flow") && !q.get("wedge")) return;
+var el = document.getElementById("errlog");
+var log = function (s) { if (el) el.textContent += s + "\n"; };
+var w2c = function (wx, wy) {
+var c = document.getElementById("glcanvas");
+var r = c.getBoundingClientRect();
+var fit = Math.min(r.width / 1280, r.height / 720);
+var dw = r.width / fit, dh = r.height / fit;
+return [r.left + (wx - (640 - dw / 2)) * fit, r.top + (wy - (360 - dh / 2)) * fit];
+};
+var fireTap = function (wx, wy, compat, cb) {
+var c = document.getElementById("glcanvas");
+var xy = w2c(wx, wy);
+var id = Date.now() % 1000000;
+try {
+var t = new Touch({ identifier: id, target: c, clientX: xy[0], clientY: xy[1] });
+c.dispatchEvent(new TouchEvent("touchstart", { cancelable: true, bubbles: true, changedTouches: [t], touches: [t] }));
+setTimeout(function () {
+c.dispatchEvent(new TouchEvent("touchend", { cancelable: true, bubbles: true, changedTouches: [t], touches: [] }));
+if (compat) {
+setTimeout(function () {
+var ev = { clientX: xy[0], clientY: xy[1], button: 0, bubbles: true, cancelable: true };
+try {
+c.dispatchEvent(new MouseEvent("mousedown", ev));
+c.dispatchEvent(new MouseEvent("mouseup", ev));
+c.dispatchEvent(new MouseEvent("click", ev));
+} catch (e3) {}
+}, 120);
+}
+if (cb) cb(xy);
+}, 90);
+} catch (e2) {
+log("[SIM] 事件派发失败: " + e2.message);
+}
+};
+if (q.get("chaos")) {
+window.__xxClockGate = false;
+setInterval(function () {
+if (!window.wasm_exports) return;
+window.__xxClockGate = true;
+log("[SIM] 冻结全部帧时钟 2.5s（模拟 X5 钳制）…");
+setTimeout(function () {
+window.__xxClockGate = false;
+log("[SIM] 解冻。fr=" + Math.round(performance.now() - (window.__xxFrameAt || 0)) + "ms");
+}, 2500);
+}, 6000);
+}
+if (q.get("wedge")) {
+setInterval(function () {
+if (!window.wasm_exports || window.__xxSimWedge) return;
+if (window.xxRlUsed && window.xxRlUsed()) return; // 预算内=重载后新鲜期
+window.__xxClockGate = true; // 三时钟死
+window.__xxSimWedge = 1; // 车夫禁启
+log("[SIM] wedge：冻结三时钟+车夫禁启（模拟 X5 钳制）");
+}, 5000);
+}
+if (q.get("tap")) {
+setInterval(function () {
+if (!window.wasm_exports || window.__xxClockGate) return;
+if (window.__xxState !== 0 && window.__xxState !== -1) return; // 已进游戏，停止
+var s0 = window.__xxState;
+fireTap(470, 549, false, function (xy) {
+setTimeout(function () {
+log("[SIM] tap @css(" + Math.round(xy[0]) + "," + Math.round(xy[1]) + ") st " +
+s0 + "→" + window.__xxState +
+(window.__xxState > 0 ? " ✓进游戏" : " ✗未进"));
+}, 800);
+});
+}, 3500);
+}
+if (q.get("flow")) {
+var early = q.get("flow") === "early";
+var fired = false, tries = 0;
+var compat = q.get("compat") !== "0"; // 默认带兼容鼠标事件
+var iv = setInterval(function () {
+if (!window.wasm_exports) return;
+tries++;
+var st = window.__xxState;
+if (st === 1) {
+clearInterval(iv);
+log("[FLOW] ✓✓ 进入 Reality（进游戏成功）compat=" + compat +
+(early ? " 早期时序" : "") + " 第" + tries + "次轮询确认");
+} else if (st > 1) {
+clearInterval(iv);
+log("[FLOW] ？意外场景 st" + st);
+} else if (tries === 3 && !fired) {
+fired = true;
+log("[FLOW] ①点「开始新的人生」(compat=" + compat + (early ? " 早期时序" : "") + ")");
+fireTap(470, 549, compat);
+} else if (tries > 200) {
+clearInterval(iv);
+log("[FLOW] ✗ 超时：点击后未进游戏，末态 st" + st);
+}
+}, 300);
+}
+})();
+</script>
 </body>
 </html>

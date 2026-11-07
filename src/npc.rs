@@ -213,6 +213,8 @@ pub fn choose_roption(g: &mut Game, i: usize) {
     };
     g.meta.npc_ev[n] = true;
     apply_reff(g, &eff);
+    // v1.17.2 章节书：故人心事事实翻转点（第六章目标边沿——抉择即消耗事件）
+    g.check_chapters();
     g.sync_save();
 }
 

@@ -1,10 +1,16 @@
 [package]
 name = "xiuxian"
-version = "1.16.7"
+version = "1.16.8"
 edition = "2021"
 
 [dependencies]
 macroquad = { version = "0.4", features = ["audio"] }
+
+# v1.16.8 加载小刀③：字体以 raw-deflate 内嵌（assets/font.ttf.deflate，
+# make_font.py 产出并回环自检），boot 首帧 ui.rs init_font 内同步 inflate——
+# 478,968B → ~324KB，wasm wire 净省 ~100-120KB（代码段增量抵扣后）。
+# 纯 Rust、无 JS 交互，解压同步完成于 init_font 内不引入启动竞态（勘察 risk②）。
+miniz_oxide = "0.8"
 
 # v1.6.0 B 清晰度：wasm 也开 high_dpi 后，dpr>1 设备上默认 4096 图集不够用
 # （字形按物理像素栅格）。vendor/macroquad 0.4.16 与依赖同版本，含图集封顶

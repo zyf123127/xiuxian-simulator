@@ -4,9 +4,17 @@ use std::sync::OnceLock;
 
 static FONT: OnceLock<Font> = OnceLock::new();
 
+// v1.16.8 加载小刀③：字体改 raw-deflate 内嵌（assets/font.ttf.deflate 由
+// tools/make_font.py 在产出 font.ttf 后压缩并回环自检——font.ttf 本体仍照常
+// 落盘供 fontcov_full.py/check_chars.py 读 cmap，容器变内容不变）。boot 首帧
+// 在 init_font 内同步解压（miniz_oxide inflate，479KB→~324KB 内嵌，wasm wire
+// 净省 ~100-120KB；解压几 ms 级，同步完成无启动竞态——勘察 risk② 口径）。
+static FONT_DEFLATE: &[u8] = include_bytes!("../assets/font.ttf.deflate");
+
 pub fn init_font() {
-    let bytes = include_bytes!("../assets/font.ttf");
-    let f = load_ttf_font_from_bytes(bytes).expect("字体加载失败");
+    let bytes = miniz_oxide::inflate::decompress_to_vec(FONT_DEFLATE)
+        .expect("字体解压失败（deflate 流损坏）");
+    let f = load_ttf_font_from_bytes(&bytes).expect("字体加载失败");
     let _ = FONT.set(f);
 }
 

@@ -1441,6 +1441,99 @@ pub const ACHS: [AchDef; 30] = [
     },
 ];
 
+// ---------------- v1.17.2 章节书：主线八章 ----------------
+// 章节定义静态表（照 ACHS/EVENTS 惯例）：名/引入剧情/目标清单。达成谓词不在本表——
+// 全部收敛为 game.rs chapter_goal_met 单口（pid 分发，照 check_ach_all 的 (id,bool)
+// 元组表先例），禁第二实现。所有谓词只读 meta 标量（不含 hist/story 等 String 字段），
+// chapter_done_mask 可在存档载入帧与每帧章节视图安全调用，零分配。
+// 达成持久 = meta.chap_done 位掩码（键 ch=，缺键→0 零迁移，save.rs 回环单测）。
+pub struct ChapterGoal {
+    pub text: &'static str, // 目标文案（章节书目标行）
+    pub pid: u8,            // 谓词 id（game.rs chapter_goal_met 单口 match 分发表）
+}
+
+pub struct ChapterDef {
+    pub num: &'static str,   // 章次字面量（"第一章"，禁运行时拼数字）
+    pub name: &'static str,  // 章名（横幅/章节书行）
+    pub intro: &'static str, // 引入剧情（章节书右栏，wrap_draw 单段）
+    pub goals: &'static [ChapterGoal],
+}
+
+pub const CHAPTERS: [ChapterDef; 8] = [
+    ChapterDef {
+        num: "第一章",
+        name: "雨夜执印",
+        intro: "雨夜乱葬岗，你从尸堆里爬出来，手里攥着一枚方印——印身无字，只有层层叠叠被划掉的痕迹。识海里有个累坏了的少年嗓音：你的名字是错的，天写错了。——先推演一生，看看错在哪里。",
+        goals: &[
+            ChapterGoal { text: "转生入世——此身既立，主线自此始", pid: 12 },
+            ChapterGoal { text: "开卷首模拟——耗 1 枚点数推演一生", pid: 0 },
+        ],
+    },
+    ChapterDef {
+        num: "第二章",
+        name: "镜中万象",
+        intro: "轮回镜里万象森罗：游历遇敌、闭关破境、奇遇结缘。模拟中的一战一胜，都是现实这具身体的磨刀石。",
+        goals: &[
+            ChapterGoal { text: "首胜——模拟中战退一次强敌", pid: 1 },
+            ChapterGoal { text: "现实首破境——闭关圆满，冲击新境", pid: 2 },
+        ],
+    },
+    ChapterDef {
+        num: "第三章",
+        name: "血仇得报",
+        intro: "删你字的血仇之敌仍按册候查。变强，寻仇，阵斩之——夺其家产，据其职牒。此吏不除，书不成书。",
+        goals: &[
+            ChapterGoal { text: "首斩宿敌——现实中寻仇得胜", pid: 3 },
+            ChapterGoal { text: "再斩一敌——血仇之链，一环扣一环", pid: 14 },
+        ],
+    },
+    ChapterDef {
+        num: "第四章",
+        name: "文狱讨牒",
+        intro: "每斩一吏，其职牒便归你名下。六牒齐聚之日，文狱闻你名而却步——问笔终战的门票，一张一张攒出来。",
+        goals: &[
+            ChapterGoal { text: "讨牒三成——职牒 3/6 归档", pid: 4 },
+            ChapterGoal { text: "六牒归档——讨牒 6/6，道韵+166", pid: 5 },
+        ],
+    },
+    ChapterDef {
+        num: "第五章",
+        name: "山河万象",
+        intro: "山河图志五大区域，各有风土与机缘：宗门兴望、大漠秘藏、瘴惑灵芽、冰心澄神、仙屿潮音。行走、换幕、初至有赏——把五个域的名字都走一遍。",
+        goals: &[
+            ChapterGoal { text: "三域已至——山河图志初成", pid: 6 },
+            ChapterGoal { text: "五域全至——图志圆满", pid: 7 },
+        ],
+    },
+    ChapterDef {
+        num: "第六章",
+        name: "同页之缘",
+        intro: "模拟世中有人愿与你缝作同页；现实里有长老、掌柜、宁清霜、醉道人四位故人。缘是线，把散稿订成书。",
+        goals: &[
+            ChapterGoal { text: "首结缘——与一人缝作同页", pid: 8 },
+            ChapterGoal { text: "故人心事——好感达标，抉择一场专属事件", pid: 9 },
+        ],
+    },
+    ChapterDef {
+        num: "第七章",
+        name: "问笔终战",
+        intro: "六牒在手，修为圆满——现实破境的雷劫里，执笔人在等你。九重雷劫尽数扛下，便是落笔之刻。",
+        goals: &[
+            ChapterGoal { text: "现实问笔——九重雷劫扛下，首登仙界", pid: 10 },
+            ChapterGoal { text: "封卷已斩——讨牒 6/6 方见终战卡", pid: 5 },
+        ],
+    },
+    ChapterDef {
+        num: "第八章",
+        name: "落款成书",
+        intro: "终战卡上四种落款：认写、撕稿、夺笔、合订。你如何落款，书便如何成——十万稿废纸，等你一个结尾。",
+        goals: &[
+            ChapterGoal { text: "落款成书——达成任一结局", pid: 11 },
+            ChapterGoal { text: "四卷全览——四种结局皆已落款", pid: 13 },
+        ],
+    },
+];
+
 // ---------------- 出身 ----------------
 pub struct OriginDef {
     pub name: &'static str,
@@ -1474,7 +1567,7 @@ pub const ORIGINS: [OriginDef; 6] = [
 ];
 
 // ---------------- 游历事件表 (id, 权重, 最低境界, 是否善缘) ----------------
-pub const EVENTS: [(usize, i32, usize, bool); 59] = [
+pub const EVENTS: [(usize, i32, usize, bool); 85] = [
     (0, 12, 0, true),  // 灵草满坡
     (1, 11, 0, false), // 妖兽拦路
     (2, 6, 1, true),   // 上古洞府
@@ -1539,6 +1632,38 @@ pub const EVENTS: [(usize, i32, usize, bool); 59] = [
     (56, 2, 0, true),  // 星坠荒原（稀有）
     (57, 1, 1, false), // 无面镜客（稀有）
     (58, 2, 0, false), // 灵潮倒卷（稀有）
+    // v1.17.3 扩池 26 条（id 59..=84）：普通 13（59..=71，题材避开既有 59 条——
+    // 书院/灵蜂/画师/雪崩/赌擂/漕运/温泉/棋枰/铸炉/蜃楼/古井/药市/驿壁，基权
+    // 合计 57）、稀有 2（72..=73，w≤2）、章节联动 2（74..=75，chap_done 位门控，
+    // 见 sim_event_weights）、连锁剧情 6（76..=78 灯楼谜约 3 段 / 79..=81 傩面
+    // 还愿 2 段分支式；77/78/80/81 为链内段权重 0）、道侣同行 3（82..=84，
+    // COMPANION_EVENTS 白名单扩 6）
+    (59, 5, 0, true),  // 书院讲经
+    (60, 4, 1, true),  // 灵蜂酿蜜
+    (61, 4, 1, true),  // 画师留影
+    (62, 4, 1, false), // 雪崩沟谷
+    (63, 5, 1, false), // 赌坊押擂
+    (64, 4, 2, true),  // 漕运夜航
+    (65, 5, 0, true),  // 温泉濯尘
+    (66, 5, 2, true),  // 棋枰斗弈
+    (67, 4, 2, true),  // 铸兵守炉
+    (68, 3, 3, true),  // 蜃楼残景
+    (69, 5, 0, true),  // 井底传声
+    (70, 5, 1, true),  // 药市问诊
+    (71, 4, 0, true),  // 驿壁题诗
+    (72, 2, 2, true),  // 墨渊垂钓（稀有，special33 检定）
+    (73, 1, 3, false), // 纸人夜行（稀有，special34 检定）
+    (74, 3, 1, false), // 血仇余响（章节联动：第三章·血仇得报已了才入池）
+    (75, 3, 1, true),  // 同页灯约（章节联动：第六章·同页之缘已了且有伴才入池）
+    (76, 3, 1, true),  // 灯楼谜约（链4 首段）
+    (77, 0, 0, true),  // 灯下问答（链4 中段，仅链内）
+    (78, 0, 0, true),  // 青灯问藏（链4 末段，仅链内；special32 检定收尾）
+    (79, 3, 0, true),  // 傩面还愿（链5 首段）
+    (80, 0, 0, true),  // 戏毕面热（链5 分支a 段）
+    (81, 0, 0, true),  // 愿成符赠（链5 分支b 段）
+    (82, 4, 1, true),  // 灯下缝页（伴随）
+    (83, 3, 1, true),  // 同摘霜橘（伴随）
+    (84, 3, 2, false), // 论道起隙（伴随）
 ];
 
 // v1.17.1 稀有层阈值：EVENTS 权重 w∈1..=RARE_W 的卡按稀有呈现（描边紫；

@@ -110,6 +110,11 @@ pub fn save_text(m: &Meta) -> String {
     s.push_str(&format!("blv={}\n", m.feng_blv));
     // v1.16.0 交游图鉴：十同页人历世结缘次数（旧档缺键 → [0;10] + 当前道侣位补 1，见 parse 尾）
     s.push_str(&format!("gbd={:?}\n", m.comp_bonds));
+    // v1.17.2 章节书达成位掩码 ch=（bit i = CHAPTERS[i] 已了；缺键/坏值 → 0，载入帧
+    // 按事实静默补齐零迁移）与系统初见闩 sy=（bit0=周天首开 bit1=兑换首通；缺键 → 0）。
+    // 独立成行置于 h=/hq= 旧稿块之前——勿插 h=/hq= 之间（文件序约定：hq= 挂最近一条 h=）
+    s.push_str(&format!("ch={}\n", m.chap_done));
+    s.push_str(&format!("sy={}\n", m.sys_seen));
     // v1.16.5 旧稿档案：近 5 次模拟结算快照，每条一行 h=（前 8 段空格分隔照 Lstat=
     // 先例，cause 取第 9 段整段余量照 note= 自由文本先例——死因含空格不能全切；
     // 缺键 → 空表 = 默认值，零迁移）
@@ -379,6 +384,10 @@ fn parse_save(text: &str) -> Meta {
                 }
                 has_gbd = true;
             }
+            // v1.17.2 章节书达成位掩码（缺键/坏值 → 0，照 ed= 先例零迁移；载入帧
+            // Game::new 按事实静默补齐——位不会被洗掉只会补上）；系统初见闩（缺键 → 0）
+            "ch" => m.chap_done = v.trim().parse().unwrap_or(0),
+            "sy" => m.sys_seen = v.trim().parse().unwrap_or(0),
             // v1.16.5 旧稿档案：h=<life> <run> <realm> <age> <years> <dy> <stones> <comp> <cause…>
             // splitn(9,' ') 取余量（cause 含空格照 note= 先例不能全切；值内 '=' 安全——
             // split_once 只切首对）。数字坏值 unwrap_or 回退；realm clamp 0..=14、
@@ -1114,5 +1123,40 @@ h=1 2 3 50.0 40 100 800 255 乙
         assert_eq!(m.hist[0].run_no, 2, "弹最旧，保 2..=6");
         assert_eq!(m.hist[4].run_no, 6);
         assert_eq!(m.hist[4].cause, "死因6");
+    }
+
+    // ---------------- v1.17.2 章节书：ch=/sy= 回环 / 旧档缺键 0 / 坏值 0 ----------------
+
+    // ch=（章节达成位掩码）/ sy=（系统初见闩）回环；缺键零迁移；坏值静默回 0。
+    // ch= 独立成行置于 h= 块之前（文件序约定：勿插 h=/hq= 之间）
+    #[test]
+    fn chapters_sys_seen_roundtrip_missing_and_bad() {
+        let mut m = Meta::default();
+        m.chap_done = 0b0001_0111; // 前五章已了（bit0..=4）
+        m.sys_seen = 0b0011; // 周天已开 + 兑换已通
+        let text = save_text(&m);
+        assert!(text.contains("ch=23\n") && text.contains("sy=3\n"));
+        // ch= 行必须先于任何 h= 行（旧稿块文件序约定）
+        let ch_pos = text.find("ch=").unwrap();
+        let h_pos = text.find("h=").map(|p| p as isize).unwrap_or(isize::MAX);
+        assert!(ch_pos < h_pos as usize, "ch= 必须在 h= 旧稿块之前");
+        let m2 = parse_save(&text);
+        assert_eq!(m2.chap_done, 0b0001_0111);
+        assert_eq!(m2.sys_seen, 0b0011);
+
+        // 旧档缺 ch=/sy= 键 → 0（历史版本从未落盘，向后兼容零迁移；
+        // Game::new 载入帧再按事实静默补齐 chap_done）
+        let old: String = text
+            .lines()
+            .filter(|l| !l.starts_with("ch=") && !l.starts_with("sy="))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let m3 = parse_save(&old);
+        assert_eq!((m3.chap_done, m3.sys_seen), (0, 0));
+
+        // 坏值 → 0
+        let bad = format!("{}ch=abc\nsy=-\n", OLD_BASE);
+        let m4 = parse_save(&bad);
+        assert_eq!((m4.chap_done, m4.sys_seen), (0, 0));
     }
 }

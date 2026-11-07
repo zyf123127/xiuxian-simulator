@@ -6,18 +6,24 @@
 // * 帧路径零分配——HINTS 全为 &'static str 字面量，guide_index 是纯布尔分支树，
 //   禁 format!/clone/String（境界名/胜率等数字细节由既有左栏/按钮副标展示，
 //   指引行只指路）。
-// * 非任务链状态机：只是一个 9 叶优先级 if 链，自上而下首中即出。
-// * 终结性（构造性证明——覆盖块之下不放任何叶，无死分支；对账评审对原 6..10
-//   死分支的证明后重排+收窄）：
-//   Reality 恒 life=Some（draw.rs:611 早退守卫），过叶 0 ⟺ ¬is_stuck ⟺
-//   P≥1 ∨ S≥ex ∨ R≠∅；叶 3/4/5 谓词（修为百分比/洞府双资源/auto∧P<1）与该
-//   补集正交、各自可构造命中；叶 6∨7∨8 = (R≠∅∧P<1∧S<ex) ∨ P≥1 ∨ S≥ex
-//   ⊇ 该补集（R≠∅∧P≥1→7、R≠∅∧S≥ex→8），故任何过叶 0 的态必在 6/7/8 终结
-//   ——链到叶 8 必然终结。裁叶说明：赠礼叶/默认闭关叶结构性不可达（被
-//   6/7/8 三分覆盖），移入 futureCandidates，赠礼引流由人物页/图鉴
-//   『有心事待叙』徽标承载。
+// * 非任务链状态机：只是一个 10 叶优先级 if 链，自上而下首中即出。
+// * 终结性（构造性证明——覆盖块之下不放任何叶，无死分支；v1.17.2 链首插里程碑叶
+//   后重对账）：
+//   叶 0 = is_stuck（死局叶，最高优先——三空唯一出路是广告，任何里程碑不得截胡）。
+//   叶 1 = 里程碑叶 total_sims==0（v1.17.2 链首插入，开局无行动引导之补——
+//   主线第一章「开卷首模拟」，压经济叶与修为候破叶，开局推演优先一切养成）。
+//   过叶 0 ∧ 过叶 1 ⟺ total_sims>0 ∧ ¬is_stuck；自此以下与 v1.16.0 原链逐叶
+//   等价（原叶 1..8 → 现叶 2..9，谓词零改动）：Reality 恒 life=Some（draw_reality
+//   早退守卫），过叶 0 ⟺ P≥1 ∨ S≥ex ∨ R≠∅；叶 4/5/6 谓词（修为百分比/洞府双资源
+//   /auto∧P<1）与该补集正交、各自可构造命中；叶 7∨8∨9 = (R≠∅∧P<1∧S<ex) ∨ P≥1
+//   ∨ S≥ex ⊇ 该补集（R≠∅∧P≥1→8、R≠∅∧S≥ex→9），故任何过叶 0/1 的态必在
+//   7/8/9 终结——链到叶 9 必然终结。里程碑叶只置于链首（覆盖块之上），原链内部
+//   不动，原终结证明对 total_sims>0 子域原样成立。裁叶说明（v1.16.0 沿革）：
+//   赠礼叶/默认闭关叶结构性不可达（被 7/8/9 三分覆盖），移入 futureCandidates，
+//   赠礼引流由人物页/图鉴『有心事待叙』徽标承载。
 // * 判定条件全部复用既有单口谓词，禁另写第二实现：is_stuck / can_break /
-//   revenge_ready / sim_cost / exchange_cost / DONGFU_UP_STONES / DONGFU_UP_CONTRIB。
+//   revenge_ready / sim_cost / exchange_cost / DONGFU_UP_STONES / DONGFU_UP_CONTRIB
+//   ＋ meta.total_sims（里程碑叶唯一新谓词，纯标量读）。
 use crate::data::{DONGFU_UP_CONTRIB, DONGFU_UP_STONES, NODE_DONGFU};
 use crate::game::{qi_need, Game};
 
@@ -38,11 +44,17 @@ pub struct GuideHint {
     pub act: GuideAct,
 }
 
-/// 9 叶提示表（下标即优先级；全字面量禁插值）
-pub const HINTS: [GuideHint; 9] = [
+/// 10 叶提示表（下标即优先级；全字面量禁插值）。v1.17.2 链首插叶 1 里程碑叶
+/// （开卷首模拟——主线第一章目标，压经济/养成叶），原 9 叶语义逐叶保留于 2..9。
+pub const HINTS: [GuideHint; 10] = [
     GuideHint {
         text: "山穷水尽：观看幻境广告，得 2 枚模拟点",
         btn: Some("看广告"),
+        act: GuideAct::Draft,
+    },
+    GuideHint {
+        text: "主线第一章：开卷首模拟，推演你的一生",
+        btn: Some("开模拟"),
         act: GuideAct::Draft,
     },
     GuideHint {
@@ -99,21 +111,26 @@ pub fn guide_index(g: &Game) -> u8 {
     if g.is_stuck() {
         return 0;
     }
-    // 1 修为圆满：修为轴最高优先（养成叶与经济轴正交故可达）
-    if g.can_break() {
+    // 1 里程碑·开卷首模拟（v1.17.2 链首插入）：total_sims==0 的唯一使命是先推演一生
+    //   ——主线第一章目标，压经济叶与修为候破叶（叶 2..9 全部要求 total_sims>0 才达）
+    if g.meta.total_sims == 0 {
         return 1;
     }
-    // 2 宿敌可寻仇：带 RNG 的不可逆结算，指引只指路不代打（无按钮）
-    if g.revenge_ready() {
+    // 2 修为圆满：修为轴最高优先（养成叶与经济轴正交故可达）
+    if g.can_break() {
         return 2;
     }
+    // 3 宿敌可寻仇：带 RNG 的不可逆结算，指引只指路不代打（无按钮）
+    if g.revenge_ready() {
+        return 3;
+    }
     if let Some(l) = l {
-        // 3 修为将满（≥80% 未满）：闭关候破。can_break 已被叶 1 截走，!can_break
+        // 4 修为将满（≥80% 未满）：闭关候破。can_break 已被叶 2 截走，!can_break
         //   恒真，按规格保留以自明叶面语义（顺序无关、代价一次布尔）
         if !g.can_break() && l.qi / qi_need(l) >= 0.8 {
-            return 3;
+            return 4;
         }
-        // 4 洞府设施可扩建：任一设施未满级且灵石/贡献双资源足够（与 dongfu_up 同口：
+        // 5 洞府设施可扩建：任一设施未满级且灵石/贡献双资源足够（与 dongfu_up 同口：
         //   world.rs:468 clamp(0,3)、未满才可升；lv<3 短路保证 DONGFU_UP_*/[lv] 越界安全）
         if l.loc == NODE_DONGFU
             && (0..3).any(|i| {
@@ -123,27 +140,27 @@ pub fn guide_index(g: &Game) -> u8 {
                     && g.meta.sect_contrib >= DONGFU_UP_CONTRIB[lv]
             })
         {
-            return 4;
+            return 5;
         }
     }
-    // 5 周天吐纳未开：收窄 P<1——有点数可花时不得截胡开模拟
-    //   （新玩家首局 Meta::default P=3 必落叶 7）
+    // 6 周天吐纳未开：收窄 P<1——有点数可花时不得截胡开模拟
+    //   （新玩家首局 Meta::default P=3 必落叶 1 里程碑叶）
     if g.meta.auto == 0 && p < g.sim_cost() {
-        return 5;
-    }
-    // 6 可献祭法宝折算模拟点：点数/灵石两空而法宝尚存
-    if l.map_or(false, |x| !x.relics.is_empty()) && p < g.sim_cost() && stones < ex {
         return 6;
     }
-    // 7 模拟点已足：开卷推演新一生
-    if p >= g.sim_cost() {
+    // 7 可献祭法宝折算模拟点：点数/灵石两空而法宝尚存
+    if l.map_or(false, |x| !x.relics.is_empty()) && p < g.sim_cost() && stones < ex {
         return 7;
     }
-    // 8 灵石充裕：坊市可兑模拟点（兜底终结叶）。life=Some 时到达此臂必 S≥ex：
-    //   ¬叶7 ⟹ P<1，¬叶6（P<1）⟹ R=∅ ∨ S≥ex；R≠∅ 时叶 6 已截走除非 S≥ex，
+    // 8 模拟点已足：开卷推演新一生
+    if p >= g.sim_cost() {
+        return 8;
+    }
+    // 9 灵石充裕：坊市可兑模拟点（兜底终结叶）。life=Some 时到达此臂必 S≥ex：
+    //   ¬叶8 ⟹ P<1，¬叶7（P<1）⟹ R=∅ ∨ S≥ex；R≠∅ 时叶 7 已截走除非 S≥ex，
     //   R=∅ 时 ¬is_stuck（P<1）⟹ S≥ex——构造性证明见文件头。
     //   life=None 简并态在绘制路径不可达（draw_reality 早退守卫）。
-    8
+    9
 }
 
 /// 跳转执行器：横带按钮唯一出口。全部走既有单入口，不复制任何结算逻辑；

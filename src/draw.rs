@@ -833,6 +833,12 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         if let Some(b) = hint.btn {
             prewarm_text(b, &[18]);
         }
+        // v1.17.2 章节书页签：两签文案+章目+目标全量预热（guide_tab 跨次开面板
+        // 可能残留 1，开帧即见章节书——一次灌齐防缺字）
+        for t in GUIDE_TABS.iter() {
+            prewarm_text(t, &[16]);
+        }
+        prewarm_chapter_view(g);
     }
     // v1.10.2：顶栏三钮（烙印/帮助/主页）从 render_left 之前整体移到 life 借用
     // 最后一用（所在行）之后——立即模式命中不依赖绘制顺序（draw_sim 先例），
@@ -1071,6 +1077,16 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         g.auto_years = 0;
         g.auto_gain = 0.0;
         g.play(crate::sounds::Which::Click);
+        // v1.17.2 系统初见闩（sy= bit0）：周天首开一句戏文（一次性边沿，additive 闩
+        // 推导不出「从未开过」；log/toast 走既有渲染口径，讨牒 log 先例不另预热）
+        if !auto_on && g.meta.sys_seen & 0b0001 == 0 {
+            g.meta.sys_seen |= 0b0001;
+            g.log(
+                "周天既开，吐纳自转——从此闭关不必亲守，岁月自替你修行。",
+                C_GOLD,
+            );
+            g.toast("周天吐纳 · 初启", C_GOLD);
+        }
         g.sync_save();
     }
     if auto_on {
@@ -2060,6 +2076,14 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
         296.0, 16,
         C_GOLD,
     );
+    // v1.17.2 主线感：本稿剧情一行（SimResult.story 与旧稿档案 hq= 同源一次拼接；
+    // 会话态零新键，&str 借用分片绘制零 format!；无摘要整行隐去零位移）。
+    // 绘制于 sr 只读段末（y570 在左右卡之下、合页钮之上——借用随此终结，
+    // 后续 &mut 交互照旧；立即模式绘制序不影响该行位置）
+    if let Some(st) = sr.story.as_deref() {
+        txt("本稿剧情", 490.0, 570.0, 14, C_DIM);
+        txt(st, 570.0, 570.0, 14, C_GOLD_D);
+    }
     // v1.12.0 留行批注：大事记点一行带走（下一稿开卷浮现后清空；定稿 §5.2 留行）。
     // 先收成 owned 再进点击循环（sr 为 &g.sim_result 借用，&mut g 须待其终结——照打稿屏 draft.clone() 先例）
     txt("—— 大事记 · 点一行留作朱批 ——", 84.0, 336.0, 14, C_DIM);
@@ -2187,6 +2211,22 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
             16,
             C_DIM,
         );
+    }
+    // v1.17.2 主线感：下一章预告一行（章节书当前章+首未了目标，全静态分片绘制
+    // 零 format!——帧路径零分配红线；主线全了走字面量收束行）
+    {
+        let cur = crate::game::Game::chapter_current(&g.meta);
+        let ch = &crate::data::CHAPTERS[cur];
+        txt("下一章", 250.0, 524.0, 14, C_DIM);
+        txt(ch.num, 314.0, 524.0, 14, C_GOLD_D);
+        txt(ch.name, 376.0, 522.0, 16, C_GOLD);
+        let goal = ch
+            .goals
+            .iter()
+            .find(|gl| !crate::game::Game::chapter_goal_met(&g.meta, gl.pid))
+            .map(|gl| gl.text)
+            .unwrap_or("主线已了——十万稿废纸，终有一册");
+        txt(goal, 470.0, 522.0, 14, C_TEXT);
     }
     if button(
         V_W * 0.5 - 320.0,
@@ -2891,7 +2931,11 @@ fn draw_help_panel(g: &mut Game) {
 // 真机反馈「任务引导系统没看到」：指引横带只在现实主界面常驻，玩家在人物/图鉴/
 // 坊市等页签里没有指引入口。本面板给一个全局可达的显性入口：当前目标（guide_index
 // 纯推导，零存档键）+ 跳转按钮（guide::exec_jump 既有单口）+ 修行之道静态五行。
-// 布局照 draw_help_panel 语言；开启帧字形由顶栏任务钮 handler 事件帧预热。
+// v1.17.2 章节书页签：主线八章视图（左列章目/右栏本章引入+目标清单+当前目标高亮
+// +前情提要）——达成位 chap_done（meta additive ch=），当前目标=首未了目标行。
+// 布局照 draw_help_panel 语言；开启/切签帧字形由 prewarm_chapter_view 事件帧预热。
+// ⚠panel=6 在 Menu 场景是书志页（draw.rs 顶部 dispatch）——两处场景隔离，本面板
+// 只在 Reality 分发（draw_reality match g.panel），会话态 guide_tab 不跨场景共写。
 const GUIDE_PANEL_LINES: [&str; 5] = [
     "· 闭关修炼长修为，修为圆满可冲击破境，境境登高。",
     "· 模拟点足额时「开始模拟」，推演新一生得传承与道韵。",
@@ -2900,6 +2944,29 @@ const GUIDE_PANEL_LINES: [&str; 5] = [
     "· 与长老、掌柜、宁清霜、醉道人赠礼交好，增益长久生效。",
 ];
 const GUIDE_PANEL_NOTE: &str = "主界面顶部金框横带常驻显示当前目标（现实界面）。";
+const GUIDE_TABS: [&str; 2] = ["当前目标", "章节书"];
+
+// 章节书全量字形预热（开启面板/切签事件帧一次；8 章文案+状态词+前情摘要，
+// 动态的只有前情摘要一行 &str 借用，稳态帧零栅格化零分配）
+fn prewarm_chapter_view(g: &Game) {
+    prewarm_text("章节书", &[16]);
+    prewarm_text("本章目标", &[16]);
+    prewarm_text("前情提要", &[14]);
+    for s in ["已了", "进行", "未启", "已毕", "待办"] {
+        prewarm_text(s, &[14]);
+    }
+    for ch in crate::data::CHAPTERS.iter() {
+        prewarm_text(ch.num, &[14]);
+        prewarm_text(ch.name, &[14, 16, 20]);
+        prewarm_text(ch.intro, &[16]);
+        for gl in ch.goals.iter() {
+            prewarm_text(gl.text, &[16]);
+        }
+    }
+    if let Some(st) = g.meta.hist.last().and_then(|r| r.story.as_deref()) {
+        prewarm_text(st, &[14]);
+    }
+}
 
 fn draw_guide_panel(g: &mut Game) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
@@ -2910,12 +2977,31 @@ fn draw_guide_panel(g: &mut Game) {
         g.play(crate::sounds::Which::Page);
         return;
     }
+    // 页签（照 draw_help_panel 语言；guide_tab 会话态 min 钳制，panic=abort 纪律）
+    g.guide_tab = g.guide_tab.min(1);
+    for (i, t) in GUIDE_TABS.iter().enumerate() {
+        let x = 170.0 + i as f32 * 200.0;
+        if button(x, 128.0, 190.0, 34.0, t, None, true) {
+            g.guide_tab = i as u8;
+            if i == 1 {
+                prewarm_chapter_view(g); // 事件帧预热（切签一次）
+            }
+            g.play(crate::sounds::Which::Page);
+        }
+        if g.guide_tab == i as u8 {
+            draw_rectangle(x, 162.0, 190.0, 3.0, C_GOLD);
+        }
+    }
+    if g.guide_tab == 1 {
+        draw_chapter_view(g);
+        return;
+    }
     let idx = crate::guide::guide_index(g).min(crate::guide::HINTS.len() as u8 - 1);
     let hint = &crate::guide::HINTS[idx as usize];
-    txt("当前目标", 170.0, 146.0, 16, C_GOLD_D);
-    wrap_draw(hint.text, 170.0, 178.0, 20, 900.0, 32.0, C_GOLD);
+    txt("当前目标", 170.0, 184.0, 16, C_GOLD_D);
+    wrap_draw(hint.text, 170.0, 214.0, 20, 900.0, 32.0, C_GOLD);
     if let Some(b) = hint.btn {
-        if button(170.0, 250.0, 240.0, 54.0, b, None, true) {
+        if button(170.0, 262.0, 240.0, 54.0, b, None, true) {
             crate::guide::exec_jump(g, hint.act);
             // Shop/Bag 跳转已自置面板（坊市/行囊），其余跳转归位主界面
             if g.panel == 6 {
@@ -2924,11 +3010,64 @@ fn draw_guide_panel(g: &mut Game) {
         }
     }
     draw_rectangle(170.0, 340.0, 940.0, 1.5, Color::from_rgba(96, 76, 130, 160));
-    txt("修行之道", 170.0, 360.0, 16, C_GOLD_D);
+    txt("修行之道", 170.0, 356.0, 16, C_GOLD_D);
     for (i, s) in GUIDE_PANEL_LINES.iter().enumerate() {
-        txt(s, 170.0, 392.0 + i as f32 * 30.0, 14, C_TEXT);
+        txt(s, 170.0, 388.0 + i as f32 * 30.0, 14, C_TEXT);
     }
-    txt(GUIDE_PANEL_NOTE, 170.0, 566.0, 14, C_DIM);
+    txt(GUIDE_PANEL_NOTE, 170.0, 560.0, 14, C_DIM);
+}
+
+// v1.17.2 章节书视图：左列八章目录（状态词右上）+ 右栏本章引入/目标清单/前情提要。
+// 全静态 &str 分片绘制零 format!（帧路径零分配红线）；当前目标=首未了目标行金字高亮；
+// 达成位 meta.chap_done 由 check_chapters 边沿维护，此处纯读取。
+fn draw_chapter_view(g: &mut Game) {
+    let cur = crate::game::Game::chapter_current(&g.meta);
+    // 左列：章目 8 行（y188 起步进 46 → 末行 510，均在卡内且避开标题屏/底栏按钮带）
+    for (i, ch) in crate::data::CHAPTERS.iter().enumerate() {
+        let done = g.meta.chap_done >> i & 1 == 1;
+        let y = 188.0 + i as f32 * 46.0;
+        let (st, c) = if done {
+            ("已了", C_GOLD_D)
+        } else if i == cur {
+            ("进行", C_GOLD)
+        } else {
+            ("未启", C_DIM)
+        };
+        txt(ch.num, 178.0, y, 14, c);
+        txt(ch.name, 238.0, y - 2.0, 16, c);
+        txt_r(st, 442.0, y, 14, c);
+        if i == cur {
+            draw_rectangle(170.0, y + 20.0, 286.0, 2.0, C_GOLD);
+        }
+    }
+    // 右栏：本章引入 + 目标清单（当前目标=首未了行金字）+ 前情提要
+    let ch = &crate::data::CHAPTERS[cur];
+    txt(ch.num, 490.0, 188.0, 14, C_GOLD_D);
+    txt(ch.name, 552.0, 184.0, 20, C_GOLD);
+    wrap_draw(ch.intro, 490.0, 222.0, 16, 600.0, 28.0, C_TEXT);
+    draw_rectangle(490.0, 336.0, 610.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    txt("本章目标", 490.0, 350.0, 16, C_GOLD_D);
+    let mut cur_goal_hit = false; // 首未了目标行标记（金字高亮一次）
+    for (j, gl) in ch.goals.iter().enumerate() {
+        let met = crate::game::Game::chapter_goal_met(&g.meta, gl.pid);
+        let y = 382.0 + j as f32 * 38.0;
+        let (st, c) = if met {
+            ("已毕", C_DIM)
+        } else if !cur_goal_hit {
+            cur_goal_hit = true;
+            ("进行", C_GOLD)
+        } else {
+            ("待办", C_TEXT)
+        };
+        txt(st, 490.0, y + 2.0, 14, c);
+        wrap_draw(gl.text, 540.0, y, 16, 560.0, 24.0, c);
+    }
+    // 前情提要：旧稿档案最近一稿剧情摘要（&str 借用零分配；无稿/无摘要整块隐去）
+    if let Some(st) = g.meta.hist.last().and_then(|r| r.story.as_deref()) {
+        draw_rectangle(490.0, 470.0, 610.0, 1.5, Color::from_rgba(96, 76, 130, 110));
+        txt("前情提要", 490.0, 484.0, 14, C_DIM);
+        wrap_draw(st, 490.0, 508.0, 14, 610.0, 22.0, C_TEXT);
+    }
 }
 
 // ================= 书志 · 终卷四结局（v1.12.1，未竟稿 §9/§12）=================

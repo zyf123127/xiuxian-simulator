@@ -27,7 +27,11 @@ copy /y %WASM_RAW% web\xiuxian.wasm >nul
 :wasmopt_done
 copy /y web\xiuxian.wasm taptap\taptap_verify\taptap_h5\xiuxian.wasm >nul
 rem keep taptap_h5\index.html in sync with web\index.html (cache-bust params live there)
-copy /y web\index.html taptap\taptap_verify\taptap_h5\index.html >nul
+rem v1.16.8 load-knife 1: minify index.html at deploy time (source
+rem web\index.html stays readable; only the shipped copy is stripped).
+rem Aborts the build if any contract token (GAME_VER / ?v= /
+rem miniquad_add_plugin / xx_storage) is lost.
+python tools\minify_index.py web\index.html taptap\taptap_verify\taptap_h5\index.html || exit /b 1
 rem assert the TapTap trio is complete (index.html + mq_js_bundle.js + xiuxian.wasm)
 python -c "import os; root='taptap/taptap_verify/taptap_h5'; need=['index.html','mq_js_bundle.js','xiuxian.wasm']; missing=[n for n in need if not os.path.isfile(os.path.join(root,n))]; assert not missing, 'taptap_h5 missing: '+str(missing)" || exit /b 1
 python -c "import zipfile,os; root='taptap/taptap_verify/taptap_h5'; out='taptap/taptap_verify.zip'; z=zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED); [z.write(os.path.join(root,n),'taptap_h5/'+n) for n in sorted(os.listdir(root))]; z.close()"
