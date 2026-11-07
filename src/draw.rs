@@ -605,6 +605,15 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         version_mark();
         return;
     }
+    // v1.16.1 立绘鉴赏覆层：模态独占输入（人物页/图鉴点立绘开启；任意点按/Esc 关闭，
+    // 关闭后回到所在面板）。照 rmodal/ending_show 早退先例——下层不绘不响应，天然
+    // 免穿透；开启帧字形已由入口 prewarm_zoom_text 灌好
+    if g.zoom_art.is_some() {
+        draw_bg(art);
+        crate::charpanel::draw_zoom_overlay(g);
+        version_mark();
+        return;
+    }
     // v1.10.2 卡顿修复（次要项③）：去每帧整 Life 深克隆（含 relics/talents/equipped
     // 三个 Vec 堆分配，先例 v1.10.0 draw_sim）——只读前段（顶栏/左栏渲染 + 所在行）
     // 借 life 不可变引用，借用随最后使用自然归还（NLL），后续行动栏 &mut 交互照旧
@@ -644,22 +653,24 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         14,
         C_DIM,
     );
-    // ===== v1.16.0 道途一念：任务指引横带 (376,86,896,34) =====
+    // ===== v1.16.0 道途一念：任务指引横带 (376,86,896,40) =====
+    // v1.16.1 显性化（真机反馈「没看到引导」）：带高 34→40、底色提亮、目标/提示语
+    // 升档 14/16→16/18，顶栏另加「任务」钮开道途指引面板（双入口兜底可发现性）。
     // 仅 panel==0 且无弹层时绘制——panel_card(140,60,1000,600) 右缘只盖到 x1140，
     // 横带右段 1272 遮不住，必须整条隐藏而非遮盖；ad/offline_card/rmodal/ending_show
-    // 态由本函数头部早退链天然排除。提示语由 guide_index 纯推导（零存档键）。
+    // /zoom_art 态由本函数头部早退链天然排除。提示语由 guide_index 纯推导（零存档键）。
     if g.panel == 0 && g.submenu.is_none() {
         // min 钳制：纪律 1（panic=abort）——下标访问一律带运行期上限，构造性 0..=8 之上再加保险
         let idx = crate::guide::guide_index(g).min(crate::guide::HINTS.len() as u8 - 1);
         // 事件帧预热（先例 ui.rs prewarm/show_banner「事件帧预热」）：仅提示下标变化帧
-        // 一次性灌字形，字号只用既有离散档 14/16（UI_SIZES 前两档；按钮标经 button()
+        // 一次性灌字形，字号只用既有离散档 16/18（UI_SIZES 第 2/3 档；按钮标经 button()
         // 无副标档 18px 绘制，变化帧绘制路径自栅格化一次，仍属事件级一次性，稳态零 churn）
         if g.guide_last != Some(idx) {
             let hint = &crate::guide::HINTS[idx as usize];
-            prewarm_text(hint.text, &[14, 16]);
-            prewarm_text("目标", &[14, 16]);
+            prewarm_text(hint.text, &[16, 18]);
+            prewarm_text("目标", &[16]);
             if let Some(b) = hint.btn {
-                prewarm_text(b, &[14, 16]);
+                prewarm_text(b, &[16, 18]);
             }
             g.guide_last = Some(idx);
         }
@@ -668,17 +679,37 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
             376.0,
             86.0,
             V_W - 384.0,
-            34.0,
-            Color::from_rgba(24, 17, 40, 205), // 同 charpanel 未结缘引导框底色语言
+            40.0,
+            Color::from_rgba(30, 22, 52, 225), // v1.16.1 提亮（24,17,40,205→），暗底上更醒目
         );
-        draw_rectangle(376.0, 86.0, 3.0, 34.0, C_GOLD_D); // 左缘 3px 金竖条
-        txt("目标", 388.0, 92.0, 14, C_GOLD_D);
-        txt(hint.text, 432.0, 90.0, 16, C_GOLD);
+        draw_rectangle(376.0, 86.0, 4.0, 40.0, C_GOLD_D); // 左缘 4px 金竖条
+        txt("目标", 392.0, 96.0, 16, C_GOLD_D);
+        txt(hint.text, 444.0, 92.0, 18, C_GOLD);
         // 跳转按钮复用 draw::button()（继承去抖/悬停/描边语言）；纯提示叶不画
         if let Some(b) = hint.btn {
-            if button(1112.0, 90.0, 144.0, 26.0, b, None, true) {
+            if button(1112.0, 92.0, 144.0, 28.0, b, None, true) {
                 crate::guide::exec_jump(g, hint.act);
             }
+        }
+    }
+    // v1.16.1 顶栏四钮（任务/烙印/帮助/主页）：任务钮开道途指引面板（panel=6）——
+    // 指引横带只在主界面常驻，玩家在其他页签不知道要做什么时由此兜底（真机反馈）
+    if button(1018.0, 8.0, 62.0, 36.0, "任务", None, true) {
+        g.panel = 6;
+        g.play(crate::sounds::Which::Page);
+        // 事件帧预热：面板静态文案与当前目标行（字号 14/16/18/20/24 均既有离散档）
+        prewarm_text("道途指引", &[24]);
+        prewarm_text("当前目标", &[16]);
+        prewarm_text("修行之道", &[16]);
+        for s in GUIDE_PANEL_LINES.iter() {
+            prewarm_text(s, &[14]);
+        }
+        prewarm_text(GUIDE_PANEL_NOTE, &[14]);
+        let idx = crate::guide::guide_index(g).min(crate::guide::HINTS.len() as u8 - 1);
+        let hint = &crate::guide::HINTS[idx as usize];
+        prewarm_text(hint.text, &[20]);
+        if let Some(b) = hint.btn {
+            prewarm_text(b, &[18]);
         }
     }
     // v1.10.2：顶栏三钮（烙印/帮助/主页）从 render_left 之前整体移到 life 借用
@@ -697,10 +728,10 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     if button(1222.0, 8.0, 58.0, 36.0, "主页", None, true) {
         g.back_to_menu();
     }
-    // v1.16.0：日志行起点 88→124——顶部让位任务指引横带（86..120）；
-    // 行预算 (612-124)/28=17（原 18），日志框底部仍留 ≥12px 空隙，
-    // 日志 Vec 本就只显最新若干行，18→17 行损失可接受
-    let area_y = 124.0;
+    // v1.16.0：日志行起点 88→124——顶部让位任务指引横带；
+    // v1.16.1：124→132（横带加高 34→40）——行预算 (612-132)/28=17（原 17 不变），
+    // 日志框底部仍留 ≥12px 空隙，日志 Vec 本就只显最新若干行
+    let area_y = 132.0;
     let area_h = PANEL_B - 124.0;
     let line_h = 28.0; // v1.6.0：24→28，16px 中文行距 1.5 倍更透气（18 行预算仍够）
     let max_lines = (area_h / line_h) as usize;
@@ -931,6 +962,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         3 => draw_upgrade_panel(g),
         4 => draw_help_panel(g),
         5 => crate::charpanel::draw_char_panel(g),
+        6 => draw_guide_panel(g), // v1.16.1：道途指引（顶栏「任务」钮）
         _ => {}
     }
     // v1.6.0 B：修炼弹层（底栏之后绘制，盖住中部区域）
@@ -2453,6 +2485,50 @@ fn draw_help_panel(g: &mut Game) {
         let c = if j == 0 { C_GOLD } else { C_TEXT };
         wrap_draw(lines[i], 180.0, 200.0 + j as f32 * 52.0, 16, 920.0, 30.0, c);
     }
+}
+
+// ================= v1.16.1 道途指引面板（顶栏「任务」钮，panel=6）=================
+// 真机反馈「任务引导系统没看到」：指引横带只在现实主界面常驻，玩家在人物/图鉴/
+// 坊市等页签里没有指引入口。本面板给一个全局可达的显性入口：当前目标（guide_index
+// 纯推导，零存档键）+ 跳转按钮（guide::exec_jump 既有单口）+ 修行之道静态五行。
+// 布局照 draw_help_panel 语言；开启帧字形由顶栏任务钮 handler 事件帧预热。
+const GUIDE_PANEL_LINES: [&str; 5] = [
+    "· 闭关修炼长修为，修为圆满可冲击破境，境境登高。",
+    "· 模拟点足额时「开始模拟」，推演新一生得传承与道韵。",
+    "· 灵石可于坊市兑换模拟点，多余法宝可献祭折算。",
+    "· 山河图·洞府经营：扩建设施提升每载修炼收益。",
+    "· 与长老、掌柜、宁清霜、醉道人赠礼交好，增益长久生效。",
+];
+const GUIDE_PANEL_NOTE: &str = "主界面顶部金框横带常驻显示当前目标（现实界面）。";
+
+fn draw_guide_panel(g: &mut Game) {
+    draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
+    panel_card(140.0, 60.0, 1000.0, 600.0);
+    txt("道途指引", 170.0, 92.0, 24, C_GOLD);
+    if button(1064.0, 74.0, 44.0, 36.0, "×", None, true) {
+        g.panel = 0;
+        g.play(crate::sounds::Which::Page);
+        return;
+    }
+    let idx = crate::guide::guide_index(g).min(crate::guide::HINTS.len() as u8 - 1);
+    let hint = &crate::guide::HINTS[idx as usize];
+    txt("当前目标", 170.0, 146.0, 16, C_GOLD_D);
+    wrap_draw(hint.text, 170.0, 178.0, 20, 900.0, 32.0, C_GOLD);
+    if let Some(b) = hint.btn {
+        if button(170.0, 250.0, 240.0, 54.0, b, None, true) {
+            crate::guide::exec_jump(g, hint.act);
+            // Shop/Bag 跳转已自置面板（坊市/行囊），其余跳转归位主界面
+            if g.panel == 6 {
+                g.panel = 0;
+            }
+        }
+    }
+    draw_rectangle(170.0, 340.0, 940.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    txt("修行之道", 170.0, 360.0, 16, C_GOLD_D);
+    for (i, s) in GUIDE_PANEL_LINES.iter().enumerate() {
+        txt(s, 170.0, 392.0 + i as f32 * 30.0, 14, C_TEXT);
+    }
+    txt(GUIDE_PANEL_NOTE, 170.0, 566.0, 14, C_DIM);
 }
 
 // ================= 书志 · 终卷四结局（v1.12.1，未竟稿 §9/§12）=================

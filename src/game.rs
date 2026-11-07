@@ -724,6 +724,14 @@ pub struct SettleInfo {
     pub total: i64,
 }
 
+// v1.16.1 立绘鉴赏：覆层状态（人物页/图鉴点立绘放大）。纯会话态不进存档；
+// 纹理不持有——覆层绘制时经 art 懒取（LazyTex 缓存命中零成本），入口已判 AI 图存在。
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum ZoomArt {
+    Npc(usize),  // 文狱四友（0..=3）
+    Comp(usize), // 同页人道侣（0..=9）
+}
+
 pub struct Game {
     pub scene: Scene,
 
@@ -810,6 +818,8 @@ pub struct Game {
     pub sub_fresh: bool, // v1.6.0 B：开帧门闩——open_sub 置位、主循环顶部清零（硬伤 1）
 
     pub guide_last: Option<u8>, // v1.16.0 道途一念：上次绘制的指引下标（变更帧一次性预热；纯会话态不进存档，指引由状态纯推导零存档键）
+
+    pub zoom_art: Option<ZoomArt>, // v1.16.1 立绘鉴赏覆层（模态独占输入；不进存档）
 
     pub speed: usize, // 模拟速度 0暂停 1慢 2快 3跳过
 
@@ -1235,6 +1245,8 @@ impl Game {
             sub_fresh: false,
 
             guide_last: None,
+
+            zoom_art: None,
 
             speed: 2,
 
@@ -6192,6 +6204,8 @@ mod revenge_tests {
             sub_fresh: false,
 
             guide_last: None,
+
+            zoom_art: None,
 
             speed: 0,
 

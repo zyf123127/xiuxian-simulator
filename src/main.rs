@@ -262,7 +262,10 @@ async fn main() {
         if is_key_pressed(KeyCode::Escape) {
             // v1.6.0 B：弹层优先关闭
             // v1.8.0 B4：好感事件卡独占期 Esc 被吞——事件必须抉择，不得绕开
-            if g.rmodal.is_some() {
+            // v1.16.1：立绘鉴赏覆层最先关闭（模态独占，人物页/图鉴点立绘开启）
+            if g.zoom_art.take().is_some() {
+                g.play(crate::sounds::Which::Page);
+            } else if g.rmodal.is_some() {
                 // 吞掉：事件必须抉择
             } else if g.submenu.take().is_some() {
                 g.play(crate::sounds::Which::Page);
@@ -284,10 +287,12 @@ async fn main() {
             // v1.8.0 B4：好感事件卡独占期一并避让
             // v1.10.2 复审②：离闭结算卡独占期同样避让（防卡上开面板/山河图穿透）
             // v1.12.1 复审③a：终卷演出页覆层独占期同样避让
+            // v1.16.1 复审④：立绘鉴赏覆层独占期同样避让
             if g.submenu.is_none()
                 && g.rmodal.is_none()
                 && g.offline_card.is_none()
                 && g.ending_show.is_none()
+                && g.zoom_art.is_none()
             {
                 if is_key_pressed(KeyCode::C) {
                     g.panel = if g.panel == 5 { 0 } else { 5 };

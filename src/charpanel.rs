@@ -59,6 +59,7 @@ enum PanelAct {
     Unequip(usize), // 卸下法宝
     Equip(usize),   // 装备法宝
     Title(i32),     // 佩戴称号
+    Zoom(crate::game::ZoomArt), // v1.16.1：立绘鉴赏开启（人物页卡立绘点按）
 }
 
 fn exec_panel_act(g: &mut Game, a: PanelAct) {
@@ -88,6 +89,12 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             g.equip_relic(k);
         }
         PanelAct::Title(v) => g.set_worn_title(v),
+        PanelAct::Zoom(z) => {
+            // v1.16.1 立绘鉴赏：开启帧灌字形 + 置覆层态（draw_reality 早退链独占）
+            prewarm_zoom_text(g, &z);
+            g.zoom_art = Some(z);
+            g.play(crate::sounds::Which::Click);
+        }
     }
 }
 
@@ -114,33 +121,37 @@ fn draw_panel_chrome_act(g: &Game) -> Option<PanelAct> {
 }
 
 // ---------- 页 3：人物（v1.6.0 D 好感度；v1.10.2 单列纵向滚动列表改版）----------
-// 5 位人物（0..=3 四 NPC / 4 道侣）同一纵列滚动，不再藏进翻页：卡 960×330、间距 12、
-// 步距 342，视口 x160..1120 / y116..616（高 500），内容高 5×330+4×12=1698，滚动偏移
-// 钳 [0, 1198]；静止对齐（scroll=i×342，末卡钳 1198）一屏 = 1 整卡 + 下一卡顶部
-// 170px（人名/档次/好感条露出）。交互：拖动 1:1 跟手 + 松手惯性（vel×0.9/帧，
-// |vel|<0.5 停）+ 桌面滚轮 ±48px/格（工程首用 mouse_wheel）+ 右缘页点/底部头像条
-// lerp 0.2/帧跳转；静止向最近卡顶吸附。◀▶ 翻页移除，由滚轮+页点+头像条替代。
+// 5 位人物（0..=3 四 NPC / 4 道侣）同一纵列滚动，不再藏进翻页：卡 960×430、间距 12、
+// 步距 442（v1.16.1 立绘加高：卡 330→430，立绘盒向下延伸 310→402——玩家反馈
+// 「人物画像太小，可以往下翻」），视口 x160..1120 / y116..616（高 500），内容高
+// 5×430+4×12=2198，滚动偏移钳 [0, 1698]；静止对齐（scroll=i×442，末卡钳 1698）
+// 一屏 = 1 整卡 + 下一卡顶部 58px（人名露出）。交互：拖动 1:1 跟手 + 松手惯性
+// （vel×0.9/帧，|vel|<0.5 停）+ 桌面滚轮 ±48px/格（工程首用 mouse_wheel）+ 右缘
+// 页点/底部头像条 lerp 0.2/帧跳转；静止向最近卡顶吸附。◀▶ 翻页移除，由滚轮+页点+
+// 头像条替代。
 // 溢出遮挡双保险（macroquad scissor 不可用：get_context 私有 vendor lib.rs:497，且
 // 引擎 flush 按自身 clip 状态重设 scissor vendor quad_gl.rs:768-771）：
 //   ① 遮幅带——上 104..116（卡间 12px 间隙过顶时上一卡底边最低到 y=104）、下
 //     616..654（卡顶锚定 116 且 scroll 钳 ≥0，卡永不越下缘；收到 654 止，勿盖
 //     panel 内框线 y655，draw.rs panel_card 内框）；
 //   ② 逐元素视口裁剪——卡体/边线/立绘（纹理源等比裁剪）/按钮按视口求交，文本行
-//     越界整行跳过。必要：max scroll 1198 时上一卡顶可到 y=-56，遮幅带盖不住越出
+//     越界整行跳过。必要：max scroll 1698 时上一卡顶可到 y=-282，遮幅带盖不住越出
 //     面板的溢出（y<60 会画到面板外暗场上）。
-// 性能：整卡剔除（card_y≥616 或 card_y+330≤116 连立绘查询一并跳过，任意帧 ≤2 卡在
+// 性能：整卡剔除（card_y≥616 或 card_y+430≤116 连立绘查询一并跳过，任意帧 ≤2 卡在
 // 画）；LazyTex 仅可见卡与头像条取纹理，首开最多解码 npc_elder/npc_merchant 两张
-// （无立绘卡零解码，LazyTex 缓存 None 不重查）。立绘 contain 收进 220×310、底边
-// 对齐（实测素材宽高比 0.456..0.628 → 绘宽 141..195 恒 ≥140 不变形）；NPC 无 AI 图
-// 回退 v1.14.0 程序化像素立绘 217×310（art::npc_pixel_tex，宁清霜/醉道人不再拿
-// 12×12 图标冒充人像），道侣未结缘回退书卷剪影（art::comp_silhouette_tex），
-// 已结缘恒 comp_0..9 真立绘。好感度/档次刻度/增益/赠礼交互与数据全部保留，
-// gift_npc 单口不动（npc.rs:269）；滚动会话态不进存档（×/Esc 归零见 npc_scroll_reset）。
+// （无立绘卡零解码，LazyTex 缓存 None 不重查）。立绘 contain 收进 220×402、底边
+// 对齐（实测素材宽高比 0.456..0.628 → 绘宽 183..220，较 v1.16.0 的 141..195 加宽
+// 30%+ 不变形）；NPC 无 AI 图回退 v1.14.0 程序化像素立绘（art::npc_pixel_tex，
+// 宁清霜/醉道人不再拿 12×12 图标冒充人像），道侣未结缘回退书卷剪影
+// （art::comp_silhouette_tex），已结缘恒 comp_0..9 真立绘。AI 立绘在卡内可点按
+// 全屏鉴赏（v1.16.1 zoom_art 覆层，「放大」徽标提示）。好感度/档次刻度/增益/赠礼
+// 交互与数据全部保留，gift_npc 单口不动（npc.rs:269）；滚动会话态不进存档
+// （×/Esc 归零见 npc_scroll_reset）。
 const NPC_VIEW_Y0: f32 = 116.0; // 视口顶（页签下划线下缘）
 const NPC_VIEW_Y1: f32 = 616.0; // 视口底
-const NPC_CARD_H: f32 = 330.0; // 卡高
-const NPC_STEP: f32 = 342.0; // 卡高 + 间距 12
-const NPC_SCROLL_MAX: f32 = 1198.0; // 内容 1698 − 视口 500
+const NPC_CARD_H: f32 = 430.0; // 卡高（v1.16.1：330→430，立绘盒向下延伸）
+const NPC_STEP: f32 = 442.0; // 卡高 + 间距 12
+const NPC_SCROLL_MAX: f32 = 1698.0; // 内容 2198 − 视口 500
 
 // 视口内竖向裁剪：返回可见段 (y, h)，None = 完全在视口外
 fn npc_clip_band(y: f32, h: f32) -> Option<(f32, f32)> {
@@ -178,13 +189,13 @@ pub(crate) fn npc_card_chrome(x: f32, y: f32, h: f32, bg: Color, border: Color) 
     }
 }
 
-// 立绘：contain 收进 220×310、底边对齐（公式沿用旧卡闭包）；并按视口上下缘对纹理
-// 源等比裁剪（source 为纹理像素，vendor texture.rs:537-545 按纹理尺寸归一）；
-// v1.14.0 起兜底像（28×40 像素立绘/书卷剪影，contain 得 217×310）由调用方经
-// or_else 以 Some 传入；icon 仅剩 tex=None 防御路径（12×12 ×12=144，同像素风不糊）
-// v1.16.0：几何参数化版见 npc_portrait_box——本薄包装保持人物页原签名与几何逐值不变
+// 立绘：contain 收进 220×402、底边对齐（v1.16.1 卡高 430→盒向下延伸 310→402，
+// 公式沿用）；并按视口上下缘对纹理源等比裁剪（source 为纹理像素，vendor
+// texture.rs:537-545 按纹理尺寸归一）；v1.14.0 起兜底像（28×40 像素立绘/书卷剪影）
+// 由调用方经 or_else 以 Some 传入；icon 仅剩 tex=None 防御路径（12×12 ×12=144）
+// v1.16.1：薄包装改传 (220,402,418)——bottom_off 418 = 卡高 430 − 内缩 12
 fn npc_portrait(tex: Option<&Texture2D>, icon: &Texture2D, x: f32, card_y: f32) {
-    npc_portrait_box(tex, icon, x, card_y, 220.0, 310.0, 318.0);
+    npc_portrait_box(tex, icon, x, card_y, 220.0, 402.0, 418.0);
 }
 
 /// v1.16.0 交游图鉴共用：box 参数化立绘（contain 收进 box_w×box_h、底边锚 card_y+bottom_off、
@@ -225,6 +236,110 @@ pub(crate) fn npc_portrait_box(
             ..Default::default()
         },
     );
+}
+
+// ---------- v1.16.1 立绘鉴赏（点立绘放大） ----------
+// 入口三件套：「放大」徽标（卡内立绘盒右下角，纯视觉提示）+ 点按命中（调用方
+// 按各自几何判定）+ 全屏覆层（draw_zoom_overlay，draw_reality 早退链独占）。
+// AI 立绘存在才可点/显徽标（像素兜底/书卷剪影不进鉴赏——放大无意义）。
+
+// 「放大」徽标：立绘盒右下角 58×22（badge 需 AI 立绘实际存在才显示，调用方判定；
+// npc_row_vis 防滚动越缘）。人物页 (220,418) / 图鉴 (150,188)。
+pub(crate) fn zoom_badge(x: f32, y: f32, box_w: f32, bottom_off: f32) {
+    let bx = x + box_w - 58.0;
+    let by = y + bottom_off - 26.0;
+    if !npc_row_vis(by) {
+        return;
+    }
+    draw_rectangle(bx, by, 58.0, 22.0, Color::from_rgba(14, 10, 26, 215));
+    draw_rectangle_lines(bx, by, 58.0, 22.0, 1.0, C_GOLD_D);
+    txt_c("放大", bx + 29.0, by + 3.0, 14, C_GOLD_D);
+}
+
+// 同页人鉴赏档次取值：当前道侣显 Life.comp_fav 实时值，历世卡显初识档（图鉴口径）
+fn comp_zoom_fav(g: &Game, i: usize) -> i32 {
+    let cur = g
+        .life
+        .as_ref()
+        .and_then(|l| l.companion.as_deref())
+        .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn));
+    if cur == Some(i) {
+        g.life.as_ref().map_or(0, |l| l.comp_fav)
+    } else {
+        0
+    }
+}
+
+/// 鉴赏覆层开启帧一次性灌字形（事件帧预热先例 show_banner/指引横带；名字 20/24、
+/// 档次 14/16、关闭提示 14——均既有离散档；ASCII 由菜单期保底覆盖）。人物页
+/// exec_panel_act 与图鉴页直开两路共用本单口。
+pub(crate) fn prewarm_zoom_text(g: &Game, z: &ZoomArt) {
+    prewarm_text("点按任意处返回", &[14]);
+    match *z {
+        ZoomArt::Npc(i) => {
+            let i = i.min(NPC_NAMES.len() - 1);
+            prewarm_text(NPC_NAMES[i], &[20, 24]);
+            prewarm_text(crate::npc::tier_name(g.meta.npc_fav[i]), &[14, 16]);
+        }
+        ZoomArt::Comp(i) => {
+            let i = i.min(COMPANION_NAMES.len() - 1);
+            prewarm_text(COMPANION_NAMES[i], &[20, 24]);
+            prewarm_text(crate::npc::tier_name(comp_zoom_fav(g, i)), &[14, 16]);
+        }
+    }
+}
+
+// 鉴赏覆层（模态独占输入，照 rmodal/ending_show 早退先例）：全屏暗幕 + 立绘 contain
+// 大图（高 550 收进、底边 y=650 居中，较卡内立绘放大约 1.8 倍）+ 名牌（名字 24 /
+// 档次 16 居中）+ 底缘提示。任意点按关闭；开启帧由入口 prewarm_zoom_text 灌字形，
+// 本函数稳态零分配（全 &'static str，无 format!/clone）。
+pub fn draw_zoom_overlay(g: &mut Game) {
+    let Some(z) = g.zoom_art else { return };
+    let (tex, name, tier, col) = match z {
+        ZoomArt::Npc(i) => {
+            let i = i.min(NPC_NAMES.len() - 1);
+            (
+                crate::art::art().npc_tex(i),
+                NPC_NAMES[i],
+                crate::npc::tier_name(g.meta.npc_fav[i]),
+                C_GOLD,
+            )
+        }
+        ZoomArt::Comp(i) => {
+            let i = i.min(COMPANION_NAMES.len() - 1);
+            (
+                crate::art::art().comp_tex(i),
+                COMPANION_NAMES[i],
+                crate::npc::tier_name(comp_zoom_fav(g, i)),
+                C_PURPLE,
+            )
+        }
+    };
+    let Some(t) = tex else {
+        g.zoom_art = None; // 防御合页：纹理缺失不该发生（入口已判 AI 图存在）
+        return;
+    };
+    draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(8, 5, 16, 244));
+    let ar = t.width() / t.height().max(1.0);
+    let dw = (550.0 * ar).min(V_W - 120.0);
+    let dh = dw / ar;
+    draw_texture_ex(
+        &t,
+        (V_W - dw) * 0.5,
+        650.0 - dh,
+        WHITE,
+        DrawTextureParams {
+            dest_size: Some(vec2(dw, dh)),
+            ..Default::default()
+        },
+    );
+    txt_c(name, V_W * 0.5, 34.0, 24, col);
+    txt_c(tier, V_W * 0.5, 72.0, 16, C_DIM);
+    txt_c("点按任意处返回", V_W * 0.5, 668.0, 14, C_DIM);
+    if is_mouse_button_pressed(MouseButton::Left) {
+        g.zoom_art = None;
+        g.play(crate::sounds::Which::Page);
+    }
 }
 
 // v1.16.0：滚动状态机自 draw_npc_page 抽出为单口——图鉴页（gallery.rs）与人物页共用
@@ -320,8 +435,9 @@ fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
 
     // ---------- 卡片（整卡剔除：任意帧 ≤2 卡在画，剔除含立绘查询）----------
     // v1.7.1/1.7.2：有道侣且有 AI 立绘（comp_0..9 按结缘顺序）则替代丹药图标。
-    // 卡片绘制段的 life 不可变借用限定在此块内（块尾归还），命中赠礼以 Gift 传出
-    let (comp_tex, gifted) = {
+    // 卡片绘制段的 life 不可变借用限定在此块内（块尾归还），命中赠礼以 Gift 传出；
+    // v1.16.1 立绘点按命中以 Zoom 传出（赠礼钮在文本列 x+260 起与立绘盒无像素重叠）
+    let (comp_tex, gifted, zoom_hit) = {
         let l = g.life.as_ref();
         let comp_idx = l.and_then(|x| {
             x.companion
@@ -330,10 +446,33 @@ fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
         });
         let comp_tex = comp_idx.and_then(|ci| crate::art::art().comp_tex(ci));
         let mut gifted = None;
+        let mut zoom_hit: Option<crate::game::ZoomArt> = None;
         for i in 0..5usize {
             let card_y = NPC_VIEW_Y0 + i as f32 * NPC_STEP - g.npc_scroll;
             if card_y >= NPC_VIEW_Y1 || card_y + NPC_CARD_H <= NPC_VIEW_Y0 {
                 continue;
+            }
+            // v1.16.1 点立绘放大：AI 立绘存在且点按落在立绘盒（176..396 × 卡顶+16..底-12）
+            // ——像素兜底/书卷剪影不进鉴赏
+            let art_hit = if i < 4 {
+                crate::art::art().npc_tex(i).is_some()
+            } else {
+                comp_tex.is_some()
+            };
+            if art_hit
+                && tap
+                && zoom_hit.is_none()
+                && mx >= 176.0
+                && mx <= 396.0
+                && my >= card_y + 16.0
+                && my <= card_y + 418.0
+            {
+                zoom_hit = Some(if i < 4 {
+                    crate::game::ZoomArt::Npc(i)
+                } else {
+                    // comp_tex Some ⟹ comp_idx Some（同源推导）；unwrap_or(0) 为纪律 1 防御
+                    crate::game::ZoomArt::Comp(comp_idx.unwrap_or(0))
+                });
             }
             let done = if i < 4 {
                 draw_npc_card(g, l, i, card_y, mx, my, tap)
@@ -346,18 +485,21 @@ fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
                 break;
             }
         }
-        (comp_tex, gifted)
+        (comp_tex, gifted, zoom_hit)
     };
-
-    // ---------- 遮幅（口径见本页头注释；C_PANEL α235 半透不蔽物，用其全不透明版）----------
-    let mask = Color::from_rgba(22, 16, 38, 255);
-    draw_rectangle(150.0, 104.0, 980.0, 12.0, mask);
-    draw_rectangle(150.0, 616.0, 980.0, 38.0, mask);
     if let Some(i) = gifted {
         // 赠礼帧到此为止（先例：赠礼后 return；chrome 由调用方补画）；
         // 执行移交 exec_panel_act（滚动偏移在 Game 会话态，位置不丢）
         return Some(PanelAct::Gift(i));
     }
+    if let Some(z) = zoom_hit {
+        return Some(PanelAct::Zoom(z));
+    }
+
+    // ---------- 遮幅（口径见本页头注释；C_PANEL α235 半透不蔽物，用其全不透明版）----------
+    let mask = Color::from_rgba(22, 16, 38, 255);
+    draw_rectangle(150.0, 104.0, 980.0, 12.0, mask);
+    draw_rectangle(150.0, 616.0, 980.0, 38.0, mask);
 
     // ---------- 发现性①：右缘页点（当前卡金色实心；点击 lerp 跳转）----------
     let cur = ((g.npc_scroll / NPC_STEP).round() as i32).clamp(0, 4) as usize;
@@ -488,6 +630,10 @@ fn draw_npc_card(
         .npc_tex(i)
         .or_else(|| crate::art::npc_pixel_tex(i));
     npc_portrait(pix.as_ref(), &crate::art::art().icon_yun, x + 16.0, y);
+    // v1.16.1 立绘鉴赏入口徽标（仅 AI 立绘显示；像素兜底不进鉴赏）
+    if crate::art::art().npc_tex(i).is_some() {
+        zoom_badge(x + 16.0, y, 220.0, 418.0);
+    }
     let col = x + 260.0;
     if npc_row_vis(y + 16.0) {
         txt(NPC_NAMES[i], col, y + 16.0, 24, C_GOLD);
@@ -551,8 +697,9 @@ fn draw_npc_card(
     } else if npc_row_vis(y + 196.0) {
         txt("交情愈深，其人故事自会显于纸上。", col, y + 196.0, 14, C_DIM);
     }
-    // 赠礼钮 230×60 底对齐（仅整钮可见时绘出与可点）；gift_npc 内部再校验灵石（单口）
-    let (bx, by) = (col, y + 258.0);
+    // 赠礼钮 230×60（v1.16.1 底对齐：卡高 430→y+358，随立绘盒向下延伸沉到卡底；
+    // 仅整钮可见时绘出与可点）；gift_npc 内部再校验灵石（单口）
+    let (bx, by) = (col, y + NPC_CARD_H - 72.0);
     if by < NPC_VIEW_Y0 || by + 60.0 > NPC_VIEW_Y1 {
         return false;
     }
@@ -612,6 +759,10 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
         .map(Clone::clone)
         .or_else(crate::art::comp_silhouette_tex);
     npc_portrait(portrait.as_ref(), &crate::art::art().icon_pill, x + 16.0, y);
+    // v1.16.1 立绘鉴赏入口徽标（已结缘真立绘显示；书卷剪影不进鉴赏）
+    if comp_tex.is_some() {
+        zoom_badge(x + 16.0, y, 220.0, 418.0);
+    }
     let col = x + 260.0;
     match l.and_then(|x| x.companion.as_deref()) {
         Some(cn) => {
@@ -719,11 +870,12 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
             if g.meta.companion_lives >= 1 && npc_row_vis(y + 192.0) {
                 wrap_draw(COMP_TALES[0], col, y + 192.0, 14, 640.0, 22.0, C_TEXT);
             }
-            // 剪影下缘小字一行（直接回应「女角色立绘丢了」的误读）
-            if npc_row_vis(y + 290.0) {
+            // 剪影下缘小字一行（直接回应「女角色立绘丢了」的误读；v1.16.1 随卡加高
+            // 下沉：y+286/290 → y+386/390，仍盖在立绘盒底边上方）
+            if npc_row_vis(y + 390.0) {
                 draw_rectangle(
                     x + 16.0,
-                    y + 286.0,
+                    y + 386.0,
                     220.0,
                     22.0,
                     Color::from_rgba(14, 10, 26, 210),
@@ -731,7 +883,7 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
                 txt_c(
                     "结缘之后，立绘自会在此显现",
                     x + 126.0,
-                    y + 290.0, 14,
+                    y + 390.0, 14,
                     C_DIM,
                 );
             }

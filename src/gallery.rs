@@ -17,7 +17,8 @@
 //   format! 仅限动态数值行且 ≤ 可见卡数（首开 ≤3、滚动峰值 ≤4）。
 //   （评审修正 gallery#6：原注释『任意帧 ≤3』失准——吸附静止位与拖动中均为峰值 4）
 use crate::charpanel::{
-    npc_card_chrome, npc_portrait_box, npc_row_vis, scroll_list_tick, tale_unlocked,
+    npc_card_chrome, npc_portrait_box, npc_row_vis, prewarm_zoom_text, scroll_list_tick,
+    tale_unlocked, zoom_badge,
 };
 use crate::data::*;
 use crate::draw::bar;
@@ -82,7 +83,9 @@ pub fn prewarm_corpus() {
 /// 注意：panel_card 底板由调用方 draw_char_panel 统一绘制（同人物页，本页不重铺）。
 pub fn draw_gallery_page(g: &mut Game) {
     // ---------- 滚动状态机（人物页同一单口；图鉴自有 max/step）----------
-    scroll_list_tick(g, GAL_SCROLL_MAX, GAL_STEP);
+    // v1.16.1：tap 捕获——已识真图卡立绘点按进鉴赏覆层（draw_zoom_overlay）
+    let tap = scroll_list_tick(g, GAL_SCROLL_MAX, GAL_STEP);
+    let (mx, my) = crate::cam::mouse();
     let scroll = g.npc_scroll;
     // 当前道侣下标（已识判定的运行时纯推导半边；None = 此生未结缘）
     let cur_comp: Option<usize> = g.life.as_ref().and_then(|l| {
@@ -98,6 +101,21 @@ pub fn draw_gallery_page(g: &mut Game) {
             continue;
         }
         draw_gal_comp_card(g, i, y, cur_comp == Some(i));
+        // v1.16.1 点立绘放大（已识真图才开；立绘盒 176..326 × y+12..y+188）
+        let known = g.meta.comp_bonds[i] > 0 || cur_comp == Some(i);
+        if tap
+            && known
+            && crate::art::art().comp_tex(i).is_some()
+            && mx >= 176.0
+            && mx <= 326.0
+            && my >= y + 12.0
+            && my <= y + 188.0
+        {
+            let z = ZoomArt::Comp(i);
+            prewarm_zoom_text(g, &z);
+            g.zoom_art = Some(z);
+            g.play(crate::sounds::Which::Click);
+        }
     }
 
     // ---------- 分节行（40px，第 10 卡后）----------
@@ -118,6 +136,19 @@ pub fn draw_gallery_page(g: &mut Game) {
             continue;
         }
         draw_gal_npc_card(g, i, y);
+        // v1.16.1 点立绘放大（AI 立绘才开；像素兜底不进鉴赏；几何同上）
+        if tap
+            && crate::art::art().npc_tex(i).is_some()
+            && mx >= 176.0
+            && mx <= 326.0
+            && my >= y + 12.0
+            && my <= y + 188.0
+        {
+            let z = ZoomArt::Npc(i);
+            prewarm_zoom_text(g, &z);
+            g.zoom_art = Some(z);
+            g.play(crate::sounds::Which::Click);
+        }
     }
 
     // ---------- 遮幅（口径同人物页：全不透明面板色，盖住越缘内容）----------
@@ -176,6 +207,10 @@ fn draw_gal_comp_card(g: &Game, i: usize, y: f32, cur: bool) {
         176.0,
         188.0,
     );
+    // v1.16.1 立绘鉴赏入口徽标（已识真图才显示）
+    if known && crate::art::art().comp_tex(i).is_some() {
+        zoom_badge(x + 16.0, y, 150.0, 188.0);
+    }
     let col = x + 190.0; // 立绘位 150 宽 + 24 间隙（人物页 x+260 同构）
     if npc_row_vis(y + 14.0) {
         if known {
@@ -251,6 +286,10 @@ fn draw_gal_npc_card(g: &Game, i: usize, y: f32) {
         176.0,
         188.0,
     );
+    // v1.16.1 立绘鉴赏入口徽标（仅 AI 立绘显示；像素兜底不进鉴赏）
+    if crate::art::art().npc_tex(i).is_some() {
+        zoom_badge(x + 16.0, y, 150.0, 188.0);
+    }
     let col = x + 190.0;
     if npc_row_vis(y + 14.0) {
         txt(NPC_NAMES[i], col, y + 14.0, 20, C_GOLD);
