@@ -84,7 +84,38 @@ display: none;
 </div>
 <div id="errlog"></div>
 <canvas id="glcanvas" tabindex='1'></canvas>
-<script>var GAME_VER = "1.16.9";</script>
+<script>var GAME_VER = "1.16.10";</script>
+<script>
+window.__xxFont = { state: 0, bytes: null };
+(function () {
+function xxFontFail() {
+try { if (window.__xxFont) window.__xxFont.state = -1; } catch (e0) {}
+try {
+var el = document.getElementById("errlog");
+if (el) el.textContent += "[ERR] 字体资源加载失败（font.ttf.deflate）\n";
+} catch (e1) {}
+try {
+if (!window.wasm_exports) {
+if (typeof xx_stage === "function") xx_stage("资源加载失败（字体），点击重试");
+var ld = document.getElementById("loading");
+if (ld) {
+ld.style.pointerEvents = "auto";
+ld.onclick = function () { location.reload(); };
+}
+}
+} catch (e2) {}
+}
+try {
+fetch("font.ttf.deflate?v=" + GAME_VER).then(function (res) {
+if (!res.ok) throw new Error("HTTP " + res.status);
+return res.arrayBuffer();
+}).then(function (buf) {
+window.__xxFont.bytes = new Uint8Array(buf);
+window.__xxFont.state = 1;
+})["catch"](xxFontFail);
+} catch (e) { xxFontFail(); }
+})();
+</script>
 <script>
 (function () {
 try {
@@ -273,6 +304,34 @@ localStorage.setItem(XX_KEY, new TextDecoder("utf-8").decode(bytes));
 },
 on_init: function () {}
 });
+window.miniquad_add_plugin({
+name: "xx_font",
+version: 1,
+register_plugin: function (importObject) {
+importObject.env.xx_font_len = function () {
+var f = window.__xxFont;
+if (!f || f.state === -1) return -2;
+if (f.state === 1 && f.bytes) return f.bytes.length;
+return -1;
+};
+importObject.env.xx_font_read = function (ptr, len) {
+try {
+var f = window.__xxFont;
+if (!f || f.state !== 1 || !f.bytes) return;
+var mem =
+window.wasm_memory && window.wasm_memory.buffer
+? window.wasm_memory.buffer
+: window.wasm_exports && window.wasm_exports.memory
+? window.wasm_exports.memory.buffer
+: null;
+if (!mem) return;
+var arr = new Uint8Array(mem, ptr, len);
+arr.set(f.bytes.subarray(0, len));
+} catch (e) { console.error("xx_font_read:", e); }
+};
+},
+on_init: function () {}
+});
 var XX_GPU_OK = !!(window.WebGLRenderingContext || window.WebGL2RenderingContext);
 var XX_MAX_TEX = 0; // 0 = 未探测
 function xx_probe_max_tex() {
@@ -376,6 +435,14 @@ try {
 if (code === 90) xx_stage("读取存档，构建世界…");
 else if (code === 92) xx_stage("准备就绪…");
 else if (code === 93) xx_stage("进入游戏…");
+else if (code === 95) {
+xx_stage("资源加载失败（字体），点击重试");
+var ld95 = document.getElementById("loading");
+if (ld95) {
+ld95.style.pointerEvents = "auto";
+ld95.onclick = function () { location.reload(); };
+}
+}
 } catch (eS) {}
 };
 importObject.env.xx_click = function (n) {

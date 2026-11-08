@@ -98,6 +98,30 @@ mod xx_dbg {
     }
 }
 
+// v1.16.10 字体外置（仅 wasm）：与 index.html 的 xx_font 插件成对出现（env 导入，
+// wasm 实例化校验导入存在——JS 漏注册或 Rust 漏声明任一侧即实例化即败，与
+// xx_storage/xx_dbg 同模式；三重成对断言见 verify_taptap_zip.py / 构建脚本）。
+// JS 侧与 wasm 下载全并行 fetch font.ttf.deflate?v=GAME_VER：
+//   xx_font_len：-1 = 仍在下载、-2 = 已失败、N ≥ 0 = 就绪字节数
+//   xx_font_read：把就绪字节写入 wasm 内存（ptr/len 由 Rust 分配，len 与
+//                 xx_font_len 报告值一致）
+#[cfg(target_arch = "wasm32")]
+mod xx_font {
+    #[link(wasm_import_module = "env")]
+    unsafe extern "C" {
+        fn xx_font_len() -> i32;
+        fn xx_font_read(ptr: *mut u8, len: i32);
+    }
+
+    pub fn len() -> i32 {
+        unsafe { xx_font_len() }
+    }
+
+    pub fn read(buf: &mut [u8]) {
+        unsafe { xx_font_read(buf.as_mut_ptr(), buf.len() as i32) }
+    }
+}
+
 /// JS → Rust 调试开关入口（?dbg=1 时 JS 在 wasm 就绪后调用）
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
@@ -141,6 +165,33 @@ async fn main() {
     if std::env::var("GF_CLEAN").is_ok() || std::env::var("GF_DEBUG").is_ok() {
         let _ = std::fs::remove_file(save::PATH);
     }
+    // v1.16.10 字体外置（wasm）：字体 deflate 字节经 index.html xx_font 插件回传
+    // （JS 与 wasm 下载全并行预取，exports 就绪时通常已就位——正常路径 0-1 帧命中，
+    // 不把字体下载排到实例化之后串行）。-1=仍在下载、-2=已失败、N=就绪；600 帧
+    // 死线（~10s）只防 wasm 侧无限空转，更长的 JS 侧慢载由 45s 看门狗/D1/D2 自动
+    // 重载兜底。失败/死线 → state(95) 且不进主循环（场景码不发、加载层保持），
+    // JS 侧显「资源加载失败（字体），点击重试」+可点重试——绝不静默黑屏。
+    // 桌面端维持内嵌（ui.rs cfg 包住表本体本身，字节不进 wasm，构建产物零变化）。
+    #[cfg(target_arch = "wasm32")]
+    {
+        let mut waited = 0u32;
+        let len = loop {
+            let l = xx_font::len();
+            if l >= 0 || waited >= 600 {
+                break l;
+            }
+            waited += 1;
+            next_frame().await;
+        };
+        if len <= 0 {
+            xx_dbg::state(95);
+            return;
+        }
+        let mut buf = vec![0u8; len as usize];
+        xx_font::read(&mut buf);
+        ui::init_font_from_bytes(&buf);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
     ui::init_font();
     art::init_art();
     // v1.15.0 X5 排障：启动分段标记（st90 进入主体 / st91 空 Audio 就绪 /

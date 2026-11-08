@@ -86,7 +86,44 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.16.9";</script>
+    <script>var GAME_VER = "1.16.10";</script>
+    <!-- v1.16.10 字体外置：font.ttf.deflate 与 wasm 下载全并行预取（唯一能赢的时序
+         ——env 导入回传方案 vs wasm 内 load_file await：后者把字体下载排到实例化
+         之后串行，反而更慢）。就绪态存 __xxFont（state 0=下载中 1=就绪 -1=失败），
+         由下方 xx_font 插件的 env 导入在 wasm boot 头回传（Rust main.rs 轮询）。
+         失败即如实报错：errlog [ERR] + 加载层失败文案 + 可点重试（与 wasm 拉取失败
+         同级），另有 Rust state(95)/45s 看门狗/D1D2 自动重载三重兜底，绝不静默黑屏。 -->
+    <script>
+        window.__xxFont = { state: 0, bytes: null };
+        (function () {
+            function xxFontFail() {
+                try { if (window.__xxFont) window.__xxFont.state = -1; } catch (e0) {}
+                try {
+                    var el = document.getElementById("errlog");
+                    if (el) el.textContent += "[ERR] 字体资源加载失败（font.ttf.deflate）\n";
+                } catch (e1) {}
+                try {
+                    if (!window.wasm_exports) {
+                        if (typeof xx_stage === "function") xx_stage("资源加载失败（字体），点击重试");
+                        var ld = document.getElementById("loading");
+                        if (ld) {
+                            ld.style.pointerEvents = "auto";
+                            ld.onclick = function () { location.reload(); };
+                        }
+                    }
+                } catch (e2) {}
+            }
+            try {
+                fetch("font.ttf.deflate?v=" + GAME_VER).then(function (res) {
+                    if (!res.ok) throw new Error("HTTP " + res.status);
+                    return res.arrayBuffer();
+                }).then(function (buf) {
+                    window.__xxFont.bytes = new Uint8Array(buf);
+                    window.__xxFont.state = 1;
+                })["catch"](xxFontFail);
+            } catch (e) { xxFontFail(); }
+        })();
+    </script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
          覆盖 canvas 实例的 clientWidth/clientHeight getter（×SS，封顶 4096），
@@ -285,7 +322,7 @@
             } catch (e) { /* 包装失败维持原状：流式可用则用，不可用走旧分支 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.16.9"></script>
+    <script src="mq_js_bundle.js?v=1.16.10"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -315,6 +352,40 @@
                         var bytes = new Uint8Array(wasm_memory.buffer, ptr, len);
                         localStorage.setItem(XX_KEY, new TextDecoder("utf-8").decode(bytes));
                     } catch (e) { console.error("xx_save_write:", e); }
+                };
+            },
+            on_init: function () {}
+        });
+
+        // v1.16.10 字体外置：xx_font 插件（与头部并行预取脚本、Rust main.rs xx_font
+        // extern 块三方成对——wasm 实例化校验导入存在，漏任一侧即实例化即败）。
+        // xx_font_len：-1 = 预取仍在下载、-2 = 已失败、N ≥ 0 = 就绪字节数；
+        // xx_font_read：把就绪字节写入 wasm 内存（buffer 取用照 xx_panic 回退链）。
+        // 必须在 load() 之前注册（与 xx_storage 同理）。
+        window.miniquad_add_plugin({
+            name: "xx_font",
+            version: 1,
+            register_plugin: function (importObject) {
+                importObject.env.xx_font_len = function () {
+                    var f = window.__xxFont;
+                    if (!f || f.state === -1) return -2;
+                    if (f.state === 1 && f.bytes) return f.bytes.length;
+                    return -1;
+                };
+                importObject.env.xx_font_read = function (ptr, len) {
+                    try {
+                        var f = window.__xxFont;
+                        if (!f || f.state !== 1 || !f.bytes) return;
+                        var mem =
+                            window.wasm_memory && window.wasm_memory.buffer
+                                ? window.wasm_memory.buffer
+                                : window.wasm_exports && window.wasm_exports.memory
+                                  ? window.wasm_exports.memory.buffer
+                                  : null;
+                        if (!mem) return;
+                        var arr = new Uint8Array(mem, ptr, len);
+                        arr.set(f.bytes.subarray(0, len));
+                    } catch (e) { console.error("xx_font_read:", e); }
                 };
             },
             on_init: function () {}
@@ -453,10 +524,22 @@
                     // st92→st93 = 收尾；st93 后下一帧即上报场景码 0-6（首帧已
                     // 渲染，加载层由 pollFirstFrame 的场景码判据揭幕）。场景码
                     // 0-6 不改文案（运行期高频上报，加载层此时多已隐藏）。
+                    // v1.16.10 字体外置失败码 95：Rust 轮询 xx_font_len 得 -2/600 帧
+                    // 死线即上报此码并 return（不进主循环）——字体是文本渲染的硬
+                    // 依赖，缺它必有第一帧。加载层转失败文案 + 可点重试（与 wasm
+                    // 拉取失败同级；45s 看门狗/D1D2 自动重载仍兜底）。
                     try {
                         if (code === 90) xx_stage("读取存档，构建世界…");
                         else if (code === 92) xx_stage("准备就绪…");
                         else if (code === 93) xx_stage("进入游戏…");
+                        else if (code === 95) {
+                            xx_stage("资源加载失败（字体），点击重试");
+                            var ld95 = document.getElementById("loading");
+                            if (ld95) {
+                                ld95.style.pointerEvents = "auto";
+                                ld95.onclick = function () { location.reload(); };
+                            }
+                        }
                     } catch (eS) {}
                 };
                 // v1.9.12 三通道（Rust xx_dbg 模块声明，须成对）：

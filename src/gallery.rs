@@ -32,11 +32,20 @@ const GAL_VIEW_Y1: f32 = 616.0;
 const GAL_CARD_H: f32 = 280.0; // 卡高（v1.16.2：200→280——真机反馈图鉴立绘太小，照人物页 330→430 同款向下延伸）
 const GAL_STEP: f32 = 292.0; // 卡高 + 间距 12
 const GAL_TOP_PAD: f32 = 40.0; // 内容首卡前留白
-// 内容高 4208 = 顶白 40 + 10×292（同页人区）+ 40（分节行）+ 12 + 4×292−12（NPC 区，
-// 末卡底 4168）+ 底白 40 → 滚动钳 [0, 3708]（4208 − 视口 500）
+// v1.16.10 布局重排（追加分节不挪既有段，向下延伸）：
+//   同页人区  40 .. 2948（顶白 40 + 10×292−12）
+//   分节行    2960 .. 3000（文狱交游）
+//   NPC 区    3012 .. 4168（4×292−12）
+//   分节行    4180 .. 4220（遭遇手札，v1.16.10 新增）
+//   事件行    4228 起，每行 52（高 46 + 间距 6）× EVENTS.len() 行
+//   尾白 40；滚动钳 = 4228 + N×52 + 40 − 500（视口），draw_gallery_page 内按
+//   EVENTS.len() 现算（扩池自动跟随，硬编码会漂——4208/3708 旧账教训）
 const GAL_SECTION_OFF: f32 = 2960.0; // 分节行顶（= TOP_PAD + 10×292）
 const GAL_NPC_OFF: f32 = 3012.0; // NPC 首卡顶（= 分节行底 3000 + 12 间隙）
-const GAL_SCROLL_MAX: f32 = 3708.0;
+const GAL_EV_SEC_OFF: f32 = 4180.0; // 遭遇手札分节行顶（= NPC 末卡底 4168 + 12）
+const GAL_EV_OFF: f32 = 4228.0; // 事件首行顶（= 分节行底 4220 + 8）
+const GAL_EV_H: f32 = 46.0; // 事件行卡高（纯文本两行：标题/简一行）
+const GAL_EV_STEP: f32 = 52.0; // 行高 + 间距 6
 
 // 首开预热语料（PanelAct::Tab(4) 执行帧一次性灌字形，字号档 [14,16,20] 均既有离散档；
 // 仅静态标签——动态数值行的 ASCII 数字/符号由菜单期 panel_warm_chars 保底覆盖）
@@ -79,12 +88,112 @@ pub fn prewarm_corpus() {
     }
 }
 
+// 遭遇手札分节行/徽标/计数静态串（v1.16.10）：首开帧一次灌字形防滚动期栅格化
+// 触发图集整图重传（照 prewarm_corpus 同款事故教训）。计数串只备 ×1..=9——
+// 实际遭遇同卡 ≥10 次属长尾，走 format! 兜底（≤ 可见行数，页面性能红线同 gallery#6 口径）
+const EV_NOTE_PREWARM: &[&str] = &[
+    "—— 遭遇手札 ——",
+    "未遇",
+    "？？？",
+    "稀有",
+    "链起",
+    "链段",
+    "伴随",
+    "章节",
+    "老年",
+    "宿敌",
+    "遭遇",
+    "×1",
+    "×2",
+    "×3",
+    "×4",
+    "×5",
+    "×6",
+    "×7",
+    "×8",
+    "×9",
+];
+
+/// 遭遇手札首开帧预热（exec_panel_act Tab(4)/指引 Gallery 跳转同口调用）：静态串
+/// 全量 + 已遇事件的标题/简介（未遇不灌——全部 118 条灌齐有图集余量风险，且未遇
+/// 行只显？？？；收录随游玩渐进，预热开销与之同长）
+pub fn prewarm_event_book(g: &Game) {
+    for s in EV_NOTE_PREWARM {
+        prewarm_text(s, &[14]);
+    }
+    for (i, &c) in g.meta.ev_cnt.iter().enumerate() {
+        if c > 0 {
+            if let Some(n) = EVENT_NAMES.get(i) {
+                prewarm_text(n, &[14]);
+            }
+            if let Some(b) = EVENT_BRIEF.get(i) {
+                prewarm_text(b, &[14]);
+            }
+        }
+    }
+}
+
+/// 事件分类徽标单口（纯推导零新表）：伴随/章节/老年/宿敌按门控白名单与特定 id，
+/// 链段=EVENTS 权重 0（仅链内直取），链起=各链首段（弹卡即建链的那条），
+/// 稀有=EVENTS 权重 w∈1..=RARE_W（与 build_event card.rare 同源），余者=遭遇。
+/// 返回 (文案, 色)；id 越界落 ("遭遇", C_DIM) 防御（panic=abort 纪律）。
+pub fn event_badge(id: usize) -> (&'static str, Color) {
+    // 越界防御：表外 id 落「遭遇」，绝不把 w=0 哨兵误判成链段（panic=abort 纪律）
+    let w = match EVENTS.get(id) {
+        Some(&(_, w, _, _)) => w,
+        None => return ("遭遇", C_DIM),
+    };
+    if COMPANION_EVENTS.contains(&id) {
+        return ("伴随", C_GOLD_D);
+    }
+    match id {
+        74 | 75 => return ("章节", C_GOLD),
+        88 | 89 => return ("老年", C_GOLD_D),
+        110 | 111 => return ("宿敌", C_RED),
+        44 | 47 | 50 | 76 | 79 | 85 | 112 | 115 => return ("链起", C_CYAN),
+        _ => {}
+    }
+    if w == 0 {
+        return ("链段", C_CYAN);
+    }
+    if w <= crate::data::RARE_W {
+        return ("稀有", C_PURPLE);
+    }
+    ("遭遇", C_DIM)
+}
+
+// 计数串单口：×1..=9 静态查表零分配（与 EV_NOTE_PREWARM 对齐），≥10 返回空串由
+// 调用方走 format! 兜底（≤ 可见行数；封顶 255）
+fn ev_cnt_str(c: u8) -> &'static str {
+    match c {
+        1 => "×1",
+        2 => "×2",
+        3 => "×3",
+        4 => "×4",
+        5 => "×5",
+        6 => "×6",
+        7 => "×7",
+        8 => "×8",
+        9 => "×9",
+        _ => "",
+    }
+}
+
 /// 图鉴页（char_tab=4）：纯只读滚动列表，无 &mut 交互（滚动经 scroll_list_tick 单口）。
 /// 注意：panel_card 底板由调用方 draw_char_panel 统一绘制（同人物页，本页不重铺）。
 pub fn draw_gallery_page(g: &mut Game) {
     // ---------- 滚动状态机（人物页同一单口；图鉴自有 max/step）----------
     // v1.16.1：tap 捕获——已识真图卡立绘点按进鉴赏覆层（draw_zoom_overlay）
-    let tap = scroll_list_tick(g, GAL_SCROLL_MAX, GAL_STEP);
+    // v1.16.10：滚动钳按 EVENTS.len() 现算（遭遇手札追加在列表尾，扩池自动跟随；
+    // 硬编码 max 会随扩池漂移——4208/3708 旧账教训）
+    // v1.16.10 复审修：snap 按滚动区域传——292 卡栅格吸附与手札 52px 行距失配，
+    // 手札区停手/惯性衰减后会被 lerp 拉回 292 栅格把行卡切在视口缘。分节行进入
+    // 视口（scroll > GAL_EV_SEC_OFF − 视口高）前再让出一个栅格步关吸附：既保
+    // 手札区自由停留，也防「贴线静止被吸过界」的越界前跳（卡栅格区行为不变）。
+    let scroll_max = GAL_EV_OFF + EVENTS.len() as f32 * GAL_EV_STEP + 40.0 - (GAL_VIEW_Y1 - GAL_VIEW_Y0);
+    let snap = g.npc_scroll
+        <= GAL_EV_SEC_OFF - (GAL_VIEW_Y1 - GAL_VIEW_Y0) - GAL_STEP;
+    let tap = scroll_list_tick(g, scroll_max, GAL_STEP, snap);
     let (mx, my) = crate::cam::mouse();
     let scroll = g.npc_scroll;
     // 当前道侣下标（已识判定的运行时纯推导半边；None = 此生未结缘）
@@ -151,6 +260,27 @@ pub fn draw_gallery_page(g: &mut Game) {
         }
     }
 
+    // ---------- v1.16.10 遭遇手札分节行（40px，NPC 区后）----------
+    let esec_y = GAL_VIEW_Y0 + GAL_EV_SEC_OFF - scroll;
+    if esec_y + 40.0 > GAL_VIEW_Y0 && esec_y < GAL_VIEW_Y1 && npc_row_vis(esec_y + 14.0) {
+        txt_c(
+            "—— 遭遇手札 ——",
+            640.0,
+            esec_y + 12.0, 14,
+            Color::from_rgba(162, 152, 184, 220), // 同「—— 现 实 ——」表头语言
+        );
+    }
+
+    // ---------- v1.16.10 遭遇手札事件行（整卡剔除：行 46/步 52 → 视口内峰值 ≤11 行；
+    // 纯文本无立绘无懒解码，format! 仅计数 ≥10 的长尾行 ≤ 可见行数）----------
+    for i in 0..EVENTS.len() {
+        let y = GAL_VIEW_Y0 + GAL_EV_OFF + i as f32 * GAL_EV_STEP - scroll;
+        if y >= GAL_VIEW_Y1 || y + GAL_EV_H <= GAL_VIEW_Y0 {
+            continue;
+        }
+        draw_event_note_row(g, i, y);
+    }
+
     // ---------- 遮幅（口径同人物页：全不透明面板色，盖住越缘内容）----------
     let mask = Color::from_rgba(22, 16, 38, 255);
     draw_rectangle(150.0, 104.0, 980.0, 12.0, mask);
@@ -159,15 +289,81 @@ pub fn draw_gallery_page(g: &mut Game) {
     // ---------- 页脚（y630 固定于视口外，照人物页 411-426；纯推导计数零存档键）----------
     let known = g.meta.comp_bonds.iter().filter(|&&b| b > 0).count();
     let met = g.meta.npc_fav.iter().filter(|&&f| f >= 20).count();
+    let seen_n = g.meta.ev_cnt.iter().filter(|&&c| c > 0).count();
     txt(
         &format!(
-            "同页人 已识 {}/10 · 交游 {}/4 —— 同页之缘起于模拟，跨世持久。",
-            known, met
+            "同页人 已识 {}/10 · 交游 {}/4 · 手札收录 {}/{} —— 同页之缘起于模拟，跨世持久。",
+            known,
+            met,
+            seen_n,
+            EVENTS.len()
         ),
         170.0,
         630.0, 14,
         C_DIM,
     );
+}
+
+// v1.16.10 遭遇手札事件行（纯只读无 &mut 交互）：已遇=标题+简介+徽标+遭遇计数
+// （徽标 event_badge 单口纯推导；标题/简一静态表，未遇整行 ？？？ 不泄题）。
+// 行卡描边照同页人卡语言：稀有紫 / 普通（普通稀有判定与 build_event card.rare 同源
+// ——EVENTS 权重 w∈1..=RARE_W）/ 未遇灰。
+fn draw_event_note_row(g: &Game, i: usize, y: f32) {
+    let x = 160.0;
+    let cnt = g.meta.ev_cnt[i]; // i 循环界内（0..EVENTS.len()），恒界内
+    let seen = cnt > 0;
+    let w = EVENTS[i].1;
+    let rare = w > 0 && w <= crate::data::RARE_W;
+    let (bg, border) = if seen {
+        (
+            Color::from_rgba(40, 32, 58, 200),
+            if rare { C_PURPLE } else { C_GOLD_D },
+        )
+    } else {
+        (
+            Color::from_rgba(26, 22, 42, 190),
+            Color::from_rgba(96, 82, 124, 255), // 灰边（面板禁用描边同色）
+        )
+    };
+    npc_card_chrome(x, y, GAL_EV_H, bg, border);
+    if npc_row_vis(y + 6.0) {
+        if seen {
+            let name = EVENT_NAMES
+                .get(i)
+                .copied()
+                .unwrap_or("？？？"); // 防御：表行错位落 ？？？ 绝不越界
+            txt(name, x + 16.0, y + 6.0, 14, if rare { C_PURPLE } else { C_TEXT });
+        } else {
+            txt("？？？", x + 16.0, y + 6.0, 14, C_DIM);
+        }
+    }
+    if npc_row_vis(y + 24.0) {
+        if seen {
+            // 简一 display-only（EVENT_BRIEF 静态表；未遇不显示不泄题）
+            let brief = EVENT_BRIEF.get(i).copied().unwrap_or("");
+            if !brief.is_empty() {
+                txt(brief, x + 16.0, y + 24.0, 14, C_DIM);
+            }
+        }
+    }
+    // 徽标（已遇才显——未遇不泄分类）与计数（行右）
+    if seen {
+        let (bt, bc) = event_badge(i);
+        if npc_row_vis(y + 6.0) {
+            txt(bt, 900.0, y + 6.0, 14, bc);
+        }
+        let cs = ev_cnt_str(cnt);
+        if npc_row_vis(y + 6.0) {
+            if cs.is_empty() {
+                // ≥10 长尾：format! 兜底（≤ 可见行数，峰值 11）
+                txt_r(&format!("×{}", cnt), 1084.0, y + 6.0, 14, C_GOLD);
+            } else {
+                txt_r(cs, 1084.0, y + 6.0, 14, C_GOLD);
+            }
+        }
+    } else if npc_row_vis(y + 6.0) {
+        txt("未遇", 900.0, y + 6.0, 14, C_DIM);
+    }
 }
 
 // 同页人卡（i=0..=9）：已识 rgba(42,26,52,210)+C_PURPLE 边（现道侣卡语言）、

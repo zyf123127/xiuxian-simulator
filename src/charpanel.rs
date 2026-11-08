@@ -1,7 +1,8 @@
 // v1.5.0 角色面板 v2（底栏「角色」/ C 键，panel=5）：三页签
 // 0 总览：左栏立绘与栖身之地，右区属性摘要（法宝只留计数）
 // 1 法宝：左 3 装备槽（点击卸下）/ 右包内法宝（点击装备）
-// 2 成就·称号：左成就 2 列带进度 / 右称号 17 格（点击佩戴，格 0=自动跟随、格 16=弑神者）
+// 2 成就·称号：左成就 2 列带进度 / 右称号 18 格（点击佩戴，格 0=自动跟随、
+//   格 16=弑神者、格 17=雨夜执印者——v1.16.10 章节称号，首章达成即授）
 use crate::art::draw_cultivator;
 use crate::data::*;
 use crate::draw::{bar, bar_glow, button, panel_card};
@@ -77,6 +78,8 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             // 仅 PanelAct::Tab(4) 执行帧触发，C 键带陈旧 char_tab=4 直开的首帧温开可接受）
             if i == 4 {
                 crate::gallery::prewarm_corpus();
+                // v1.16.10 遭遇手札：静态串 + 已遇事件标题/简一（未遇不灌防图集超量）
+                crate::gallery::prewarm_event_book(g);
             }
             // v1.16.5 旧稿页首开帧预热（同图鉴先例；C 键带陈旧 char_tab=5 直开的
             // 首帧温开可接受——与 Tab(4) 同一口径）
@@ -371,7 +374,11 @@ pub fn draw_zoom_overlay(g: &mut Game) {
 // 由各自 max 钳制收敛；npc_scroll_reset 关面板统一归零）。纯搬移自原 205-279 行：
 // 拖动/惯性/滚轮/吸附/lerp 逻辑逐行未动，仅 NPC_SCROLL_MAX/NPC_STEP 参数化为
 // max/step；返回 tap（位移<8px 的点按帧标记，人物页赠礼钮唯一激活口径）。
-pub(crate) fn scroll_list_tick(g: &mut Game, max: f32, step: f32) -> bool {
+// v1.16.10 复审修：新增 snap 关断——静止对齐吸附是「向 step 栅格 lerp 拉回」，
+// 只适合与 step 同栅格的整卡区；图鉴 v1.16.10 遭遇手札区为 52px 行距（与 292 卡
+// 栅格失配），吸附会把行卡切在视口缘且停手后持续抖动，该区须传 false 自由停留
+// （边界行被视口缘裁切属任意列表的正常滚动形态，bug 在「拉回」不在「裁切」）。
+pub(crate) fn scroll_list_tick(g: &mut Game, max: f32, step: f32, snap: bool) -> bool {
     // ---------- 滚动状态机（会话态，不进存档）----------
     let (mx, my) = crate::cam::mouse();
     let pressed = is_mouse_button_pressed(MouseButton::Left);
@@ -425,13 +432,16 @@ pub(crate) fn scroll_list_tick(g: &mut Game, max: f32, step: f32) -> bool {
         } else {
             g.npc_vel = 0.0;
             // 静止对齐：向最近卡顶吸附（lerp 0.2/帧；末卡钳 max）——任意静止态
-            // =整卡+邻卡露头，页点/头像条的「当前卡」高亮恒有唯一锚
-            let target = ((g.npc_scroll / step).round() * step).clamp(0.0, max);
-            let d = target - g.npc_scroll;
-            if d.abs() > 0.5 {
-                g.npc_scroll += d * 0.2;
-            } else {
-                g.npc_scroll = target;
+            // =整卡+邻卡露头，页点/头像条的「当前卡」高亮恒有唯一锚。
+            // snap=false 时整段跳过（自由停留，v1.16.10 图鉴手札区口径）
+            if snap {
+                let target = ((g.npc_scroll / step).round() * step).clamp(0.0, max);
+                let d = target - g.npc_scroll;
+                if d.abs() > 0.5 {
+                    g.npc_scroll += d * 0.2;
+                } else {
+                    g.npc_scroll = target;
+                }
             }
         }
     }
@@ -474,7 +484,7 @@ fn comp_portrait_idx(l: Option<&Life>, meta: &Meta) -> Option<usize> {
 // 借 life 不可变引用（块尾归还），命中赠礼以 PanelAct::Gift 跨借用传出
 fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
     // ---------- 滚动状态机（单口见 scroll_list_tick；v1.16.0 抽出供图鉴页共用）----------
-    let tap = scroll_list_tick(g, NPC_SCROLL_MAX, NPC_STEP);
+    let tap = scroll_list_tick(g, NPC_SCROLL_MAX, NPC_STEP, true);
     let (mx, my) = crate::cam::mouse();
     let pressed = is_mouse_button_pressed(MouseButton::Left);
 
@@ -1356,11 +1366,13 @@ fn draw_relic_page(g: &Game) -> Option<PanelAct> {
 //   格 0    → 值 -1（自动跟随，恒可选）
 //   格 1..=15 → 值 c-1（0..=14 境界称号，earned = best_realm >= c-1）
 //   格 16   → 值 15（弑神者，earned = neme_slain >= 3）
+//   格 17   → 值 16（v1.16.10 章节称号·雨夜执印者，earned = chap_done bit0 即首章已了）
 fn title_cell(c: usize) -> (&'static str, i32, bool) {
     let g_name = |v: usize| realm_title(v);
     match c {
         0 => ("自动跟随", -1, true),
         16 => ("弑神者", 15, false),
+        17 => ("雨夜执印者", 16, false),
         c => (g_name(c - 1), (c - 1) as i32, false),
     }
 }
@@ -1387,16 +1399,19 @@ fn draw_ach_title_page(g: &Game) -> Option<PanelAct> {
         }
     }
 
-    // 右：称号 3 列 × 6 行 17 格
+    // 右：称号 3 列 × 6 行 18 格（v1.16.10 格 17 恰补满网格：col=2/row=5，x=1000、
+    // y=540..604，在页脚 y636 之上——几何按既有步进公式推算）
     txt("称号（点击佩戴）", 760.0, 118.0, 18, C_GOLD);
     let worn = g.meta.worn_title;
     let neme_slain = g.meta.neme_slain;
     let best_realm = g.meta.best_realm;
-    for c in 0..17usize {
+    let chap_done = g.meta.chap_done;
+    for c in 0..18usize {
         let (name, val, _) = title_cell(c);
         let earned = match c {
             0 => true,
             16 => neme_slain >= 3,
+            17 => chap_done & 1 != 0, // v1.16.10 章节称号：首章「雨夜执印」已了
             _ => best_realm >= (c - 1),
         };
         let col = c % 3;
@@ -1538,6 +1553,34 @@ mod comp_portrait_tests {
         let mut meta = Meta::default();
         meta.feng_bn = 4;
         assert_eq!(comp_portrait_idx(None, &meta), None);
+    }
+}
+
+// ---------------- v1.16.10 章节称号：称号格映射（格/值两处共用单口防 off-by-one） ----------------
+
+#[cfg(test)]
+mod title_cell_tests {
+    use super::*;
+
+    // 格 17 → 值 16（雨夜执印者，earned=chap_done bit0 由 draw_ach_title_page 读格）；
+    // 18 格恰满 3×6 网格（格 17：col=2/row=5）
+    #[test]
+    fn cell17_maps_value16_rainy_seal() {
+        let (name, val, _) = title_cell(17);
+        assert_eq!((name, val), ("雨夜执印者", 16));
+    }
+
+    // 全格值域卫生：0→-1；1..=15→0..=14（境界称号）；16→15（弑神者）；名字非空
+    #[test]
+    fn cells_cover_expected_values() {
+        assert_eq!(title_cell(0).1, -1);
+        assert_eq!(title_cell(0).0, "自动跟随");
+        for c in 1..=15usize {
+            assert_eq!(title_cell(c).1, c as i32 - 1, "格 {} 值漂移", c);
+            assert!(!title_cell(c).0.is_empty());
+        }
+        assert_eq!(title_cell(16).1, 15);
+        assert_eq!(title_cell(16).0, "弑神者");
     }
 }
 

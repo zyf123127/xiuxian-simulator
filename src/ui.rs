@@ -4,18 +4,31 @@ use std::sync::OnceLock;
 
 static FONT: OnceLock<Font> = OnceLock::new();
 
-// v1.16.8 加载小刀③：字体改 raw-deflate 内嵌（assets/font.ttf.deflate 由
-// tools/make_font.py 在产出 font.ttf 后压缩并回环自检——font.ttf 本体仍照常
-// 落盘供 fontcov_full.py/check_chars.py 读 cmap，容器变内容不变）。boot 首帧
-// 在 init_font 内同步解压（miniz_oxide inflate，479KB→~324KB 内嵌，wasm wire
-// 净省 ~100-120KB；解压几 ms 级，同步完成无启动竞态——勘察 risk② 口径）。
+// v1.16.8 加载小刀③：字体 raw-deflate（assets/font.ttf.deflate 由 tools/make_font.py
+// 在产出 font.ttf 后压缩并回环自检——font.ttf 本体仍照常落盘供 fontcov_full.py/
+// check_chars.py 读 cmap，容器变内容不变）。
+// v1.16.10 字体外置（wasm）：include_bytes 整块 cfg(not wasm32) 包住——照 art.rs
+// EMBED 表教训，必须 cfg 静态本体本身，只 cfg 调用方字节照样进数据段。wasm 侧
+// 由 index.html 与 wasm 下载全并行 fetch font.ttf.deflate?v=GAME_VER，经 env 导入
+// xx_font_len/xx_font_read 回传（main.rs boot 头轮询，失败 state(95) 如实报错），
+// wasm 数据段减去整个字体（v1.16.10 时点 deflate ≈378KB，≈旧 wasm 的 31%）。桌面
+// 端内嵌口径不变、构建产物零变化；历史 479KB→324KB 注释字节数已过时删除（以 ls
+// 实测为准）。
+#[cfg(not(target_arch = "wasm32"))]
 static FONT_DEFLATE: &[u8] = include_bytes!("../assets/font.ttf.deflate");
 
-pub fn init_font() {
-    let bytes = miniz_oxide::inflate::decompress_to_vec(FONT_DEFLATE)
+/// 双端共用收口：inflate + load_ttf（桌面 init_font 传内嵌字节；wasm main.rs 传
+/// xx_font 回传字节——解压口径逐字节一致，字体内容零变化）。
+pub fn init_font_from_bytes(deflated: &[u8]) {
+    let bytes = miniz_oxide::inflate::decompress_to_vec(deflated)
         .expect("字体解压失败（deflate 流损坏）");
     let f = load_ttf_font_from_bytes(&bytes).expect("字体加载失败");
     let _ = FONT.set(f);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn init_font() {
+    init_font_from_bytes(FONT_DEFLATE);
 }
 
 pub fn font() -> &'static Font {

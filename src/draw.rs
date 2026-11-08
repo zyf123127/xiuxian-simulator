@@ -788,6 +788,9 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         14,
         C_DIM,
     );
+    // v1.16.10 新手一次性提示（sy= bit4）：修为首满指路一句（单口 sys_hint_break_ready，
+    // 边沿帧才动 meta/落盘；l 借用至上一行已终结，此处 &mut 合法）
+    g.sys_hint_break_ready();
     // ===== v1.16.0 道途一念：任务指引横带 (376,86,896,40) =====
     // v1.16.1 显性化（真机反馈「没看到引导」）：带高 34→40、底色提亮、目标/提示语
     // 升档 14/16→16/18，顶栏另加「任务」钮开道途指引面板（双入口兜底可发现性）。
@@ -2950,7 +2953,7 @@ fn draw_help_panel(g: &mut Game) {
 // 真机反馈「任务引导系统没看到」：指引横带只在现实主界面常驻，玩家在人物/图鉴/
 // 坊市等页签里没有指引入口。本面板给一个全局可达的显性入口：当前目标（guide_index
 // 纯推导，零存档键）+ 跳转按钮（guide::exec_jump 既有单口）+ 修行之道静态五行。
-// v1.16.8 章节书页签：主线八章视图（左列章目/右栏本章引入+目标清单+当前目标高亮
+// v1.16.8 章节书页签：主线章节视图（v1.16.10 九章；左列章目/右栏本章引入+目标清单+当前目标高亮
 // +前情提要）——达成位 chap_done（meta additive ch=），当前目标=首未了目标行。
 // 布局照 draw_help_panel 语言；开启/切签帧字形由 prewarm_chapter_view 事件帧预热。
 // ⚠panel=6 在 Menu 场景是书志页（draw.rs 顶部 dispatch）——两处场景隔离，本面板
@@ -2965,7 +2968,7 @@ const GUIDE_PANEL_LINES: [&str; 5] = [
 const GUIDE_PANEL_NOTE: &str = "主界面顶部金框横带常驻显示当前目标（现实界面）。";
 const GUIDE_TABS: [&str; 2] = ["当前目标", "章节书"];
 
-// 章节书全量字形预热（开启面板/切签事件帧一次；8 章文案+状态词+奖励行+章间记事
+// 章节书全量字形预热（开启面板/切签事件帧一次；九章文案+状态词+奖励行+章间记事
 // 全段+进度串+前情摘要，动态的只有前情摘要一行 &str 借用，稳态帧零栅格化零分配）。
 // v1.16.9 改 pub：guide.rs exec_jump Book 臂横带跳转同口预热（任务钮/跳转共用单口）。
 pub fn prewarm_chapter_view(g: &Game) {
@@ -3104,7 +3107,7 @@ fn draw_guide_panel(g: &mut Game) {
     txt(GUIDE_PANEL_NOTE, 170.0, 560.0, 14, C_DIM);
 }
 
-// v1.16.8 章节书视图：左列八章目录（状态词右上）+ 右栏本章引入/目标清单/前情提要。
+// v1.16.8 章节书视图：左列章目目录（v1.16.10 起九行，状态词右上）+ 右栏本章引入/目标清单/前情提要。
 // 全静态 &str 分片绘制零 format!（帧路径零分配红线）；当前目标=首未了目标行金字高亮；
 // 达成位 meta.chap_done 由 check_chapters 边沿维护，此处纯读取。
 // v1.16.9 右栏加密度：目标行右 x/y 进度（prog_txt 静态查表）+ 章成之礼行（reward_note
@@ -3113,7 +3116,7 @@ fn draw_guide_panel(g: &mut Game) {
 // 222..334 / 目标 382..460 / 礼行 448 / 记事 508..548 / 提要 588..648，均在卡内。
 fn draw_chapter_view(g: &mut Game) {
     let cur = crate::game::Game::chapter_current(&g.meta);
-    // 左列：章目 8 行（y188 起步进 46 → 末行 510，均在卡内且避开标题屏/底栏按钮带）
+    // 左列：章目 9 行（y188 起步进 46 → 末行 556，均在卡内且避开标题屏/底栏按钮带）
     for (i, ch) in crate::data::CHAPTERS.iter().enumerate() {
         let done = g.meta.chap_done >> i & 1 == 1;
         let y = 188.0 + i as f32 * 46.0;

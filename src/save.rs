@@ -115,6 +115,10 @@ pub fn save_text(m: &Meta) -> String {
     // 独立成行置于 h=/hq= 旧稿块之前——勿插 h=/hq= 之间（文件序约定：hq= 挂最近一条 h=）
     s.push_str(&format!("ch={}\n", m.chap_done));
     s.push_str(&format!("sy={}\n", m.sys_seen));
+    // v1.16.10 事件回顾图鉴：EVENTS 全 id 遭遇计数 evc=（照 ach= 先例按表重定形，
+    // 旧档缺键 → vec![0; EVENTS.len()] 零迁移；独立成行置于 h= 旧稿块之前——
+    // 勿插 h=/hq= 之间，文件序约定同 ch=/sy=）
+    s.push_str(&format!("evc={:?}\n", m.ev_cnt));
     // v1.16.5 旧稿档案：近 5 次模拟结算快照，每条一行 h=（前 8 段空格分隔照 Lstat=
     // 先例，cause 取第 9 段整段余量照 note= 自由文本先例——死因含空格不能全切；
     // 缺键 → 空表 = 默认值，零迁移）
@@ -388,6 +392,19 @@ fn parse_save(text: &str) -> Meta {
             // Game::new 按事实静默补齐——位不会被洗掉只会补上）；系统初见闩（缺键 → 0）
             "ch" => m.chap_done = v.trim().parse().unwrap_or(0),
             "sy" => m.sys_seen = v.trim().parse().unwrap_or(0),
+            // v1.16.10 事件遭遇计数（照 ach= 重定形先例 save.rs 上方：短数组补零、
+            // 长数组截断、值 saturating 口径在 clamp 0..=255——u8 溢出回 0 会被
+            // 「>0 即已收录」误判为未遇，故逐值 min(255) 顶格）
+            "evc" => {
+                let a = nums(v);
+                let mut fixed = vec![0u8; crate::data::EVENTS.len()];
+                for (i, &x) in a.iter().enumerate() {
+                    if i < fixed.len() {
+                        fixed[i] = (x.max(0.0) as u64).min(255) as u8;
+                    }
+                }
+                m.ev_cnt = fixed;
+            }
             // v1.16.5 旧稿档案：h=<life> <run> <realm> <age> <years> <dy> <stones> <comp> <cause…>
             // splitn(9,' ') 取余量（cause 含空格照 note= 先例不能全切；值内 '=' 安全——
             // split_once 只切首对）。数字坏值 unwrap_or 回退；realm clamp 0..=14、
@@ -557,7 +574,8 @@ fn parse_save(text: &str) -> Meta {
         });
     }
     // v1.5.0：佩戴称号值域限定 {-1, 0..=14, 15}，越界一律回退自动跟随
-    if !(-1..=15).contains(&m.worn_title) {
+    // （v1.16.10 扩 16=章节称号·雨夜执印者；脏档降级读档越界值仍钳回 -1，无崩溃面）
+    if !(-1..=16).contains(&m.worn_title) {
         m.worn_title = -1;
     }
     // v1.8.0 C5：mvis 缺键（v1.7.x 旧档）迁移——仅当前区域补记为已至，不补发奖励
@@ -1128,7 +1146,9 @@ h=1 2 3 50.0 40 100 800 255 乙
     // ---------------- v1.16.8 章节书：ch=/sy= 回环 / 旧档缺键 0 / 坏值 0 ----------------
 
     // ch=（章节达成位掩码）/ sy=（系统初见闩）回环；缺键零迁移；坏值静默回 0。
-    // ch= 独立成行置于 h= 块之前（文件序约定：勿插 h=/hq= 之间）
+    // ch= 独立成行置于 h= 块之前（文件序约定：勿插 h=/hq= 之间）。
+    // v1.16.10 补验：sy= 新三位 bit2/3/4（首入现实/首次传承/首修为圆满）与
+    // ch= bit8（第九章·书外之章）同口径回环——纯 additive，旧键位不变。
     #[test]
     fn chapters_sys_seen_roundtrip_missing_and_bad() {
         let mut m = Meta::default();
@@ -1144,6 +1164,15 @@ h=1 2 3 50.0 40 100 800 255 乙
         assert_eq!(m2.chap_done, 0b0001_0111);
         assert_eq!(m2.sys_seen, 0b0011);
 
+        // v1.16.10 新位回环：sy bit2..=4（首入现实/首次传承/首修为圆满）+ ch bit8
+        let mut m5 = Meta::default();
+        m5.chap_done = 0x1FF; // 九章全了（bit0..=8）
+        m5.sys_seen = 0b11100; // 三新闩全置
+        let text5 = save_text(&m5);
+        assert!(text5.contains("ch=511\n") && text5.contains("sy=28\n"));
+        let m6 = parse_save(&text5);
+        assert_eq!((m6.chap_done, m6.sys_seen), (0x1FF, 0b11100));
+
         // 旧档缺 ch=/sy= 键 → 0（历史版本从未落盘，向后兼容零迁移；
         // Game::new 载入帧再按事实静默补齐 chap_done）
         let old: String = text
@@ -1158,5 +1187,73 @@ h=1 2 3 50.0 40 100 800 255 乙
         let bad = format!("{}ch=abc\nsy=-\n", OLD_BASE);
         let m4 = parse_save(&bad);
         assert_eq!((m4.chap_done, m4.sys_seen), (0, 0));
+    }
+
+    // v1.16.10 章节称号：佩戴值域扩 16（雨夜执印者）——合法值保留、越界仍钳 -1
+    #[test]
+    fn worn_title_value16_kept_and_out_of_range_clamped() {
+        let t = format!("{}wtitle=16\n", OLD_BASE);
+        assert_eq!(parse_save(&t).worn_title, 16, "章节称号合法值保留");
+        let bad = format!("{}wtitle=17\n", OLD_BASE);
+        assert_eq!(parse_save(&bad).worn_title, -1, "越界仍回退自动跟随");
+    }
+
+    // ---------------- v1.16.10 事件回顾图鉴：evc= 键（回环/缺键/重定形/越值） ----------------
+
+    // 回环：save_text→parse_save evc 逐位相等（>0 即已收录的单一数据源，无 seen 位）
+    #[test]
+    fn evc_roundtrip_bitwise() {
+        let mut m = Meta::default();
+        let n = crate::data::EVENTS.len();
+        m.ev_cnt = vec![0; n];
+        m.ev_cnt[0] = 1;
+        m.ev_cnt[85] = 255; // saturating 顶格
+        m.ev_cnt[n - 1] = 7;
+        let text = save_text(&m);
+        assert!(text.contains("evc="));
+        // evc= 行必须先于 h= 旧稿块（文件序约定同 ch=/sy=；按行首匹配——
+        // 子串 find 会误中 "ach=" 尾部的 "h="）
+        let evc_pos = text
+            .lines()
+            .position(|l| l.starts_with("evc="))
+            .expect("evc= 行缺失");
+        let h_pos = text
+            .lines()
+            .position(|l| l.starts_with("h="))
+            .map(|p| p as isize)
+            .unwrap_or(isize::MAX);
+        assert!(evc_pos < h_pos as usize, "evc= 必须在 h= 旧稿块之前");
+        let back = parse_save(&text);
+        assert_eq!(back.ev_cnt.len(), n);
+        assert_eq!((back.ev_cnt[0], back.ev_cnt[85], back.ev_cnt[n - 1]), (1, 255, 7));
+    }
+
+    // 旧档缺 evc= → 全 0（零迁移，照 ach= 重定形先例）；短数组补零、长数组截断、
+    // 越值钳 0..=255（负值归 0）
+    #[test]
+    fn evc_missing_default_and_reshape() {
+        let m = parse_save(OLD_BASE);
+        assert_eq!(m.ev_cnt, vec![0; crate::data::EVENTS.len()]);
+        let t = format!(
+            "{}evc=[3, 300, -2]\n",
+            OLD_BASE
+        );
+        let m2 = parse_save(&t);
+        assert_eq!(m2.ev_cnt[0], 3);
+        assert_eq!(m2.ev_cnt[1], 255, "越值顶格");
+        assert_eq!(m2.ev_cnt[2], 0, "负值归 0");
+        assert_eq!(m2.ev_cnt[3..], vec![0; crate::data::EVENTS.len() - 3][..]);
+        // 长数组截断（脏档塞超长值不 panic 不越表）
+        let mut long = String::from("evc=[");
+        for i in 0..200 {
+            if i > 0 {
+                long.push_str(", ");
+            }
+            long.push_str(&(i % 256).to_string());
+        }
+        long.push_str("]\n");
+        let m3 = parse_save(&format!("{}{}", OLD_BASE, long));
+        assert_eq!(m3.ev_cnt.len(), crate::data::EVENTS.len());
+        assert_eq!(m3.ev_cnt[117], 117);
     }
 }

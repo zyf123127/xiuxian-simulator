@@ -6,9 +6,9 @@
 // * 帧路径零分配——HINTS 全为 &'static str 字面量，guide_index 是纯布尔分支树，
 //   禁 format!/clone/String（境界名/胜率等数字细节由既有左栏/按钮副标展示，
 //   指引行只指路）。
-// * 非任务链状态机：只是一个 11 叶优先级 if 链，自上而下首中即出。
-// * 终结性（构造性证明——覆盖块之下不放任何叶，无死分支；v1.16.9 链首插终局叶后
-//   重对账）：
+// * 非任务链状态机：只是一个 12 叶优先级 if 链，自上而下首中即出。
+// * 终结性（构造性证明——覆盖块之下不放任何叶，无死分支；v1.16.10 宿敌叶后插
+//   图鉴叶后重对账）：
 //   叶 0 = is_stuck（死局叶，最高优先——三空唯一出路是广告，任何里程碑不得截胡）。
 //   叶 1 = 里程碑叶 total_sims==0（v1.16.8 链首插入，开局无行动引导之补——
 //   主线第一章「开卷首模拟」，压经济叶与修为候破叶，开局推演优先一切养成）。
@@ -16,20 +16,27 @@
 //   四结局未全（endings_seen≠0b1111）——飞升后的唯一主线使命是讨牒 6/6 落款四
 //   结局，压日常修为/经济叶。与叶 1 不互斥（total_sims==0 也可现实破境）但叶 1
 //   在前：开局推演优先于终局收束，里程碑语义保持。
-//   过叶 0/1/2 ⟺ total_sims>0 ∧ ¬is_stuck ∧ ¬(pid10 ∧ ed≠1111)——该态集 ⊆
-//   「过叶 0/1」原域，自此以下与 v1.16.0 原链逐叶等价（原叶 1..8 → 现叶 3..10，
-//   谓词零改动）：Reality 恒 life=Some（draw_reality 早退守卫），过叶 0 ⟺ P≥1 ∨
-//   S≥ex ∨ R≠∅；叶 5/6/7 谓词（修为百分比/洞府双资源/auto∧P<1）与该补集正交、
-//   各自可构造命中；叶 8∨9∨10 = (R≠∅∧P<1∧S<ex) ∨ P≥1 ∨ S≥ex ⊇ 该补集
-//   （R≠∅∧P≥1→9、R≠∅∧S≥ex→10），故任何过叶 0/1/2 的态必在 8/9/10 终结——
-//   链到叶 10 必然终结。里程碑叶与终局叶只置于覆盖块之上，原链内部不动，原终结
-//   证明对剩余子域原样成立。裁叶说明（v1.16.0 沿革）：
-//   赠礼叶/默认闭关叶结构性不可达（被 8/9/10 三分覆盖），移入 futureCandidates，
-//   赠礼引流由人物页/图鉴『有心事待叙』徽标承载。
+//   叶 5 = 图鉴叶（v1.16.10 插入）：∃i npc_fav[i]≥NPC_EVENT_FAV ∧ ¬npc_ev[i]
+//   （同一故人好感已达标而专属事件未抉择）——第六章「故人心事」目标从徽标暗提示
+//   升级为横带可达跳转，压修为候破/洞府/经济等日常叶（主线目标优先日常养成）。
+//   谓词只读 npc_fav/npc_ev，与叶 6..11 的 qi/stones/points/loc 域正交；且非截断
+//   型：抉择事件置 npc_ev[i] 后谓词翻假，链自然落回原域，无新死域。
+//   过叶 0..5 ⟺ total_sims>0 ∧ ¬is_stuck ∧ ¬(pid10 ∧ ed≠1111) ∧ ¬can_break ∧
+//   ¬revenge_ready ∧ ¬图鉴——该态集 ⊆「过叶 0/1」原域，自此以下与 v1.16.0 原链
+//   逐叶等价（原叶 5..10 → 现叶 6..11，谓词零改动）：Reality 恒 life=Some
+//   （draw_reality 早退守卫），过叶 0 ⟺ P≥1 ∨ S≥ex ∨ R≠∅；叶 6/7/8 谓词（修为
+//   百分比/洞府双资源/auto∧P<1）与该补集正交、各自可构造命中；
+//   叶 9∨10∨11 = (R≠∅∧P<1∧S<ex) ∨ P≥1 ∨ S≥ex ⊇ 该补集
+//   （R≠∅∧P≥1→10、R≠∅∧S≥ex→11），故任何过叶 0..5 的态必在 9/10/11 终结——
+//   链到叶 11 必然终结。里程碑叶/终局叶/图鉴叶只置于覆盖块之上，原链内部不动，
+//   原终结证明对剩余子域原样成立。裁叶说明（v1.16.0 沿革）：
+//   赠礼叶/默认闭关叶结构性不可达（被 9/10/11 三分覆盖），移入 futureCandidates，
+//   赠礼引流由人物页/图鉴『有心事待叙』徽标承载（v1.16.10 起另有图鉴叶指路）。
 // * 判定条件全部复用既有单口谓词，禁另写第二实现：is_stuck / can_break /
 //   revenge_ready / sim_cost / exchange_cost / DONGFU_UP_STONES / DONGFU_UP_CONTRIB
-//   ＋ meta.total_sims（里程碑叶唯一新谓词，纯标量读）。
-use crate::data::{DONGFU_UP_CONTRIB, DONGFU_UP_STONES, NODE_DONGFU};
+//   ＋ meta.total_sims（里程碑叶唯一新谓词，纯标量读）＋ meta.npc_fav/npc_ev
+//   （图鉴叶新谓词，读 NPC_EVENT_FAV 常量；既定域数据，非新实现）。
+use crate::data::{DONGFU_UP_CONTRIB, DONGFU_UP_STONES, NODE_DONGFU, NPC_EVENT_FAV};
 use crate::game::{qi_need, Game};
 
 /// 跳转动作（全部复用既有单入口，不复制任何结算逻辑；无 Gift——赠礼叶被裁，见文件头）
@@ -43,6 +50,8 @@ pub enum GuideAct {
     World, // 山河图：crate::world::open_world（内部已做底图预烘）
     Book,  // v1.16.9 章节书：panel=6 + guide_tab=1（横带开面板直落章节书签；
            // 指引面板内点击只切签不关面板——draw 侧归零逻辑对 Book 例外）
+    Gallery, // v1.16.10 交游图鉴：panel=5 + char_tab=4（角色面板直落图鉴页签，
+             // prewarm_corpus 单口预热，与 exec_panel_act Tab(4) 同口）
 }
 
 pub struct GuideHint {
@@ -51,10 +60,11 @@ pub struct GuideHint {
     pub act: GuideAct,
 }
 
-/// 11 叶提示表（下标即优先级；全字面量禁插值）。v1.16.8 链首插叶 1 里程碑叶
+/// 12 叶提示表（下标即优先级；全字面量禁插值）。v1.16.8 链首插叶 1 里程碑叶
 /// （开卷首模拟——主线第一章目标，压经济/养成叶）；v1.16.9 插叶 2 终局叶（问笔后
-/// 落款收束期唯一使命），原 9 叶语义逐叶保留于 3..10。
-pub const HINTS: [GuideHint; 11] = [
+/// 落款收束期唯一使命）；v1.16.10 宿敌叶后插叶 5 图鉴叶（第六章故人心事横带可达），
+/// 原 9 叶语义逐叶保留于 3..4 与 6..11。
+pub const HINTS: [GuideHint; 12] = [
     GuideHint {
         text: "山穷水尽：观看幻境广告，得 2 枚模拟点",
         btn: Some("看广告"),
@@ -79,6 +89,11 @@ pub const HINTS: [GuideHint; 11] = [
         text: "宿敌可寻仇：一战定赏（底栏「寻仇」）",
         btn: None,
         act: GuideAct::None,
+    },
+    GuideHint {
+        text: "故人心事待叙：好感已达，人物·图鉴页抉择专属事件",
+        btn: Some("去图鉴"),
+        act: GuideAct::Gallery,
     },
     GuideHint {
         text: "修为将满：闭关苦修，静候破境",
@@ -144,13 +159,25 @@ pub fn guide_index(g: &Game) -> u8 {
     if g.revenge_ready() {
         return 4;
     }
+    // 5 图鉴·故人心事（v1.16.10 插入）：任一故人好感达 NPC_EVENT_FAV 且其专属
+    //   事件未抉择——第六章「故人心事」目标的横带可达跳转（原为图鉴卡徽标暗提示）。
+    //   只读 npc_fav/npc_ev 既定域（与叶 6..11 域正交，见文件头终结性证明）
+    if g
+        .meta
+        .npc_fav
+        .iter()
+        .zip(g.meta.npc_ev.iter())
+        .any(|(&f, &e)| f >= NPC_EVENT_FAV && !e)
+    {
+        return 5;
+    }
     if let Some(l) = l {
-        // 5 修为将满（≥80% 未满）：闭关候破。can_break 已被叶 3 截走，!can_break
+        // 6 修为将满（≥80% 未满）：闭关候破。can_break 已被叶 3 截走，!can_break
         //   恒真，按规格保留以自明叶面语义（顺序无关、代价一次布尔）
         if !g.can_break() && l.qi / qi_need(l) >= 0.8 {
-            return 5;
+            return 6;
         }
-        // 6 洞府设施可扩建：任一设施未满级且灵石/贡献双资源足够（与 dongfu_up 同口：
+        // 7 洞府设施可扩建：任一设施未满级且灵石/贡献双资源足够（与 dongfu_up 同口：
         //   world.rs:468 clamp(0,3)、未满才可升；lv<3 短路保证 DONGFU_UP_*/[lv] 越界安全）
         if l.loc == NODE_DONGFU
             && (0..3).any(|i| {
@@ -160,27 +187,27 @@ pub fn guide_index(g: &Game) -> u8 {
                     && g.meta.sect_contrib >= DONGFU_UP_CONTRIB[lv]
             })
         {
-            return 6;
+            return 7;
         }
     }
-    // 7 周天吐纳未开：收窄 P<1——有点数可花时不得截胡开模拟
+    // 8 周天吐纳未开：收窄 P<1——有点数可花时不得截胡开模拟
     //   （新玩家首局 Meta::default P=3 必落叶 1 里程碑叶）
     if g.meta.auto == 0 && p < g.sim_cost() {
-        return 7;
-    }
-    // 8 可献祭法宝折算模拟点：点数/灵石两空而法宝尚存
-    if l.map_or(false, |x| !x.relics.is_empty()) && p < g.sim_cost() && stones < ex {
         return 8;
     }
-    // 9 模拟点已足：开卷推演新一生
-    if p >= g.sim_cost() {
+    // 9 可献祭法宝折算模拟点：点数/灵石两空而法宝尚存
+    if l.map_or(false, |x| !x.relics.is_empty()) && p < g.sim_cost() && stones < ex {
         return 9;
     }
-    // 10 灵石充裕：坊市可兑模拟点（兜底终结叶）。life=Some 时到达此臂必 S≥ex：
-    //   ¬叶9 ⟹ P<1，¬叶8（P<1）⟹ R=∅ ∨ S≥ex；R≠∅ 时叶 8 已截走除非 S≥ex，
+    // 10 模拟点已足：开卷推演新一生
+    if p >= g.sim_cost() {
+        return 10;
+    }
+    // 11 灵石充裕：坊市可兑模拟点（兜底终结叶）。life=Some 时到达此臂必 S≥ex：
+    //   ¬叶10 ⟹ P<1，¬叶9（P<1）⟹ R=∅ ∨ S≥ex；R≠∅ 时叶 9 已截走除非 S≥ex，
     //   R=∅ 时 ¬is_stuck（P<1）⟹ S≥ex——构造性证明见文件头。
     //   life=None 简并态在绘制路径不可达（draw_reality 早退守卫）。
-    10
+    11
 }
 
 /// 跳转执行器：横带按钮唯一出口。全部走既有单入口，不复制任何结算逻辑；
@@ -218,6 +245,20 @@ pub fn exec_jump(g: &mut Game, act: GuideAct) {
             }
             g.guide_tab = 1;
             crate::draw::prewarm_chapter_view(g);
+            g.play(crate::sounds::Which::Page);
+        }
+        GuideAct::Gallery => {
+            // v1.16.10 交游图鉴：角色面板（panel=5）直落图鉴页签（char_tab=4），
+            // 首开帧字形预热走 prewarm_corpus 单口（与 exec_panel_act Tab(4) 同口；
+            // 幂等——重复预热只多一次查表，事件帧级无稳态开销）
+            if g.panel != 5 || g.char_tab != 4 {
+                g.panel = 5;
+                g.char_tab = 4;
+                crate::gallery::prewarm_corpus();
+            }
+            // v1.16.10 遭遇手札预热同口补齐（与 exec_panel_act Tab(4) 逐字等价；
+            // 幂等，未遇事件不灌）
+            crate::gallery::prewarm_event_book(g);
             g.play(crate::sounds::Which::Page);
         }
     }
