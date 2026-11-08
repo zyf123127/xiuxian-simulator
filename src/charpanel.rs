@@ -1,8 +1,9 @@
 // v1.5.0 角色面板 v2（底栏「角色」/ C 键，panel=5）：三页签
 // 0 总览：左栏立绘与栖身之地，右区属性摘要（法宝只留计数）
 // 1 法宝：左 3 装备槽（点击卸下）/ 右包内法宝（点击装备）
-// 2 成就·称号：左成就 2 列带进度 / 右称号 18 格（点击佩戴，格 0=自动跟随、
-//   格 16=弑神者、格 17=雨夜执印者——v1.16.10 章节称号，首章达成即授）
+// 2 成就·称号：左成就 2 列带进度 / 右称号 19 格（点击佩戴，格 0=自动跟随、
+//   格 16=弑神者、格 17=雨夜执印者——v1.16.10 章节称号，首章达成即授；
+//   格 18=执笔人——v1.16.15 全卷称号，四结局全览即授）
 use crate::art::draw_cultivator;
 use crate::data::*;
 use crate::draw::{bar, bar_glow, button, panel_card};
@@ -95,6 +96,12 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             // 首帧温开可接受——与 Tab(4) 同一口径）
             if i == 5 {
                 prewarm_hist(g);
+            }
+            // v1.16.15 成就·称号页首开帧预热：格 18『执笔人』为新静态名（未达成
+            // 档最常见态也画灰行）——冷栅格化会触发 2048² 图集整图重传，照图鉴/
+            // 旧稿先例开帧一次灌齐
+            if i == 2 {
+                prewarm_title_page();
             }
             g.char_tab = i;
             g.play(crate::sounds::Which::Page);
@@ -1377,13 +1384,32 @@ fn draw_relic_page(g: &Game) -> Option<PanelAct> {
 //   格 1..=15 → 值 c-1（0..=14 境界称号，earned = best_realm >= c-1）
 //   格 16   → 值 15（弑神者，earned = neme_slain >= 3）
 //   格 17   → 值 16（v1.16.10 章节称号·雨夜执印者，earned = chap_done bit0 即首章已了）
+//   格 18   → 值 17（v1.16.15 全卷称号·执笔人，earned = endings_seen == 0b1111 四结局全览）
 fn title_cell(c: usize) -> (&'static str, i32, bool) {
     let g_name = |v: usize| realm_title(v);
     match c {
         0 => ("自动跟随", -1, true),
         16 => ("弑神者", 15, false),
         17 => ("雨夜执印者", 16, false),
+        18 => ("执笔人", 17, false),
         c => (g_name(c - 1), (c - 1) as i32, false),
+    }
+}
+
+// v1.16.15 成就·称号页全量字形预热单口（照 prewarm_book_record 单口语言）：
+// 首开帧（Tab(2) 执行帧）一次灌齐 19 格名+页头/页签静态串——格 18『执笔人』为
+// 新静态名，未达成档（endings_seen 未满最常见态）也画灰行，漏灌则首开帧冷
+// 栅格化触发 2048² 图集整图重传。动态值（境界称号名/页脚提示）源自静态表
+// 且经人物页/结算屏常显已热，不入本口
+pub fn prewarm_title_page() {
+    prewarm_text("成就", &[18]);
+    prewarm_text("称号（点击佩戴）", &[18]);
+    for c in 0..19usize {
+        let (name, _, _) = title_cell(c);
+        prewarm_text(name, &[14]);
+    }
+    for s in ["自动跟随", "佩戴中", "可佩戴", "未获得"] {
+        prewarm_text(s, &[14]);
     }
 }
 
@@ -1409,31 +1435,33 @@ fn draw_ach_title_page(g: &Game) -> Option<PanelAct> {
         }
     }
 
-    // 右：称号 3 列 × 6 行 18 格（v1.16.10 格 17 恰补满网格：col=2/row=5，x=1000、
-    // y=540..604，在页脚 y636 之上——几何按既有步进公式推算）
+    // 右：称号 3 列 × 7 行 19 格（v1.16.15 格 18 执笔人破 18 满格：步进 78→70、
+    // 格高 64→60 三处常量同改——行 6 y=570..630 仍在页脚 y636 之上，行间隙 10px）
     txt("称号（点击佩戴）", 760.0, 118.0, 18, C_GOLD);
     let worn = g.meta.worn_title;
     let neme_slain = g.meta.neme_slain;
     let best_realm = g.meta.best_realm;
     let chap_done = g.meta.chap_done;
-    for c in 0..18usize {
+    let endings_seen = g.meta.endings_seen;
+    for c in 0..19usize {
         let (name, val, _) = title_cell(c);
         let earned = match c {
             0 => true,
             16 => neme_slain >= 3,
             17 => chap_done & 1 != 0, // v1.16.10 章节称号：首章「雨夜执印」已了
+            18 => endings_seen == 0b1111, // v1.16.15 全卷称号：四结局全览
             _ => best_realm >= (c - 1),
         };
         let col = c % 3;
         let row = c / 3;
         let x = 760.0 + col as f32 * 120.0;
-        let y = 150.0 + row as f32 * 78.0;
+        let y = 150.0 + row as f32 * 70.0;
         let is_worn = worn == val;
         draw_rectangle(
             x,
             y,
             112.0,
-            64.0,
+            60.0,
             if is_worn {
                 Color::from_rgba(70, 52, 24, 235)
             } else if earned {
@@ -1446,7 +1474,7 @@ fn draw_ach_title_page(g: &Game) -> Option<PanelAct> {
             x,
             y,
             112.0,
-            64.0,
+            60.0,
             if is_worn { 2.5 } else { 1.5 },
             if is_worn {
                 C_GOLD
@@ -1459,7 +1487,7 @@ fn draw_ach_title_page(g: &Game) -> Option<PanelAct> {
         txt_c(
             name,
             x + 56.0,
-            y + 14.0, 14,
+            y + 12.0, 14,
             if earned { C_TEXT } else { C_DIM },
         );
         txt_c(
@@ -1471,7 +1499,7 @@ fn draw_ach_title_page(g: &Game) -> Option<PanelAct> {
                 "未获得"
             },
             x + 56.0,
-            y + 40.0,
+            y + 36.0,
             14, // v1.8.0 A8：12→14 字号下限
             if is_worn {
                 C_GOLD
@@ -1483,7 +1511,7 @@ fn draw_ach_title_page(g: &Game) -> Option<PanelAct> {
         );
         if is_mouse_button_pressed(MouseButton::Left) {
             let (mx, my) = crate::cam::mouse();
-            if mx >= x && mx <= x + 112.0 && my >= y && my <= y + 64.0 {
+            if mx >= x && mx <= x + 112.0 && my >= y && my <= y + 60.0 {
                 return Some(PanelAct::Title(val)); // 执行移交 exec_panel_act
             }
         }
@@ -1572,15 +1600,24 @@ mod comp_portrait_tests {
 mod title_cell_tests {
     use super::*;
 
-    // 格 17 → 值 16（雨夜执印者，earned=chap_done bit0 由 draw_ach_title_page 读格）；
-    // 18 格恰满 3×6 网格（格 17：col=2/row=5）
+    // 格 17 → 值 16（雨夜执印者，earned=chap_done bit0 由 draw_ach_title_page 读格）
     #[test]
     fn cell17_maps_value16_rainy_seal() {
         let (name, val, _) = title_cell(17);
         assert_eq!((name, val), ("雨夜执印者", 16));
     }
 
-    // 全格值域卫生：0→-1；1..=15→0..=14（境界称号）；16→15（弑神者）；名字非空
+    // v1.16.15 格 18 → 值 17（执笔人，earned=endings_seen==0b1111 由
+    // draw_ach_title_page 读格）；19 格 3×7 网格（格 18：col=2/row=6，y=570..630
+    // 仍在页脚 y636 之上——布局三常量 19/70/60 已同步，勿改回 off-by-one）
+    #[test]
+    fn cell18_maps_value17_scribe() {
+        let (name, val, _) = title_cell(18);
+        assert_eq!((name, val), ("执笔人", 17));
+    }
+
+    // 全格值域卫生：0→-1；1..=15→0..=14（境界称号）；16→15（弑神者）；
+    // 17→16（章节）；18→17（全卷）；名字非空
     #[test]
     fn cells_cover_expected_values() {
         assert_eq!(title_cell(0).1, -1);
@@ -1591,6 +1628,8 @@ mod title_cell_tests {
         }
         assert_eq!(title_cell(16).1, 15);
         assert_eq!(title_cell(16).0, "弑神者");
+        assert_eq!(title_cell(18).1, 17);
+        assert_eq!(title_cell(18).0, "执笔人");
     }
 }
 

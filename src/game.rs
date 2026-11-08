@@ -45,8 +45,9 @@ pub const CHAIN_TTL: u8 = 8;
 
 // v1.16.7 道侣同行事件白名单：sim.companion 存在才入池（与 sect/lingmai 门闩
 // 同点结算，见 sim_event_weights）；链内段 45/46/48/49/51/52 与 v1.16.8 链内段
-// 77/78/80/81 用 EVENTS 表权重 0 表达「仅链内出现」，无需代码特判
-pub const COMPANION_EVENTS: [usize; 6] = [53, 54, 55, 82, 83, 84];
+// 77/78/80/81 用 EVENTS 表权重 0 表达「仅链内出现」，无需代码特判。
+// v1.16.15 道侣深化 +3：156 雪窖藏酿/157 同守昙花/158 雨后补瓦
+pub const COMPANION_EVENTS: [usize; 9] = [53, 54, 55, 82, 83, 84, 156, 157, 158];
 
 // v1.16.7 置链臂 special 槽位段：20..=31（apply_eff 链裁决据此区分「重写链态」
 // 与「本次抉择即链终局」）。v1.16.8 续编：28/29=链4（灯楼谜约）两段推进、
@@ -2056,8 +2057,30 @@ impl Game {
             3 if d_unlocked => 3,
             _ => return, // 未解锁的 D 位（脏点击/未来卡面）卫语句拒绝
         };
-        self.meta.endings_seen |= 1 << e;
+        // v1.16.15 结局之礼：位边沿幂等——首录才发奖（照 check_chapters newly=
+        // done&!chap_done 同款取舍：旧档已置位静默不补发，不回溯奖励）；奖励走
+        // 金行 log（同帧 check_chapters 将推章节横幅，横幅单槽后写胜会互吞，
+        // log 是唯一保底通道——数字写全）。全收集帧=count_ones 3→4 天然单帧
+        // 边沿：金行 log+toast 指路（不发横幅、不叠道韵——四结局之礼已足额）
+        let mask = 1u8 << e;
+        let first = self.meta.endings_seen & mask == 0;
+        self.meta.endings_seen |= mask;
         let ed = &ENDINGS[e];
+        if first {
+            let dy = ENDING_DY[e];
+            self.meta.dao_yun += dy;
+            self.log(
+                format!("【结局之礼】首录《{}》——道韵 +{}", ed.name, dy),
+                C_GOLD,
+            );
+            if self.meta.endings_seen == 0b1111 {
+                self.log(
+                    "【全卷之礼】四结局集齐——称号『执笔人』可佩（角色·成就称号页）。".to_string(),
+                    C_GOLD,
+                );
+                self.toast("称号可佩：执笔人（角色·成就称号页）", C_GOLD);
+            }
+        }
         self.log(format!("【结局达成】{}——{}", ed.name, ed.alias), C_GOLD);
         self.show_banner(format!("结 局 · 《{}》", ed.name), C_GOLD);
         // 剧情演出包②：终局页入场节奏 0.6s（暗幕先行→标题→正文→合页钮解禁）。
@@ -3679,7 +3702,13 @@ impl Game {
 
                 card.opts.push(("探索一番".into(), e1));
 
-                card.opts.push(("敬而远之".into(), Eff::new()));
+                // v1.16.15 复审口径：空选项补一行日志反馈（照 17 摆手离开同款），
+                // 抉择后日志区不再无痕
+                let mut e0 = Eff::new();
+
+                e0.msg = vec!["你朝洞府遥遥一揖，转身下山。".into()];
+
+                card.opts.push(("敬而远之".into(), e0));
             }
 
             3 => {
@@ -3698,15 +3727,34 @@ impl Game {
 
                     card.opts.push(("大喜收下".into(), e));
                 } else {
-                    card.text = "老掌柜拉住你：\"小哥，这瓶丹药便宜卖你。\"".into();
+                    // v1.16.15 复审口径：购药是花销（照 140 半价购书同款）——聚气丹
+                    // 铺价 200×(1+realm)^1.2，地摊价照 ss 缩放（realm0=100，约铺价
+                    // 四分之一）零扣费白得是漏洞；买不起照 17 云游商人钱不够同款
+                    let g = (100.0 * ss) as i64;
 
-                    let mut e = Eff::new();
+                    let can = self.sim.as_ref().map_or(false, |s| s.stones >= g);
 
-                    e.pill = Some((0, 2));
+                    if can {
+                        card.text = "老掌柜拉住你：\"小哥，这瓶丹药便宜卖你。\"".into();
 
-                    e.msg = vec!["获得聚气丹 ×2".into()];
+                        let mut e = Eff::new();
 
-                    card.opts.push(("购下".into(), e));
+                        e.stones = -g;
+
+                        e.pill = Some((0, 2));
+
+                        e.msg = vec![format!("获得聚气丹 ×2，灵石-{}", fmt_int(g))];
+
+                        card.opts.push(("购下".into(), e));
+                    } else {
+                        card.text = "老掌柜拉住你：\"小哥，这瓶丹药便宜卖你……\"你摸了摸储物袋，钱不够。".into();
+
+                        let mut e0 = Eff::new();
+
+                        e0.msg = vec!["你把丹瓶放回摊上，讪讪走开。".into()];
+
+                        card.opts.push(("讪讪离开".into(), e0));
+                    }
                 }
             }
 
@@ -3802,7 +3850,11 @@ impl Game {
 
                 card.opts.push(("搏命夺取".into(), e1));
 
-                card.opts.push(("悄然退去".into(), Eff::new()));
+                let mut e0 = Eff::new();
+
+                e0.msg = vec!["你退入林中，由它静静成形。".into()];
+
+                card.opts.push(("悄然退去".into(), e0));
             }
 
             9 => {
@@ -3938,26 +3990,44 @@ impl Game {
             17 => {
                 card.title = "云游商人".into();
 
+                // v1.16.15 复审口径：洗髓丹是永久灵根+2 的重价丹（铺底价
+                // PILL_PRICES[4]=5000），800 平价不随境界与经济规模脱节——照铺价
+                // 指数 (1+realm)^1.2 随境界上调（realm0 维持 800 不变，realm9≈
+                // 12680，仍远低于同期铺价，是行脚商让利价）。正文带实价，can 门
+                // 用同一价格防「门过了却扣成负」（apply_eff 已 max(0) 兜底）
+                let realm = self.sim.as_ref().map_or(0, |s| s.realm);
+
+                let price = (800.0 * (1.0 + realm as f64).powf(1.2)).ceil() as i64;
+
                 let mut e = Eff::new();
 
                 e.pill = Some((4, 1));
 
-                e.stones = -800;
+                e.stones = -price;
 
-                e.msg = vec!["获得洗髓丹 ×1".into()];
+                e.msg = vec![format!("获得洗髓丹 ×1，灵石-{}", fmt_int(price))];
 
-                let can = self.sim.as_ref().map_or(false, |s| s.stones >= 800);
+                let can = self.sim.as_ref().map_or(false, |s| s.stones >= price);
 
                 if can {
-                    card.text = "蒙面商人：\"洗髓丹一枚，800 灵石，过了这村没这店。\"".into();
+                    card.text = format!(
+                        "蒙面商人：\"洗髓丹一枚，{} 灵石，过了这村没这店。\"",
+                        fmt_int(price)
+                    );
 
                     card.opts.push(("买下".into(), e));
                 } else {
-                    card.text =
-                        "蒙面商人：\"洗髓丹一枚，童叟无欺……\"你摸了摸储物袋，钱不够。".into();
+                    card.text = format!(
+                        "蒙面商人：\"洗髓丹一枚，{} 灵石，童叟无欺……\"你摸了摸储物袋，钱不够。",
+                        fmt_int(price)
+                    );
                 }
 
-                card.opts.push(("摆手离开".into(), Eff::new()));
+                let mut e0 = Eff::new();
+
+                e0.msg = vec!["你冲商人拱了拱手，转身自去。".into()];
+
+                card.opts.push(("摆手离开".into(), e0));
             }
 
             18 => {
@@ -4084,7 +4154,11 @@ impl Game {
 
                 card.opts.push(("孤身深入".into(), e1));
 
-                card.opts.push(("转身就走".into(), Eff::new()));
+                let mut e0 = Eff::new();
+
+                e0.msg = vec!["你不入魔窟，原路下山。".into()];
+
+                card.opts.push(("转身就走".into(), e0));
             }
 
             24 => {
@@ -4164,11 +4238,16 @@ impl Game {
 
                 let mut e2 = Eff::new();
 
-                e2.stones = -500;
+                // v1.16.15 复审口径：香火钱照 ss 缩放（照 38 拍卖量级）——500 平价
+                // 与气运+8 的收益量级在后期失衡；realm0=180 与既有收入事件自洽
+                e2.stones = -((180.0 * ss) as i64);
 
                 e2.luck = 8.0;
 
-                e2.msg = vec!["你留下香火钱。气运+8".into()];
+                e2.msg = vec![format!(
+                    "你留下香火钱。灵石-{}，气运+8",
+                    fmt_int((180.0 * ss) as i64)
+                )];
 
                 card.opts.push(("捐些香火".into(), e2));
             }
@@ -4345,7 +4424,8 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 5.0;
                 e2.msg = vec!["你替道场扫尘七日——扫地亦是修行。道心+5".into()];
-                card.opts.push(("扫塔七日".into(), e2));
+                // v1.16.15 复审口径：正文是废弃道场无塔，选项照 msg 同词改「扫尘」
+                card.opts.push(("扫尘七日".into(), e2));
             }
             43 => {
                 card.title = "沙暴藏窟".into();
@@ -4572,7 +4652,10 @@ impl Game {
                 card.opts.push(("佩剑同行".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
-                e2.msg = vec!["你说「剑当护道，不当争斗」，TA 笑了：「也好。」道心+3".into()];
+                e2.msg = vec![format!(
+                    "你说「剑当护道，不当争斗」，{} 笑了：「也好。」道心+3",
+                    cn
+                )];
                 card.opts.push(("推辞不受".into(), e2));
             }
             55 => {
@@ -4604,7 +4687,7 @@ impl Game {
                 e2.msg = vec![
                     "你把身后让给道侣，自己硬受了这一击——行囊尽毁，却听见那追来的脚步声。灵石-10%，气运+2".into(),
                 ];
-                card.opts.push(("护TA先走".into(), e2));
+                card.opts.push(("护身后人先走".into(), e2));
             }
             56 => {
                 // 稀有：星坠荒原（w2；special6 五五开试炼臂）
@@ -5219,8 +5302,10 @@ impl Game {
                 card.opts.push(("取匣而走".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
+                // v1.16.15 复审口径：删「来日对决又高一分胜算」空头承诺——
+                // sim_neme 胜率只看 power 比，布防图/道心无任何机制钩子
                 e2.msg = vec![
-                    "你不取分文，只把粮道布防图付之一炬——断其羽翼，来日对决又高一分胜算。道心+3".into(),
+                    "你不取分文，只把粮道布防图付之一炬——等他回营，只见满地灰烬。道心+3".into(),
                 ];
                 card.opts.push(("毁其布防".into(), e2));
             }
@@ -5254,8 +5339,11 @@ impl Game {
                 ];
                 card.opts.push(("收徒传艺".into(), e1));
                 let mut e2 = Eff::new();
+                // v1.16.15 复审口径：旧稿结缘，后会有报——补气运+2 消解对收徒臂
+                // 的严格支配（dao 少一分但多一线善缘）
                 e2.dao = 2.0;
-                e2.msg = vec!["你把一部旧稿送他：「看得懂是缘，看不懂是命。」道心+2".into()];
+                e2.luck = 2.0;
+                e2.msg = vec!["你把一部旧稿送他：「看得懂是缘，看不懂是命。」道心+2，气运+2".into()];
                 card.opts.push(("赠稿不收徒".into(), e2));
             }
             // 高境界补充（90..=91）：mr 地板 EVENTS 第三元直写即生效（weights 内
@@ -5349,7 +5437,7 @@ impl Game {
                 e1.stones = g0;
                 e1.dao = 3.0;
                 e1.msg = vec![format!(
-                    "第三具棺里只有一册无字书。你读完，书页散作灰。道心+3，灵石+{}",
+                    "第三具棺里只有一册无字书。你读完，书页散作灰。棺底殉葬的灵石归了你。道心+3，灵石+{}",
                     fmt_int(g0)
                 )];
                 card.opts.push(("攀崖探棺".into(), e1));
@@ -5691,8 +5779,10 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = -g;
                 e2.dao = 1.0;
+                // v1.16.15 复审口径：正文立规「雾河渡人不收灵石」——船夫分文不取，
+                // 灵石是你自己压在渡口石上走的（损失自担），规矩不破
                 e2.msg = vec![format!(
-                    "你放下一笔灵石：「我不讲故事。」老船夫摇头，把船拢回岸。灵石-{}，道心+1",
+                    "你把灵石压在渡口石上：「我不讲故事。」老船夫摇头拢船自去——石上灵石，你连头也没回。灵石-{}，道心+1",
                     fmt_int(g)
                 )];
                 card.opts.push(("付石不语".into(), e2));
@@ -5803,7 +5893,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.special = 41; // 置链：→119 雪夜拦道
-                e1.msg = vec!["「三日后，断名崖。」你只回了这五个字。道心+1".into()];
+                e1.msg = vec!["「三日后，断名崖。」你只回了这六个字。道心+1".into()];
                 card.opts.push(("应下战书".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
@@ -6228,10 +6318,17 @@ impl Game {
                 // 链12 中段（仅链内）
                 card.title = "代笔提要·续".into();
                 card.text = "新书主是个绸缎商，不识修行书，却把铺面翻修得亮堂。他听伙计说你识货，请你替架上旧抄本各写一句提要——写得中肯书就卖得动，酬你一成书资。".into();
+                // v1.16.15 复审口径：卡面既言「酬你一成书资」，msg 补灵石实付
+                // （照 116 添柴 30*ss 同量级取 45*ss，与既有收入事件持平）
+                let g141 = (45.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
+                e1.stones = g141;
                 e1.special = 48; // 置链：→142 肆后书案
-                e1.msg = vec!["你写了七日。绸缎商言而有信，书资分毫不差——还多包了一层油纸。气运+1".into()];
+                e1.msg = vec![format!(
+                    "你写了七日。绸缎商言而有信，书资分毫不差——还多包了一层油纸。灵石+{}，气运+1",
+                    fmt_int(g141)
+                )];
                 card.opts.push(("应下提要".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
@@ -6289,9 +6386,12 @@ impl Game {
                 ];
                 card.opts.push(("搭叶为桥".into(), e1));
                 let mut e2 = Eff::new();
+                // v1.16.15 复审口径：以灵力行功亦是耗损——补 qi_pct 消解「搭叶
+                // 为桥」的全面支配（第二币种：动用灵气得道心少但修为不空过）
                 e2.dao = 1.0;
+                e2.qi_pct = 0.04;
                 e2.msg = vec![
-                    "你以灵气托起整队蚁群送过对岸。它们列队向你颔首——虫豸也识礼数。道心+1".into(),
+                    "你以灵气托起整队蚁群送过对岸。它们列队向你颔首——虫豸也识礼数。修为+4%，道心+1".into(),
                 ];
                 card.opts.push(("灵气渡蚁".into(), e2));
             }
@@ -6505,6 +6605,212 @@ impl Game {
                     "你把讲稿抄了一份，与门外候着的散修分阅——灯传下去，才算灯。道心+1，气运+1".into(),
                 ];
                 card.opts.push(("抄稿分阅".into(), e2));
+            }
+
+            // ---------- v1.16.15 扩池 9 条（156..=164）----------
+            // 伴随深化 3（156..=158，COMPANION_EVENTS 门控照 82..=84 同款：cn 取
+            // sim.companion 反查 COMPANION_NAMES 挂 Comp 立绘，缺席兜底 COMPANION_
+            // NAMES[0] 不误指）+ 常规 6（159..=164，山野异象/民俗生活流，照
+            // 143..=150 词汇：纯 dao/stones/luck/qi_pct 效果、不占 special、
+            // 灵石臂照 ss 缩放；题材查重见 data.rs EVENTS 表 v1.16.15 批注）
+            156 => {
+                // 伴随事件：雪窖藏酿（Comp 立绘）
+                card.title = "雪窖藏酿".into();
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = format!(
+                    "入冬第一场雪，{}抱来一坛青梅酒：「埋在檐下，功成之日同启——谁先回来，谁挖。」",
+                    cn
+                );
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.luck = 1.0;
+                e1.msg = vec![
+                    "你俩把坛子埋进雪里，插了根枯枝作记号。道心+2，气运+1".into(),
+                ];
+                card.opts.push(("埋坛立约".into(), e1));
+                let mut e2 = Eff::new();
+                e2.qi_pct = 0.05;
+                e2.msg = vec![
+                    "「功成哪有个准头。」你笑道，先斟了一碗——酒是酸的，雪是甜的。修为+5%".into(),
+                ];
+                card.opts.push(("先启一勺".into(), e2));
+            }
+            157 => {
+                // 伴随事件：同守昙花（Comp 立绘）
+                card.title = "同守昙花".into();
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = format!(
+                    "{}养了一盆昙花，掐着时辰说今夜子时开——「花开一现，错过等来年。」你俩搬了两只蒲团守在花前。",
+                    cn
+                );
+                let mut e1 = Eff::new();
+                e1.dao = 3.0;
+                e1.msg = vec![
+                    "子时三刻，白瓣一层层张开。有些东西慢——慢到一生只给你看一次。道心+3".into(),
+                ];
+                card.opts.push(("守到花开".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.luck = 2.0;
+                e2.msg = vec![format!(
+                    "你守到四更睡去，醒来花已谢。{}把落花夹进你的书里：「明年它还开，你也还在。」道心+1，气运+2",
+                    cn
+                )];
+                card.opts.push(("先睡留话".into(), e2));
+            }
+            158 => {
+                // 伴随事件：雨后补瓦（Comp 立绘）
+                card.title = "雨后补瓦".into();
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = format!(
+                    "夜雨漏了屋一角，天亮你与{}上房补瓦——一人递一人接，谁也没提这屋子本是借宿的。",
+                    cn
+                );
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.luck = 1.0;
+                e1.msg = vec![
+                    "最后一片瓦压实，日头正好爬上房脊。借宿的屋，补成了家。道心+2，气运+1".into(),
+                ];
+                card.opts.push(("细心补全".into(), e1));
+                let mut e2 = Eff::new();
+                e2.qi_pct = 0.05;
+                e2.msg = vec![
+                    "你以灵气把碎瓦熔凝重塑，比原先还结实三分。修为+5%".into(),
+                ];
+                card.opts.push(("灵气熔凝".into(), e2));
+            }
+            159 => {
+                card.title = "萤火引路".into();
+                card.text = "夏夜山道起雾迷了路，一列萤火忽然自林间亮起，蜿蜒向北——雾气竟随它们让出一条道来。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 1.0;
+                e1.luck = 1.0;
+                e1.msg = vec![
+                    "你随光而行，半个时辰后雾散月出，回望来路萤火已散。道心+1，气运+1".into(),
+                ];
+                card.opts.push(("循光出谷".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 2.0;
+                e2.msg = vec![
+                    "你停在道口让萤先行——它们绕你三匝才去。说不清是什么谢礼，但你心里松快。气运+2".into(),
+                ];
+                card.opts.push(("让道萤行".into(), e2));
+            }
+            160 => {
+                card.title = "山洪改道".into();
+                card.text = "连日暴雨，山洪裹着断木直冲下游村落。你在洪头之上，身边只有一炷香的工夫。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 3.0;
+                e1.msg = vec![
+                    "你以术力硬生生把洪头分进废弃故河道——浊浪过境，村中鸡犬不惊。道心+3".into(),
+                ];
+                card.opts.push(("分洪入故道".into(), e1));
+                let g = (40.0 * ss) as i64;
+                let mut e2 = Eff::new();
+                e2.stones = g;
+                e2.msg = vec![format!(
+                    "术力分洪不足，你落村中帮各家抢收抢掩——水退后，村老塞给你一口袋谢钱。灵石+{}",
+                    fmt_int(g)
+                )];
+                card.opts.push(("落村帮抢收".into(), e2));
+            }
+            161 => {
+                card.title = "白鹿过涧".into();
+                card.text = "雪霁。一头白鹿自涧底踏雪而过，蹄印落处竟生出一线青草，走到对面山脊才回头望你一眼。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 1.0;
+                e1.luck = 2.0;
+                e1.msg = vec![
+                    "你循蹄印走到山脊——鹿已不见，蹄印里那线青草却在雪里绿着。道心+1，气运+2".into(),
+                ];
+                card.opts.push(("循迹上山脊".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.msg = vec![
+                    "你朝它消失的方向长揖一礼，转身下山——有些相遇，不必追。道心+2".into(),
+                ];
+                card.opts.push(("长揖目送".into(), e2));
+            }
+            162 => {
+                card.title = "月蚀之夜".into();
+                card.text = "十五夜，圆月被啃去一角。村中锣声四起——老人们说月蚀是天上犬在吞月，要敲响器救它。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.luck = 1.0;
+                e1.msg = vec![
+                    "你击缶和着锣声，直到月轮复圆——狗吠渐歇，月亮干干净净。道心+2，气运+1".into(),
+                ];
+                card.opts.push(("击缶救月".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.qi_pct = 0.04;
+                e2.msg = vec![
+                    "你不上街，只在檐下静观月轮一点点吞进去又吐出来——天地自有时刻。修为+4%，道心+1".into(),
+                ];
+                card.opts.push(("静观复圆".into(), e2));
+            }
+            163 => {
+                card.title = "壶中天".into();
+                card.text = "集上老者售一柄陶壶：「壶里有一座山。」你冲水入壶，壶口竟传出一线飞瀑声，久久不歇。".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.06;
+                e1.msg = vec![
+                    "你以灵泉日日养壶——瀑声渐清，静坐时如闻真山。修为+6%".into(),
+                ];
+                card.opts.push(("灵泉养壶".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 2.0;
+                e2.msg = vec![
+                    "你把壶原价转赠村塾的孩童——多年后有人回来说，那孩子成了画山水的名家。气运+2".into(),
+                ];
+                card.opts.push(("转赠孩童".into(), e2));
+            }
+            164 => {
+                card.title = "檐铃无风".into();
+                card.text = "客栈檐角一枚铁铃，无风自响。店家说这铃响时，北面官道必有游子还乡——响一声，还一个。".into();
+                let mut e1 = Eff::new();
+                e1.luck = 2.0;
+                e1.msg = vec![
+                    "你搬梯把铃解下擦亮重新挂好——当夜铃响了三声，北面道上灯火三点。气运+2".into(),
+                ];
+                card.opts.push(("擦亮重挂".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.msg = vec![
+                    "你枕着铃音坐到天明——每一声，都替远行的人把家喊了一遍。道心+2".into(),
+                ];
+                card.opts.push(("坐听一夜".into(), e2));
             }
 
             _ => {}
@@ -8331,23 +8637,27 @@ impl Game {
     // ================= v1.5.0 四时洞天：称号 / 法宝装备 / 洞府经营 / 成就进度 =================
 
     // 佩戴称号：-1 自动跟随 title_of；15 弑神者；16 章节称号（v1.16.10）；
-    // 0..=14 锁定境界称号
+    // 17 执笔人（v1.16.15 四结局全收集）；0..=14 锁定境界称号
     pub fn worn_title_of(&self) -> String {
         match self.meta.worn_title {
             -1 => self.title_of(),
             15 => "弑神者".to_string(),
             16 => "雨夜执印者".to_string(),
+            17 => "执笔人".to_string(),
             t => realm_title(t.clamp(0, 14) as usize).to_string(),
         }
     }
 
-    // 佩戴称号（值域即 {-1, 0..=14, 15, 16}）：越权/未获得拒绝并 toast
+    // 佩戴称号（值域即 {-1, 0..=14, 15, 16, 17}）：越权/未获得拒绝并 toast
     pub fn set_worn_title(&mut self, t: i32) {
         let ok = match t {
             -1 => true,
             15 => self.meta.neme_slain >= 3,
             // v1.16.10 章节称号：首章「雨夜执印」已了（chap_done bit0）即授权
             16 => self.meta.chap_done & 1 != 0,
+            // v1.16.15 全卷称号：四结局全览（endings_seen 0b1111，结局之礼边沿
+            // 帧 toast 指路）即授权——位即凭证零新键
+            17 => self.meta.endings_seen == 0b1111,
             v if (0..=14).contains(&v) => self.meta.best_realm >= v as usize,
             _ => false,
         };
@@ -9709,6 +10019,12 @@ impl Game {
 
 // v1.12.1 终卷·四结局（未竟稿 §9 原文摘句，下标=endings_seen 位 0..=3）：
 // 演出页/书志页共用文案表；B《留白》为定稿推荐结局（织机声行为定稿原文通用句）。
+// v1.16.15 结局之礼：结局首录奖励（道韵）。位即凭证零新键（endings_seen ed=
+// 已存）；标定照章成之礼 50..500 区间（data.rs CHAPTERS.reward）取整 200——
+// 问笔终战门槛=讨牒 6/6+九重雷劫+封卷吏，单结局 200 与章成之礼量级持平；
+// 全收集不发额外道韵（四结局之礼已足额），礼遇走称号『执笔人』授权
+pub const ENDING_DY: [i64; 4] = [200, 200, 200, 200];
+
 pub struct EndingDef {
     pub name: &'static str, // 结局名（横幅/书志行）
     pub alias: &'static str, // 抉择别名（认写/撕稿/夺笔/收册人）
@@ -13080,9 +13396,9 @@ mod event_batch_v1173_tests {
         }
         // EVENTS 总数断言（v1.16.9 扩池后 100 条；v1.16.10 扩池 18 → 118 条；
         // v1.16.11 扩池 16 → 134 条；v1.16.12 洞府联动 3 → 137 条；v1.16.13 扩池
-        // 14 → 151 条；v1.16.14 扩池 5 → 156 条，稀有基权合计口径见 data.rs 各批
-        // 注释——账本数字一律以重算为准）
-        assert_eq!(EVENTS.len(), 156);
+        // 14 → 151 条；v1.16.14 扩池 5 → 156 条；v1.16.15 扩池 9 → 165 条，稀有
+        // 基权合计口径见 data.rs 各批注释——账本数字一律以重算为准）
+        assert_eq!(EVENTS.len(), 165);
     }
 }
 
@@ -13458,5 +13774,135 @@ mod v11614_event_tests {
         assert_eq!(b(155).0, "遭遇");
         // 越界防御随表扩仍成立
         assert_eq!(b(999).0, "遭遇");
+    }
+}
+
+// ================= v1.16.15 结局之礼 + 扩池 9 条（156..=164） =================
+#[cfg(test)]
+mod v11615_reward_and_pool_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // 结局之礼：首录发奖（道韵 +200 金行）+ 同结局重达幂等不重发（位边沿）
+    #[test]
+    fn ending_reward_first_grant_then_idempotent() {
+        let mut g = game_with(Life::default(), None);
+        let dy0 = g.meta.dao_yun;
+        g.choose_ending(0); // 首录 A《定稿》
+        assert_eq!(g.meta.endings_seen, 0b0001, "A 位应置位");
+        assert_eq!(g.meta.dao_yun, dy0 + crate::game::ENDING_DY[0], "首录应发结局之礼");
+        assert!(
+            g.log.iter().any(|x| x.text.contains("【结局之礼】")),
+            "奖励须走金行 log（横幅单槽后写胜会吞）"
+        );
+        // 同结局重达：位已置 → 边沿不触发，道韵不再加
+        let dy1 = g.meta.dao_yun;
+        g.choose_ending(0);
+        assert_eq!(g.meta.dao_yun, dy1, "重达同结局不得重发奖励");
+    }
+
+    // 旧档取舍：endings_seen 已置位（跨版本老档）静默不补发——不回溯奖励
+    #[test]
+    fn ending_reward_old_save_no_retro() {
+        let mut g = game_with(Life::default(), None);
+        g.meta.endings_seen = 0b0011; // 老档：A/B 已录
+        let dy0 = g.meta.dao_yun;
+        g.choose_ending(0); // 重达 A
+        g.choose_ending(1); // 重达 B
+        assert_eq!(g.meta.dao_yun, dy0, "旧档已置位静默不补发（check_chapters 同款取舍）");
+    }
+
+    // 全卷之礼：第 4 个首录帧恰发一次（count_ones 3→4 天然单帧边沿）；
+    // 称号『执笔人』(值 17) 授权=endings_seen==0b1111，未满拒绝佩戴
+    #[test]
+    fn ending_full_collection_fires_once_and_grants_title17() {
+        let mut g = game_with(Life::default(), None);
+        for i in 0..3usize {
+            g.choose_ending(i);
+            assert!(
+                !g.log.iter().any(|x| x.text.contains("【全卷之礼】")),
+                "第 {} 次首录不应触发全卷之礼",
+                i + 1
+            );
+        }
+        g.choose_ending(3); // 第 4 位：全收集帧
+        assert_eq!(g.meta.endings_seen, 0b1111);
+        let hits = g
+            .log
+            .iter()
+            .filter(|x| x.text.contains("【全卷之礼】"))
+            .count();
+        assert_eq!(hits, 1, "全卷之礼恰发一次");
+        assert!(g.toast.is_some(), "全收集帧应有可佩指路 toast");
+        // 称号授权：满位可佩、未满拒绝
+        g.set_worn_title(17);
+        assert_eq!(g.meta.worn_title, 17);
+        assert_eq!(g.worn_title_of(), "执笔人");
+        let mut g2 = game_with(Life::default(), None);
+        g2.meta.endings_seen = 0b1110; // 差一位
+        g2.meta.worn_title = 5;
+        g2.set_worn_title(17);
+        assert_eq!(g2.meta.worn_title, 5, "四结局未全览：佩戴拒绝");
+    }
+
+    // 扩池 9 条良构：id 156..=164 每条 ≥2 ≤3 选项、标题/正文非空、
+    // choose_option(0) 全链不 panic（伴随臂 companion 兜底 COMPANION_NAMES[0]）
+    #[test]
+    fn pool_batch_cards_well_formed() {
+        for id in 156..=164 {
+            let mut g = sim_game(5, 40.0);
+            g.sim.as_mut().unwrap().companion = Some(COMPANION_NAMES[1].to_string());
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
+            assert_eq!(card.title, EVENT_NAMES[id], "标题双源");
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两个选项", id);
+            g.choose_option(0); // apply_eff 全链不 panic（sync_save 仅置脏不落盘）
+        }
+    }
+
+    // 伴随门控：白名单 9 条（含新 156..=158）无伴不入池、有伴入池（照 154/155
+    // 门控测试同款 sim_event_weights 直测）
+    #[test]
+    fn pool_companion_gate() {
+        for &id in COMPANION_EVENTS.iter() {
+            let mut g0 = sim_game(5, 40.0);
+            g0.recent_events.clear();
+            let (ws0, _) = g0.sim_event_weights(40.0, 5, false, false, false);
+            assert_eq!(ws0[id], 0.0, "无伴：伴随事件 {} 不入池", id);
+            let mut g1 = sim_game(5, 40.0);
+            g1.recent_events.clear();
+            let (ws1, _) = g1.sim_event_weights(40.0, 5, false, false, true);
+            assert!(ws1[id] > 0.0, "有伴：伴随事件 {} 应入池", id);
+        }
+    }
+
+    // 账本钉死：总基权 556、稀有 12 条 21 基权（≈3.78%）——权重手滑入稀有区
+    // （w∈1..=RARE_W）或批注漂移由本测试拦截（账本数字一律以重算为准）
+    #[test]
+    fn pool_ledger_recheck() {
+        let total: i32 = EVENTS.iter().map(|&(_, w, _, _)| w).sum();
+        assert_eq!(total, 556, "总基权漂移——照 data.rs v1.16.15 批注重算");
+        let rare: Vec<(usize, i32)> = EVENTS
+            .iter()
+            .filter(|&&(_, w, _, _)| w > 0 && w <= crate::data::RARE_W)
+            .map(|&(id, w, _, _)| (id, w))
+            .collect();
+        assert_eq!(rare.len(), 12, "稀有条数漂移");
+        let rare_w: i32 = rare.iter().map(|&(_, w)| w).sum();
+        assert_eq!(rare_w, 21, "稀有基权漂移");
     }
 }

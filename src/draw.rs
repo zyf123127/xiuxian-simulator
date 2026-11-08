@@ -3388,14 +3388,26 @@ fn draw_book_record(g: &mut Game) {
             170.0, 554.0, 14, C_TEXT,
         );
     }
+    // v1.16.15 全卷标注：四结局集齐时追加执笔人佩显状态（纯推导零新键，与
+    // choose_ending 全卷之礼 toast 成对交付；并进本行零新增行零布局风险）
+    let end_note = if end_n >= crate::game::ENDINGS.len() {
+        if g.meta.worn_title == 17 {
+            " · 四结局集齐·『执笔人』已佩"
+        } else {
+            " · 四结局集齐·『执笔人』可佩"
+        }
+    } else {
+        ""
+    };
     txt(
         &format!(
-            "称号『{}』 · 手札 {}/{} · 结局 {}/{}",
+            "称号『{}』 · 手札 {}/{} · 结局 {}/{}{}",
             g.worn_title_of(),
             seen_n,
             crate::data::EVENTS.len(),
             end_n,
-            crate::game::ENDINGS.len()
+            crate::game::ENDINGS.len(),
+            end_note
         ),
         170.0, 578.0, 14, C_TEXT,
     );
@@ -3424,9 +3436,19 @@ pub fn prewarm_book_record(g: &Game) {
         prewarm_text(&format!("《{}》 · {}", e.name, e.alias), &[20]);
         prewarm_text(e.gain.lines().next().unwrap_or(""), &[14]);
     }
-    // 全貌带静态标签与动态源（九章章名 + 当前佩戴称号串，两源皆静态表成员）
+    // 全貌带静态标签与动态源（九章章名 + 当前佩戴称号串，两源皆静态表成员）；
+    // v1.16.15 全卷标注两态静态段灌齐（四结局集齐后此行才可能出现）
     prewarm_text("此书全貌", &[14]);
-    for s in ["主线", "现进行：", "九章已毕", "称号『』", "手札", "结局"] {
+    for s in [
+        "主线",
+        "现进行：",
+        "九章已毕",
+        "称号『』",
+        "手札",
+        "结局",
+        " · 四结局集齐·『执笔人』可佩",
+        " · 四结局集齐·『执笔人』已佩",
+    ] {
         prewarm_text(s, &[14]);
     }
     for ch in crate::data::CHAPTERS.iter() {
