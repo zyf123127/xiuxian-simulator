@@ -52,6 +52,9 @@ pub fn open_world(g: &mut Game) {
     g.world.sel = g.life.as_ref().map(|l| l.loc).unwrap_or(NODE_START);
     g.world.shop = false;
     g.world.dev = false;
+    // v1.16.11 洞府经营初见闩（sy= bit5）：进图即守在洞府（NODE_START==NODE_DONGFU
+    // 出生即在此/advance_map 换幕归位同路）——单口自带 loc 守卫与位闩，幂等
+    g.sys_hint_dongfu();
     g.play(crate::sounds::Which::Page);
 }
 
@@ -109,6 +112,9 @@ pub fn travel(g: &mut Game, to: usize) {
         l.loc = to;
     }
     g.log(format!("你收拾行装赶路，此番抵达{}。", name), C_TEXT);
+    // v1.16.11 洞府经营初见闩（sy= bit5）：旅行抵达洞府口（单口自带 loc 守卫与位闩，
+    // 非洞府抵达为幂等空转；覆盖离府再归路径——出生即洞府路径由 open_world 口覆盖）
+    g.sys_hint_dongfu();
     g.play(crate::sounds::Which::Page);
     // v1.10.2：travel 不换 region，此处预烘为幂等兜底（防未来 region 联动改动漏烘）
     crate::art::map_bg_for(g.meta.map_region, g.meta.map_seed);

@@ -66,11 +66,18 @@ pub const CHAIN6_SPECIAL_HI: u8 = 36;
 pub const CHAIN78_SPECIAL_LO: u8 = 37;
 pub const CHAIN78_SPECIAL_HI: u8 = 40;
 
+// v1.16.11 链9（循册寻仇——宿敌终局对决线）/链10（旧页回声——跨世情缘回访）置链臂
+// 窗口 41..=44：37..=40 已占、32..=34 检定臂照旧窗外——apply_eff 链裁决四窗判定
+//（第四窗，语义不变）。41/42=链9 两推进臂（118→119→120），43/44=链10（121→122→123）
+pub const CHAIN910_SPECIAL_LO: u8 = 41;
+pub const CHAIN910_SPECIAL_HI: u8 = 44;
+
 // v1.16.7 连锁剧情链名（链完成大事记「{名}·缘了」用；下标=链 id-1）。
 // v1.16.8 扩五：链4 灯楼谜约 / 链5 傩面还愿；v1.16.9 扩六：链6 血债血偿
 //（宿敌剧情化复仇线——真斩杀仍走 sim_neme/寻仇两口，链只述「探踪/设伏/夺积」）；
-// v1.16.10 扩八：链7 灯花渡舟 / 链8 药炉童子
-pub const CHAIN_NAMES: [&str; 8] = [
+// v1.16.10 扩八：链7 灯花渡舟 / 链8 药炉童子；v1.16.11 扩十：链9 循册寻仇
+//（斩宿敌之后其门下循册寻仇——与链6 成因果闭环）/ 链10 旧页回声
+pub const CHAIN_NAMES: [&str; 10] = [
     "货郎奇缘",
     "古碑遗篇",
     "沉墨遗匣",
@@ -79,6 +86,8 @@ pub const CHAIN_NAMES: [&str; 8] = [
     "血债血偿",
     "灯花渡舟",
     "药炉童子",
+    "循册寻仇",
+    "旧页回声",
 ];
 
 // v1.16.7 旧稿剧情摘要：大事记尾 1-2 条剥「N岁，」前缀拼接 ≤28 字
@@ -643,7 +652,9 @@ pub struct Meta {
                         // 零迁移——老玩家补齐不重播横幅）
 
     pub sys_seen: u8, // v1.16.8 系统初见闩（键 sy=；bit0=周天首开 bit1=点数兑换首通
-                      // bit2=首入现实 bit3=首次传承带回 bit4=首修为圆满（v1.16.10）；
+                      // bit2=首入现实 bit3=首次传承带回 bit4=首修为圆满（v1.16.10）
+                      // bit5=首见洞府经营（v1.16.11——山河图经营线唯一无指向实缺的
+                      // 初见指路，挂 open_world/travel 事件口）；
                       // 一次性戏文的边沿闩，推导不出故 additive 持久；缺键 → 0 零迁移）
 
     pub hist: Vec<SimRecord>, // v1.16.5 旧稿档案：近 5 次模拟结算快照（键 h= 每条一行；旧档缺键=空表零迁移，超量解析端截断）
@@ -1036,6 +1047,15 @@ pub struct Game {
     pub chain6_closed: bool, // v1.16.10 链6 本世是否已缘了（宿敌同世回响事件 110 的
                              // 入池门控读此标志；纯会话态不进存档，launch_sim 清零
                              // ——「同世回响」顾名思义只属推演中的这一世）
+
+    // v1.16.11 手札回味：图鉴已遇行点按回看的只读详情数据源（zoom_art 同款纯会话态，
+    // 不进存档、launch_sim 不清——跨世只作展示缓存无模拟语义）。ev_memo[id]=该事件
+    // 最近一次构建帧的卡面正文（build_event 尾 ev_memo_set 单点捕获，与 note_event
+    // 同点同口径；None=本会话尚未构建过——图鉴降级显 EVENT_BRIEF 一句）；
+    // ev_recall=Some(id) 回味覆层开启中（draw_reality/draw_char_panel 早退独占，
+    // Esc/C/点按三口清，图鉴行 tap 唯一写入口）
+    pub ev_memo: Vec<Option<String>>,
+    pub ev_recall: Option<usize>,
 
     pub time: f32,
 
@@ -1480,6 +1500,10 @@ impl Game {
 
             chain6_closed: false,
 
+            ev_memo: vec![None; EVENTS.len()],
+
+            ev_recall: None,
+
             time: 0.0,
 
             sfx_ok: None,
@@ -1563,12 +1587,26 @@ impl Game {
         self.meta.ev_cnt[id] = self.meta.ev_cnt[id].saturating_add(1);
     }
 
+    // v1.16.11 手札回味：卡面正文捕获唯一写入口（与 note_event 同点调用——build_event
+    // 尾 opts 齐备处，构建帧即存）。纯会话展示缓存：不进存档、launch_sim 不清（跨世
+    // 仅作回看数据，无任何模拟语义）；id 越界卫语句直接 return（panic=abort 纪律）。
+    // 同 id 重复遭遇覆盖为最新正文（动态数值随当次推演，回看取最近所见）
+    pub fn ev_memo_set(&mut self, id: usize, text: &str) {
+        if id >= self.ev_memo.len() {
+            return;
+        }
+        self.ev_memo[id] = Some(text.to_string());
+    }
+
     // v1.10.2：人物页滚动会话态归零（×/Esc 关面板同批归零，先例 char_page 归零口径）
+    // v1.16.11：手札回味覆层态同批归零——本口被角色面板 ×（exec_panel_act Close）与
+    // Esc 关面板臂两处共用，一并清 ev_recall（覆层独占期这两口不可达，纯防御防泄漏）
     pub fn npc_scroll_reset(&mut self) {
         self.npc_scroll = 0.0;
         self.npc_drag = None;
         self.npc_vel = 0.0;
         self.npc_anim = None;
+        self.ev_recall = None;
     }
 
     // v1.16.0 交游图鉴：历世结缘记账（唯一写入口）。结缘即录入——挂 apply_eff special 17
@@ -3346,6 +3384,19 @@ impl Game {
                 ww = 0.0;
             }
             if id == 111 && self.meta.neme_slain < 1 {
+                ww = 0.0;
+            }
+
+            // v1.16.11 链9 首段 118 血册投书（宿敌终局对决线）：斩过宿敌才入池——
+            // 「门下循册寻仇」只属斩宿敌之后（照 111 读持久计数器同点，零新键）。
+            // 正文不具名：被斩者已不在册（meta.neme 是新宿敌），泛称兜底不误指
+            if id == 118 && self.meta.neme_slain < 1 {
+                ww = 0.0;
+            }
+            // v1.16.11 链10 首段 121 旧页回声（跨世情缘回访）：历世结缘过同页人才
+            // 入池（comp_bonds 任意 >0，照 85/111 读既有字段零新键口径——跨世旧页
+            // 无旧缘不可述）
+            if id == 121 && !self.meta.comp_bonds.iter().any(|&b| b > 0) {
                 ww = 0.0;
             }
 
@@ -5645,6 +5696,297 @@ impl Game {
                 ];
                 card.opts.push(("还稿于炉".into(), e2));
             }
+            // v1.16.11 链9 循册寻仇（宿敌终局对决线，118..=120）：斩宿敌之后其门下
+            // 循册寻仇——与链6 成因果闭环（链6 述「探踪/设伏/夺积」，真斩杀走
+            // sim_neme/寻仇两口，本链述其后果）。被斩者已不在册（meta.neme 是新
+            // 宿敌），全程泛称不具名，避免误指
+            118 => {
+                // 链9 首段：血册投书（首段建链待分支）
+                card.title = "血册投书".into();
+                card.text = "雨夜有物钉门——半页旧册残页，朱笔圈着你斩落的那位血仇之敌的名讳，末行一行新墨：「师仇未雪，门下递呈。」落款七个名字，按入门次序排着。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 1.0;
+                e1.special = 41; // 置链：→119 雪夜拦道
+                e1.msg = vec!["「三日后，断名崖。」你只回了这五个字。道心+1".into()];
+                card.opts.push(("应下战书".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    "你把残页凑上烛火：「你的账，随你师父一起了了。」灰烬里最末一个名字始终没有显形。道心+2，气运+1".into(),
+                ];
+                card.opts.push(("焚册不接".into(), e2));
+                self.chain = Some((9, 0, CHAIN_TTL)); // 首段建链：待分支
+            }
+            119 => {
+                // 链9 中段（仅链内）
+                card.title = "雪夜拦道·续".into();
+                card.text = "你没等三日。雪夜兼程走到半途，山道上一列灯笼拦路——七人皆缟素，为首的捧着那半页册子：「师叔之仇，按门规由我等分摊。先生，请了。」".into();
+                let mut e1 = Eff::new();
+                e1.luck = 1.0;
+                e1.special = 42; // 置链：→120 断名之局
+                e1.msg = vec!["你把七盏灯一一吹熄：「一个一个来，还是一起上？」雪落无声。气运+1".into()];
+                card.opts.push(("逐一应名".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.msg = vec![
+                    "你转身入雪——杀过一次的人，不必向再一场血证什么。道心+1".into(),
+                ];
+                card.opts.push(("雪中折返".into(), e2));
+            }
+            120 => {
+                // 链9 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
+                card.title = "断名之局·续".into();
+                card.text = "断名崖下，风把雪吹成一面白幡。为首者递出那半页册：「赢了你撕，输了我等收殓。」你认得他握剑的手势——与他师父，一个师门教出来的。".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.10;
+                e1.dao = 3.0;
+                e1.msg = vec![
+                    "多年记仇磨出来的那一剑，比门规快。册页你撕了，名字断在崖底。修为+10%，道心+3".into(),
+                ];
+                card.opts.push(("一剑断名".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 4.0;
+                e2.msg = vec![
+                    "你收剑，把残页递还：「账清了，册子留给你——记着怎么别走到这一步。」道心+4".into(),
+                ];
+                card.opts.push(("递册两清".into(), e2));
+            }
+            // v1.16.11 链10 旧页回声（跨世情缘回访，121..=123）：历世结缘过同页人
+            // 才入池——沿书/纸/墨基因述「旧稿散页跨世回流」，与章节书/链7 的灯纸
+            // 天曹口径互不相涉（回声只关乎「你写过的字」）
+            121 => {
+                // 链10 首段：旧页回声（首段建链待分支）
+                card.title = "旧页回声".into();
+                card.text = "灯市书摊，一页残稿压在《千字文》下——字迹是你自己的，你却从未写过：那是某一世里，你写给谁的半行。「客官好眼力，这页等一个认得它的人，等了很多年。」".into();
+                let mut e1 = Eff::new();
+                e1.luck = 1.0;
+                e1.special = 43; // 置链：→122 灯市换页
+                e1.msg = vec!["「从哪儿收来的？」你按住那页纸。摊主笑而不答，朝灯市深处努了努嘴。气运+1".into()];
+                card.opts.push(("循墨寻摊".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.msg = vec![
+                    "你把残页折进袖中——有些字，不必问来历。道心+1".into(),
+                ];
+                card.opts.push(("收页入怀".into(), e2));
+                self.chain = Some((10, 0, CHAIN_TTL)); // 首段建链：待分支
+            }
+            122 => {
+                // 链10 中段（仅链内）
+                card.title = "灯市换页·续".into();
+                card.text = "灯市最深处果然有个不挂灯的摊子。摊主披蓑戴笠，案上摞着几百页旧稿，各朝各代的纸色都有：「只换不卖——一页旧稿，换我一页新墨。」".into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.special = 44; // 置链：→123 换页重逢
+                e1.msg = vec!["你把袖中残页铺开。摊主指尖一顿：「原来在这儿。」——他认得这页。道心+2".into()];
+                card.opts.push(("以页换页".into(), e1));
+                let g = (50.0 * ss) as i64;
+                let mut e2 = Eff::new();
+                e2.stones = -g; // v1.16.11 复审口径：赎页是花销，与卡面「灵石-{}」同号（照 112/113 同款）
+                e2.luck = 1.0;
+                e2.msg = vec![format!(
+                    "你不肯交出残页，压下一笔灵石只借看一夜。灵石-{}，气运+1",
+                    fmt_int(g)
+                )];
+                card.opts.push(("以石借阅".into(), e2));
+            }
+            123 => {
+                // 链10 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
+                card.title = "换页重逢·续".into();
+                card.text = "摊主取出的那页新墨，背面洇着一行小字批注——笔迹你认得，某一世里与你同页的人。摊主说：「她也在找这页。找了很多年。」".into();
+                let mut e1 = Eff::new();
+                e1.dao = 3.0;
+                e1.luck = 2.0;
+                e1.msg = vec![
+                    "你把批注与原稿合在一处，请摊主裱作一页。隔世的字迹终于挨在一起。道心+3，气运+2".into(),
+                ];
+                card.opts.push(("批注合璧".into(), e1));
+                let mut e2 = Eff::new();
+                e2.qi_pct = 0.10;
+                e2.dao = 2.0;
+                e2.msg = vec![
+                    "你把两页各自收好——重逢不必在场，字在，人就还在。修为+10%，道心+2".into(),
+                ];
+                card.opts.push(("各页各藏".into(), e2));
+            }
+            // v1.16.11 常规补池 10 条（124..=133）：mr 薄档优先（原 mr=4 仅 6 条/
+            // mr=5 仅 3 条——本批 mr4×3/mr5×1/mr3×2/mr2×2/mr1×1），题材避开既有
+            // 全部 118 条：断弦琴/龙窑夜火/埙/枯禅遗偈/兽潮/玉贩/引魂幡/磁山/
+            // 天梯/断虹，其中稀有 1（133 断虹饮涧 w=2）。查重对账见本批次施工单
+            124 => {
+                card.title = "断弦琴意".into();
+                card.text = "山亭里一把无主的旧琴，七弦断其三。亭柱刻着半阙未完的曲名。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    "你取马尾续弦，就着断谱把那半阙弹完了。山风替你鼓了一回掌。道心+2".into(),
+                ];
+                card.opts.push(("续弦成曲".into(), e1));
+                let g = (45.0 * ss) as i64;
+                let mut e2 = Eff::new();
+                e2.stones = g;
+                e2.msg = vec![format!(
+                    "你抱琴下山，坊市识货的琴师出了个公道价。灵石+{}",
+                    fmt_int(g)
+                )];
+                card.opts.push(("抱琴换钱".into(), e2));
+            }
+            125 => {
+                card.title = "百窑夜火".into();
+                card.text = "山坳龙窑夜半无火自燃，窑工跪了一地不敢近——窑头说，这窑三年前封的那一炉，「回来了」。".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.05;
+                e1.luck = 1.0;
+                e1.msg = vec![
+                    "你贴窑听了半宿，起出一匣遇月自亮的釉灰——带回研墨，笔下的字都稳了三分。修为+5%，气运+1".into(),
+                ];
+                card.opts.push(("探窑起釉".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.msg = vec![
+                    "「火有主，不扰。」你帮窑工把窑门封土垒严。道心+1".into(),
+                ];
+                card.opts.push(("封土还窑".into(), e2));
+            }
+            126 => {
+                card.title = "埙声穿垣".into();
+                card.text = "断垣深处传出埙声，呜咽着反复同一个调子。走近了看——垣心供着一具石埙，无人而自鸣。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    "你捧起石埙，把它没吹完的尾音吹完了。埙声停了，像卸下了什么。道心+2".into(),
+                ];
+                card.opts.push(("续完尾音".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    "「曲有主。」你把碎垣拢回原位，替它挡了夜风。道心+1，气运+1".into(),
+                ];
+                card.opts.push(("拢垣掩埙".into(), e2));
+            }
+            127 => {
+                card.title = "枯禅遗偈".into();
+                card.text = "崖洞里一位坐化的老僧，壁间遗偈只写了上半——「我于人间留一问」。墨迹已枯了不知多少年。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 3.0;
+                e1.msg = vec![
+                    "你以指为笔续了下半。搁手时，壁上枯了一甲子的野花无声开了。道心+3".into(),
+                ];
+                card.opts.push(("续偈作答".into(), e1));
+                let g = (40.0 * ss) as i64;
+                let mut e2 = Eff::new();
+                e2.stones = g;
+                e2.good = false;
+                e2.msg = vec![format!(
+                    "你把半偈拓了下来，转手卖给藏家——「卖字这件事，你越来越熟练了。」灵石+{}",
+                    fmt_int(g)
+                )];
+                card.opts.push(("拓偈易石".into(), e2));
+            }
+            128 => {
+                card.title = "兽潮围栅".into();
+                card.text = "灵兽潮涌自山脊压下，围了猎户的山栅。栅内孩童哭声一片，栅外兽瞳在暮色里连成一片星。".into();
+                let mut e1 = Eff::new();
+                e1.fight = 1.05; // 通用战斗单口 sim_fight（勿另写胜率公式）
+                e1.good = false;
+                card.opts.push(("并肩守栅".into(), e1));
+                let mut e2 = Eff::new();
+                e2.stones_pct = -0.08;
+                e2.good = false;
+                e2.msg = vec![
+                    "你割了行囊里的干粮肉脯引开兽头，栅民得全——你贴身的灵石撒了一路。灵石-8%".into(),
+                ];
+                card.opts.push(("弃饵引潮".into(), e2));
+            }
+            129 => {
+                card.title = "玉贩困隘".into();
+                card.text = "雪隘口的坡道塌了半边，一队玉贩的车马困在崖沿。领队的朝你长揖：「先生过路，搭把手，玉随您挑。」".into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.luck = 1.0;
+                e1.msg = vec![
+                    "你拽车上坡、垫道填辙，忙完只讨了一碗热汤。玉贩硬塞给你一枚暖玉。道心+2，气运+1".into(),
+                ];
+                card.opts.push(("援手不取".into(), e1));
+                let g = (55.0 * ss) as i64;
+                let mut e2 = Eff::new();
+                e2.stones = g;
+                e2.good = false;
+                e2.msg = vec![format!(
+                    "你按行价收了酬金才动手——钱货两讫，领队道谢时眼神发苦。灵石+{}",
+                    fmt_int(g)
+                )];
+                card.opts.push(("收酬让道".into(), e2));
+            }
+            130 => {
+                card.title = "引魂幡影".into();
+                card.text = "荒岭上一杆白幡夜夜招魂，幡影里浮着些看不清的影子，来往客商绕着走。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 3.0;
+                e1.good = false;
+                e1.msg = vec![
+                    "你一剑断幡。幡下没有魂，只有半册招魂经——操幡的人借幡养念，念断了。道心+3".into(),
+                ];
+                card.opts.push(("断幡散念".into(), e1));
+                let mut e2 = Eff::new();
+                e2.qi_pct = 0.08;
+                e2.msg = vec![
+                    "你随幡影走了一程——它只是引你到一处避风崖洞，天明自散。修为+8%".into(),
+                ];
+                card.opts.push(("随幡借宿".into(), e2));
+            }
+            131 => {
+                card.title = "磁山迷辙".into();
+                card.text = "磁山吸针，车马的指北针在这里全成了摆设——一队商旅在山坳里兜了两天，辙印绕成一团乱麻。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    "你闭目听了半刻地脉，抬手一指：「从西坳走。」商队出山那天，给你烧了三炷高香。道心+2".into(),
+                ];
+                card.opts.push(("循脉指路".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    "你弃了车马绕山而行，多走三日——慢是慢了点，稳。气运+1".into(),
+                ];
+                card.opts.push(("绕山缓行".into(), e2));
+            }
+            132 => {
+                card.title = "天梯断级".into();
+                card.text = "通天石梯到此断了一级，断口平整如切——梯上仙气粼然，梯下望不见底。".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.12;
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    "你斩雷击木为材，补上断级。梯身嗡鸣如谢，你拾级而上如沐春风。修为+12%，道心+2".into(),
+                ];
+                card.opts.push(("补级而上".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 2.0;
+                e2.msg = vec![
+                    "你退后半步，纵身跃过缺口——有些关隘，问都不必问。气运+2".into(),
+                ];
+                card.opts.push(("跃过缺口".into(), e2));
+            }
+            133 => {
+                card.title = "断虹饮涧".into();
+                card.text = "雨后断虹垂涧，虹脚没入一汪积水——水色映出的天，是你从未见过的那一副。".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.15;
+                e1.luck = 2.0;
+                e1.msg = vec![
+                    "你俯身照水，把那副天色看了个饱。起身时虹散了，那汪水却再没干过。修为+15%，气运+2".into(),
+                ];
+                card.opts.push(("循虹照水".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.msg = vec![
+                    "「虹是借来的景。」你看完就走，不惊动它。道心+2".into(),
+                ];
+                card.opts.push(("守心不扰".into(), e2));
+            }
 
             _ => {}
         }
@@ -5682,6 +6024,13 @@ impl Game {
             115 => Some((1, 3)),
             116 => Some((2, 3)),
             117 => Some((3, 3)),
+            // v1.16.11 链9/链10 三段式
+            118 => Some((1, 3)),
+            119 => Some((2, 3)),
+            120 => Some((3, 3)),
+            121 => Some((1, 3)),
+            122 => Some((2, 3)),
+            123 => Some((3, 3)),
             _ => None,
         };
 
@@ -5689,6 +6038,11 @@ impl Game {
             // v1.16.10 事件回顾图鉴收录：轮盘/链内直取两路共经 build_event，opts
             // 齐备即记一次遭遇（与卡是否被抉择无关，照稀有记事「构建帧即记」口径）
             self.note_event(id);
+
+            // v1.16.11 手札回味：同点捕获卡面正文（构建帧即存，纯会话展示缓存；
+            // 标题不存——event_names_match_card_titles 钉死 card.title==EVENT_NAMES[id]
+            // 静态双源，回看时按 id 查表零新增分配）
+            self.ev_memo_set(id, &card.text);
 
             // v1.16.7 稀有事件遭遇记事：入本世大事记（旧稿 story 数据源；卡构建
             // 帧即记「遇」，与抉择无关）
@@ -5980,6 +6334,24 @@ impl Game {
             40 => {
                 // 链8 炉语问心：问炉要什么 → 守炉一夜
                 self.chain = Some((8, 117, CHAIN_TTL));
+            }
+            // v1.16.11 链9（循册寻仇）/链10（旧页回声）置链臂：第四窗（见
+            // CHAIN910_SPECIAL_LO/HI），四窗之外落链即终局的裁决语义不变
+            41 => {
+                // 链9 血册投书：应下战书 → 雪夜拦道
+                self.chain = Some((9, 119, CHAIN_TTL));
+            }
+            42 => {
+                // 链9 雪夜拦道：逐一应名 → 断名之局
+                self.chain = Some((9, 120, CHAIN_TTL));
+            }
+            43 => {
+                // 链10 旧页回声：循墨寻摊 → 灯市换页
+                self.chain = Some((10, 122, CHAIN_TTL));
+            }
+            44 => {
+                // 链10 灯市换页：以页换页 → 换页重逢
+                self.chain = Some((10, 123, CHAIN_TTL));
             }
             32 => {
                 // 青灯三问（链4 末段）：道心检定——过授功法一阶（满阶折灯油银），
@@ -6703,9 +7075,11 @@ impl Game {
         // v1.16.9 双段判定：链6（血债血偿）置链臂 35..=36 续编第二段窗口——
         // 20..=31 已满且 32..=34 是检定臂刻意窗外，抬 HI 会吞检定臂裁决语义
         // v1.16.10 三窗判定：链7/链8 置链臂 37..=40 新窗（CHAIN78_SPECIAL_LO/HI）
+        // v1.16.11 四窗判定：链9/链10 置链臂 41..=44 新窗（CHAIN910_SPECIAL_LO/HI）
         if !(CHAIN_SPECIAL_LO..=CHAIN_SPECIAL_HI).contains(&e.special)
             && !(CHAIN6_SPECIAL_LO..=CHAIN6_SPECIAL_HI).contains(&e.special)
             && !(CHAIN78_SPECIAL_LO..=CHAIN78_SPECIAL_HI).contains(&e.special)
+            && !(CHAIN910_SPECIAL_LO..=CHAIN910_SPECIAL_HI).contains(&e.special)
         {
             self.chain = None;
         }
@@ -7618,6 +7992,28 @@ impl Game {
             self.toast("修为圆满！底栏「修炼」可破境", C_GOLD);
             self.sync_save();
         }
+    }
+
+    // v1.16.11 系统初见闩 bit5（sy= additive，照 bit4 单口语言）：首见洞府经营指路
+    // ——山河图经营线唯一无指向实缺（指引叶 7 要求 loc==NODE_DONGFU 且灵石/贡献
+    // 双足，未至洞府时全程无任何指向）。文案指向「经营洞府」钮（world.rs 洞府臂）。
+    // 挂点=事件口非帧路径：open_world（覆盖 NODE_START==NODE_DONGFU 出生即在此与
+    // advance_map 换幕归位两路）+ travel 抵达洞府（覆盖离府再归）；单口自带 loc
+    // 守卫，边沿帧才动 meta/落盘，重复调用幂等。旧玩家升版至多一见（先例 bit3 注释）
+    pub fn sys_hint_dongfu(&mut self) {
+        if self.meta.sys_seen & 0b100000 != 0 {
+            return;
+        }
+        if !self.life.as_ref().is_some_and(|l| l.loc == NODE_DONGFU) {
+            return;
+        }
+        self.meta.sys_seen |= 0b100000;
+        self.log(
+            "山河图洞府处，「经营洞府」可扩建聚灵阵·灵田·丹房。",
+            C_GOLD,
+        );
+        self.toast("洞府经营已开放！山河图「经营洞府」", C_GOLD);
+        self.sync_save();
     }
 
     pub fn break_label(&self) -> String {
@@ -8997,6 +9393,10 @@ mod revenge_tests {
             chain: None,
 
             chain6_closed: false,
+
+            ev_memo: vec![None; EVENTS.len()],
+
+            ev_recall: None,
 
             time: 0.0,
 
@@ -10927,6 +11327,13 @@ mod chain_event_tests {
             (115, false, Some((1, 3))),
             (116, false, Some((2, 3))),
             (117, false, Some((3, 3))),
+            // v1.16.11 链9/链10 三段式
+            (118, false, Some((1, 3))),
+            (119, false, Some((2, 3))),
+            (120, false, Some((3, 3))),
+            (121, false, Some((1, 3))),
+            (122, false, Some((2, 3))),
+            (123, false, Some((3, 3))),
             (108, true, None),
             (59, false, None),
             (84, false, None),
@@ -11182,6 +11589,302 @@ mod v11610_event_tests {
         assert_eq!(b(92).0, "遭遇");
         // 越界防御：落「遭遇」不 panic
         assert_eq!(b(999).0, "遭遇");
+    }
+}
+
+// ================= v1.16.11 扩池 16 条（118..=133）+ 手札回味 =================
+
+#[cfg(test)]
+mod v11611_event_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // 新批次良构：id 118..=133 每条 ≥2 ≤3 选项、标题正文非空、choose_option(0)
+    // 全链不 panic（照 100..=117 模板；128 fight 臂 8% 战死——每轮重置稿）
+    #[test]
+    fn new_batch_cards_well_formed() {
+        for id in 118..=133 {
+            let mut s = Life::default();
+            s.realm = 5;
+            s.luck = 40.0;
+            let mut g = game_with(Life::default(), None);
+            g.sim = Some(s);
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂（白抽）", id));
+            assert!(matches!(card.kind, CardKind::Npc));
+            assert!(!card.title.is_empty());
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两个选项", id);
+            assert!(card.opts.len() <= 3, "卡面几何至多三选项");
+            g.choose_option(0); // apply_eff 全链不 panic（含置链臂/fight 臂）
+        }
+    }
+
+    // 链9 全程：118 首段建链待分支 → special41 → 直取 119 → special42 → 直取 120
+    // （stage 3/3）→ 抉择即缘了「循册寻仇·缘了」且链清
+    #[test]
+    fn chain9_advances_and_closes() {
+        let mut g = sim_game(5, 100.0);
+        g.modal = None;
+        g.build_event(118);
+        assert!(matches!(g.chain, Some((9, 0, _))), "首段建链待分支");
+        g.choose_option(0); // special41
+        assert!(matches!(g.chain, Some((9, 119, _))), "opt0 推链至 119");
+        g.modal = None;
+        g.sim_event(); // 直取中段
+        assert_eq!(g.modal.as_ref().unwrap().title, "雪夜拦道·续");
+        g.choose_option(0); // special42
+        assert!(matches!(g.chain, Some((9, 120, _))), "opt0 推链至 120");
+        g.modal = None;
+        g.sim_event(); // 直取末段
+        let card = g.modal.as_ref().unwrap();
+        assert_eq!(card.title, "断名之局·续");
+        assert_eq!(card.stage, Some((3, 3)), "末段 stage 达总段");
+        g.choose_option(0);
+        assert!(g.chain.is_none(), "末段抉择落通用裁决清链");
+        let hl = g.sim.as_ref().unwrap().highlights.join("|");
+        assert!(hl.contains("循册寻仇·缘了"), "链9 缘了记事缺失: {}", hl);
+    }
+
+    // 链10 全程：121 → special43 → 122 → special44 → 123（3/3）→「旧页回声·缘了」
+    #[test]
+    fn chain10_advances_and_closes() {
+        let mut g = sim_game(5, 100.0);
+        g.modal = None;
+        g.build_event(121);
+        assert!(matches!(g.chain, Some((10, 0, _))));
+        g.choose_option(0); // special43
+        g.modal = None;
+        g.sim_event();
+        assert_eq!(g.modal.as_ref().unwrap().title, "灯市换页·续");
+        g.choose_option(0); // special44
+        g.modal = None;
+        g.sim_event();
+        assert_eq!(g.modal.as_ref().unwrap().title, "换页重逢·续");
+        g.choose_option(0);
+        let hl = g.sim.as_ref().unwrap().highlights.join("|");
+        assert!(hl.contains("旧页回声·缘了"), "链10 缘了记事缺失: {}", hl);
+    }
+
+    // 四窗裁决回归：41..=44 置链窗不落清链；窗外检定臂照旧落「落臂即清链」；
+    // 非 special 选项落通用裁决清链（四窗语义不互吞，照 37..=40 回归模板）
+    #[test]
+    fn chain910_window_keeps_chain_and_outside_clears() {
+        let mut g = sim_game(5, 100.0);
+        g.chain = Some((9, 119, CHAIN_TTL));
+        let e41 = {
+            let mut e = Eff::new();
+            e.special = 41;
+            e
+        };
+        g.apply_eff(&e41);
+        assert!(matches!(g.chain, Some((9, 119, _))), "41 置链窗不清链");
+        let e34 = {
+            let mut e = Eff::new();
+            e.special = 34;
+            e
+        };
+        g.apply_eff(&e34);
+        assert!(g.chain.is_none(), "窗外检定臂照旧清链");
+        let e44 = {
+            let mut e = Eff::new();
+            e.special = 44;
+            e
+        };
+        g.chain = Some((10, 122, CHAIN_TTL));
+        g.apply_eff(&e44);
+        assert!(matches!(g.chain, Some((10, 123, _))), "44 重写链态");
+        let e0 = Eff::new();
+        g.apply_eff(&e0);
+        assert!(g.chain.is_none(), "非置链选项落通用裁决清链");
+    }
+
+    // 链9/链10 首段门控：118=meta.neme_slain≥1（持久计数器）、
+    // 121=comp_bonds 任意 >0（历世结缘过，零新键）
+    #[test]
+    fn chain910_first_segs_gated() {
+        let mut g = sim_game(5, 100.0);
+        let i118 = EVENTS.iter().position(|&(e, _, _, _)| e == 118).unwrap();
+        let i121 = EVENTS.iter().position(|&(e, _, _, _)| e == 121).unwrap();
+        let (ws, _) = g.sim_event_weights(100.0, 5, false, false, false);
+        assert_eq!(ws[i118], 0.0, "未斩宿敌 118 不入池");
+        assert_eq!(ws[i121], 0.0, "历世无结缘 121 不入池");
+        g.meta.neme_slain = 1;
+        let (ws, _) = g.sim_event_weights(100.0, 5, false, false, false);
+        assert!(ws[i118] > 0.0, "斩过宿敌 118 入池");
+        assert_eq!(ws[i121], 0.0, "slain 不喂 121（门控独立）");
+        g.meta.comp_bonds[3] = 1;
+        let (ws, _) = g.sim_event_weights(100.0, 5, false, false, false);
+        assert!(ws[i121] > 0.0, "comp_bonds 任意 >0 121 入池");
+    }
+
+    // 手札回味展示数据：构建帧即捕获正文（memo==卡面正文）、越界卫语句不 panic
+    // 不写入、ev_recall 清态三口（npc_scroll_reset/C 臂同款置 None 语义）
+    #[test]
+    fn recall_memo_captured_on_build() {
+        let mut g = sim_game(5, 100.0);
+        assert!(g.ev_recall.is_none(), "缺省覆层关");
+        g.modal = None;
+        g.build_event(112);
+        let text = g.modal.as_ref().unwrap().text.clone();
+        assert_eq!(
+            g.ev_memo[112].as_deref(),
+            Some(text.as_str()),
+            "构建帧即捕获"
+        );
+        // 重复遭遇覆盖为最新正文
+        g.modal = None;
+        g.build_event(116);
+        let t116 = g.modal.as_ref().unwrap().text.clone();
+        assert_eq!(g.ev_memo[116].as_deref(), Some(t116.as_str()));
+        assert_eq!(
+            g.ev_memo[112].as_deref(),
+            Some(text.as_str()),
+            "同 id 独立槽位"
+        );
+        // 越界卫语句（panic=abort 纪律）：不 panic 不写入（槽位数不变）
+        let n = g.ev_memo.len();
+        g.ev_memo_set(999, "x");
+        assert_eq!(g.ev_memo.len(), n);
+        // 未遇槽位 None → 图鉴降级路径数据源存在（EVENT_BRIEF 静态表兜底）
+        g.modal = None;
+        g.build_event(133);
+        assert!(g.ev_memo[133].is_some(), "133 构建帧捕获");
+        assert!(
+            !EVENT_BRIEF[124].is_empty(),
+            "降级简介静态表非空"
+        );
+        // 清态：npc_scroll_reset 并口（×/Esc 关面板臂共用）
+        g.ev_recall = Some(112);
+        g.npc_scroll_reset();
+        assert!(g.ev_recall.is_none(), "关面板并口清覆层态");
+    }
+
+    // v1.16.11 徽标扩类：118/121 链起、119/122 链段、124 遭遇、133 稀有
+    #[test]
+    fn event_badges_11611_derive() {
+        let b = crate::gallery::event_badge;
+        assert_eq!(b(118).0, "链起");
+        assert_eq!(b(121).0, "链起");
+        assert_eq!(b(119).0, "链段");
+        assert_eq!(b(122).0, "链段");
+        assert_eq!(b(124).0, "遭遇");
+        assert_eq!(b(133).0, "稀有");
+        // 越界防御：扩表后仍落「遭遇」不 panic
+        assert_eq!(b(134).0, "遭遇");
+    }
+}
+
+// ================= v1.16.11 书志全貌推导 + 洞府经营初见闩（施工单2） =================
+
+#[cfg(test)]
+mod v11611_book_hint_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    // 书志页「此书全貌」汇总带数据源（与 draw_book_record 逐式同构的纯推导，
+    // 零新键）：章节 done 计数/chapter_current 现进行章、手札 ev_cnt>0 计数、
+    // 结局 endings_seen 位计数；全了走「九章已毕」分支
+    #[test]
+    fn book_summary_derivations() {
+        let mut m = Meta::default();
+        // 全新档：0/9，当前章=第一章「雨夜执印」
+        assert_eq!(m.chap_done.count_ones(), 0);
+        assert_eq!(Game::chapter_current(&m), 0);
+        assert_eq!(crate::data::CHAPTERS[0].name, "雨夜执印");
+        assert_eq!(ENDINGS.len(), 4);
+        assert_eq!(m.endings_seen.count_ones(), 0);
+        // 现进行章走事实推导（chapter_current→chapter_done_mask，照既有
+        // chapter_current_advances_and_clamps 口径）：章 1 两目标已毕 → 当前章 2
+        //（下标 1）；账本 done 计数（chap_done 位）独立于现进行推导
+        m.lives = 1;
+        m.total_sims = 1;
+        assert_eq!(Game::chapter_current(&m), 1);
+        assert_eq!(
+            crate::data::CHAPTERS[Game::chapter_current(&m)].name,
+            crate::data::CHAPTERS[1].name,
+            "全貌带现进行章名取当前章"
+        );
+        // 结局/手札计数：bit 口径 + ev_cnt>0 口径（0 值不计）
+        m.endings_seen = 0b0111;
+        assert_eq!(m.endings_seen.count_ones(), 3);
+        m.ev_cnt = vec![0, 2, 255, 0];
+        assert_eq!(m.ev_cnt.iter().filter(|&&c| c > 0).count(), 2);
+        // 九章全了（走事实置齐）→ done≥len →「九章已毕」分支（不再报现进行章）
+        m.neme_slain = 2;
+        m.total_wins = 1;
+        m.first_realm[1] = true;
+        m.taodie = 6;
+        m.region_visited = [true; 5];
+        m.companion_lives = 1;
+        m.npc_ev[0] = true;
+        m.first_realm[10] = true;
+        m.endings_seen = 0b1111;
+        m.best_realm = 13;
+        let done_mask = Game::chapter_done_mask(&m);
+        assert_eq!(done_mask, 0x1FF, "全事齐九章全了");
+        // 账本闩随 check_chapters 边沿落位（此处同式模拟）→ 全貌带走「九章已毕」分支
+        m.chap_done |= done_mask;
+        assert!(m.chap_done.count_ones() as usize >= crate::data::CHAPTERS.len());
+    }
+
+    // 洞府经营初见闩（sy= bit5）：出生即在洞府（NODE_START==NODE_DONGFU）→ 首见
+    // 置闩+toast；位闩幂等不重播；离府不置闩、回府再调置闩（travel 口语义）
+    #[test]
+    fn dongfu_hint_latches_once_and_gates_by_loc() {
+        let mut g = game_with(Life::default(), None);
+        assert_eq!(
+            g.life.as_ref().unwrap().loc,
+            NODE_DONGFU,
+            "出生即在洞府（NODE_START 别名）"
+        );
+        assert_eq!(g.meta.sys_seen & 0b100000, 0, "闩初态未置");
+        g.sys_hint_dongfu();
+        assert_eq!(g.meta.sys_seen & 0b100000, 0b100000, "洞府首见置闩");
+        assert!(
+            g.toast
+                .as_ref()
+                .map_or(false, |(t, _, _)| t.contains("经营洞府")),
+            "toast 指向经营洞府"
+        );
+        let n1 = g
+            .log
+            .iter()
+            .filter(|l| l.text.contains("经营洞府"))
+            .count();
+        g.sys_hint_dongfu();
+        let n2 = g
+            .log
+            .iter()
+            .filter(|l| l.text.contains("经营洞府"))
+            .count();
+        assert_eq!((n1, n2), (1, 1), "位闩幂等不重播");
+        // 离府不置闩；回府再调置闩（travel 抵达口语义）
+        let mut g2 = game_with(Life::default(), None);
+        g2.life.as_mut().unwrap().loc = NODE_MARKET;
+        g2.sys_hint_dongfu();
+        assert_eq!(g2.meta.sys_seen & 0b100000, 0, "非洞府不置闩");
+        g2.life.as_mut().unwrap().loc = NODE_DONGFU;
+        g2.sys_hint_dongfu();
+        assert_eq!(g2.meta.sys_seen & 0b100000, 0b100000, "回府置闩");
+        // life None 防御（sim 侧/菜单期极端帧）不 panic 不置闩
+        let mut g3 = game_with(Life::default(), None);
+        g3.life = None;
+        g3.sys_hint_dongfu();
+        assert_eq!(g3.meta.sys_seen & 0b100000, 0, "无 life 不置闩");
     }
 }
 
@@ -11625,8 +12328,9 @@ mod event_batch_v1173_tests {
             let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
             assert!(ws[i] > 0.0, "普通事件 {} realm5 应入池", id);
         }
-        // EVENTS 总数断言（v1.16.9 扩池后 100 条；v1.16.10 扩池 18 → 118 条，
-        // 稀有基权合计口径见 data.rs 各批注释——账本数字一律以重算为准）
-        assert_eq!(EVENTS.len(), 118);
+        // EVENTS 总数断言（v1.16.9 扩池后 100 条；v1.16.10 扩池 18 → 118 条；
+        // v1.16.11 扩池 16 → 134 条，稀有基权合计口径见 data.rs 各批注释——
+        // 账本数字一律以重算为准）
+        assert_eq!(EVENTS.len(), 134);
     }
 }

@@ -675,6 +675,9 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
     if button(bx + 620.0, 592.0, 140.0, 44.0, "书志", None, true) {
         g.panel = 6;
         g.book_view = None; // Esc 关面板不清此会话态，入口处归零防重开直接落在演出页
+        // v1.16.11 书志页全量字形预热（事件帧一次，照 prewarm_guide_panel 单口语言
+        // ——顺带治书志页标题/导语/？？？/ENDINGS 名+alias+gain 首开全冷的既有潜伏项）
+        prewarm_book_record(g);
     }
     let best = REALMS[g.meta.best_realm.min(14)].name;
     txt_c(
@@ -746,6 +749,15 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     if g.zoom_art.is_some() {
         draw_bg(art);
         crate::charpanel::draw_zoom_overlay(g);
+        version_mark();
+        return;
+    }
+    // v1.16.11 手札回味覆层：图鉴已遇行点按开启（仅 panel=5 图鉴页内可达）——模态
+    // 独占输入照 zoom_art 同款早退；panel 已关的残留态不浮层（panel!=5 直接放行，
+    // 残留由 Esc/C/npc_scroll_reset 三口清）
+    if g.panel == 5 && g.ev_recall.is_some() {
+        draw_bg(art);
+        crate::gallery::draw_event_recall_overlay(g);
         version_mark();
         return;
     }
@@ -3307,4 +3319,75 @@ fn draw_book_record(g: &mut Game) {
             g.book_view = Some(i); // enabled=seen：未达成行点不开
         }
     }
+    // ===== v1.16.11 此书全貌：非交互汇总带（卡内 514..650 空白）=====
+    // 四数据源全纯推导零新键：chap_done 位计数+chapter_current（章节）、
+    // worn_title_of（称号）、ev_cnt>0 计数（手札）、endings_seen 位计数（结局）。
+    // 布局纪律同上：只绘不响应（无 button 命中矩形），底层按钮带 522..636 先命中
+    // 不受影响；format! 属本页既有行循环同款（模态静态页，非稳态滚动帧路径）
+    draw_rectangle(170.0, 524.0, 940.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    txt("此书全貌", 170.0, 532.0, 14, C_GOLD);
+    let n_ch = crate::data::CHAPTERS.len();
+    let done_ch = g.meta.chap_done.count_ones() as usize;
+    let cur = Game::chapter_current(&g.meta);
+    let seen_n = g.meta.ev_cnt.iter().filter(|&&c| c > 0).count();
+    let end_n = g.meta.endings_seen.count_ones() as usize;
+    if done_ch >= n_ch {
+        txt(
+            &format!("主线 {}/{} · 九章已毕", done_ch, n_ch),
+            170.0, 554.0, 14, C_TEXT,
+        );
+    } else {
+        txt(
+            &format!(
+                "主线 {}/{} · 现进行：{}",
+                done_ch, n_ch, crate::data::CHAPTERS[cur.min(n_ch - 1)].name
+            ),
+            170.0, 554.0, 14, C_TEXT,
+        );
+    }
+    txt(
+        &format!(
+            "称号『{}』 · 手札 {}/{} · 结局 {}/{}",
+            g.worn_title_of(),
+            seen_n,
+            crate::data::EVENTS.len(),
+            end_n,
+            crate::game::ENDINGS.len()
+        ),
+        170.0, 578.0, 14, C_TEXT,
+    );
+}
+
+// v1.16.11 书志页全量字形预热单口（照 prewarm_guide_panel 单口语言）：书志钮开启帧
+// 一次灌齐（事件帧幂等，严禁入稳态帧）——顺带治书志页既有潜伏项（标题/导语/？？？/
+// ENDINGS 名+alias+gain 首行/未达成两行引导语首开全冷）。全貌带动态值只有章节名/
+// 称号两处 &str 源自静态表，其余 ASCII 数字由菜单期 panel_warm_chars 保底覆盖
+pub fn prewarm_book_record(g: &Game) {
+    prewarm_text("书 志 · 终卷四结局", &[24]);
+    prewarm_text(
+        "问笔终战（现实破境问笔·九重雷劫全扛，且封卷吏已斩）之后，执笔人递笔——你如何落款？",
+        &[14],
+    );
+    // ？？？双档预热（复审修）：14 供图鉴/手札行复用口径，20 供本页未达成行
+    // button 主标（draw.rs button sub 存在时 label 恒 20）——「？」不在
+    // PANEL_WARM_CHARS、全库无其它 @20 预热，漏 20 档则新档首开书志页
+    // （结局未达成最常见态）3 个 20px 字形冷栅格化触发 2048² 图集整图重传
+    prewarm_text("？？？", &[14, 20]);
+    prewarm_text("走向问笔终战，卡上自有分说", &[14]);
+    prewarm_text("先撕稿留白（后事不详），再来问笔——未完的书，收册人自会看见", &[14]);
+    for e in crate::game::ENDINGS.iter() {
+        // 行首括号/间隔符与名/alias 一次灌齐（事件帧 format! 豁免，照 build_event
+        // 卡面预热同口径）
+        prewarm_text(&format!("《{}》 · {}", e.name, e.alias), &[20]);
+        prewarm_text(e.gain.lines().next().unwrap_or(""), &[14]);
+    }
+    // 全貌带静态标签与动态源（九章章名 + 当前佩戴称号串，两源皆静态表成员）
+    prewarm_text("此书全貌", &[14]);
+    for s in ["主线", "现进行：", "九章已毕", "称号『』", "手札", "结局"] {
+        prewarm_text(s, &[14]);
+    }
+    for ch in crate::data::CHAPTERS.iter() {
+        prewarm_text(ch.name, &[14]);
+    }
+    prewarm_text(&g.worn_title_of(), &[14]);
 }

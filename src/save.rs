@@ -1187,6 +1187,15 @@ h=1 2 3 50.0 40 100 800 255 乙
         let bad = format!("{}ch=abc\nsy=-\n", OLD_BASE);
         let m4 = parse_save(&bad);
         assert_eq!((m4.chap_done, m4.sys_seen), (0, 0));
+
+        // v1.16.11 新位回环：sy bit5（首见洞府经营）纯 additive 独立追加——
+        // 既有 0b11100 常量断言不动（上），新位不洗旧位
+        let mut m7 = Meta::default();
+        m7.sys_seen = 0b100000;
+        let text7 = save_text(&m7);
+        assert!(text7.contains("sy=32\n"));
+        let m8 = parse_save(&text7);
+        assert_eq!(m8.sys_seen, 0b100000);
     }
 
     // v1.16.10 章节称号：佩戴值域扩 16（雨夜执印者）——合法值保留、越界仍钳 -1

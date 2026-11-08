@@ -102,7 +102,9 @@ mod xx_dbg {
 // wasm 实例化校验导入存在——JS 漏注册或 Rust 漏声明任一侧即实例化即败，与
 // xx_storage/xx_dbg 同模式；三重成对断言见 verify_taptap_zip.py / 构建脚本）。
 // JS 侧与 wasm 下载全并行 fetch font.ttf.deflate?v=GAME_VER：
-//   xx_font_len：-1 = 仍在下载、-2 = 已失败、N ≥ 0 = 就绪字节数
+//   xx_font_len：-1 = 仍在下载、-2 = 已失败（终态，xxFontFail 一次性置位无重试
+//                ——boot 轮询遇 -2 立即 break 走 state(95)，见下方字体轮询块）、
+//                N ≥ 0 = 就绪字节数
 //   xx_font_read：把就绪字节写入 wasm 内存（ptr/len 由 Rust 分配，len 与
 //                 xx_font_len 报告值一致）
 #[cfg(target_arch = "wasm32")]
@@ -177,7 +179,12 @@ async fn main() {
         let mut waited = 0u32;
         let len = loop {
             let l = xx_font::len();
-            if l >= 0 || waited >= 600 {
+            // v1.16.11 low 修复：-2 是 JS 预取的终态失败（index.html xxFontFail 一次性
+            // 置位、无重试回 0），立即 break 走 state(95) 失败收口——旧逻辑只认 l>=0，
+            // -2 时空转满 600 帧（60fps≈10s，真机帧泵差最长 ~30s 黑加载层）才报错。
+            // 隐式契约：若将来给字体预取加重试逻辑（失败回 0），必须同步撤销本条件
+            // ——重试窗口内 wasm 侧会误判终败。
+            if l >= 0 || l == -2 || waited >= 600 {
                 break l;
             }
             waited += 1;
@@ -314,7 +321,10 @@ async fn main() {
             // v1.6.0 B：弹层优先关闭
             // v1.8.0 B4：好感事件卡独占期 Esc 被吞——事件必须抉择，不得绕开
             // v1.16.1：立绘鉴赏覆层最先关闭（模态独占，人物页/图鉴点立绘开启）
+            // v1.16.11：手札回味覆层同批（图鉴已遇行点按开启，模态独占）
             if g.zoom_art.take().is_some() {
+                g.play(crate::sounds::Which::Page);
+            } else if g.ev_recall.take().is_some() {
                 g.play(crate::sounds::Which::Page);
             } else if g.rmodal.is_some() {
                 // 吞掉：事件必须抉择
@@ -346,6 +356,10 @@ async fn main() {
                 && g.zoom_art.is_none()
             {
                 if is_key_pressed(KeyCode::C) {
+                    // v1.16.11：C 键切面板不走 exec_panel_act（直接置 panel）——
+                    // 手札回味覆层态必须在本口单独清，防残留跨开合（借 npc_scroll_reset
+                    // 已并 ×/Esc 两口，Tab 臂已防御，本口为四处清态的最后一处）
+                    g.ev_recall = None;
                     g.panel = if g.panel == 5 { 0 } else { 5 };
                 }
                 if g.panel == 0 && is_key_pressed(KeyCode::M) {

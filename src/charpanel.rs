@@ -11,6 +11,13 @@ use crate::ui::*;
 use macroquad::prelude::*;
 
 pub fn draw_char_panel(g: &mut Game) {
+    // v1.16.11 手札回味覆层：模态独占输入（图鉴页已遇行点按开启）。正常路径已被
+    // draw_reality 早退链独占（不至本函数），此防御口照 zoom_art 的 draw_sim 早退
+    // 先例兜未来调用路径——覆层期 chrome/页签一概不绘不响应，点按任意处返回
+    if g.ev_recall.is_some() {
+        crate::gallery::draw_event_recall_overlay(g);
+        return;
+    }
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
     panel_card(140.0, 60.0, 1000.0, 600.0);
     // v1.10.2：人物页（页签 3）改为「先内容 → 遮幅 → 后 chrome」——人物页滚动列表的
@@ -74,6 +81,9 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             g.play(crate::sounds::Which::Page);
         }
         PanelAct::Tab(i) => {
+            // v1.16.11 防御：切页签清回味覆层态（覆层独占期 chrome 不可达，纯防
+            // 会话态泄漏跨页签——与 npc_scroll_reset 内的清态成对）
+            g.ev_recall = None;
             // v1.16.0：图鉴页首开帧一次性灌字形（事件帧预热先例 show_banner/指引横带；
             // 仅 PanelAct::Tab(4) 执行帧触发，C 键带陈旧 char_tab=4 直开的首帧温开可接受）
             if i == 4 {

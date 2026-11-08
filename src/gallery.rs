@@ -21,7 +21,7 @@ use crate::charpanel::{
     tale_unlocked, zoom_badge,
 };
 use crate::data::*;
-use crate::draw::bar;
+use crate::draw::{bar, panel_card};
 use crate::game::*;
 use crate::ui::*;
 use macroquad::prelude::*;
@@ -67,6 +67,9 @@ const PREWARM_STRS: &[&str] = &[
     "/10",
     "交游",
     "/4",
+    // v1.16.11 low 修复：页脚「手札收录 n/N」的收/录二字此前不在任何预热串
+    //（COMPANION_NAMES/NPC_NAMES/NPC_TIER_NAMES 皆无）——新档首开图鉴帧冷栅格化
+    "手札收录",
     "—— 同页之缘起于模拟，跨世持久。",
     "她的页仍在你书间",
     "缘起模拟，同页之人。她的故事，待你与她共书。",
@@ -112,6 +115,11 @@ const EV_NOTE_PREWARM: &[&str] = &[
     "×7",
     "×8",
     "×9",
+    // v1.16.11 手札回味覆层静态 chrome（全部 @14，prewarm_event_book 一次灌齐；
+    // 覆层正文/标题字形走构建帧预热，见 draw_event_recall_overlay 注释）
+    "手札回味",
+    "本世未存全文，仅录简介",
+    "点按任意处返回",
 ];
 
 /// 遭遇手札首开帧预热（exec_panel_act Tab(4)/指引 Gallery 跳转同口调用）：静态串
@@ -150,7 +158,8 @@ pub fn event_badge(id: usize) -> (&'static str, Color) {
         74 | 75 => return ("章节", C_GOLD),
         88 | 89 => return ("老年", C_GOLD_D),
         110 | 111 => return ("宿敌", C_RED),
-        44 | 47 | 50 | 76 | 79 | 85 | 112 | 115 => return ("链起", C_CYAN),
+        // v1.16.11 链起扩 118/121（链9 循册寻仇/链10 旧页回声首段）
+        44 | 47 | 50 | 76 | 79 | 85 | 112 | 115 | 118 | 121 => return ("链起", C_CYAN),
         _ => {}
     }
     if w == 0 {
@@ -273,12 +282,26 @@ pub fn draw_gallery_page(g: &mut Game) {
 
     // ---------- v1.16.10 遭遇手札事件行（整卡剔除：行 46/步 52 → 视口内峰值 ≤11 行；
     // 纯文本无立绘无懒解码，format! 仅计数 ≥10 的长尾行 ≤ 可见行数）----------
+    // v1.16.11 手札回味：已遇行点按（位移<8px 门槛由 scroll_list_tick 的 tap 语义
+    // 保证）开启只读详情覆层——开启帧灌该行动态字形（事件帧预热先例），覆层本体
+    // draw_event_recall_overlay 由 draw_reality 早退链独占渲染
     for i in 0..EVENTS.len() {
         let y = GAL_VIEW_Y0 + GAL_EV_OFF + i as f32 * GAL_EV_STEP - scroll;
         if y >= GAL_VIEW_Y1 || y + GAL_EV_H <= GAL_VIEW_Y0 {
             continue;
         }
         draw_event_note_row(g, i, y);
+        if tap
+            && g.meta.ev_cnt[i] > 0
+            && mx >= 160.0
+            && mx <= 1120.0
+            && my >= y
+            && my <= y + GAL_EV_H
+        {
+            g.ev_recall = Some(i);
+            prewarm_recall_overlay(g, i);
+            g.play(crate::sounds::Which::Click);
+        }
     }
 
     // ---------- 遮幅（口径同人物页：全不透明面板色，盖住越缘内容）----------
@@ -363,6 +386,96 @@ fn draw_event_note_row(g: &Game, i: usize, y: f32) {
         }
     } else if npc_row_vis(y + 6.0) {
         txt("未遇", 900.0, y + 6.0, 14, C_DIM);
+    }
+}
+
+// v1.16.11 手札回味覆层开启帧一次性灌字形（照 prewarm_zoom_text 先例）：静态 chrome
+// （手札回味/降级标签/点按任意处返回）已并入 EV_NOTE_PREWARM 由 prewarm_event_book
+// 在 Tab(4) 开页帧灌齐；此处只补该行动态内容——memo 命中路径的标题/正文已在卡构建
+// 帧灌过（build_event 尾 prewarm_text title@24/text@16，同串同字号），只补降级路径
+// （memo None）的名/简，一两行字形事件帧开销可忽略
+fn prewarm_recall_overlay(g: &Game, i: usize) {
+    if !g.ev_memo.get(i).map_or(false, |m| m.is_some()) {
+        if let Some(n) = EVENT_NAMES.get(i) {
+            prewarm_text(n, &[24, 14]);
+        }
+        if let Some(b) = EVENT_BRIEF.get(i) {
+            prewarm_text(b, &[14]);
+        }
+    }
+}
+
+// v1.16.11 手札回味覆层：图鉴已遇行点按开启的只读详情（纯展示不结算）。模态独占
+// 输入照 zoom_art 早退先例（draw_reality 早退链独占渲染，本函数由其调用）；版式
+// 轻量复刻 draw_modal_card 普通卡（panel_card 底板/标题 24 金居中/装饰线/链段青
+// 稀有紫描边/正文 16 wrap 520），无选项无暂避钮。任意点按关闭；Esc/C 走 main.rs
+// 独立清态口。
+// 数据源 ev_memo[id]（本会话最近一次卡面正文构建帧捕获）：None 降级显 EVENT_BRIEF
+// 一句（旧会话/旧档遭遇本会话未重现的行，不虚构全文）；标题恒取 EVENT_NAMES[id]
+// 静态表（event_names_match_card_titles 钉死与卡面标题双源一致）。
+// 性能：稳态零堆分配（全 &'static str，计数 ≥10 长尾走 format! 与手札行同款豁免）；
+// 字形命中构建帧/开页帧/开启帧三层预热，覆层期零图集重传。
+pub fn draw_event_recall_overlay(g: &mut Game) {
+    let Some(id) = g.ev_recall else { return };
+    // min/clamp 防御（panic=abort 纪律）：id 越界绝不索引
+    let id = id.min(EVENTS.len().saturating_sub(1));
+    let memo = g.ev_memo.get(id).and_then(|m| m.as_deref());
+    let cnt = g.meta.ev_cnt.get(id).copied().unwrap_or(0);
+    draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(8, 5, 16, 244));
+    panel_card(340.0, 100.0, 600.0, 500.0);
+    // 卡描边照 draw_modal_card 语言（2.5 同位覆盖）：链段青/稀有紫/普通卡不叠边
+    let w = EVENTS[id].1;
+    let rare = w > 0 && w <= crate::data::RARE_W;
+    let (badge_t, badge_c) = event_badge(id);
+    let is_chain = badge_t == "链起" || badge_t == "链段";
+    let edge = if is_chain {
+        Some(C_CYAN)
+    } else if rare {
+        Some(C_PURPLE)
+    } else {
+        None
+    };
+    if let Some(ec) = edge {
+        draw_rectangle_lines(340.0, 100.0, 600.0, 500.0, 2.5, ec);
+    }
+    txt("手札回味", 380.0, 112.0, 14, C_DIM);
+    let name = EVENT_NAMES.get(id).copied().unwrap_or("？？？"); // 防御同手札行口径
+    txt_c(name, V_W * 0.5, 128.0, 24, C_GOLD);
+    draw_rectangle(
+        380.0,
+        164.0,
+        520.0,
+        1.5,
+        Color::from_rgba(96, 76, 130, 160), // 照 draw_modal_card 标题装饰线同色
+    );
+    // 徽标/计数行：分类徽标居左（event_badge 单口纯推导），遭遇计数居右
+    //（×1..=9 静态查表，≥10 format! 兜底——覆层期单行豁免，同手札行口径）
+    txt(badge_t, 380.0, 174.0, 14, badge_c);
+    let cs = ev_cnt_str(cnt);
+    if cs.is_empty() {
+        txt_r(&format!("遭遇 ×{}", cnt), 900.0, 174.0, 14, C_GOLD);
+    } else {
+        txt_r(cs, 900.0, 174.0, 14, C_GOLD);
+    }
+    // 正文：memo 命中显全文 @16（区 196..560 容 13 行，全部事件卡面 ≤5 行预算
+    // 皆裕）；降级显简介 @14（静态表，不虚构全文）
+    match memo {
+        Some(t) => {
+            wrap_draw(t, 380.0, 196.0, 16, 520.0, 28.0, C_TEXT);
+        }
+        None => {
+            txt("本世未存全文，仅录简介", 380.0, 196.0, 14, C_DIM);
+            if let Some(b) = EVENT_BRIEF.get(id) {
+                if !b.is_empty() {
+                    wrap_draw(b, 380.0, 224.0, 14, 520.0, 22.0, C_TEXT);
+                }
+            }
+        }
+    }
+    txt_c("点按任意处返回", V_W * 0.5, 566.0, 14, C_DIM);
+    if is_mouse_button_pressed(MouseButton::Left) {
+        g.ev_recall = None;
+        g.play(crate::sounds::Which::Page);
     }
 }
 
