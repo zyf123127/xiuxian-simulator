@@ -47,6 +47,13 @@ const GAL_EV_OFF: f32 = 4228.0; // 事件首行顶（= 分节行底 4220 + 8）
 const GAL_EV_H: f32 = 46.0; // 事件行卡高（纯文本两行：标题/简一行）
 const GAL_EV_STEP: f32 = 52.0; // 行高 + 间距 6
 
+// v1.16.13 复审⑦ tap 纵向夹取单口（手札行/同页人卡/NPC 卡三处共用，纯函数供单测）：
+// 列表循环剔除只剔整行/整卡出界，部分可见行经上下遮幅（309-310）仍可点——命中
+// 条件必须再夹进视口带 [GAL_VIEW_Y0, GAL_VIEW_Y1]，防点遮幅带开覆层/鉴赏
+fn tap_y_in_view(my: f32) -> bool {
+    my >= GAL_VIEW_Y0 && my <= GAL_VIEW_Y1
+}
+
 // 首开预热语料（PanelAct::Tab(4) 执行帧一次性灌字形，字号档 [14,16,20] 均既有离散档；
 // 仅静态标签——动态数值行的 ASCII 数字/符号由菜单期 panel_warm_chars 保底覆盖）
 const PREWARM_STRS: &[&str] = &[
@@ -159,7 +166,10 @@ pub fn event_badge(id: usize) -> (&'static str, Color) {
         88 | 89 => return ("老年", C_GOLD_D),
         110 | 111 => return ("宿敌", C_RED),
         // v1.16.11 链起扩 118/121（链9 循册寻仇/链10 旧页回声首段）
-        44 | 47 | 50 | 76 | 79 | 85 | 112 | 115 | 118 | 121 => return ("链起", C_CYAN),
+        // v1.16.13 链起扩 137/140（链11 劫痕渡客/链12 书肆换届首段）
+        44 | 47 | 50 | 76 | 79 | 85 | 112 | 115 | 118 | 121 | 137 | 140 => {
+            return ("链起", C_CYAN)
+        }
         _ => {}
     }
     if w == 0 {
@@ -228,6 +238,7 @@ pub fn draw_gallery_page(g: &mut Game) {
             && mx <= 396.0
             && my >= y + 12.0
             && my <= y + 268.0
+            && tap_y_in_view(my) // v1.16.13 复审⑦：遮幅带内点按不开鉴赏（纵夹）
         {
             let z = ZoomArt::Comp(i);
             prewarm_zoom_text(g, &z);
@@ -261,6 +272,7 @@ pub fn draw_gallery_page(g: &mut Game) {
             && mx <= 396.0
             && my >= y + 12.0
             && my <= y + 268.0
+            && tap_y_in_view(my) // v1.16.13 复审⑦：遮幅带内点按不开鉴赏（纵夹）
         {
             let z = ZoomArt::Npc(i);
             prewarm_zoom_text(g, &z);
@@ -297,6 +309,7 @@ pub fn draw_gallery_page(g: &mut Game) {
             && mx <= 1120.0
             && my >= y
             && my <= y + GAL_EV_H
+            && tap_y_in_view(my) // v1.16.13 复审⑦：部分可见行遮幅带内点按不开回味覆层（纵夹）
         {
             g.ev_recall = Some(i);
             prewarm_recall_overlay(g, i);
@@ -449,11 +462,13 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
         Color::from_rgba(96, 76, 130, 160), // 照 draw_modal_card 标题装饰线同色
     );
     // 徽标/计数行：分类徽标居左（event_badge 单口纯推导），遭遇计数居右
-    //（×1..=9 静态查表，≥10 format! 兜底——覆层期单行豁免，同手札行口径）
+    //（×1..=9 静态查表，≥10 format! 兜底——覆层期单行豁免；v1.16.13 复审⑥：
+    // 前缀「遭遇」只随数值大小出现属口径漂移，与手札行统一为纯「×N」右对齐。
+    // cnt==0 运行时不可达——唯一开启口 gallery.rs:301 前有 ev_cnt[i]>0 门控）
     txt(badge_t, 380.0, 174.0, 14, badge_c);
     let cs = ev_cnt_str(cnt);
     if cs.is_empty() {
-        txt_r(&format!("遭遇 ×{}", cnt), 900.0, 174.0, 14, C_GOLD);
+        txt_r(&format!("×{}", cnt), 900.0, 174.0, 14, C_GOLD);
     } else {
         txt_r(cs, 900.0, 174.0, 14, C_GOLD);
     }
@@ -477,6 +492,130 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
         g.ev_recall = None;
         g.play(crate::sounds::Which::Page);
     }
+}
+
+// v1.16.13 终局页『本稿遭遇』开启帧一次性灌字形（照 prewarm_recall_overlay 先例）：
+// chrome + 徽标串（取值域固定小集）+ 本稿各遇行名（EVENT_NAMES 静态表查行）
+pub fn prewarm_run_recall(g: &Game) {
+    prewarm_text("本 稿 遭 遇", &[24]);
+    // v1.16.13 复审修：头部计数行静态部分「本稿共录/则」此前不在任何预热串
+    //（本/稿@14 由空态串覆盖，共/录/则全库独此一行）——动态数字为 ASCII 整档
+    // 保留，中文字形在此灌齐
+    prewarm_text("本稿共录 则 · 点行回味全文", &[14]);
+    prewarm_text("点行外任意处返回", &[14]);
+    prewarm_text("本稿风平浪静，未遇事件", &[14]);
+    for id in &g.run_events {
+        let (bt, _) = event_badge(*id);
+        prewarm_text(bt, &[14]);
+        if let Some(nm) = EVENT_NAMES.get(*id) {
+            prewarm_text(nm, &[14]);
+        }
+    }
+}
+
+// v1.16.13 终局页『本稿遭遇』列表覆层：Scene::Inherit 页「本稿剧情」行点开的只读
+// 列表（draw_inherit 早退独占渲染，本函数由其调用）。数据源 g.run_events（本世遭遇
+// 去重有序表，note_event 单口 push、launch_sim 清零——切勿用 ev_cnt 反推本世列表，
+// 跨世累计无边界）。点行开 draw_event_recall_overlay 回味全文（ev_recall 复用，
+// Esc 先关回味再关列表、main.rs 分域）；点行外任意处返回（终局页不离场——继承
+// 选项/合页钮原位保留）。
+// 版式照 draw_event_recall_overlay（panel_card 340,100,600,500/标题 24 金居中/装饰
+// 线）；滚动自持字段 run_recall_scroll/drag（滚轮 ±48px/格照 scroll_list_tick 同参 +
+// 触拖 1:1，无惯性无吸附——覆层列表短程滚动不需要状态机全套），与图鉴页 npc_scroll
+// 互不相涉。性能：行渲染全静态查表零分配（EVENT_NAMES/event_badge &'static str），
+// 唯头部计数一行 format!（模态静态页豁免，同 draw_inherit 本页既有行口径）。
+pub fn draw_run_recall_list(g: &mut Game) {
+    let n = g.run_events.len();
+    // 内容视口 190..556（面板 340,100,600,500 内，标题/装饰线之下），行带 26
+    let (content_y0, content_y1, row_h) = (190.0f32, 556.0f32, 26.0f32);
+    let max = ((n as f32) * row_h - (content_y1 - content_y0)).max(0.0);
+    let (mx, my) = crate::cam::mouse();
+    let pressed = is_mouse_button_pressed(MouseButton::Left);
+    let released = is_mouse_button_released(MouseButton::Left);
+    // 滚轮（桌面）
+    let (_, wy) = mouse_wheel();
+    if wy != 0.0 {
+        g.run_recall_scroll = (g.run_recall_scroll - wy * 48.0).clamp(0.0, max);
+    }
+    // 输入分域：内容带内按下记锚点（拖动/点行）；带外（面板 chrome/页眉页脚/面板外）
+    // 点按即返回——照 recall 覆层「任意点按关闭」先例。关闭不提前 return（提前退会
+    // 跳过本帧全部绘制产生一帧空屏）：不置锚，chrome/行照常绘完，下帧函数头早退
+    // 自然落到终局页
+    if pressed {
+        if mx >= 340.0 && mx <= 940.0 && my >= content_y0 && my <= content_y1 {
+            g.run_recall_drag = Some((mx, my, g.run_recall_scroll));
+        } else {
+            g.run_recall_open = false;
+            g.play(crate::sounds::Which::Page);
+        }
+    }
+    if let Some((px, py, s0)) = g.run_recall_drag {
+        let dist = ((mx - px) * (mx - px) + (my - py) * (my - py)).sqrt();
+        if !released {
+            if dist >= 6.0 {
+                // 1:1 跟手（自锚点起算），无惯性（短列表自由停留即停）
+                g.run_recall_scroll = (s0 - (my - py)).clamp(0.0, max);
+            }
+        } else {
+            g.run_recall_drag = None;
+            if dist < 6.0 {
+                // 点行：开回味覆层（行号由抬起点反推，min 防御绝不高估）
+                let idx = ((my - content_y0 + g.run_recall_scroll) / row_h).max(0.0) as usize;
+                if mx >= 380.0 && mx <= 900.0 && idx < n {
+                    let id = g.run_events[idx];
+                    g.ev_recall = Some(id);
+                    prewarm_recall_overlay(g, id);
+                    g.play(crate::sounds::Which::Click);
+                }
+            }
+        }
+    }
+    // chrome（照 draw_event_recall_overlay 版式）
+    draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(8, 5, 16, 244));
+    panel_card(340.0, 100.0, 600.0, 500.0);
+    txt_c("本 稿 遭 遇", V_W * 0.5, 128.0, 24, C_GOLD);
+    draw_rectangle(
+        380.0,
+        164.0,
+        520.0,
+        1.5,
+        Color::from_rgba(96, 76, 130, 160), // 照装饰线同色
+    );
+    if n == 0 {
+        txt("本稿风平浪静，未遇事件", 380.0, 200.0, 14, C_DIM);
+        return;
+    }
+    // 行渲染：滚动画布 + 上下遮幅（照手札页遮幅口径——全不透明面板色盖越缘行，
+    // 命中侧已按内容带分域故遮幅只遮绘制），行带 26 内徽标居左+名居左
+    let scroll = g.run_recall_scroll;
+    let first = (scroll / row_h).floor() as usize;
+    let last = ((scroll + (content_y1 - content_y0)) / row_h).ceil() as usize;
+    for k in first..last.min(n) {
+        let id = g.run_events[k];
+        let y = content_y0 + k as f32 * row_h - scroll;
+        let (bt, bc) = event_badge(id);
+        txt(bt, 380.0, y, 14, bc);
+        if let Some(nm) = EVENT_NAMES.get(id) {
+            txt(nm, 452.0, y, 14, C_TEXT);
+        }
+    }
+    // 遮幅（口径同手札页 309-310：全不透明面板色，盖住越缘内容）——上幅让开
+    // 装饰线（164..165.5），下幅让开卡底缘（596..600 为 panel_card 边线）
+    let mask = Color::from_rgba(22, 16, 38, 255);
+    draw_rectangle(340.0, 167.0, 600.0, content_y0 - 167.0, mask);
+    draw_rectangle(340.0, content_y1, 600.0, 596.0 - content_y1, mask);
+    // v1.16.13 复审修：头部计数行（174..188 落上遮幅 167..190 带内）须在遮幅之后
+    // 绘制——原版式照抄 draw_event_recall_overlay y174 徽标行，但回味覆层无滚动
+    // 遮幅、本列表新加了遮幅，先绘即被 alpha 255 整行盖住（n>0 恒不可见）；照
+    // footer 同法后置，行越缘像素先被遮幅吃掉再叠 chrome，无透字
+    txt(
+        &format!("本稿共录 {} 则 · 点行回味全文", n),
+        380.0,
+        174.0,
+        14,
+        C_DIM,
+    );
+    txt_c("点行外任意处返回", V_W * 0.5, 566.0, 14, C_DIM);
 }
 
 // 同页人卡（i=0..=9）：已识 rgba(42,26,52,210)+C_PURPLE 边（现道侣卡语言）、
@@ -641,5 +780,58 @@ fn draw_gal_npc_card(g: &Game, i: usize, y: f32) {
         } else if fav >= NPC_EVENT_FAV {
             txt("有心事待叙", col, y + 150.0, 14, C_GOLD);
         }
+    }
+}
+
+// ---------------- v1.16.13 复审⑥⑦：计数口径与 tap 纵夹（纯函数单测） ----------------
+#[cfg(test)]
+mod gallery_v11613_tests {
+    use super::*;
+
+    // ev_cnt_str 口径：×1..=9 静态查表；0 与 ≥10 返回空串走调用方 format! 兜底。
+    // 0 运行时不可达（唯一开启口 gallery.rs:301 前有 ev_cnt[i]>0 门控），仅 ≥10
+    // 落 format!（覆层与手札行统一为纯「×N」右对齐）。
+    #[test]
+    fn ev_cnt_str_table_and_fallback() {
+        for c in 1u8..=9 {
+            assert_eq!(ev_cnt_str(c), format!("×{}", c), "×{} 须静态查表命中", c);
+        }
+        assert_eq!(ev_cnt_str(0), "", "0 不可达口径：空串走兜底");
+        assert_eq!(ev_cnt_str(10), "", "≥10 长尾走 format! 兜底");
+        assert_eq!(ev_cnt_str(255), "", "封顶 255 同走兜底");
+    }
+
+    // tap 纵夹边界：视口带 [116, 616] 闭区间内可点，上下缘外一 px 即不可点
+    #[test]
+    fn tap_y_clamped_to_viewport_band() {
+        assert!(!tap_y_in_view(GAL_VIEW_Y0 - 1.0), "上缘外 1px 不可点");
+        assert!(tap_y_in_view(GAL_VIEW_Y0), "上缘可点（闭区间）");
+        assert!(tap_y_in_view((GAL_VIEW_Y0 + GAL_VIEW_Y1) * 0.5));
+        assert!(tap_y_in_view(GAL_VIEW_Y1), "下缘可点（闭区间）");
+        assert!(!tap_y_in_view(GAL_VIEW_Y1 + 1.0), "下缘外 1px 不可点");
+    }
+
+    // 回归场景：部分可见行（整行出界剔除剔除不到）遮幅带内点按——行内命中式
+    // （my∈[y, y+GAL_EV_H]）为真但纵夹为假，覆层不得开启（遮幅 309-310 只遮绘制
+    // 不遮命中，纵夹是命中侧的补口）
+    #[test]
+    fn partially_visible_row_mask_band_not_tappable() {
+        // 首行滚出视口上半：行顶 y = VIEW_Y0 − 30，遮幅带 my=VIEW_Y0−5 落行内
+        let y = GAL_VIEW_Y0 - 30.0;
+        let my = GAL_VIEW_Y0 - 5.0;
+        assert!(my >= y && my <= y + GAL_EV_H, "行内命中式为真（未夹前可误触）");
+        assert!(!tap_y_in_view(my), "纵夹后遮幅带点按不开覆层");
+        // 行内可见区仍可点：行顶滚入后 my 在视口带内
+        let my_in = GAL_VIEW_Y0 + 10.0;
+        assert!(my_in >= y && my_in <= y + GAL_EV_H && tap_y_in_view(my_in));
+    }
+
+    // 末行滚出视口下半的对称场景（尾行 y+GAL_EV_H 越下缘）
+    #[test]
+    fn partially_visible_row_below_band_not_tappable() {
+        let y = GAL_VIEW_Y1 - GAL_EV_H + 30.0; // 行底 = VIEW_Y1 + 30
+        let my = GAL_VIEW_Y1 + 5.0;
+        assert!(my >= y && my <= y + GAL_EV_H, "行内命中式为真");
+        assert!(!tap_y_in_view(my), "下遮幅带点按不开覆层");
     }
 }

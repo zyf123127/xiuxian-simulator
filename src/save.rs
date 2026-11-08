@@ -69,6 +69,15 @@ mod backend {
 // 存档文本生成（双端共用：桌面文件与 wasm localStorage 写入的是同一段文本，
 // 差异仅在 backend::write_text 的存储介质）。抽出为纯函数以便单测做写读回环。
 pub fn save_text(m: &Meta) -> String {
+    save_text_with_ts(m, m.last_ts)
+}
+
+/// v1.16.13 复审⑨：ts 可注入变体（save_text 唯一实际体）。pagehide 兜底快照
+/// （stash_pending）传 date_now() 只把快照级 ts= 基准推进到当前时刻——内存
+/// m.last_ts 仍由 save_flush 真落盘才推进（game.rs:1533 口径：离线起点=最后
+/// 一次落盘时刻，快照注入不提前该基准）。零格式变化：键名/键序/解析不变，
+/// 旧档不受影响。
+pub fn save_text_with_ts(m: &Meta, ts: u64) -> String {
     let mut s = String::new();
     s.push_str(&format!("lives={}\n", m.lives));
     s.push_str(&format!("dy={}\n", m.dao_yun));
@@ -101,7 +110,8 @@ pub fn save_text(m: &Meta) -> String {
     s.push_str(&format!("music={} sfx={}\n", m.music as i32, m.sfx as i32));
     // v1.10.2 离线闭关：最后一次落盘 epoch 秒（缺键/0 → 首落盘不计收益仅落新基准；
     // 回拨/脏值 → 按 0 收益；离线起点=最后一次落盘时刻，保守口径）
-    s.push_str(&format!("ts={}\n", m.last_ts));
+    // v1.16.13 复审⑨：取注入参（save_text 传 m.last_ts；stash_pending 传 date_now()）
+    s.push_str(&format!("ts={}\n", ts));
     // v1.12.1 四结局达成位掩码（bit0=A定稿 bit1=B留白 bit2=C执笔 bit3=D合订；缺键/坏值→0）
     s.push_str(&format!("ed={}\n", m.endings_seen));
     // v1.12.1 讨牒 dp=（sync_taodie 对账补发，旧档首检补齐）与缝页 bn=/blv=（255 未定、缘 0..=3）
@@ -187,7 +197,19 @@ static PENDING: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
 #[cfg(target_arch = "wasm32")]
 pub fn stash_pending(m: &Meta) {
-    *PENDING.lock().unwrap() = Some(save_text(m));
+    // v1.16.13 复审⑨：快照 ts= 注入 date_now()（save_text_with_ts）——原 save_text
+    // 取 m.last_ts（距最近真落盘一个 sync→flush 间隔的旧值），sync_save 后切后台
+    // 强杀时离线收益起点回退；注入只影响快照文本，内存 m.last_ts 不动（game.rs:1533
+    // 真落盘才推进的口径保持）。快照置入后由 save_flush 落盘帧清空（clear_pending），
+    // 杜绝「已落盘 ts 更新、pagehide 仍用旧快照回写」的 ts 回退窗。
+    *PENDING.lock().unwrap() = Some(save_text_with_ts(m, crate::game::date_now()));
+}
+
+/// v1.16.13 复审⑨：save_flush 真落盘后清兜底快照——磁盘内容已含新 ts=，pagehide
+/// 无需再回写（index.html len<=0 天然跳过），消除旧快照把 ts 基准往回拨的窗口
+#[cfg(target_arch = "wasm32")]
+pub fn clear_pending() {
+    *PENDING.lock().unwrap() = None;
 }
 
 /// JS 兜底读取：pending 快照字节长度（0 = 无待兜底快照）
@@ -1264,5 +1286,44 @@ h=1 2 3 50.0 40 100 800 255 乙
         let m3 = parse_save(&format!("{}{}", OLD_BASE, long));
         assert_eq!(m3.ev_cnt.len(), crate::data::EVENTS.len());
         assert_eq!(m3.ev_cnt[117], 117);
+    }
+}
+
+// ---------------- v1.16.13 复审⑨：ts 注入口回归（纯函数单测） ----------------
+// 现场背景：pagehide 兜底快照原用 save_text（ts= 取 m.last_ts 旧值），sync→flush
+// 间隔内强杀会令离线收益起点回退一个间隔；拆 save_text_with_ts 后 stash_pending
+// 注入 date_now()，内存 m.last_ts 口径（save_flush 真落盘才推进）不动。
+#[cfg(test)]
+mod v11613_ts_inject_tests {
+    use super::{save_text, save_text_with_ts};
+    use crate::game::Meta;
+
+    // save_text 恒等于注入 m.last_ts（原路径零行为变化，双端写入文本逐字节不变）
+    #[test]
+    fn save_text_is_ts_identity() {
+        let mut m = Meta::default();
+        m.last_ts = 1_700_000_000;
+        assert_eq!(save_text(&m), save_text_with_ts(&m, m.last_ts));
+    }
+
+    // 注入只改 ts= 一行，其余行（含 h=/hq=/ch=/sy=/evc= 行序）逐字节不变——
+    // 旧行解析（parse_save）零迁移不受影响
+    #[test]
+    fn ts_injection_changes_only_ts_line() {
+        let m = Meta::default();
+        let a = save_text_with_ts(&m, 111);
+        let b = save_text_with_ts(&m, 222);
+        let la: Vec<&str> = a.lines().collect();
+        let lb: Vec<&str> = b.lines().collect();
+        assert_eq!(la.len(), lb.len(), "行数一致（无新增/删行）");
+        let mut diff = 0usize;
+        for (x, y) in la.iter().zip(lb.iter()) {
+            if x != y {
+                diff += 1;
+                assert!(x.starts_with("ts=") && y.starts_with("ts="), "仅 ts= 行可变");
+            }
+        }
+        assert_eq!(diff, 1, "恰好 ts= 一行不同");
+        assert!(b.contains("ts=222\n"), "注入值落行式键值");
     }
 }

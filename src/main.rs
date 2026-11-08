@@ -326,6 +326,11 @@ async fn main() {
                 g.play(crate::sounds::Which::Page);
             } else if g.ev_recall.take().is_some() {
                 g.play(crate::sounds::Which::Page);
+            } else if g.run_recall_open {
+                // v1.16.13：终局页『本稿遭遇』列表（Scene::Inherit 专属会话态，
+                // 回味覆层在其上层故先于本臂关闭）
+                g.run_recall_open = false;
+                g.play(crate::sounds::Which::Page);
             } else if g.rmodal.is_some() {
                 // 吞掉：事件必须抉择
             } else if g.submenu.take().is_some() {
@@ -349,16 +354,15 @@ async fn main() {
             // v1.10.2 复审②：离闭结算卡独占期同样避让（防卡上开面板/山河图穿透）
             // v1.12.1 复审③a：终卷演出页覆层独占期同样避让
             // v1.16.1 复审④：立绘鉴赏覆层独占期同样避让
-            if g.submenu.is_none()
-                && g.rmodal.is_none()
-                && g.offline_card.is_none()
-                && g.ending_show.is_none()
-                && g.zoom_art.is_none()
-            {
+            // v1.16.13 复审⑤：手札回味覆层独占期同样避让（守卫收敛为单口
+            // key_overlay_blocking，main.rs 与单测共用；C 臂置 None 降级为纵深
+            // 防御——守卫成立时恒 no-op，保留防后续新增覆层漏登记）
+            if !g.key_overlay_blocking() {
                 if is_key_pressed(KeyCode::C) {
-                    // v1.16.11：C 键切面板不走 exec_panel_act（直接置 panel）——
-                    // 手札回味覆层态必须在本口单独清，防残留跨开合（借 npc_scroll_reset
-                    // 已并 ×/Esc 两口，Tab 臂已防御，本口为四处清态的最后一处）
+                    // v1.16.11：C 键切面板不走 exec_panel_act（直接置 panel）
+                    // v1.16.13 复审⑤：覆层态已由上方守卫整链避让（ev_recall 开启期
+                    // 本臂不可达），置 None 降级为纵深防御——原「本口为四处清态的
+                    // 最后一处」前提被守卫取代，保留防后续新增覆层漏登记
                     g.ev_recall = None;
                     g.panel = if g.panel == 5 { 0 } else { 5 };
                 }

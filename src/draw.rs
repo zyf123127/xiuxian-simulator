@@ -583,6 +583,15 @@ pub(crate) fn draw_toast(g: &Game) {
     }
 }
 
+// v1.16.13 复审①：菜单底排两危险钮命中守卫单口（draw_menu 两钮与单测共用）——
+// panel!=0（书志/烙印/帮助/角色阅读态）时立即模式底排 button 先于罩层绘制命中，
+// 同帧重叠矩形全触发（见下方 619-621 注先例），一律不做命中；承接前缘钮另需
+// 有档（need_life）。回归口：书志页全貌带 y554 行落按钮带 522..576 内，开书志
+// 点该带不得静默 resume_life。
+fn menu_danger_btn_hit(panel: u8, need_life: bool, has_life: bool) -> bool {
+    panel == 0 && (!need_life || has_life)
+}
+
 // ================= 菜单 =================
 pub fn draw_menu(g: &mut Game, art: &Art) {
     draw_bg(art);
@@ -619,11 +628,15 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
     // v1.12.1 复审①②：panel!=0（书志/烙印/帮助罩层阅读态）时危险钮不做命中——
     // 立即模式底排 button 先于罩层绘制命中，同帧重叠矩形全触发，误点即无确认
     // begin_mortal 覆盖当前人生（resume_life 注释自证）；合页钮与它仅隔 4px
-    if g.panel == 0 && button(bx, 522.0, 300.0, 54.0, "开始新的人生", None, true) {
+    if menu_danger_btn_hit(g.panel, false, false)
+        && button(bx, 522.0, 300.0, 54.0, "开始新的人生", None, true)
+    {
         g.play(crate::sounds::Which::Click);
         g.begin_mortal();
     }
-    if g.meta.life.is_some() {
+    // v1.16.13 复审②（同 619-621 同帧重叠先例）：本钮带 522..576 与书志页全貌带
+    // y554 行重叠——panel!=0 阅读态下不做命中，防开书志点全貌带静默 resume_life
+    if menu_danger_btn_hit(g.panel, true, g.meta.life.is_some()) {
         if button(
             bx + 320.0,
             522.0,
@@ -2076,6 +2089,18 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     draw_bg(art);
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(10, 6, 20, 235));
     draw_motes(g);
+    // v1.16.13 终局页『本稿遭遇』列表/回味覆层早退独占（照 zoom_art/ev_recall 先例
+    // ——下层不绘不响应；Scene::Inherit 无 Reality 面板跳转路径，finish_inherit 是
+    // 唯一出口，跳面板会静默弃未选继承项，故落页内覆层而非跳转）
+    if g.run_recall_open {
+        if g.ev_recall.is_some() {
+            crate::gallery::draw_event_recall_overlay(g);
+        } else {
+            crate::gallery::draw_run_recall_list(g);
+        }
+        version_mark();
+        return;
+    }
     let Some(sr) = g.sim_result.as_ref() else {
         return;
     };
@@ -2112,16 +2137,32 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     );
     // v1.16.8 主线感：本稿剧情一行（SimResult.story 与旧稿档案 hq= 同源一次拼接；
     // 会话态零新键，&str 借用分片绘制零 format!；无摘要整行隐去零位移）。
-    // 绘制于 sr 只读段末（y570 在左右卡之下、合页钮之上——借用随此终结，
-    // 后续 &mut 交互照旧；立即模式绘制序不影响该行位置）
+    // v1.16.13 本稿剧情行点开『本稿遭遇』列表：此处只读绘制+热态金色反馈+记
+    // open_story，&mut 全部放在 note_lines collect 之后（sr 借用随 collect 终结
+    // ——本段末纪律照旧；is_mouse_button_pressed 帧内稳定，同帧后置判定等价）
+    let mut open_story = false;
     if let Some(st) = sr.story.as_deref() {
-        txt("本稿剧情", 490.0, 570.0, 14, C_DIM);
-        txt(st, 570.0, 570.0, 14, C_GOLD_D);
+        let (smx, smy) = crate::cam::mouse();
+        let (mx0, mx1, my0, my1) = (486.0f32, 1230.0f32, 560.0f32, 592.0f32);
+        let hot = smx >= mx0 && smx <= mx1 && smy >= my0 && smy <= my1;
+        txt("本稿剧情", 490.0, 570.0, 14, if hot { C_GOLD } else { C_DIM });
+        txt(st, 570.0, 570.0, 14, if hot { C_GOLD } else { C_GOLD_D });
+        open_story = hot && is_mouse_button_pressed(MouseButton::Left);
     }
     // v1.12.0 留行批注：大事记点一行带走（下一稿开卷浮现后清空；定稿 §5.2 留行）。
     // 先收成 owned 再进点击循环（sr 为 &g.sim_result 借用，&mut g 须待其终结——照打稿屏 draft.clone() 先例）
     txt("—— 大事记 · 点一行留作朱批 ——", 84.0, 336.0, 14, C_DIM);
     let note_lines: Vec<String> = sr.highlights.iter().rev().take(7).cloned().collect();
+    // v1.16.13 承上：open_story 落点（sr 借用已终结，&mut 照旧；覆层下帧经函数头
+    // 早退独占接管，终局页不离场——继承选项/合页钮原位保留）
+    if open_story {
+        crate::gallery::prewarm_run_recall(g);
+        g.run_recall_open = true;
+        g.run_recall_scroll = 0.0;
+        g.run_recall_drag = None;
+        g.ev_recall = None;
+        g.play(crate::sounds::Which::Page);
+    }
     let (nmx, nmy) = crate::cam::mouse();
     let mut y = 360.0;
     for h in &note_lines {
@@ -2788,16 +2829,19 @@ fn draw_offline_card(g: &mut Game) {
         226.0, 16,
         C_TEXT,
     );
+    // v1.16.13 复审⑧：字号 15 是图集孤立档（UI_SIZES=[14,16,18,20,24,28] 之外，
+    // 每字独立栅格化+首开图集 dirty）——收敛回 16（与 2788 行同档；本卡无预热口，
+    // 静态后仍随面板通用字形命中）。行距 28px 容 16px 无溢出（面板内宽 ~520）。
     txt(
         &format!("闭关吐纳（五折）：修为 +{}", fmt_num(r.qi)),
         380.0,
-        260.0, 15,
+        260.0, 16,
         C_CYAN,
     );
     txt(
         &format!("洞府灵田岁入：灵石 +{}", fmt_int(r.stones)),
         380.0,
-        288.0, 15,
+        288.0, 16,
         C_CYAN,
     );
     txt(
@@ -3389,4 +3433,44 @@ pub fn prewarm_book_record(g: &Game) {
         prewarm_text(ch.name, &[14]);
     }
     prewarm_text(&g.worn_title_of(), &[14]);
+}
+
+// ---------------- v1.16.13 复审①②：菜单危险钮守卫回归（纯函数单测） ----------------
+// 现场背景：书志页全貌带 y554 行（draw_book_record）与底排按钮带 522..576 重叠，
+// 立即模式底排 button 先于罩层绘制命中（619-621 注）——panel 守卫缺失时开书志
+// 点该带即静默 begin_mortal/resume_life 覆盖当前人生。
+#[cfg(test)]
+mod menu_danger_btn_tests {
+    use super::menu_danger_btn_hit;
+
+    // panel==0：开始新的人生恒可命中（无档新档也要能开新局）
+    #[test]
+    fn begin_btn_on_menu_panel() {
+        assert!(menu_danger_btn_hit(0, false, false));
+        assert!(menu_danger_btn_hit(0, false, true));
+    }
+
+    // panel==0 且有档：承接前缘可命中；无档不可命中（原 `life.is_some()` 语义保持）
+    #[test]
+    fn resume_btn_on_menu_panel_gated_by_life() {
+        assert!(menu_danger_btn_hit(0, true, true));
+        assert!(!menu_danger_btn_hit(0, true, false));
+    }
+
+    // 阅读态面板（1坊市 2行囊 3烙印 4帮助 5角色 6书志）任一开启：两钮一律不做命中
+    #[test]
+    fn any_reading_panel_blocks_both_btns() {
+        for panel in 1u8..=6 {
+            assert!(
+                !menu_danger_btn_hit(panel, false, false),
+                "panel={} 开始新的人生须避让",
+                panel
+            );
+            assert!(
+                !menu_danger_btn_hit(panel, true, true),
+                "panel={} 承接前缘须避让（有档也不命中）",
+                panel
+            );
+        }
+    }
 }
