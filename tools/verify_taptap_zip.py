@@ -47,13 +47,13 @@ assert not zero, f"零字节条目: {zero}"
 assert not names or all(n.startswith("taptap_h5/") for n in names), "根层混入 taptap_h5/ 之外条目"
 assert b"xx_storage" in wasm, "wasm 内未见 xx_storage 导出符号"
 assert b"xx_font_len" in wasm, "wasm 内未见 xx_font_len 导入符号（v1.16.10 字体外置三方成对断言）"
-for token in ('GAME_VER = "1.16.13"', "miniquad_add_plugin", "xx_storage", "xx_font", '"use strict"'):
+for token in ('GAME_VER = "1.16.14"', "miniquad_add_plugin", "xx_storage", "xx_font", '"use strict"'):
     assert token in idx, f"包内 index.html 缺: {token}"
 assert 'xiuxian.wasm?v=' in idx, "包内 index.html 缺 wasm 缓存穿透参数"
 assert 'font.ttf.deflate?v=' in idx, "包内 index.html 缺字体缓存穿透参数"
 assert '<script src="mq_js_bundle.js' not in idx, "内联后仍残留 bundle 外链行"
 print("OK: 恰 21 条目（index+wasm+font+portraits/18）、/ 分隔、根层仅一层 taptap_h5/、"
       "CRC 全过、条目非零字节；wasm 含 xx_storage 与 xx_font_len（字体外置）；"
-      "index.html 含 GAME_VER 1.16.13 与内联 bundle（miniquad_add_plugin/use strict）"
+      "index.html 含 GAME_VER 1.16.14 与内联 bundle（miniquad_add_plugin/use strict）"
       "与存档/字体插件")
 sys.exit(0)

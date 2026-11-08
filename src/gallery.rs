@@ -130,7 +130,7 @@ const EV_NOTE_PREWARM: &[&str] = &[
 ];
 
 /// 遭遇手札首开帧预热（exec_panel_act Tab(4)/指引 Gallery 跳转同口调用）：静态串
-/// 全量 + 已遇事件的标题/简介（未遇不灌——全部 118 条灌齐有图集余量风险，且未遇
+/// 全量 + 已遇事件的标题/简介（未遇不灌——全池灌齐有图集余量风险，且未遇
 /// 行只显？？？；收录随游玩渐进，预热开销与之同长）
 pub fn prewarm_event_book(g: &Game) {
     for s in EV_NOTE_PREWARM {
@@ -167,7 +167,8 @@ pub fn event_badge(id: usize) -> (&'static str, Color) {
         110 | 111 => return ("宿敌", C_RED),
         // v1.16.11 链起扩 118/121（链9 循册寻仇/链10 旧页回声首段）
         // v1.16.13 链起扩 137/140（链11 劫痕渡客/链12 书肆换届首段）
-        44 | 47 | 50 | 76 | 79 | 85 | 112 | 115 | 118 | 121 | 137 | 140 => {
+        // v1.16.14 链起扩 151（链13 死当归主首段）
+        44 | 47 | 50 | 76 | 79 | 85 | 112 | 115 | 118 | 121 | 137 | 140 | 151 => {
             return ("链起", C_CYAN)
         }
         _ => {}
@@ -418,6 +419,12 @@ fn prewarm_recall_overlay(g: &Game, i: usize) {
     }
 }
 
+// v1.16.14 回味覆层静态 chrome 单源（全 @14）：覆层头标/降级标签/返回提示三串，
+// 绘制位（draw_event_recall_overlay 三处按下标取串）与两条开启口的预热同源——
+// Tab(4) 手札页口并入 EV_NOTE_PREWARM（对账测试钉死不漂移），终局页本稿遭遇口
+// 由 prewarm_run_recall 循环本表自灌（该口不经 prewarm_event_book）
+const RECALL_CHROME: [&str; 3] = ["手札回味", "本世未存全文，仅录简介", "点按任意处返回"];
+
 // v1.16.11 手札回味覆层：图鉴已遇行点按开启的只读详情（纯展示不结算）。模态独占
 // 输入照 zoom_art 早退先例（draw_reality 早退链独占渲染，本函数由其调用）；版式
 // 轻量复刻 draw_modal_card 普通卡（panel_card 底板/标题 24 金居中/装饰线/链段青
@@ -451,7 +458,7 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
     if let Some(ec) = edge {
         draw_rectangle_lines(340.0, 100.0, 600.0, 500.0, 2.5, ec);
     }
-    txt("手札回味", 380.0, 112.0, 14, C_DIM);
+    txt(RECALL_CHROME[0], 380.0, 112.0, 14, C_DIM);
     let name = EVENT_NAMES.get(id).copied().unwrap_or("？？？"); // 防御同手札行口径
     txt_c(name, V_W * 0.5, 128.0, 24, C_GOLD);
     draw_rectangle(
@@ -464,7 +471,8 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
     // 徽标/计数行：分类徽标居左（event_badge 单口纯推导），遭遇计数居右
     //（×1..=9 静态查表，≥10 format! 兜底——覆层期单行豁免；v1.16.13 复审⑥：
     // 前缀「遭遇」只随数值大小出现属口径漂移，与手札行统一为纯「×N」右对齐。
-    // cnt==0 运行时不可达——唯一开启口 gallery.rs:301 前有 ev_cnt[i]>0 门控）
+    // cnt==0 运行时不可达——两口开启侧均有保证：手札行 ev_cnt[i]>0 门控+
+    // tap_y_in_view 纵夹；本稿遭遇行 id 出自 run_events 已遇集，cnt>0 恒成立）
     txt(badge_t, 380.0, 174.0, 14, badge_c);
     let cs = ev_cnt_str(cnt);
     if cs.is_empty() {
@@ -479,7 +487,7 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
             wrap_draw(t, 380.0, 196.0, 16, 520.0, 28.0, C_TEXT);
         }
         None => {
-            txt("本世未存全文，仅录简介", 380.0, 196.0, 14, C_DIM);
+            txt(RECALL_CHROME[1], 380.0, 196.0, 14, C_DIM);
             if let Some(b) = EVENT_BRIEF.get(id) {
                 if !b.is_empty() {
                     wrap_draw(b, 380.0, 224.0, 14, 520.0, 22.0, C_TEXT);
@@ -487,7 +495,7 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
             }
         }
     }
-    txt_c("点按任意处返回", V_W * 0.5, 566.0, 14, C_DIM);
+    txt_c(RECALL_CHROME[2], V_W * 0.5, 566.0, 14, C_DIM);
     if is_mouse_button_pressed(MouseButton::Left) {
         g.ev_recall = None;
         g.play(crate::sounds::Which::Page);
@@ -504,6 +512,12 @@ pub fn prewarm_run_recall(g: &Game) {
     prewarm_text("本稿共录 则 · 点行回味全文", &[14]);
     prewarm_text("点行外任意处返回", &[14]);
     prewarm_text("本稿风平浪静，未遇事件", &[14]);
+    // v1.16.14 复审修：本稿遭遇口点行开启的回味覆层不经 prewarm_event_book（那是
+    // Tab(4) 手札页口）——chrome 三串在此自灌，否则未开过手札页的会话（开 sim→
+    // 终局→本稿剧情→点行）首开覆层三串冷栅格化
+    for s in RECALL_CHROME {
+        prewarm_text(s, &[14]);
+    }
     for id in &g.run_events {
         let (bt, _) = event_badge(*id);
         prewarm_text(bt, &[14]);
@@ -511,6 +525,20 @@ pub fn prewarm_run_recall(g: &Game) {
             prewarm_text(nm, &[14]);
         }
     }
+}
+
+// v1.16.14 本稿遭遇列表内容带/行带常量：自局部提升为模块级，供抬起命中单口
+// run_recall_row_hit 与其单测引用（数值=版式原注 190..556/行带 26，不挪不改）
+const RUN_RECALL_Y0: f32 = 190.0;
+const RUN_RECALL_Y1: f32 = 556.0;
+const RUN_RECALL_ROW_H: f32 = 26.0;
+
+// v1.16.14 复审修：抬起命中单口（纯函数供单测，照 tap_y_in_view 先例）——按下
+// 锚点已限内容带（draw_run_recall_list 按下分支），但 <6px 位移可把抬起滑出带外：
+// 上/下缘落遮幅带（167..190 / 556..596 只遮绘制不遮命中）时行号反推指向被盖住的
+// 不可见行，抬起须再夹内容带（手札页 tap_y_in_view 同款纵夹）
+fn run_recall_row_hit(mx: f32, my: f32, idx: usize, n: usize) -> bool {
+    mx >= 380.0 && mx <= 900.0 && my >= RUN_RECALL_Y0 && my <= RUN_RECALL_Y1 && idx < n
 }
 
 // v1.16.13 终局页『本稿遭遇』列表覆层：Scene::Inherit 页「本稿剧情」行点开的只读
@@ -527,7 +555,7 @@ pub fn prewarm_run_recall(g: &Game) {
 pub fn draw_run_recall_list(g: &mut Game) {
     let n = g.run_events.len();
     // 内容视口 190..556（面板 340,100,600,500 内，标题/装饰线之下），行带 26
-    let (content_y0, content_y1, row_h) = (190.0f32, 556.0f32, 26.0f32);
+    let (content_y0, content_y1, row_h) = (RUN_RECALL_Y0, RUN_RECALL_Y1, RUN_RECALL_ROW_H);
     let max = ((n as f32) * row_h - (content_y1 - content_y0)).max(0.0);
     let (mx, my) = crate::cam::mouse();
     let pressed = is_mouse_button_pressed(MouseButton::Left);
@@ -559,9 +587,10 @@ pub fn draw_run_recall_list(g: &mut Game) {
         } else {
             g.run_recall_drag = None;
             if dist < 6.0 {
-                // 点行：开回味覆层（行号由抬起点反推，min 防御绝不高估）
+                // 点行：开回味覆层（行号由抬起点反推，min 防御绝不高估）；命中
+                // 单口内含 my 纵夹——带外抬起（遮幅带）不开不可见行
                 let idx = ((my - content_y0 + g.run_recall_scroll) / row_h).max(0.0) as usize;
-                if mx >= 380.0 && mx <= 900.0 && idx < n {
+                if run_recall_row_hit(mx, my, idx, n) {
                     let id = g.run_events[idx];
                     g.ev_recall = Some(id);
                     prewarm_recall_overlay(g, id);
@@ -789,8 +818,9 @@ mod gallery_v11613_tests {
     use super::*;
 
     // ev_cnt_str 口径：×1..=9 静态查表；0 与 ≥10 返回空串走调用方 format! 兜底。
-    // 0 运行时不可达（唯一开启口 gallery.rs:301 前有 ev_cnt[i]>0 门控），仅 ≥10
-    // 落 format!（覆层与手札行统一为纯「×N」右对齐）。
+    // 0 运行时不可达（两口开启侧均有保证——手札行 ev_cnt[i]>0 门控+tap_y_in_view
+    // 纵夹；本稿遭遇行 id 出自 run_events 已遇集），仅 ≥10 落 format!（覆层与
+    // 手札行统一为纯「×N」右对齐）。
     #[test]
     fn ev_cnt_str_table_and_fallback() {
         for c in 1u8..=9 {
@@ -833,5 +863,97 @@ mod gallery_v11613_tests {
         let my = GAL_VIEW_Y1 + 5.0;
         assert!(my >= y && my <= y + GAL_EV_H, "行内命中式为真");
         assert!(!tap_y_in_view(my), "下遮幅带点按不开覆层");
+    }
+}
+
+// ---------------- v1.16.14 复审：回味 chrome 预热对账 + 本稿遭遇抬起纵夹（纯函数单测） ----------------
+#[cfg(test)]
+mod gallery_v11614_tests {
+    use super::*;
+
+    // chrome 单源形状钉死：draw_event_recall_overlay 三绘制位按下标取串
+    //（0=头标/1=降级标签/2=返回提示），数组被重排/增删会静默错位——逐位钉值
+    #[test]
+    fn recall_chrome_shape_pinned() {
+        assert_eq!(RECALL_CHROME.len(), 3);
+        assert_eq!(RECALL_CHROME[0], "手札回味");
+        assert_eq!(RECALL_CHROME[1], "本世未存全文，仅录简介");
+        assert_eq!(RECALL_CHROME[2], "点按任意处返回");
+    }
+
+    // Tab(4) 手札页开启口对账：EV_NOTE_PREWARM 必须覆盖 chrome 全集——预热清单
+    // 与 chrome 是两份字面量，任一侧改串/删串即红（防该口首开覆层冷栅格化）。
+    // 终局页本稿遭遇口由 prewarm_run_recall 循环 RECALL_CHROME 自灌（与绘制位
+    // 同一单源，覆盖属结构保证，不存在可对账的旁路清单）
+    #[test]
+    fn recall_chrome_covered_by_event_book_prewarm() {
+        for s in RECALL_CHROME {
+            assert!(
+                EV_NOTE_PREWARM.contains(&s),
+                "chrome「{}」不在 EV_NOTE_PREWARM——Tab(4) 口首开覆层冷栅格化",
+                s
+            );
+        }
+    }
+
+    // 抬起命中带边界：内容带 [RUN_RECALL_Y0, RUN_RECALL_Y1] 闭区间内可点，缘外
+    // 一概不开（v1.16.14 复审修——<6px 位移可把抬起滑出按下锚点的带判定）；mx
+    // 带与 idx<n 两既有维度一并钉住不回归
+    #[test]
+    fn run_recall_row_hit_band_boundaries() {
+        let (mx, n) = (500.0, 20usize);
+        assert!(!run_recall_row_hit(mx, RUN_RECALL_Y0 - 1.0, 0, n), "上缘外 1px 不可点");
+        assert!(run_recall_row_hit(mx, RUN_RECALL_Y0, 0, n), "上缘可点（闭区间）");
+        assert!(run_recall_row_hit(mx, (RUN_RECALL_Y0 + RUN_RECALL_Y1) * 0.5, 5, n));
+        assert!(run_recall_row_hit(mx, RUN_RECALL_Y1, 5, n), "下缘可点（闭区间）");
+        assert!(!run_recall_row_hit(mx, RUN_RECALL_Y1 + 1.0, 5, n), "下缘外 1px 不可点");
+        assert!(!run_recall_row_hit(379.9, 300.0, 0, n), "mx 左缘外不可点");
+        assert!(!run_recall_row_hit(900.1, 300.0, 0, n), "mx 右缘外不可点");
+        assert!(!run_recall_row_hit(mx, 300.0, n, n), "idx 越表不可点");
+    }
+
+    // 上遮幅带误开回归（修前实况）：半行滚动 scroll=13，行0 起绘 y=Y0−13=177——
+    // 仍在绘制循环内（first=0，非整行出界剔除）但整行文字落上遮幅 167..Y0 带内
+    // 不可见；按下锚 my=Y0（带内合法）抬起 <6px 滑到 184.5，行号反推恰指行0。
+    // 修前命中式可开不可见行，修后缘外不开
+    #[test]
+    fn run_recall_top_mask_band_not_tappable() {
+        let scroll = 13.0f32;
+        let release_y = RUN_RECALL_Y0 - 5.5; // 按下锚 Y0、抬起位移 5.5<6（tap 语义）
+        let idx = ((release_y - RUN_RECALL_Y0 + scroll) / RUN_RECALL_ROW_H).max(0.0) as usize;
+        assert_eq!(idx, 0, "行号反推指向上遮幅带内的行0");
+        let first = (scroll / RUN_RECALL_ROW_H).floor() as usize;
+        let last = ((scroll + (RUN_RECALL_Y1 - RUN_RECALL_Y0)) / RUN_RECALL_ROW_H).ceil() as usize;
+        assert!(first <= idx && idx < last.min(20), "行0 在绘制循环内（非未绘不可见）");
+        let draw_y = RUN_RECALL_Y0 + idx as f32 * RUN_RECALL_ROW_H - scroll;
+        assert!(
+            draw_y >= 167.0 && draw_y + 14.0 * 0.82 <= RUN_RECALL_Y0,
+            "行0 文字整体被上遮幅 167..Y0 盖住（不可见）"
+        );
+        assert!(!run_recall_row_hit(500.0, release_y, idx, 20), "上遮幅带抬起不开不可见行");
+    }
+
+    // 下遮幅带对称场景：scroll=0，行14 起绘 y=Y0+14×26=554，下遮幅 556..596 盖掉
+    // 行主体（可见仅 554..556 共 2px 残条）；抬起滑出下缘到 561.5，行号反推恰指
+    // 行14。修前可开近整行被盖的行，修后缘外不开（可见残条 554..556 仍可点，与
+    // 手札页 tap_y_in_view 闭区间口径一致）
+    #[test]
+    fn run_recall_bottom_mask_band_not_tappable() {
+        let scroll = 0.0f32;
+        let release_y = RUN_RECALL_Y1 + 5.5;
+        let idx = ((release_y - RUN_RECALL_Y0 + scroll) / RUN_RECALL_ROW_H).max(0.0) as usize;
+        assert_eq!(idx, 14, "行号反推指向下遮幅带内的行14");
+        let draw_y = RUN_RECALL_Y0 + idx as f32 * RUN_RECALL_ROW_H - scroll;
+        let visible_h = (RUN_RECALL_Y1 - draw_y).max(0.0);
+        assert!(visible_h < RUN_RECALL_ROW_H, "行14 部分被下遮幅盖住（可见 {}px）", visible_h);
+        assert!(!run_recall_row_hit(500.0, release_y, idx, 20), "下遮幅带抬起不开被盖住的行");
+    }
+
+    // 带内合法点行不回归：上/下缘内 2px 的抬起伏动照常命中（收窄只切带外，不切
+    // 任何带内合法路径；拖拽 dist>=6 与滚轮路径不经此单口，不受影响）
+    #[test]
+    fn run_recall_in_band_tap_still_hits() {
+        assert!(run_recall_row_hit(500.0, RUN_RECALL_Y0 + 2.0, 3, 20));
+        assert!(run_recall_row_hit(500.0, RUN_RECALL_Y1 - 2.0, 3, 20));
     }
 }

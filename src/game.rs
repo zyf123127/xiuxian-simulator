@@ -79,13 +79,20 @@ pub const CHAIN910_SPECIAL_HI: u8 = 44;
 pub const CHAIN1112_SPECIAL_LO: u8 = 45;
 pub const CHAIN1112_SPECIAL_HI: u8 = 48;
 
+// v1.16.14 链13（死当归主——当铺死当旧物归主线）置链臂窗口 49..=52：45..=48
+// 已占、32..=34 检定臂照旧窗外——apply_eff 链裁决六窗判定（第六窗，语义不变）。
+// 49/50=链13 两推进臂（151→152→153）
+pub const CHAIN13_SPECIAL_LO: u8 = 49;
+pub const CHAIN13_SPECIAL_HI: u8 = 52;
+
 // v1.16.7 连锁剧情链名（链完成大事记「{名}·缘了」用；下标=链 id-1）。
 // v1.16.8 扩五：链4 灯楼谜约 / 链5 傩面还愿；v1.16.9 扩六：链6 血债血偿
 //（宿敌剧情化复仇线——真斩杀仍走 sim_neme/寻仇两口，链只述「探踪/设伏/夺积」）；
 // v1.16.10 扩八：链7 灯花渡舟 / 链8 药炉童子；v1.16.11 扩十：链9 循册寻仇
 //（斩宿敌之后其门下循册寻仇——与链6 成因果闭环）/ 链10 旧页回声；
-// v1.16.13 扩十二：链11 劫痕渡客（邻山渡劫侧写）/ 链12 书肆换届
-pub const CHAIN_NAMES: [&str; 12] = [
+// v1.16.13 扩十二：链11 劫痕渡客（邻山渡劫侧写）/ 链12 书肆换届；
+// v1.16.14 扩十三：链13 死当归主（当铺死当旧物归主线）
+pub const CHAIN_NAMES: [&str; 13] = [
     "货郎奇缘",
     "古碑遗篇",
     "沉墨遗匣",
@@ -98,6 +105,7 @@ pub const CHAIN_NAMES: [&str; 12] = [
     "旧页回声",
     "劫痕渡客",
     "书肆换届",
+    "死当归主",
 ];
 
 // v1.16.7 旧稿剧情摘要：大事记尾 1-2 条剥「N岁，」前缀拼接 ≤28 字
@@ -1060,7 +1068,8 @@ pub struct Game {
     // 最近一次构建帧的卡面正文（build_event 尾 ev_memo_set 单点捕获，与 note_event
     // 同点同口径；None=本会话尚未构建过——图鉴降级显 EVENT_BRIEF 一句）；
     // ev_recall=Some(id) 回味覆层开启中（draw_reality/draw_char_panel 早退独占，
-    // Esc/C/点按三口清，图鉴行 tap 唯一写入口）
+    // Esc/C/点按三口清；写入口两口——手札图鉴行 tap（ev_cnt>0 门控）与终局页
+    // 本稿遭遇行点开（行 id 出自 run_events 已遇集，cnt>0 恒成立））
     pub ev_memo: Vec<Option<String>>,
     pub ev_recall: Option<usize>,
 
@@ -3488,6 +3497,15 @@ impl Game {
                 || (id == 135 && self.meta.dongfu[1].clamp(0, 3) < 3)
                 || (id == 136 && self.meta.dongfu[2].clamp(0, 3) < 3)
             {
+                ww = 0.0;
+            }
+
+            // v1.16.14 宗门换届 2 条（154 新掌接印/155 旧掌传灯）：入宗门（sim.sect，
+            // 会话）且行走东境青云（map_region%5==0 唯 0 号域「东境青云·宗门兴望」；
+            // map_region 为 wrapping u32，%5 口径照 region_mech/region_visited 同款）
+            // 才入池——换届故事只属宗门与宗门地界；读既有会话/持久字段零新键。
+            // sect 参数即 s.sect（sim_event 自 sim 解元组传入，宗门相邀 e.sect 置位）
+            if (id == 154 || id == 155) && !(sect && self.meta.map_region % 5 == 0) {
                 ww = 0.0;
             }
 
@@ -6386,6 +6404,109 @@ impl Game {
                 card.opts.push(("拂平足迹".into(), e2));
             }
 
+            // ---------- v1.16.14 扩池 5 条（id 151..=155）----------
+            // 链13 死当归主（151..=153）：当铺死当旧物归主线——「归」字刻痕贯穿
+            // 三段（151 架上旧箫→152 寻主赎当→153 物归旧主），物—人—缘结构与既有
+            // 十二链同构而载体全新（货郎=行商、当铺=坐商；与链10 旧页回声分域：
+            // 那条是「跨世旧稿」，本链是「本世旧物」，无跨世指涉）。置链臂 49/50
+            // 第六窗（CHAIN13_SPECIAL_LO/HI），末段抉择即「死当归主·缘了」入大事
+            // 记（stage 表见函数尾）
+            151 => {
+                // 链13 首段：当铺死当（首段建链待分支）
+                card.title = "当铺死当".into();
+                card.text = "镇口老当铺的死当架上，一管旧箫落了薄尘，签条一个「死」字——三年无人来赎，按例今岁拆料重铸。箫尾刻着个小小的「归」字，笔画被摩挲得发亮。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 1.0;
+                e1.special = 49; // 置链：→152 访主赎当
+                e1.msg = vec!["你问下这管箫。掌柜翻出当票存根：「物主姓甚忘了，只记得年年冬至来朝铺子里望一眼。」道心+1".into()];
+                card.opts.push(("问下死当".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    "旧物各有机缘，死当也是归宿。你出门时，掌柜正把箫收进里屋。气运+1".into(),
+                ];
+                card.opts.push(("不置一词".into(), e2));
+                self.chain = Some((13, 0, CHAIN_TTL)); // 首段建链：待分支
+            }
+            152 => {
+                // 链13 中段（仅链内）
+                card.title = "访主赎当·续".into();
+                card.text = "循当票存根寻到城郊药庐，物主是位咳疾缠身的老丹师——当年为给同门购药，把随身旧箫典进了当铺。他说物随缘去，不赎也罢，只是每年冬至会朝镇上望一眼。".into();
+                let g = (30.0 * ss) as i64;
+                let mut e1 = Eff::new();
+                e1.stones = -g; // 代垫赎资是花销，与卡面「灵石-{}」同号（照 122/140/149 同款）
+                e1.dao = 1.0;
+                e1.special = 50; // 置链：→153 物归旧主
+                e1.msg = vec![format!(
+                    "你回当铺替他赎下旧箫送回药庐。掌柜收了当本，多句：「认物的，今年头一个。」灵石-{}，道心+1",
+                    fmt_int(g)
+                )];
+                card.opts.push(("代为赎当".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    "你把存根原样放回，只把「归」字的来历讲给掌柜听。当铺的灯，那晚亮得久些。气运+1".into(),
+                ];
+                card.opts.push(("止步不问".into(), e2));
+            }
+            153 => {
+                // 链13 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
+                card.title = "物归旧主·续".into();
+                card.text = "旧箫归架那日，老丹师的精神竟好了些。他说箫是故人手制，箫声起时，药庐里经年的药苦味都淡了。曲罢他执意送你到篱外，往你袖里塞了一撮窖了多年的灵茶。".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.10;
+                e1.dao = 3.0;
+                e1.msg = vec![
+                    "你在篱外立了半晌——箫声呜咽穿篱而出，胸中滞念竟随曲散了。修为+10%，道心+3".into(),
+                ];
+                card.opts.push(("篱外听曲".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.luck = 2.0;
+                e2.msg = vec![
+                    "你收下灵茶。他说：「物归了主，茶归有缘。」道心+2，气运+2".into(),
+                ];
+                card.opts.push(("收下谢礼".into(), e2));
+            }
+            // 宗门换届 2（154/155）照 134..=136 词汇：纯 dao/stones/msg 效果、ss
+            // 缩放灵石、不占 special（不入链不入稀有，题材是宗门兴望的世情侧写）
+            // ——入池门控（入宗门+东境青云）在 sim_event_weights，见该函数块注
+            154 => {
+                card.title = "新掌接印".into();
+                card.text = "青云宗今岁接印大典——老掌门功成闭关，新掌门于观星台受印。山门外候观的散修排成长龙，你随人流上山，满山彩绸映得檐角都在发亮。".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.08;
+                e1.msg = vec![
+                    "受印一拜，满山灵机为之一涌。你借势吐纳半日，经络里暖意不散。修为+8%".into(),
+                ];
+                card.opts.push(("观礼随喜".into(), e1));
+                let g = (60.0 * ss) as i64;
+                let mut e2 = Eff::new();
+                e2.stones = g;
+                e2.msg = vec![format!(
+                    "你帮山门搭彩、递印捧诰，执事分了份观礼例钱——今岁宗门手笔比往年阔。灵石+{}",
+                    fmt_int(g)
+                )];
+                card.opts.push(("帮接彩头".into(), e2));
+            }
+            155 => {
+                card.title = "旧掌传灯".into();
+                card.text = "老掌门闭关前最后一次开讲，讲的不是功法，是一句「接印容易守印难」。大殿里挤满了人，你坐在窗根下听完，出殿时暮钟正响。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    "「印是担子，不是椅子。」这一句，你在归途上想了很久。道心+2".into(),
+                ];
+                card.opts.push(("殿中听讲".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    "你把讲稿抄了一份，与门外候着的散修分阅——灯传下去，才算灯。道心+1，气运+1".into(),
+                ];
+                card.opts.push(("抄稿分阅".into(), e2));
+            }
+
             _ => {}
         }
 
@@ -6436,6 +6557,10 @@ impl Game {
             140 => Some((1, 3)),
             141 => Some((2, 3)),
             142 => Some((3, 3)),
+            // v1.16.14 链13 三段式
+            151 => Some((1, 3)),
+            152 => Some((2, 3)),
+            153 => Some((3, 3)),
             _ => None,
         };
 
@@ -6759,7 +6884,7 @@ impl Game {
                 self.chain = Some((10, 123, CHAIN_TTL));
             }
             // v1.16.13 链11（劫痕渡客）/链12（书肆换届）置链臂：第五窗（见
-            // CHAIN1112_SPECIAL_LO/HI），四窗之外落链即终局的裁决语义不变
+            // CHAIN1112_SPECIAL_LO/HI），五窗之外落链即终局的裁决语义不变
             45 => {
                 // 链11 劫云过境：留棚观劫 → 劫灰拾遗
                 self.chain = Some((11, 138, CHAIN_TTL));
@@ -6775,6 +6900,16 @@ impl Game {
             48 => {
                 // 链12 代笔提要：应下提要 → 肆后书案
                 self.chain = Some((12, 142, CHAIN_TTL));
+            }
+            // v1.16.14 链13（死当归主）置链臂：第六窗（见 CHAIN13_SPECIAL_LO/HI），
+            // 六窗之外落链即终局的裁决语义不变
+            49 => {
+                // 链13 当铺死当：问下死当 → 访主赎当
+                self.chain = Some((13, 152, CHAIN_TTL));
+            }
+            50 => {
+                // 链13 访主赎当：代为赎当 → 物归旧主
+                self.chain = Some((13, 153, CHAIN_TTL));
             }
             32 => {
                 // 青灯三问（链4 末段）：道心检定——过授功法一阶（满阶折灯油银），
@@ -7500,11 +7635,13 @@ impl Game {
         // v1.16.10 三窗判定：链7/链8 置链臂 37..=40 新窗（CHAIN78_SPECIAL_LO/HI）
         // v1.16.11 四窗判定：链9/链10 置链臂 41..=44 新窗（CHAIN910_SPECIAL_LO/HI）
         // v1.16.13 五窗判定：链11/链12 置链臂 45..=48 新窗（CHAIN1112_SPECIAL_LO/HI）
+        // v1.16.14 六窗判定：链13 置链臂 49..=52 新窗（CHAIN13_SPECIAL_LO/HI）
         if !(CHAIN_SPECIAL_LO..=CHAIN_SPECIAL_HI).contains(&e.special)
             && !(CHAIN6_SPECIAL_LO..=CHAIN6_SPECIAL_HI).contains(&e.special)
             && !(CHAIN78_SPECIAL_LO..=CHAIN78_SPECIAL_HI).contains(&e.special)
             && !(CHAIN910_SPECIAL_LO..=CHAIN910_SPECIAL_HI).contains(&e.special)
             && !(CHAIN1112_SPECIAL_LO..=CHAIN1112_SPECIAL_HI).contains(&e.special)
+            && !(CHAIN13_SPECIAL_LO..=CHAIN13_SPECIAL_HI).contains(&e.special)
         {
             self.chain = None;
         }
@@ -11930,6 +12067,23 @@ mod v11610_event_tests {
         }
     }
 
+    // id 唯一 + 名互异（v1.16.14 勘察建议纯测试，零运行时成本）：EVENTS 首列 id
+    // 逐条等于下标（防表行复制粘贴重号/build_event match 臂错位）；EVENT_NAMES
+    // 去「·续」后缀后互异（防两事件图鉴同名难分——全链段分支名现状本就互异）
+    #[test]
+    fn event_ids_unique_and_names_distinct() {
+        for (i, row) in EVENTS.iter().enumerate() {
+            assert_eq!(row.0, i, "EVENTS[{}] 行 id={} 与下标不符（重号/错位）", i, row.0);
+        }
+        for (a, na) in EVENT_NAMES.iter().enumerate() {
+            let ca = na.strip_suffix("·续").unwrap_or(na);
+            for (b, nb) in EVENT_NAMES.iter().enumerate().skip(a + 1) {
+                let cb = nb.strip_suffix("·续").unwrap_or(nb);
+                assert_ne!(ca, cb, "事件名撞车：{}(id{}) vs {}(id{})", na, a, nb, b);
+            }
+        }
+    }
+
     // 遭遇计数单口：build_event 构建帧收录（轮盘/链内两路共经此口）、重复累加、
     // 越界卫语句不 panic 不写入；收录判定 ev_cnt[id]>0 纯推导（无 seen 位双源）
     #[test]
@@ -12926,8 +13080,9 @@ mod event_batch_v1173_tests {
         }
         // EVENTS 总数断言（v1.16.9 扩池后 100 条；v1.16.10 扩池 18 → 118 条；
         // v1.16.11 扩池 16 → 134 条；v1.16.12 洞府联动 3 → 137 条；v1.16.13 扩池
-        // 14 → 151 条，稀有基权合计口径见 data.rs 各批注释——账本数字一律以重算为准）
-        assert_eq!(EVENTS.len(), 151);
+        // 14 → 151 条；v1.16.14 扩池 5 → 156 条，稀有基权合计口径见 data.rs 各批
+        // 注释——账本数字一律以重算为准）
+        assert_eq!(EVENTS.len(), 156);
     }
 }
 
@@ -13146,5 +13301,162 @@ mod v11613_event_tests {
         g.launch_sim();
         assert!(g.run_events.is_empty(), "launch_sim 清零跨世不泄漏");
         assert!(!g.run_recall_open, "覆层 UI 态同批归零");
+    }
+}
+
+// ---------------- v1.16.14 扩池 5 条（151..=155）：链13 死当归主 + 宗门换届 2 ----------------
+
+#[cfg(test)]
+mod v11614_event_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // 新批次良构：id 151..=155 每条 ≥2 ≤3 选项、标题/正文非空、choose_option(0)
+    // 全链不 panic（照 v11613 骨架；链臂/纯 dao/stones/msg 臂无战死）
+    #[test]
+    fn batch_cards_well_formed() {
+        for id in 151..=155 {
+            let mut g = sim_game(5, 40.0);
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
+            assert!(!card.title.is_empty());
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两个选项", id);
+            assert!(card.opts.len() <= 3, "事件 {} 卡面至多三选项", id);
+            g.choose_option(0); // apply_eff 全链不 panic（sync_save 仅置脏不落盘）
+        }
+    }
+
+    // 链13 死当归主推进：首段建链→置链臂 49/50 推进→末段缘了入大事记（照链11/12
+    // 口径）；中段断链不入大事记；检定臂 32..=34 照旧窗外——第六窗判定不吞
+    // 「检定臂落链即终局」裁决语义（照 game.rs 58-60 教训注）
+    #[test]
+    fn chain13_progression_and_completion() {
+        let mut g = sim_game(5, 40.0);
+        // 首段：弹卡即建链待分支
+        g.build_event(151);
+        assert!(g.modal.is_some(), "151 首段有卡臂");
+        assert_eq!(g.chain, Some((13, 0, CHAIN_TTL)), "首段建链：待分支");
+        g.choose_option(0); // e1 special=49 置链
+        assert_eq!(g.chain, Some((13, 152, CHAIN_TTL)), "置链臂 49 → 152");
+        // 中段推链选项续进
+        g.build_event(152);
+        g.choose_option(0); // e1 special=50 置链
+        assert_eq!(g.chain, Some((13, 153, CHAIN_TTL)), "置链臂 50 → 153");
+        // 末段：抉择即缘了——直取消费后 chain=(13,0,ttl) 仍活跃，此处同式模拟
+        g.chain = Some((13, 0, CHAIN_TTL));
+        g.build_event(153);
+        g.choose_option(0);
+        assert!(g.chain.is_none(), "末段抉择落通用段 → 链裁决清链");
+        assert!(
+            g.sim
+                .as_ref()
+                .unwrap()
+                .highlights
+                .iter()
+                .any(|h| h.contains("死当归主·缘了")),
+            "末段缘了入大事记"
+        );
+        // 中段断链：152 走 e2（无置链臂）→ 清链且无缘了
+        let mut g2 = sim_game(5, 40.0);
+        g2.chain = Some((13, 152, CHAIN_TTL));
+        g2.build_event(152);
+        g2.choose_option(1);
+        assert!(g2.chain.is_none(), "中段断链清链");
+        assert!(
+            !g2.sim
+                .as_ref()
+                .unwrap()
+                .highlights
+                .iter()
+                .any(|h| h.contains("缘了")),
+            "中段断链不入大事记"
+        );
+        // 检定臂照旧窗外：special=32（青灯三问）落链上即终局——第六窗不吞检定裁决
+        let mut g3 = sim_game(5, 40.0);
+        g3.chain = Some((13, 152, CHAIN_TTL));
+        let mut e = Eff::new();
+        e.special = 32;
+        g3.apply_eff(&e);
+        assert!(g3.chain.is_none(), "检定臂 32..=34 窗外落链即清链（六窗语义不变）");
+    }
+
+    // 入池门控：链13 首段 mr=3 由既有 realm<mr 归零承担；链内段 152/153 权重 0
+    // 恒不入正常池（照 chain_only_ids_never_in_pool 口径）
+    #[test]
+    fn batch13_gated_by_realm_floor() {
+        let mut g = sim_game(2, 40.0);
+        g.recent_events.clear();
+        let (ws, _) = g.sim_event_weights(40.0, 2, false, false, false);
+        assert_eq!(ws[151], 0.0, "realm2 < mr3：链13 首段不入池");
+        let mut g5 = sim_game(5, 40.0);
+        g5.recent_events.clear();
+        let (ws5, _) = g5.sim_event_weights(40.0, 5, false, false, false);
+        assert!(ws5[151] > 0.0, "realm5 达 mr3 地板：链13 首段入池");
+        assert_eq!(ws5[152], 0.0, "链内段权重 0 恒不入正常池");
+        assert_eq!(ws5[153], 0.0, "链内段权重 0 恒不入正常池");
+    }
+
+    // 宗门换届双门：入宗门（sim.sect 会话）+ 行走东境青云（map_region%5==0，wrapping
+    // u32 折回口径照 region_mech 同款）双条件齐备才入池，缺一权重归零
+    #[test]
+    fn sect_events_gated_by_sect_and_region() {
+        // 入宗门 + 东境青云（=0）→ 入池
+        let mut g = sim_game(5, 40.0);
+        g.sim.as_mut().unwrap().sect = true;
+        g.meta.map_region = 0;
+        g.recent_events.clear();
+        let (ws, _) = g.sim_event_weights(40.0, 5, true, false, false);
+        assert!(ws[154] > 0.0, "入宗门+东境青云：接印入池");
+        assert!(ws[155] > 0.0, "入宗门+东境青云：传灯入池");
+        // 缺宗门（sect=false，region 达标）→ 不入池
+        let mut g2 = sim_game(5, 40.0);
+        g2.meta.map_region = 0;
+        g2.recent_events.clear();
+        let (ws2, _) = g2.sim_event_weights(40.0, 5, false, false, false);
+        assert_eq!(ws2[154], 0.0, "无宗门：换届不入池");
+        assert_eq!(ws2[155], 0.0);
+        // 入宗门 + 他域（=1 西漠）→ 不入池
+        let mut g3 = sim_game(5, 40.0);
+        g3.sim.as_mut().unwrap().sect = true;
+        g3.meta.map_region = 1;
+        g3.recent_events.clear();
+        let (ws3, _) = g3.sim_event_weights(40.0, 5, true, false, false);
+        assert_eq!(ws3[154], 0.0, "入宗门但行走西漠：换届不入池");
+        assert_eq!(ws3[155], 0.0);
+        // wrapping u32 折回：map_region=5 %5==0 归 0 号域（照 region_mech %5 同款）
+        let mut g4 = sim_game(5, 40.0);
+        g4.sim.as_mut().unwrap().sect = true;
+        g4.meta.map_region = 5;
+        g4.recent_events.clear();
+        let (ws4, _) = g4.sim_event_weights(40.0, 5, true, false, false);
+        assert!(ws4[154] > 0.0, "map_region=5 折回东境青云：入池");
+    }
+
+    // 徽标自动跟随：151 链起/152·153 链段/154·155 遭遇（event_badge 单口按
+    // EVENTS 权重与链起表推导，扩表后新 id 落位即对；badges_derive 同步扩）
+    #[test]
+    fn batch_badges_derive() {
+        let b = crate::gallery::event_badge;
+        assert_eq!(b(151).0, "链起");
+        assert_eq!(b(152).0, "链段");
+        assert_eq!(b(153).0, "链段");
+        assert_eq!(b(154).0, "遭遇");
+        assert_eq!(b(155).0, "遭遇");
+        // 越界防御随表扩仍成立
+        assert_eq!(b(999).0, "遭遇");
     }
 }
