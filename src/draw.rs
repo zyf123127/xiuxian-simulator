@@ -837,6 +837,17 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
             }
             g.guide_last = Some(idx);
         }
+        // v1.16.16 主线章签（横带右段常驻小签）：chapter_current 单口复用——任何指引
+        // 叶下都可见「主线在第几章」。事件帧预热照 guide_last 先例：仅当前章变化帧灌
+        // 14px 两串（ch.num/ch.name 静态字面量）；布局右缘锚 1098（按钮 1112 前 14px），
+        // num 起点 992 与最长提示叶（终局叶，实测 18px 字宽 ~966px 止）留 ~26px 安全隙
+        let curch = crate::game::Game::chapter_current(&g.meta);
+        if g.guide_chap_last != Some(curch) {
+            let chc = &crate::data::CHAPTERS[curch];
+            prewarm_text(chc.num, &[14]);
+            prewarm_text(chc.name, &[14]);
+            g.guide_chap_last = Some(curch);
+        }
         let hint = &crate::guide::HINTS[idx as usize];
         draw_rectangle(
             376.0,
@@ -848,6 +859,11 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         draw_rectangle(376.0, 86.0, 4.0, 40.0, C_GOLD_D); // 左缘 4px 金竖条
         txt("目标", 392.0, 96.0, 16, C_GOLD_D);
         txt(hint.text, 444.0, 92.0, 18, C_GOLD);
+        // 右段章签：num+name 两静态分片直绘（禁 format!——横带稳态帧零分配红线；
+        // 章名全表 4 字，992/1042 双锚定宽布局）
+        let chc = &crate::data::CHAPTERS[curch];
+        txt(chc.num, 992.0, 96.0, 14, C_GOLD_D);
+        txt(chc.name, 1042.0, 96.0, 14, C_DIM);
         // 跳转按钮复用 draw::button()（继承去抖/悬停/描边语言）；纯提示叶不画
         if let Some(b) = hint.btn {
             if button(1112.0, 92.0, 144.0, 28.0, b, None, true) {
@@ -875,6 +891,9 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     if button(1154.0, 8.0, 62.0, 36.0, "帮助", None, true) {
         g.panel = 4;
         g.play(crate::sounds::Which::Page);
+        // v1.16.16 帮助页新增行事件帧预热（照横带/任务钮事件帧预热先例；整页既有
+        // 行为首开冷栅格化一次的既定行为，本行随新增先行灌字形防首次展开重传尖峰）
+        prewarm_text("【章节书】任务钮→章节书签：主线九章目标、进度与章间记事。", &[16]);
     }
     // v1.9.23：返回开始界面（存档已落盘，菜单「承接前缘」可恢复）
     if button(1222.0, 8.0, 58.0, 36.0, "主页", None, true) {
@@ -2289,6 +2308,10 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
     }
     // v1.16.8 主线感：下一章预告一行（章节书当前章+首未了目标，全静态分片绘制
     // 零 format!——帧路径零分配红线；主线全了走字面量收束行）
+    // v1.16.16 行右补「差多少」x/y 进度（prog_txt 静态查表零分配）与章成之礼行
+    // （reward_note 静态字面量）——每世身故即见「下一章差什么、了了给什么」。
+    // settle 屏有 format! 豁免先例（draw.rs 道韵累积行），本行仍走静态串零分配；
+    // 字形由 real_die 事件帧预热（game.rs 结算章签预热口，防首帧冷栅格化）
     {
         let cur = crate::game::Game::chapter_current(&g.meta);
         let ch = &crate::data::CHAPTERS[cur];
@@ -2302,6 +2325,25 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
             .map(|gl| gl.text)
             .unwrap_or("主线已了——十万稿废纸，终有一册");
         txt(goal, 470.0, 522.0, 14, C_TEXT);
+        if ch
+            .goals
+            .iter()
+            .any(|gl| !crate::game::Game::chapter_goal_met(&g.meta, gl.pid))
+        {
+            txt_r(ch.reward_note, 980.0, 524.0, 14, C_GOLD_D);
+            if let Some(gl) = ch
+                .goals
+                .iter()
+                .find(|gl| !crate::game::Game::chapter_goal_met(&g.meta, gl.pid))
+            {
+                if let Some((x, n)) = crate::game::Game::chapter_goal_prog(&g.meta, gl.pid) {
+                    let s = prog_txt(x, n);
+                    if !s.is_empty() {
+                        txt_r(s, 1040.0, 524.0, 14, C_DIM);
+                    }
+                }
+            }
+        }
     }
     if button(
         V_W * 0.5 - 320.0,
@@ -2973,7 +3015,7 @@ fn draw_help_panel(g: &mut Game) {
             draw_rectangle(x, 170.0, 190.0, 3.0, C_GOLD);
         }
     }
-    let lines: [&str; 16] = [
+    let lines: [&str; 17] = [
         "【轮回镜】耗 1 枚模拟点数，推演“可能的你”的一生，直至死亡。",
         "【模拟前】3 选 1 天赋（仅此一梦生效）；模拟中自动修炼、游历、闭关、突破。",
         "【模拟毕】随机给出数项“造化”，选一项带回现实：修为、功法、法宝、丹药……",
@@ -2984,6 +3026,8 @@ fn draw_help_panel(g: &mut Game) {
         "【宿敌】血仇之敌每世模拟中皆会遭遇——实力不足则被斩，可逃可死。",
         // v1.16.0 交游图鉴引导（玩法签末行）
         "【交游图鉴】角色面板·图鉴页签：同页人结缘与文狱四友，随轮回烙印存档。",
+        // v1.16.16 章节书引导（玩法签末行，v1.16.8 起缺席的主线入口兜底）
+        "【章节书】任务钮→章节书签：主线九章目标、进度与章间记事。",
         "【斩敌】在模拟中反杀宿敌（领悟其招）或现实寻仇，皆可得灵石、点数与大笔道韵。",
         "【宿敌不灭】斩其一身，还有更强的幕后之敌接棒，直至……",
         "【现实身死】寿元耗尽则一世归尘，结算大笔道韵；轮回再起，烙印永存。",
@@ -2994,9 +3038,10 @@ fn draw_help_panel(g: &mut Game) {
         "【区域】山河图志五大区域各有专属机制：宗门兴望、大漠秘藏、瘴惑灵芽、冰心澄神、仙屿潮音——初至区域，图鉴有赏。",
         "【炼化】行囊·法宝页可「炼化」：献祭一件法宝为材料，为另一件提升灵纹（攻效与灵性再上一层，至多 +3 级）。",
     ];
-    // v1.16.0：玩法签 7→8 行（新增图鉴行居第 8），操作·技巧签后移至 base 8（行数不变）
-    let base = if g.help_tab == 0 { 0usize } else { 8usize };
-    let count = 8usize;
+    // v1.16.0：玩法签 7→8 行（新增图鉴行居第 8）；v1.16.16：玩法签 8→9 行（章节书
+    // 行居第 9，末行 y=200+8×52=616、行高 30 → 底 646 < 卡底 650），操作·技巧签
+    // 后移至 base 9（行数不变）
+    let (base, count) = if g.help_tab == 0 { (0usize, 9usize) } else { (9usize, 8usize) };
     for j in 0..count {
         let i = base + j;
         let c = if j == 0 { C_GOLD } else { C_TEXT };
@@ -3034,9 +3079,10 @@ pub fn prewarm_chapter_view(g: &Game) {
     for s in ["已了", "进行", "未启", "已毕", "待办"] {
         prewarm_text(s, &[14]);
     }
-    // v1.16.9 目标行右进度串全量预热（prog_txt 静态查表：分母 1/2/3/5/6 × 分子
-    // 0..=分母——漏灌会复现首开 2048² 图集整图重传卡顿，charpanel.rs 同类事故教训）
-    for n in [1u32, 2, 3, 5, 6] {
+    // v1.16.9 目标行右进度串全量预热（prog_txt 静态查表：分母 1/2/3/4/5/6/9/10/13
+    // × 分子 0..=分母——漏灌会复现首开 2048² 图集整图重传卡顿，charpanel.rs 同类
+    // 事故教训。v1.16.16 分母扩 4/9/10/13：全 pid 数值化 + 结算屏/主线汇总复用）
+    for n in [1u32, 2, 3, 4, 5, 6, 9, 10, 13] {
         for x in 0..=n {
             prewarm_text(prog_txt(x, n), &[14]);
         }
@@ -3084,6 +3130,8 @@ pub fn prewarm_guide_panel(g: &Game) {
 // v1.16.9 目标进度串静态查表：帧路径零分配红线（draw_chapter_view 无 format!），
 // 数字不进 format!——(分子,分母) 全组合枚举返回 &'static str，越界组合返回空串
 // 隐藏（防御臂，progress 单口已 clamp 不可达）。串集由 prewarm_chapter_view 全量预热。
+// v1.16.16 分母扩 4/9/10/13（全 pid 数值化：4=四结局、9=主线 X/9 汇总、
+// 10=问笔、13=执卷境）。
 fn prog_txt(x: u32, n: u32) -> &'static str {
     match (x, n) {
         (0, 1) => "0/1",
@@ -3095,6 +3143,11 @@ fn prog_txt(x: u32, n: u32) -> &'static str {
         (1, 3) => "1/3",
         (2, 3) => "2/3",
         (3, 3) => "3/3",
+        (0, 4) => "0/4",
+        (1, 4) => "1/4",
+        (2, 4) => "2/4",
+        (3, 4) => "3/4",
+        (4, 4) => "4/4",
         (0, 5) => "0/5",
         (1, 5) => "1/5",
         (2, 5) => "2/5",
@@ -3108,6 +3161,41 @@ fn prog_txt(x: u32, n: u32) -> &'static str {
         (4, 6) => "4/6",
         (5, 6) => "5/6",
         (6, 6) => "6/6",
+        (0, 9) => "0/9",
+        (1, 9) => "1/9",
+        (2, 9) => "2/9",
+        (3, 9) => "3/9",
+        (4, 9) => "4/9",
+        (5, 9) => "5/9",
+        (6, 9) => "6/9",
+        (7, 9) => "7/9",
+        (8, 9) => "8/9",
+        (9, 9) => "9/9",
+        (0, 10) => "0/10",
+        (1, 10) => "1/10",
+        (2, 10) => "2/10",
+        (3, 10) => "3/10",
+        (4, 10) => "4/10",
+        (5, 10) => "5/10",
+        (6, 10) => "6/10",
+        (7, 10) => "7/10",
+        (8, 10) => "8/10",
+        (9, 10) => "9/10",
+        (10, 10) => "10/10",
+        (0, 13) => "0/13",
+        (1, 13) => "1/13",
+        (2, 13) => "2/13",
+        (3, 13) => "3/13",
+        (4, 13) => "4/13",
+        (5, 13) => "5/13",
+        (6, 13) => "6/13",
+        (7, 13) => "7/13",
+        (8, 13) => "8/13",
+        (9, 13) => "9/13",
+        (10, 13) => "10/13",
+        (11, 13) => "11/13",
+        (12, 13) => "12/13",
+        (13, 13) => "13/13",
         _ => "",
     }
 }
@@ -3136,6 +3224,20 @@ fn draw_guide_panel(g: &mut Game) {
             draw_rectangle(x, 162.0, 190.0, 3.0, C_GOLD);
         }
     }
+    // v1.16.16 主线汇总：页签行右「主线 X/9」（chap_done 位计数，prog_txt 静态查表
+    // 零分配——章节书视图禁 format! 红线；与书志全貌带「主线 X/9」口径一致，串集由
+    // prewarm_chapter_view 分母 9 全量预热）。防越界：count_ones ≤ 9 上钳（章数即 9，
+    // 未来扩章同 min 钳制纪律）
+    txt_r(
+        prog_txt(
+            g.meta.chap_done.count_ones().min(crate::data::CHAPTERS.len() as u32),
+            crate::data::CHAPTERS.len() as u32,
+        ),
+        1040.0,
+        136.0,
+        14,
+        C_DIM,
+    );
     if g.guide_tab == 1 {
         draw_chapter_view(g);
         return;

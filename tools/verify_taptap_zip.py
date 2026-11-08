@@ -10,9 +10,17 @@ v1.16.10 契约变更（字体外置）：
   - 逐条目 file_size>0 + z.testzip() 全档 CRC 校验
   - 字体三方成对断言：wasm 内 xx_font_len 导入名 + index 内 xx_font 插件 token
     + font 条目非零
+v1.16.16 契约变更：GAME_VER 版本 token 不再硬编码——从 Cargo.toml version 动态
+  读取后断言（与 pack_taptap.py:86-100 同源同款），消除「每版必手改第二处 token」
+  的漂移面（1.16.15→1.16.16 升版时此处曾漏改的同类风险）
 """
+import re
 import sys
 import zipfile
+
+CARGO_VER = re.search(
+    r'^version\s*=\s*"([^"]+)"', open("Cargo.toml", encoding="utf-8").read(), re.M
+).group(1)
 
 ZIP = "taptap/taptap_verify.zip"
 PORTRAITS = [
@@ -47,13 +55,13 @@ assert not zero, f"零字节条目: {zero}"
 assert not names or all(n.startswith("taptap_h5/") for n in names), "根层混入 taptap_h5/ 之外条目"
 assert b"xx_storage" in wasm, "wasm 内未见 xx_storage 导出符号"
 assert b"xx_font_len" in wasm, "wasm 内未见 xx_font_len 导入符号（v1.16.10 字体外置三方成对断言）"
-for token in ('GAME_VER = "1.16.15"', "miniquad_add_plugin", "xx_storage", "xx_font", '"use strict"'):
+for token in (f'GAME_VER = "{CARGO_VER}"', "miniquad_add_plugin", "xx_storage", "xx_font", '"use strict"'):
     assert token in idx, f"包内 index.html 缺: {token}"
 assert 'xiuxian.wasm?v=' in idx, "包内 index.html 缺 wasm 缓存穿透参数"
 assert 'font.ttf.deflate?v=' in idx, "包内 index.html 缺字体缓存穿透参数"
 assert '<script src="mq_js_bundle.js' not in idx, "内联后仍残留 bundle 外链行"
 print("OK: 恰 21 条目（index+wasm+font+portraits/18）、/ 分隔、根层仅一层 taptap_h5/、"
       "CRC 全过、条目非零字节；wasm 含 xx_storage 与 xx_font_len（字体外置）；"
-      "index.html 含 GAME_VER 1.16.15 与内联 bundle（miniquad_add_plugin/use strict）"
-      "与存档/字体插件")
+      f"index.html 含 GAME_VER {CARGO_VER}（与 Cargo.toml 动态对账）"
+      "与内联 bundle（miniquad_add_plugin/use strict）与存档/字体插件")
 sys.exit(0)

@@ -1,14 +1,14 @@
 // v1.16.0 道途一念：任务指引（现实主界面日志区顶部一行目标语）
 //
 // 设计边界（规格对账）：
-// * 零存档键——指引由游戏状态纯推导，旧档零迁移；唯一会话态 guide_last（不进存档）
-//   放在 Game 上，本模块无任何状态。
+// * 零存档键——指引由游戏状态纯推导，旧档零迁移；会话态仅 guide_last 与
+//   guide_chap_last（均不进存档，v1.16.16 预热游标）放在 Game 上，本模块无任何状态。
 // * 帧路径零分配——HINTS 全为 &'static str 字面量，guide_index 是纯布尔分支树，
 //   禁 format!/clone/String（境界名/胜率等数字细节由既有左栏/按钮副标展示，
 //   指引行只指路）。
-// * 非任务链状态机：只是一个 12 叶优先级 if 链，自上而下首中即出。
-// * 终结性（构造性证明——覆盖块之下不放任何叶，无死分支；v1.16.10 宿敌叶后插
-//   图鉴叶后重对账）：
+// * 非任务链状态机：只是一个 14 叶优先级 if 链，自上而下首中即出。
+// * 终结性（构造性证明——覆盖块之下不放任何叶，无死分支；v1.16.16 讨牒叶/
+//   到域叶插入后重对账）：
 //   叶 0 = is_stuck（死局叶，最高优先——三空唯一出路是广告，任何里程碑不得截胡）。
 //   叶 1 = 里程碑叶 total_sims==0（v1.16.8 链首插入，开局无行动引导之补——
 //   主线第一章「开卷首模拟」，压经济叶与修为候破叶，开局推演优先一切养成）。
@@ -16,26 +16,37 @@
 //   四结局未全（endings_seen≠0b1111）——飞升后的唯一主线使命是讨牒 6/6 落款四
 //   结局，压日常修为/经济叶。与叶 1 不互斥（total_sims==0 也可现实破境）但叶 1
 //   在前：开局推演优先于终局收束，里程碑语义保持。
-//   叶 5 = 图鉴叶（v1.16.10 插入）：∃i npc_fav[i]≥NPC_EVENT_FAV ∧ ¬npc_ev[i]
+//   叶 5 = 讨牒叶（v1.16.16 插入）：当前章=第四章·文狱讨牒（chapter_current 单口
+//   复用）∧ taodie<6——第四章进行期唯一主线使命是寻仇取牒凑六牒。谓词只读
+//   chapter_current/taodie（与叶 3/4/6..13 的 qi/stones/points/loc/npc 域正交）；
+//   非截断型：taodie 至 6 时第四章翻毕、chapter_current 前移，谓词自然落假，无新
+//   死域；taodie<6 且 revenge_ready 的态被叶 4 先截，两域不重叠泄漏。
+//   叶 6 = 图鉴叶（v1.16.10 插入）：∃i npc_fav[i]≥NPC_EVENT_FAV ∧ ¬npc_ev[i]
 //   （同一故人好感已达标而专属事件未抉择）——第六章「故人心事」目标从徽标暗提示
 //   升级为横带可达跳转，压修为候破/洞府/经济等日常叶（主线目标优先日常养成）。
-//   谓词只读 npc_fav/npc_ev，与叶 6..11 的 qi/stones/points/loc 域正交；且非截断
+//   谓词只读 npc_fav/npc_ev，与叶 8..13 的 qi/stones/points/loc 域正交；且非截断
 //   型：抉择事件置 npc_ev[i] 后谓词翻假，链自然落回原域，无新死域。
-//   过叶 0..5 ⟺ total_sims>0 ∧ ¬is_stuck ∧ ¬(pid10 ∧ ed≠1111) ∧ ¬can_break ∧
-//   ¬revenge_ready ∧ ¬图鉴——该态集 ⊆「过叶 0/1」原域，自此以下与 v1.16.0 原链
-//   逐叶等价（原叶 5..10 → 现叶 6..11，谓词零改动）：Reality 恒 life=Some
-//   （draw_reality 早退守卫），过叶 0 ⟺ P≥1 ∨ S≥ex ∨ R≠∅；叶 6/7/8 谓词（修为
-//   百分比/洞府双资源/auto∧P<1）与该补集正交、各自可构造命中；
-//   叶 9∨10∨11 = (R≠∅∧P<1∧S<ex) ∨ P≥1 ∨ S≥ex ⊇ 该补集
-//   （R≠∅∧P≥1→10、R≠∅∧S≥ex→11），故任何过叶 0..5 的态必在 9/10/11 终结——
-//   链到叶 11 必然终结。里程碑叶/终局叶/图鉴叶只置于覆盖块之上，原链内部不动，
-//   原终结证明对剩余子域原样成立。裁叶说明（v1.16.0 沿革）：
-//   赠礼叶/默认闭关叶结构性不可达（被 9/10/11 三分覆盖），移入 futureCandidates，
+//   叶 7 = 到域叶（v1.16.16 插入）：当前章=第五章·山河万象 ∧ 五域未全（region
+//   计数<5，pid7 谓词补集）——第五章进行期唯一主线使命是走访新域。置于图鉴叶之
+//   下：心事待叙优先于山河；谓词只读 chapter_current/region_visited（与叶 8..13
+//   域正交）；非截断型：五域走满第五章翻毕、chapter_current 前移，谓词自然落假。
+//   过叶 0..7 ⟺ total_sims>0 ∧ ¬is_stuck ∧ ¬(pid10 ∧ ed≠1111) ∧ ¬can_break ∧
+//   ¬revenge_ready ∧ ¬(四章未了∧牒<6) ∧ ¬图鉴 ∧ ¬(五章未了∧域<5)——该态集 ⊆
+//   「过叶 0/1」原域，自此以下与 v1.16.0 原链逐叶等价（原叶 5..10 → 现叶 8..13，
+//   谓词零改动）：Reality 恒 life=Some（draw_reality 早退守卫），过叶 0 ⟺ P≥1 ∨
+//   S≥ex ∨ R≠∅；叶 8/9/10 谓词（修为百分比/洞府双资源/auto∧P<1）与该补集正交、
+//   各自可构造命中；叶 11∨12∨13 = (R≠∅∧P<1∧S<ex) ∨ P≥1 ∨ S≥ex ⊇ 该补集
+//   （R≠∅∧P≥1→12、R≠∅∧S≥ex→13），故任何过叶 0..7 的态必在 11/12/13 终结——
+//   链到叶 13 必然终结。里程碑叶/终局叶/讨牒叶/图鉴叶/到域叶只置于覆盖块之上，
+//   原链内部不动，原终结证明对剩余子域原样成立。裁叶说明（v1.16.0 沿革）：
+//   赠礼叶/默认闭关叶结构性不可达（被 11/12/13 三分覆盖），移入 futureCandidates，
 //   赠礼引流由人物页/图鉴『有心事待叙』徽标承载（v1.16.10 起另有图鉴叶指路）。
 // * 判定条件全部复用既有单口谓词，禁另写第二实现：is_stuck / can_break /
 //   revenge_ready / sim_cost / exchange_cost / DONGFU_UP_STONES / DONGFU_UP_CONTRIB
 //   ＋ meta.total_sims（里程碑叶唯一新谓词，纯标量读）＋ meta.npc_fav/npc_ev
-//   （图鉴叶新谓词，读 NPC_EVENT_FAV 常量；既定域数据，非新实现）。
+//   （图鉴叶新谓词，读 NPC_EVENT_FAV 常量；既定域数据，非新实现）＋
+//   Game::chapter_current（v1.16.16 讨牒/到域叶新谓词，章节单口复用；meta.taodie/
+//   region_visited 既定域标量读，非新实现）。
 use crate::data::{DONGFU_UP_CONTRIB, DONGFU_UP_STONES, NODE_DONGFU, NPC_EVENT_FAV};
 use crate::game::{qi_need, Game};
 
@@ -60,11 +71,12 @@ pub struct GuideHint {
     pub act: GuideAct,
 }
 
-/// 12 叶提示表（下标即优先级；全字面量禁插值）。v1.16.8 链首插叶 1 里程碑叶
+/// 14 叶提示表（下标即优先级；全字面量禁插值）。v1.16.8 链首插叶 1 里程碑叶
 /// （开卷首模拟——主线第一章目标，压经济/养成叶）；v1.16.9 插叶 2 终局叶（问笔后
-/// 落款收束期唯一使命）；v1.16.10 宿敌叶后插叶 5 图鉴叶（第六章故人心事横带可达），
-/// 原 9 叶语义逐叶保留于 3..4 与 6..11。
-pub const HINTS: [GuideHint; 12] = [
+/// 落款收束期唯一使命）；v1.16.10 宿敌叶后插图鉴叶（第六章故人心事横带可达）；
+/// v1.16.16 插叶 5 讨牒叶（第四章进行期主线指路）与叶 7 到域叶（第五章进行期
+/// 主线指路），原叶语义逐叶保留于 3..4 与 6..13。
+pub const HINTS: [GuideHint; 14] = [
     GuideHint {
         text: "山穷水尽：观看幻境广告，得 2 枚模拟点",
         btn: Some("看广告"),
@@ -91,9 +103,21 @@ pub const HINTS: [GuideHint; 12] = [
         act: GuideAct::None,
     },
     GuideHint {
+        // v1.16.16 讨牒叶：第四章·文狱讨牒进行期（详见 guide_index 叶 5 注）
+        text: "主线·文狱讨牒：寻仇斩敌取牒，六牒归档见终战",
+        btn: None,
+        act: GuideAct::None,
+    },
+    GuideHint {
         text: "故人心事待叙：好感已达，人物·图鉴页抉择专属事件",
         btn: Some("去图鉴"),
         act: GuideAct::Gallery,
+    },
+    GuideHint {
+        // v1.16.16 到域叶：第五章·山河万象进行期（详见 guide_index 叶 7 注）
+        text: "主线·山河万象：走访新域，五域各有机缘",
+        btn: Some("去山河"),
+        act: GuideAct::World,
     },
     GuideHint {
         text: "修为将满：闭关苦修，静候破境",
@@ -159,9 +183,16 @@ pub fn guide_index(g: &Game) -> u8 {
     if g.revenge_ready() {
         return 4;
     }
-    // 5 图鉴·故人心事（v1.16.10 插入）：任一故人好感达 NPC_EVENT_FAV 且其专属
+    // 5 讨牒叶（v1.16.16 插入）：当前章=第四章·文狱讨牒（chapter_current 单口
+    //   复用，下标 3）∧ taodie<6——第四章进行期唯一主线使命是寻仇取牒凑六牒
+    //   （讨牒正路=revenge，revenge_ready 态已被叶 4 先截）。非截断：牒至 6 章节
+    //   翻毕谓词自然落假（见文件头终结性证明）
+    if Game::chapter_current(&g.meta) == 3 && g.meta.taodie < 6 {
+        return 5;
+    }
+    // 6 图鉴·故人心事（v1.16.10 插入）：任一故人好感达 NPC_EVENT_FAV 且其专属
     //   事件未抉择——第六章「故人心事」目标的横带可达跳转（原为图鉴卡徽标暗提示）。
-    //   只读 npc_fav/npc_ev 既定域（与叶 6..11 域正交，见文件头终结性证明）
+    //   只读 npc_fav/npc_ev 既定域（与叶 8..13 域正交，见文件头终结性证明）
     if g
         .meta
         .npc_fav
@@ -169,15 +200,23 @@ pub fn guide_index(g: &Game) -> u8 {
         .zip(g.meta.npc_ev.iter())
         .any(|(&f, &e)| f >= NPC_EVENT_FAV && !e)
     {
-        return 5;
+        return 6;
+    }
+    // 7 到域叶（v1.16.16 插入）：当前章=第五章·山河万象（下标 4）∧ 五域未全
+    //   （pid7 谓词补集）——第五章进行期唯一主线使命是走访新域。置于图鉴叶之下：
+    //   心事待叙优先于山河（见文件头终结性证明）；非截断：域满章节翻毕谓词落假
+    if Game::chapter_current(&g.meta) == 4
+        && g.meta.region_visited.iter().filter(|&&x| x).count() < 5
+    {
+        return 7;
     }
     if let Some(l) = l {
-        // 6 修为将满（≥80% 未满）：闭关候破。can_break 已被叶 3 截走，!can_break
+        // 8 修为将满（≥80% 未满）：闭关候破。can_break 已被叶 3 截走，!can_break
         //   恒真，按规格保留以自明叶面语义（顺序无关、代价一次布尔）
         if !g.can_break() && l.qi / qi_need(l) >= 0.8 {
-            return 6;
+            return 8;
         }
-        // 7 洞府设施可扩建：任一设施未满级且灵石/贡献双资源足够（与 dongfu_up 同口：
+        // 9 洞府设施可扩建：任一设施未满级且灵石/贡献双资源足够（与 dongfu_up 同口：
         //   world.rs:468 clamp(0,3)、未满才可升；lv<3 短路保证 DONGFU_UP_*/[lv] 越界安全）
         if l.loc == NODE_DONGFU
             && (0..3).any(|i| {
@@ -187,27 +226,27 @@ pub fn guide_index(g: &Game) -> u8 {
                     && g.meta.sect_contrib >= DONGFU_UP_CONTRIB[lv]
             })
         {
-            return 7;
+            return 9;
         }
     }
-    // 8 周天吐纳未开：收窄 P<1——有点数可花时不得截胡开模拟
+    // 10 周天吐纳未开：收窄 P<1——有点数可花时不得截胡开模拟
     //   （新玩家首局 Meta::default P=3 必落叶 1 里程碑叶）
     if g.meta.auto == 0 && p < g.sim_cost() {
-        return 8;
-    }
-    // 9 可献祭法宝折算模拟点：点数/灵石两空而法宝尚存
-    if l.map_or(false, |x| !x.relics.is_empty()) && p < g.sim_cost() && stones < ex {
-        return 9;
-    }
-    // 10 模拟点已足：开卷推演新一生
-    if p >= g.sim_cost() {
         return 10;
     }
-    // 11 灵石充裕：坊市可兑模拟点（兜底终结叶）。life=Some 时到达此臂必 S≥ex：
-    //   ¬叶10 ⟹ P<1，¬叶9（P<1）⟹ R=∅ ∨ S≥ex；R≠∅ 时叶 9 已截走除非 S≥ex，
+    // 11 可献祭法宝折算模拟点：点数/灵石两空而法宝尚存
+    if l.map_or(false, |x| !x.relics.is_empty()) && p < g.sim_cost() && stones < ex {
+        return 11;
+    }
+    // 12 模拟点已足：开卷推演新一生
+    if p >= g.sim_cost() {
+        return 12;
+    }
+    // 13 灵石充裕：坊市可兑模拟点（兜底终结叶）。life=Some 时到达此臂必 S≥ex：
+    //   ¬叶12 ⟹ P<1，¬叶11（P<1）⟹ R=∅ ∨ S≥ex；R≠∅ 时叶 11 已截走除非 S≥ex，
     //   R=∅ 时 ¬is_stuck（P<1）⟹ S≥ex——构造性证明见文件头。
     //   life=None 简并态在绘制路径不可达（draw_reality 早退守卫）。
-    11
+    13
 }
 
 /// 跳转执行器：横带按钮唯一出口。全部走既有单入口，不复制任何结算逻辑；

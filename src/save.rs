@@ -596,8 +596,10 @@ fn parse_save(text: &str) -> Meta {
         });
     }
     // v1.5.0：佩戴称号值域限定 {-1, 0..=14, 15}，越界一律回退自动跟随
-    // （v1.16.10 扩 16=章节称号·雨夜执印者；脏档降级读档越界值仍钳回 -1，无崩溃面）
-    if !(-1..=16).contains(&m.worn_title) {
+    // （v1.16.10 扩 16=章节称号·雨夜执印者；v1.16.15 扩 17=执笔人——16/17 均
+    // 保留位不占新键；v1.16.16 修复：值域漏抬 17 致四结局全收集的佩显状态读档
+    // 即被钳回自动跟随。脏档降级读档越界值仍钳回 -1，无崩溃面）
+    if !(-1..=17).contains(&m.worn_title) {
         m.worn_title = -1;
     }
     // v1.8.0 C5：mvis 缺键（v1.7.x 旧档）迁移——仅当前区域补记为已至，不补发奖励
@@ -1221,11 +1223,18 @@ h=1 2 3 50.0 40 100 800 255 乙
     }
 
     // v1.16.10 章节称号：佩戴值域扩 16（雨夜执印者）——合法值保留、越界仍钳 -1
+    // v1.16.16 同测续用：17（执笔人）入保留域、以 18 作越界样本
     #[test]
     fn worn_title_value16_kept_and_out_of_range_clamped() {
         let t = format!("{}wtitle=16\n", OLD_BASE);
         assert_eq!(parse_save(&t).worn_title, 16, "章节称号合法值保留");
-        let bad = format!("{}wtitle=17\n", OLD_BASE);
+        let t17 = format!("{}wtitle=17\n", OLD_BASE);
+        assert_eq!(
+            parse_save(&t17).worn_title,
+            17,
+            "执笔人称号合法值保留（v1.16.16 值域扩 -1..=17）"
+        );
+        let bad = format!("{}wtitle=18\n", OLD_BASE);
         assert_eq!(parse_save(&bad).worn_title, -1, "越界仍回退自动跟随");
     }
 
