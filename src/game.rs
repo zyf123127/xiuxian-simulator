@@ -848,16 +848,18 @@ pub fn gain_qi(l: &mut Life, amount: f64) {
 }
 
 // v1.10.2 离线闭关：出关结算卡数据（会话态不进存档；收益在 resume_life 时已入账内存）
+// v1.16.12 免烧寿元：删 life_capped——离线不再推 age，钳制语义随之消亡
 pub struct OfflineReport {
-    pub years: i64,        // 离闭载数
-    pub qi: f64,           // 修为收益（五折后）
-    pub stones: i64,       // 灵田岁入（静态口径）
-    pub life_capped: bool, // 被寿元钳住（再不归返便要坐化）
+    pub years: i64,  // 离闭载数
+    pub qi: f64,     // 修为收益（五折后）
+    pub stones: i64, // 灵田岁入（静态口径）
 }
 
 // ================= v1.10.2 离线闭关：出关结算 =================
 // 纯函数（可测）：离线收益三件套。口径：90 秒 = 1 载；raw = min(离线秒, 8h)/90；
-// 效率 5 折；N = min(raw×0.5, lifespan − age − 1)——终值恒保 age<lifespan，绝不替玩家死亡。
+// 效率 5 折；N = raw×0.5——v1.16.12 免烧寿元：不再以 lifespan − age − 1 钳制（旧钳制
+// 副作用是把 age 精确钉到 lifespan−1 风烛位，承接前缘必寿元将近），收益全额发放、
+// age 完全不动；8h 封顶保留为放置反刷上限。破境节奏只由在线周天吐纳 1.6s/载驱动。
 // 修为 = 每载收益×N（cult_gain_per_year 同口）；灵石 = 灵田岁入×N（静态口径，不 roll 天气）。
 // 返回 None = 不结算（首落盘 ts 缺 0 / 时钟回拨 / N≤0）。
 pub const OFFLINE_SEC_PER_YEAR: f64 = 90.0;
@@ -869,17 +871,13 @@ pub fn offline_settle_calc(
     now: u64,
     gain_per_year: f64,
     lingtian_per_year: i64,
-    lifespan: f64,
-    age: f64,
-) -> Option<(i64, f64, i64, bool)> {
+) -> Option<(i64, f64, i64)> {
     if last_ts == 0 {
         return None; // 首次落盘前无基准
     }
     let sec = (now as f64 - last_ts as f64).max(0.0); // 时钟回拨/脏值 → 按 0 收益
     let raw = sec.min(OFFLINE_CAP_SECS) / OFFLINE_SEC_PER_YEAR;
-    let n_raw = (raw * OFFLINE_EFF) as i64;
-    let cap = ((lifespan - age - 1.0) as i64).max(0);
-    let n = n_raw.min(cap);
+    let n = (raw * OFFLINE_EFF) as i64;
     if n <= 0 {
         return None;
     }
@@ -887,7 +885,6 @@ pub fn offline_settle_calc(
         n,
         gain_per_year * n as f64,
         (lingtian_per_year as f64 * n as f64).round() as i64,
-        n_raw > cap, // 被寿元钳住
     ))
 }
 
@@ -1856,10 +1853,16 @@ impl Game {
     // 转移 roll 与宿敌成长，离线一律静态口径）——qi 累加后不自动破境，交还周天吐纳
     // 既有衔接（tick_auto→act_cultivate 主循环下次自然接管）。
     pub fn offline_settle(&mut self) {
+        self.offline_settle_inner(date_now());
+    }
+
+    // v1.16.12 免烧寿元：now 参数化的内部版（单测可注入时钟，整链不触真实时间）。
+    // 离线只发收益（qi/stones），绝不推 age——旧实现 l.age += n 把寿元精确烧到
+    // lifespan−1 风烛位（承接前缘必寿元将近的根因）；破境节奏只由在线 1.6s/载驱动。
+    fn offline_settle_inner(&mut self, now: u64) {
         let Some(l) = self.life.as_ref() else {
             return;
         };
-        let now = date_now();
         let gain = self.cult_gain_per_year();
         let lv = self.meta.dongfu[1].clamp(0, 3) as usize;
         // v1.10.2 复审③：丹修（path=3）灵田岁入 ×1.6——与唯一推岁口 advance_time 的
@@ -1869,14 +1872,9 @@ impl Game {
             * weather_loc_mult(l.weather as usize, l.loc)
             * path_pill)
         .round() as i64;
-        let Some((n, qi, stones, capped)) = offline_settle_calc(
-            self.meta.last_ts,
-            now,
-            gain,
-            lingtian,
-            l.lifespan,
-            l.age,
-        ) else {
+        let Some((n, qi, stones)) =
+            offline_settle_calc(self.meta.last_ts, now, gain, lingtian)
+        else {
             self.meta.last_ts = now; // 本次不计收益，仅落新基准
             return;
         };
@@ -1884,16 +1882,11 @@ impl Game {
             let l = self.life.as_mut().unwrap();
             l.qi += qi; // 与 act_cultivate 完全同式累加；修为满不破境（不调破境口）
             l.stones += stones;
-            l.age += n as f64;
+            // v1.16.12 免烧寿元：不再 l.age += n（收益倍率 N 仍全额发放）
         }
         self.meta.last_ts = now;
         if n >= 10 {
-            self.offline_card = Some(OfflineReport {
-                years: n,
-                qi,
-                stones,
-                life_capped: capped,
-            });
+            self.offline_card = Some(OfflineReport { years: n, qi, stones });
         } else {
             self.log(
                 format!(
@@ -2777,19 +2770,40 @@ impl Game {
                     big_break_p(s, target)
                 };
 
-                card.title = format!("{}境之门", rd.name);
+                // v1.16.12 仙境叙事分化（方向 A1）：target 11..=14（砚尊/秉笔/执卷/
+                // 天笔）破境卡特化文案——通用「X境之门」的「身死之危」对 immortal 境
+                //（bdeath=0.0，且 sim_do_break 失败仅 !rd.immortal 才 roll 死）语境
+                // 不实，终局四境叙事也由此不再平线。选项复用 special 15/16
+                //（apply_eff 读 pending_break/realm+1，target 无硬编码），机制零改动。
+                let (title, text) = if target >= 11 {
+                    let scene = match target {
+                        11 => "砚池深处无风自皱，墨色里现出一段石阶，阶上墨痕犹润",
+                        12 => "案头秃笔无风自立，笔锋所指书页哗哗自翻，停在空白一页",
+                        13 => "书山最高处那卷无字之书自己摊开，纸页里透出暖光",
+                        _ => "笔冢之上虚悬一支巨笔，笔尖垂落至你面前，墨滴欲坠",
+                    };
+                    (
+                        format!("{}之阶", rd.name),
+                        format!(
+                            "你修为圆满，{}——{}之阶已现眼前。冲击成功率 {:.0}%；仙境无死劫，失败唯修为折损、身负重伤。是拾级而上，还是蛰伏蓄势？",
+                            scene, rd.name, p * 100.0
+                        ),
+                    )
+                } else {
+                    (
+                        format!("{}境之门", rd.name),
+                        format!(
+                            "你修为圆满，{}境之门隐现眼前。冲击成功率 {:.0}%，失败有 {:.0}% 身死之危。是孤注一掷，还是蛰伏蓄势？",
+                            rd.name,
+                            p * 100.0,
+                            rd.bdeath * 100.0
+                        ),
+                    )
+                };
 
-                card.text = format!(
+                card.title = title;
 
-                    "你修为圆满，{}境之门隐现眼前。冲击成功率 {:.0}%，失败有 {:.0}% 身死之危。是孤注一掷，还是蛰伏蓄势？",
-
-                    rd.name,
-
-                    p * 100.0,
-
-                    rd.bdeath * 100.0
-
-                );
+                card.text = text;
 
                 let mut e1 = Eff::new();
 
@@ -3409,6 +3423,17 @@ impl Game {
                     .sim
                     .as_ref()
                     .map_or(false, |s| s.lifespan - s.age <= ELDER_LEFT_YEARS)
+            {
+                ww = 0.0;
+            }
+
+            // v1.16.12 洞府经营联动 3 条（134 阵眼共鸣/135 田畦岁稔/136 丹房遗香）：
+            // 名下对应设施满级（dongfu 0..=3 级，跨世持久）才入池——经营玩法与
+            // 叙事池首次联动，照 111 读持久态同点，零新键。clamp 照既有使用点
+            // 口径（7612/1864/8777）；卡面措辞按跨世纪律：「你名下洞府/历年经营」
+            if (id == 134 && self.meta.dongfu[0].clamp(0, 3) < 3)
+                || (id == 135 && self.meta.dongfu[1].clamp(0, 3) < 3)
+                || (id == 136 && self.meta.dongfu[2].clamp(0, 3) < 3)
             {
                 ww = 0.0;
             }
@@ -5986,6 +6011,61 @@ impl Game {
                     "「虹是借来的景。」你看完就走，不惊动它。道心+2".into(),
                 ];
                 card.opts.push(("守心不扰".into(), e2));
+            }
+            // v1.16.12 洞府经营联动 3 条：名下设施满级的叙事回响（门控在
+            // sim_event_weights 读 meta.dongfu 跨世持久态）。措辞一律「你名下/
+            // 历年经营」口径（跨世持久，非「本世」所得——照 111/110 措辞纪律）
+            134 => {
+                card.title = "阵眼共鸣".into();
+                card.text = "你名下洞府的聚灵阵历年养到三重圆满——今晨山河灵潮过境，阵眼无风自鸣，灵机如细溪汇入你的吐纳。".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.12;
+                e1.luck = 1.0;
+                e1.msg = vec![
+                    "你循阵纹吐纳一昼夜，灵潮与阵眼相和共振，经络里暖意不散。修为+12%，气运+1".into(),
+                ];
+                card.opts.push(("循阵吐纳".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.msg = vec![
+                    "你不取灵机，只静观阵纹明灭——历年布阵经营的功夫，今日在悟性里回响。道心+2".into(),
+                ];
+                card.opts.push(("静观阵纹".into(), e2));
+            }
+            135 => {
+                let g = (120.0 * ss * gen_range(1.0, 1.6)) as i64;
+                card.title = "田畦岁稔".into();
+                card.text = "你名下灵田垦到三等沃腴——岁末灵稻垂穗，田埂雾气未散，山下的散修都来讨一捧新米尝鲜。".into();
+                let mut e1 = Eff::new();
+                e1.stones = g;
+                e1.msg = vec![format!(
+                    "你售了三成新谷，换来的灵石比往年厚了一倍有余。获得灵石 {}",
+                    fmt_int(g)
+                )];
+                card.opts.push(("售谷换石".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 2.0;
+                e2.msg = vec![
+                    "你开仓施粥，散修叩谢而去——来年山道上落下的善意，都记在这碗新米里。气运+2".into(),
+                ];
+                card.opts.push(("开仓施粥".into(), e2));
+            }
+            136 => {
+                card.title = "丹房遗香".into();
+                card.text = "你名下丹房历年扩到三重鼎室——开炉取丹时，砖缝里渗出经年的丹香，凝而不散，闻之神思一清。".into();
+                let mut e1 = Eff::new();
+                e1.pill = Some((0, 1));
+                e1.qi_pct = 0.08;
+                e1.msg = vec![
+                    "鼎室夹层里翻出往年窖藏的一枚聚气丹，就着丹香服下，药力格外醇和。修为+8%，聚气丹+1".into(),
+                ];
+                card.opts.push(("取窖藏丹".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.msg = vec![
+                    "你把三重鼎室细细扫了一遍，火路在指下过了一遭——历年丹火的脾性，你摸得更熟了。道心+2".into(),
+                ];
+                card.opts.push(("扫炉悟火".into(), e2));
             }
 
             _ => {}
@@ -9553,37 +9633,99 @@ mod revenge_tests {
 
     // ================= v1.10.2 离线闭关 =================
 
-    // 离线收益纯函数：门槛/封顶/回拨/钳寿逐项口径
+    // 离线收益纯函数：门槛/封顶/回拨逐项口径
+    // v1.16.12 免烧寿元：签名不再收 lifespan/age——收益不被寿元余量钳制，
+    // 8h 封顶仍是唯一上限（防放置反刷）；「绝不替玩家死亡」改由「age 不动」保证
     #[test]
     fn offline_settle_calc_gates() {
         // 缺基准（ts=0）不结算
-        assert!(offline_settle_calc(0, 1_000_000, 10.0, 100, 75.0, 20.0).is_none());
+        assert!(offline_settle_calc(0, 1_000_000, 10.0, 100).is_none());
         // 时钟回拨按 0 收益
-        assert!(offline_settle_calc(2_000_000, 1_000_000, 10.0, 100, 75.0, 20.0).is_none());
+        assert!(offline_settle_calc(2_000_000, 1_000_000, 10.0, 100).is_none());
         // N=0（<3 分钟）不动：179s → raw=1.99 → N=0
-        assert!(offline_settle_calc(1000, 1179, 10.0, 100, 75.0, 20.0).is_none());
+        assert!(offline_settle_calc(1000, 1179, 10.0, 100).is_none());
         // 90s=1 载、五折：1800s → raw=20 → N=10；qi=10×10=100；stones=100×10=1000
-        let (n, qi, st, capped) = offline_settle_calc(1000, 2800, 10.0, 100, 75.0, 20.0).unwrap();
+        let (n, qi, st) = offline_settle_calc(1000, 2800, 10.0, 100).unwrap();
         assert_eq!(n, 10);
         assert!((qi - 100.0).abs() < 1e-9, "qi={}", qi);
         assert_eq!(st, 1000);
-        assert!(!capped);
-        // 8h 封顶：一天挂机 → raw = min(86400,28800)/90 = 320 → N=160，
-        // 但寿元余量 cap=(75−20−1)=54 更紧 → N=54 且 capped
-        let (n, _, _, capped) =
-            offline_settle_calc(1000, 1000 + 86_400, 10.0, 100, 75.0, 20.0).unwrap();
-        assert_eq!(n, 54);
-        assert!(capped);
-        // 8h 封顶本径（寿元充裕）：lifespan=300 → cap=279 > 160 → N=160 且未钳
-        let (n, _, _, capped) =
-            offline_settle_calc(1000, 1000 + 86_400, 10.0, 100, 300.0, 20.0).unwrap();
+        // 8h 封顶：一天挂机 → raw = min(86400,28800)/90 = 320 → N=160（五折）
+        // v1.16.12：寿元余量再小也全额发放（旧断言 86400s→54 已随钳制删除）
+        let (n, qi, _) = offline_settle_calc(1000, 1000 + 86_400, 10.0, 100).unwrap();
         assert_eq!(n, 160);
-        assert!(!capped);
-        // 寿元钳制：age=73, lifespan=75 → cap = 1 → N=1 且 capped（绝不替玩家死亡）
-        let (n, _, _, capped) =
-            offline_settle_calc(1000, 1000 + 86_400, 10.0, 100, 75.0, 73.0).unwrap();
-        assert_eq!(n, 1);
-        assert!(capped);
+        assert!((qi - 1600.0).abs() < 1e-9, "qi={}", qi);
+        // 超长离线（一周）仍 8h 封顶 → N=160，不随寿元余量缩水
+        let (n, _, _) = offline_settle_calc(1000, 1000 + 7 * 86_400, 10.0, 100).unwrap();
+        assert_eq!(n, 160);
+    }
+
+    // v1.16.12 整链：offline_settle_inner（时钟可注入）——离线发收益但绝不烧 age。
+    // 旧实现 cap=lifespan−age−1 把 age 精确钉到 lifespan−1 风烛位（真机「52/75 载」
+    //「154/155 载」承接前缘必寿元将近的根因）；本测试锁定任意离线时长 age/lifespan 不动。
+    #[test]
+    fn offline_settle_never_burns_age() {
+        let mut g = game_with(Life::default(), None);
+        let (age0, lifespan0) = {
+            let l = g.life.as_ref().unwrap();
+            (l.age, l.lifespan) // Life::default：16 / 75
+        };
+        // 整链：一天挂机 → N=160 满额收益入账；age/lifespan 不动（旧实现烧到 74/75）
+        g.meta.last_ts = 1_000_000;
+        g.offline_settle_inner(1_000_000 + 86_400);
+        {
+            let l = g.life.as_ref().unwrap();
+            assert_eq!(l.age, age0, "离线不得烧 age");
+            assert_eq!(l.lifespan, lifespan0);
+            assert!(l.qi > 0.0, "修为收益须入账");
+        }
+        assert_eq!(g.meta.last_ts, 1_000_000 + 86_400, "离线起点基准推进");
+        // N≥10 → 结算卡弹出且只带收益字段
+        let card = g.offline_card.as_ref().expect("N=160 应弹结算卡");
+        assert_eq!(card.years, 160);
+        assert!(card.qi > 0.0);
+
+        // 时间戳缺省（旧档无 ts=，parse 兜底 0）：不结算、仅落新基准、零收益
+        g.offline_card = None;
+        g.life = Some(Life::default());
+        g.meta.last_ts = 0;
+        g.offline_settle_inner(2_000_000);
+        assert!(g.offline_card.is_none(), "ts=0 不得结算");
+        assert_eq!(g.meta.last_ts, 2_000_000, "缺基准仅落新基准");
+        assert_eq!(g.life.as_ref().unwrap().qi, 0.0, "缺基准零收益");
+        assert_eq!(g.life.as_ref().unwrap().age, age0);
+
+        // 时钟回拨（now < last_ts）：按 0 收益不结算，仅落新基准
+        g.meta.last_ts = 3_000_000;
+        g.offline_settle_inner(2_000_000);
+        assert!(g.offline_card.is_none(), "回拨不得结算");
+        assert_eq!(g.meta.last_ts, 2_000_000);
+        assert_eq!(g.life.as_ref().unwrap().qi, 0.0);
+
+        // 短离线（N<10）静默入账不弹卡：300s → raw=3.33 → N=1
+        g.offline_settle_inner(2_000_000 + 300);
+        assert!(g.offline_card.is_none(), "N=1 应静默入账");
+        assert!(g.life.as_ref().unwrap().qi > 0.0, "静默径收益仍入账");
+        assert_eq!(g.life.as_ref().unwrap().age, age0, "短离线同样不烧 age");
+    }
+
+    // v1.16.12 在线路径回归：周天吐纳 act_cultivate 每载仍 +1 age、寿尽仍正常身故
+    //——免烧寿元仅限离线径，在线破境节奏（1.6s/载）不受影响。
+    //（sync_save 在 native 仅置脏标志不落盘；advance_time/real_die 均纯内存，单测安全）
+    #[test]
+    fn online_cultivate_still_ages() {
+        let mut g = game_with(Life::default(), None);
+        let age0 = g.life.as_ref().unwrap().age; // 16
+        g.act_cultivate(true);
+        let age1 = g.life.as_ref().unwrap().age;
+        assert!((age1 - (age0 + 1.0)).abs() < 1e-9, "在线每载 +1 age");
+        assert!(g.life.as_ref().unwrap().qi > 0.0, "在线修为照常入账");
+        // 寿尽线：age==lifespan → real_die → life 清空（在线死亡检查不受本次改动影响）
+        {
+            let l = g.life.as_mut().unwrap();
+            l.age = l.lifespan - 1.0;
+        }
+        g.act_cultivate(true);
+        assert!(g.life.is_none(), "在线寿尽仍应身故");
     }
 
     // ================= v1.10.2 成行择道 =================
@@ -11592,6 +11734,105 @@ mod v11610_event_tests {
     }
 }
 
+// ================= v1.16.12 洞府联动 3 条（134..=136）+ 仙境破境分化 =================
+
+#[cfg(test)]
+mod v11612_event_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // 新批次良构：id 134..=136 每条 ≥2 ≤3 选项、标题正文非空、choose_option(0)
+    // 全链不 panic（照 v11610 骨架；stones/pill/qi_pct 臂均纯收益无战死）
+    #[test]
+    fn dongfu_batch_cards_well_formed() {
+        for id in 134..=136 {
+            let mut g = sim_game(5, 40.0);
+            g.meta.dongfu = [3, 3, 3]; // 臂构建不依赖门控，满级防呆
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
+            assert!(!card.title.is_empty());
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两个选项", id);
+            assert!(card.opts.len() <= 3, "事件 {} 卡面至多三选项", id);
+            g.choose_option(0); // apply_eff 全链不 panic（sync_save 仅置脏不落盘）
+        }
+    }
+
+    // 入池门控：名下对应设施满级（meta.dongfu[i]==3，跨世持久）才入池——
+    // 134 读 dongfu[0] 聚灵阵 / 135 读 dongfu[1] 灵田 / 136 读 dongfu[2] 丹房，
+    // 各自独立，互不牵连（照 110/111 门控单测口径）
+    #[test]
+    fn dongfu_batch_gated_by_full_facility() {
+        let mut g = sim_game(2, 40.0);
+        g.recent_events.clear();
+        // 三设施皆未满：三条全不入池
+        g.meta.dongfu = [0, 0, 0];
+        let (ws, _) = g.sim_event_weights(40.0, 2, false, false, false);
+        assert_eq!(ws[134], 0.0, "聚灵阵未满 134 不入池");
+        assert_eq!(ws[135], 0.0, "灵田未满 135 不入池");
+        assert_eq!(ws[136], 0.0, "丹房未满 136 不入池");
+        // 仅聚灵阵满级：134 独入，135/136 仍 0
+        g.meta.dongfu = [3, 0, 0];
+        let (ws, _) = g.sim_event_weights(40.0, 2, false, false, false);
+        assert!(ws[134] > 0.0, "聚灵阵满级 134 入池");
+        assert_eq!(ws[135], 0.0);
+        assert_eq!(ws[136], 0.0);
+        // 全满：三条全入池（realm=2 覆盖 mr 1/1/2）
+        g.meta.dongfu = [3, 3, 3];
+        let (ws, _) = g.sim_event_weights(40.0, 2, false, false, false);
+        assert!(ws[134] > 0.0 && ws[135] > 0.0 && ws[136] > 0.0, "全满全入池");
+    }
+
+    // 仙境破境卡分化（方向 A1）：target 11..=14 标题「X之阶」+ 场景特化正文，
+    // 不再出现「身死之危」（immortal 境 bdeath=0.0 无死劫，sim_do_break 失败仅
+    // !rd.immortal 才 roll 死）；选项仍 special 15/16 复用（apply_eff target 无硬编码）
+    #[test]
+    fn immortal_break_card_narrative() {
+        // 通用境回归：realm 5 生花 → target 6 藏锋，仍「X境之门」带身死之危文案
+        let mut g = sim_game(5, 100.0);
+        g.sim.as_mut().unwrap().layer = 3; // L4 大圆满（同境末层）→ 跨境卡
+        g.modal = None;
+        g.sim_break();
+        let card = g.modal.as_ref().expect("通用破境卡");
+        assert_eq!(card.title, "藏锋境之门");
+        assert!(card.text.contains("身死之危"));
+        assert_eq!(card.opts[0].1.special, 15);
+        assert_eq!(card.opts[1].1.special, 16);
+
+        // 仙境四境：11 砚尊 / 12 秉笔 / 13 执卷 / 14 天笔 → 「X之阶」无死劫文案
+        for (realm, expect_title) in [
+            (10usize, "砚尊之阶"),
+            (11, "秉笔之阶"),
+            (12, "执卷之阶"),
+            (13, "天笔之阶"),
+        ] {
+            let mut g = sim_game(realm, 100.0);
+            g.sim.as_mut().unwrap().layer = 3; // L4 大圆满（同境末层）→ 跨境卡
+            g.modal = None;
+            g.sim_break();
+            let card = g.modal.as_ref().unwrap_or_else(|| panic!("{} 无卡", expect_title));
+            assert_eq!(card.title, expect_title);
+            assert!(!card.text.contains("身死之危"), "{} 不得再宣死劫", expect_title);
+            assert!(card.text.contains("仙境无死劫"));
+            assert_eq!(card.opts[0].1.special, 15, "{} 复用 special15", expect_title);
+            assert_eq!(card.opts[1].1.special, 16, "{} 复用 special16", expect_title);
+        }
+    }
+}
+
 // ================= v1.16.11 扩池 16 条（118..=133）+ 手札回味 =================
 
 #[cfg(test)]
@@ -12329,8 +12570,8 @@ mod event_batch_v1173_tests {
             assert!(ws[i] > 0.0, "普通事件 {} realm5 应入池", id);
         }
         // EVENTS 总数断言（v1.16.9 扩池后 100 条；v1.16.10 扩池 18 → 118 条；
-        // v1.16.11 扩池 16 → 134 条，稀有基权合计口径见 data.rs 各批注释——
-        // 账本数字一律以重算为准）
-        assert_eq!(EVENTS.len(), 134);
+        // v1.16.11 扩池 16 → 134 条；v1.16.12 洞府联动 3 → 137 条，稀有基权
+        // 合计口径见 data.rs 各批注释——账本数字一律以重算为准）
+        assert_eq!(EVENTS.len(), 137);
     }
 }

@@ -2771,7 +2771,8 @@ fn draw_bag(g: &mut Game) {
 
 // ================= v1.10.2 离线闭关：出关结算卡 =================
 // 独占输入（先例 ad-overlay）：明细列表 + 单「收功」钮。收益已在 resume_life 时
-// 入账内存（qi/stones/age），收功即一次 sync_save（去抖兜底 pagehide 亦覆盖）。
+// 入账内存（qi/stones；v1.16.12 免烧寿元，age 不动），收功即一次 sync_save
+//（去抖兜底 pagehide 亦覆盖）。
 fn draw_offline_card(g: &mut Game) {
     let Some(r) = g.offline_card.as_ref() else {
         return;
@@ -2780,8 +2781,9 @@ fn draw_offline_card(g: &mut Game) {
     panel_card(340.0, 160.0, 600.0, 400.0);
     txt_c("离 闭 归 来", V_W * 0.5, 188.0, 24, C_GOLD);
     draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    // v1.16.12 免烧寿元：原文「现实人间已悄然流逝 N 载」与 age 不动自相矛盾，改口
     txt(
-        &format!("现实人间已悄然流逝 {} 载。", r.years),
+        &format!("离闭吐纳 {} 载功行，未曾间断。", r.years),
         380.0,
         226.0, 16,
         C_TEXT,
@@ -2798,13 +2800,10 @@ fn draw_offline_card(g: &mut Game) {
         288.0, 15,
         C_CYAN,
     );
-    if r.life_capped {
-        txt("寿元将尽——再不归返便要坐化！", 380.0, 320.0, 15, C_RED);
-    }
     txt(
         "收益已入账；修为满不破境，周天吐纳可续——点击收功归于现实。",
         380.0,
-        352.0, 14,
+        320.0, 14,
         C_DIM,
     );
     if button(490.0, 420.0, 300.0, 64.0, "收功", Some("归于现实 · 落盘"), true) {
