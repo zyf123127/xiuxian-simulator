@@ -4,6 +4,8 @@
 // 2 成就·称号：左成就 2 列带进度 / 右称号 19 格（点击佩戴，格 0=自动跟随、
 //   格 16=弑神者、格 17=雨夜执印者——v1.16.10 章节称号，首章达成即授；
 //   格 18=执笔人——v1.16.15 全卷称号，四结局全览即授）
+// 6 道侣（v1.17.0）：道侣专页——主卡（立绘/名号/情谊条/双修加成/缝页缘/双修共进钮）
+//   + 缘谱十行（同页人历世账，纯文本零立绘）；展示数据全在既有持久化字段，零新键
 use crate::art::draw_cultivator;
 use crate::data::*;
 use crate::draw::{bar, bar_glow, button, panel_card};
@@ -29,8 +31,9 @@ pub fn draw_char_panel(g: &mut Game) {
     // exec_panel_act 统一执行 &mut 交互（先例 v1.10.0 draw_sim / 本版 draw_reality）。
     // ×/页签点击帧的金条高亮切换晚一帧生效（16ms，不可见），其余行为逐项等价。
     // v1.16.0：图鉴页（页签 4）同为单列滚动列表——上下遮幅带同样盖住页签行，
-    // chrome 须最后重铺；与人物页共用本双绘条件
-    let npc_tab = g.char_tab == 3 || g.char_tab == 4;
+    // chrome 须最后重铺；与人物页共用本双绘条件。
+    // v1.17.0：道侣专页（页签 6）同为滚动列表（主卡+缘谱行），并入本双绘条件
+    let npc_tab = g.char_tab == 3 || g.char_tab == 4 || g.char_tab == 6;
     let mut act = draw_panel_chrome_act(g);
     if act.is_none() {
         match g.char_tab {
@@ -41,6 +44,9 @@ pub fn draw_char_panel(g: &mut Game) {
             4 => crate::gallery::draw_gallery_page(g),
             // v1.16.5 旧稿档案：近 5 稿结算快照（纯只读固定列表，无滚动无 &mut 交互）
             5 => draw_hist_page(g),
+            // v1.17.0 道侣专页：主卡（立绘/名号/情谊/缝页/双修）+ 缘谱十行（滚动，
+            // 双修钮/立绘鉴赏以 PanelAct 传出）
+            6 => act = draw_comp_page(g),
             // v1.10.2：总览页纯只读，整页持 life 借用（防御 None：面板仅在 Reality 打开）
             1 => {}
             _ => {
@@ -71,6 +77,7 @@ enum PanelAct {
     Equip(usize),   // 装备法宝
     Title(i32),     // 佩戴称号
     Zoom(crate::game::ZoomArt), // v1.16.1：立绘鉴赏开启（人物页卡立绘点按）
+    DualCult,       // v1.17.0：双修共进（act_dual_cult 单口，内部再全门控校验）
 }
 
 fn exec_panel_act(g: &mut Game, a: PanelAct) {
@@ -103,6 +110,11 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             if i == 2 {
                 prewarm_title_page();
             }
+            // v1.17.0 道侣专页首开帧预热（同图鉴/旧稿先例）：页静态串 + 十伴名补
+            // 24 档（主卡名号 24px）——漏灌则首开帧冷栅格化触发图集整图重传
+            if i == 6 {
+                prewarm_comp_page();
+            }
             g.char_tab = i;
             g.play(crate::sounds::Which::Page);
         }
@@ -122,6 +134,11 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             g.zoom_art = Some(z);
             g.play(crate::sounds::Which::Click);
         }
+        PanelAct::DualCult => {
+            // v1.17.0 双修共进：执行口 act_dual_cult 单源（门控/定价/收益/落盘全在口内；
+            // 音效随执行成败由口内自定，此处零旁路）
+            g.act_dual_cult();
+        }
     }
 }
 
@@ -132,16 +149,17 @@ fn draw_panel_chrome_act(g: &Game) -> Option<PanelAct> {
     if button(1064.0, 74.0, 44.0, 36.0, "×", None, true) {
         return Some(PanelAct::Close);
     }
-    // ---------- 页签（v1.6.0 D：第 4 页「人物」；v1.16.0：第 5 页「图鉴」；v1.16.5：第 6 页「旧稿」） ----------
-    // 6 钮 x=300+i*116（宽 140→116）：末钮 880..996，与 × 钮（1064..1108）净空 68px 不重叠
-    let tabs = ["总览", "法宝", "成就·称号", "人物", "图鉴", "旧稿"];
+    // ---------- 页签（v1.6.0 D：第 4 页「人物」；v1.16.0：第 5 页「图鉴」；v1.16.5：第 6 页「旧稿」；
+    // v1.17.0：第 7 页「道侣」专页——7 钮宽 116→98，五处同批：本数组/宽两处/净空注释/npc_tab/预热分支） ----------
+    // 7 钮 x=300+i*98（宽 140→116→98）：末钮 888..986，与 × 钮（1064..1108）净空 78px 不重叠
+    let tabs = ["总览", "法宝", "成就·称号", "人物", "图鉴", "旧稿", "道侣"];
     for (i, t) in tabs.iter().enumerate() {
-        let x = 300.0 + i as f32 * 116.0;
-        if button(x, 74.0, 116.0, 34.0, t, None, true) {
+        let x = 300.0 + i as f32 * 98.0;
+        if button(x, 74.0, 98.0, 34.0, t, None, true) {
             return Some(PanelAct::Tab(i as u8));
         }
         if g.char_tab == i as u8 {
-            draw_rectangle(x, 108.0, 116.0, 3.0, C_GOLD);
+            draw_rectangle(x, 108.0, 98.0, 3.0, C_GOLD);
         }
     }
     None
@@ -975,6 +993,541 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
     }
 }
 
+// ================= v1.17.0 页 6：道侣专页 =================
+// 一页两段（滚动列表，会话态共用 g.npc_scroll 系列照图鉴先例，本页自有 max 钳制
+// 收敛；snap=false——主卡 430 与缘谱行 52 两栅格失配，自由停留照图鉴手札区口径）：
+//   主卡 960×430（照人物页道侣卡几何：立绘 220×402 + 右列文本）+ 间距 12
+//   + 缘谱 11 行（十同页人 + 合计行；46 高 + 6 间隙步进 52，纯文本零立绘）。
+// 内容高 = 430 + 12 + 11×52 = 1014，尾白 40；滚动钳 = 1014 + 40 − 500(视口) = 554。
+// 性能红线：全页只允许主卡 1 次 comp_tex 查询（LazyTex 懒解码，未结缘 None → 剪影
+// 兜底）；缘谱行严禁立绘（照图鉴「严禁预解码全部 10 张」红线）。立绘鉴赏 hit 照
+// 人物页立绘盒口径 + tap 纵夹视口带（图鉴 tap_y_in_view 同语言）；双修钮 hit 抄
+// 赠礼钮「整钮可见才可点 + 抬起位移<8px」口径。展示数据全在 gbd=/bn=/blv=/
+// companion_lives/Lcomp/Lcfav 既有持久化字段，纯推导渲染零新存档键（per-伴初遇
+// 世次如未来要加，照 gbd= 先例 additive，本轮明确不做）。
+const COMP_CARD_H: f32 = 430.0; // 主卡高（照 NPC_CARD_H）
+const COMP_GAP: f32 = 12.0; // 主卡与缘谱首行间距
+const COMP_ROW_H: f32 = 46.0; // 缘谱行高（照图鉴事件行）
+const COMP_ROW_STEP: f32 = 52.0; // 行步进（46 + 6）
+const COMP_ROWS: usize = 11; // 十同页人 + 合计行
+// 内容 430+12+11×52=1014；+40 尾白 − 500 视口 → 554
+const COMP_SCROLL_MAX: f32 = COMP_CARD_H
+    + COMP_GAP
+    + COMP_ROWS as f32 * COMP_ROW_STEP
+    + 40.0
+    - (NPC_VIEW_Y1 - NPC_VIEW_Y0);
+
+// 双修共进收益/限制说明（主卡常显行；与按钮副标同源数字——改一处须同步按钮副标）
+const DUAL_CULT_HINT: &str =
+    "双修共进：情谊+5 · 道心+1 · 气运+1 · 修为+2 载 · 每载一次（耗灵石随境界涨）";
+
+// 缘谱行已识判定（纯函数供单测；gallery known 同口径：历世账 >0 || 此生同页）
+fn bond_row_known(bonds: u8, cur: bool) -> bool {
+    bonds > 0 || cur
+}
+
+// 缘谱行右缘徽标（纯函数供单测）：未识不泄标；缝页缘定者 > 旧页回声所指（缘最深
+// 者，best_bond_idx 反查口径与链10 单源——std max_by_key 并列取末，勿改取首）。
+// 旧页回声标须 bonds>0：「此生同页但零历世账」退化态不标（此生同页金标已由行内
+// 左列表达）
+fn bond_row_badge(bonds: u8, cur: bool, feng_bn: u8, best: usize, i: usize) -> Option<&'static str> {
+    if !bond_row_known(bonds, cur) {
+        return None;
+    }
+    if feng_bn != FENG_UNSET && feng_bn as usize == i {
+        return Some("缘定三生");
+    }
+    if best == i && bonds > 0 {
+        return Some("旧页回声所指");
+    }
+    None
+}
+
+// 道侣专页（char_tab=6）：滚动状态机（人物页/图鉴同一单口）→ 主卡 → 缘谱行 →
+// 立绘鉴赏 hit → 遮幅 → 页脚引导。命中（鉴赏/双修）以 PanelAct 传出，执行移交
+// exec_panel_act（借用纪律照人物页）。
+fn draw_comp_page(g: &mut Game) -> Option<PanelAct> {
+    // ---------- 滚动状态机（本页自有 max；snap=false 双栅格失配自由停留）----------
+    let tap = scroll_list_tick(g, COMP_SCROLL_MAX, COMP_ROW_STEP, false);
+    let (mx, my) = crate::cam::mouse();
+    let scroll = g.npc_scroll;
+
+    // ---------- 单源推导（主卡与缘谱共用；comp_portrait_idx 历世兜底口径照人物页）----------
+    let l = g.life.as_ref();
+    let comp_idx = comp_portrait_idx(l, &g.meta);
+    // 红线：全页唯一立绘查询（LazyTex 懒解码；未结缘 → None → 剪影兜底）
+    let comp_tex = comp_idx.and_then(|ci| crate::art::art().comp_tex(ci));
+    let best = best_bond_idx(&g.meta.comp_bonds);
+
+    // ---------- 主卡（双修钮命中传出）----------
+    let mut act = draw_comp_main_card(
+        g,
+        l,
+        comp_idx,
+        comp_tex.as_ref(),
+        NPC_VIEW_Y0 - scroll,
+        mx,
+        my,
+        tap,
+    );
+
+    // ---------- 缘谱十一行（整行剔除；纯文本零立绘零纹理查询）----------
+    let cur_comp: Option<usize> = l.and_then(|x| {
+        x.companion
+            .as_deref()
+            .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn))
+    });
+    for i in 0..COMPANION_NAMES.len() {
+        let y = NPC_VIEW_Y0 + COMP_CARD_H + COMP_GAP + i as f32 * COMP_ROW_STEP - scroll;
+        if y >= NPC_VIEW_Y1 || y + COMP_ROW_H <= NPC_VIEW_Y0 {
+            continue;
+        }
+        draw_bond_row(g, i, y, cur_comp == Some(i), best);
+    }
+    let ty = NPC_VIEW_Y0
+        + COMP_CARD_H
+        + COMP_GAP
+        + COMPANION_NAMES.len() as f32 * COMP_ROW_STEP
+        - scroll;
+    if ty < NPC_VIEW_Y1 && ty + COMP_ROW_H > NPC_VIEW_Y0 {
+        draw_bond_total_row(g, ty);
+    }
+
+    // ---------- 立绘鉴赏 hit（照人物页盒口径 176..396 × 卡顶+16..底-12 + 纵夹视口带）----------
+    if act.is_none()
+        && tap
+        && comp_tex.is_some()
+        && mx >= 176.0
+        && mx <= 396.0
+        && my >= (NPC_VIEW_Y0 - scroll) + 16.0
+        && my <= (NPC_VIEW_Y0 - scroll) + 418.0
+        && my >= NPC_VIEW_Y0
+        && my <= NPC_VIEW_Y1
+    {
+        // comp_tex Some ⟹ comp_idx Some（同源推导）；unwrap_or(0) 为纪律 1 防御
+        act = Some(PanelAct::Zoom(crate::game::ZoomArt::Comp(
+            comp_idx.unwrap_or(0),
+        )));
+    }
+
+    // ---------- 遮幅（口径同人物页/图鉴：全不透明面板色，盖住越缘内容）----------
+    let mask = Color::from_rgba(22, 16, 38, 255);
+    draw_rectangle(150.0, 104.0, 980.0, 12.0, mask);
+    draw_rectangle(150.0, 616.0, 980.0, 38.0, mask);
+
+    // ---------- 页脚引导（固定视口外一行，照人物页 y630；三态复用现成文案单次 format! 豁免）----------
+    // 未结缘 → 人物页空态同句 + 遗泽口径；已结缘 → INHERITS[8] 口径；
+    // 历世有缘（comp_bonds 任意 >0）→ 链10 门控提示（灯市旧页回声）
+    let bonded = l.is_some_and(|x| x.companion.is_some());
+    let head = if bonded {
+        "落幕后可承道侣遗泽：道心+8 气运+8（永久）。"
+    } else {
+        "模拟中遇『同页天成』，选『认下这页』即可结缘；落幕后可承道侣遗泽。"
+    };
+    let tail = if g.meta.comp_bonds.iter().any(|&b| b > 0) {
+        "灯市深处，旧页回声或再现。"
+    } else {
+        ""
+    };
+    txt(&format!("{}{}", head, tail), 170.0, 630.0, 14, C_DIM);
+    act
+}
+
+// 主卡：立绘（220×402 + 鉴赏徽标）/ 名号 / 档次 / 情谊条+刻度 / 双修加成 / 双修
+// 收益行 / 缝页缘行 / 历世行 / 小传 / 双修共进钮（340×60，整钮可见才可点，照赠礼
+// 钮口径）。已结缘返回双修命中（PanelAct::DualCult），其余 None。
+fn draw_comp_main_card(
+    g: &Game,
+    l: Option<&Life>,
+    comp_idx: Option<usize>,
+    comp_tex: Option<&Texture2D>,
+    y: f32,
+    mx: f32,
+    my: f32,
+    tap: bool,
+) -> Option<PanelAct> {
+    let x = 160.0;
+    let cfav = l.map_or(0, |x| x.comp_fav);
+    npc_card_chrome(x, y, COMP_CARD_H, Color::from_rgba(42, 26, 52, 210), C_PURPLE);
+    // 立绘：已结缘/历世兜底真图（comp_tex 已在页口单点查询），未结缘书卷剪影兜底
+    //（or_else 短路——真图命中永不触发）
+    let portrait = comp_tex
+        .map(Clone::clone)
+        .or_else(crate::art::comp_silhouette_tex);
+    npc_portrait(portrait.as_ref(), &crate::art::art().icon_pill, x + 16.0, y);
+    // 立绘鉴赏入口徽标（真图才显示；剪影不进鉴赏）
+    if comp_tex.is_some() {
+        zoom_badge(x + 16.0, y, 220.0, 418.0);
+    }
+    let col = x + 260.0;
+    match l.and_then(|x| x.companion.as_deref()) {
+        Some(cn) => {
+            if npc_row_vis(y + 16.0) {
+                txt(cn, col, y + 16.0, 24, C_PURPLE);
+            }
+            if npc_row_vis(y + 54.0) {
+                txt(crate::npc::tier_name(cfav), col, y + 54.0, 16, C_PURPLE);
+            }
+            if npc_row_vis(y + 82.0) {
+                txt(
+                    &format!("情谊 {}/{}", cfav, NPC_FAV_MAX),
+                    col,
+                    y + 82.0, 14,
+                    C_TEXT,
+                );
+            }
+            if y + 102.0 >= NPC_VIEW_Y0 && y + 124.0 <= NPC_VIEW_Y1 {
+                bar(
+                    col,
+                    y + 106.0,
+                    560.0,
+                    14.0,
+                    cfav as f32 / NPC_FAV_MAX as f32,
+                    C_PURPLE,
+                );
+                // 档次刻度（照人物页 :733-736 同款：3px / (188,168,224,235)）
+                for &t in NPC_FAV_TIERS.iter() {
+                    let tx = col + t as f32 / NPC_FAV_MAX as f32 * 560.0;
+                    draw_rectangle(tx - 1.5, y + 102.0, 3.0, 22.0, Color::from_rgba(188, 168, 224, 235));
+                }
+            }
+            if npc_row_vis(y + 136.0) {
+                txt(
+                    &format!(
+                        "当前：双修加成 ×{:.2}（结缘起步+{:.0}%，只升不降）",
+                        crate::npc::comp_cult_mult(cfav),
+                        (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0
+                    ),
+                    col,
+                    y + 136.0, 14,
+                    C_CYAN,
+                );
+            }
+            // 双修共进收益/限制行（与按钮副标同源数字）
+            if npc_row_vis(y + 162.0) {
+                txt(DUAL_CULT_HINT, col, y + 162.0, 14, C_GOLD_D);
+            }
+            // 缝页缘行：feng_bn==ci 显『三生缝页·缘 N』（N=blv 0..=3，ASCII 动态）
+            if npc_row_vis(y + 188.0) {
+                if let Some(bn) = comp_idx {
+                    if g.meta.feng_bn != FENG_UNSET && g.meta.feng_bn as usize == bn {
+                        txt(
+                            &format!("三生缝页·缘 {}", g.meta.feng_blv.min(3)),
+                            col,
+                            y + 188.0, 14,
+                            C_GOLD,
+                        );
+                    }
+                }
+            }
+            if npc_row_vis(y + 214.0) {
+                txt(
+                    &format!("历世结缘 {} 次", g.meta.companion_lives),
+                    col,
+                    y + 214.0, 14,
+                    C_DIM,
+                );
+            }
+            // 识人小传：道侣槽共通段（首段结缘保底，段2/3 随情谊 40/70 解锁，照 :895 口径）
+            let cseg = tale_unlocked(cfav).max((g.meta.companion_lives >= 1) as usize);
+            if cseg > 0 && npc_row_vis(y + 240.0) {
+                wrap_draw(COMP_TALES[cseg - 1], col, y + 240.0, 14, 640.0, 22.0, C_TEXT);
+            }
+            // 双修共进钮 340×60（底对齐 y+358 照赠礼钮；整钮可见才可点；执行口
+            // act_dual_cult 内部再全门控校验——按钮仅 UI 门）
+            let (bx, by) = (col, y + COMP_CARD_H - 72.0);
+            if by < NPC_VIEW_Y0 || by + 60.0 > NPC_VIEW_Y1 {
+                return None;
+            }
+            let cost = g.dual_cult_cost();
+            let gate = Game::dual_cult_gate(l, cost);
+            let en = gate == DualGate::Ready;
+            let hot = mx >= bx && mx <= bx + 340.0 && my >= by && my <= by + 60.0;
+            let base = if !en {
+                Color::from_rgba(38, 32, 56, 225)
+            } else if hot {
+                Color::from_rgba(92, 66, 122, 245)
+            } else {
+                Color::from_rgba(56, 42, 86, 235)
+            };
+            draw_rectangle(bx, by, 340.0, 60.0, base);
+            draw_rectangle_lines(
+                bx,
+                by,
+                340.0,
+                60.0,
+                2.0,
+                if en {
+                    C_GOLD_D
+                } else {
+                    Color::from_rgba(96, 82, 124, 255)
+                },
+            );
+            txt_c(
+                "双修共进",
+                bx + 170.0,
+                by + 13.0,
+                20,
+                if en {
+                    C_TEXT
+                } else {
+                    Color::from_rgba(184, 178, 196, 255)
+                },
+            );
+            // 副标：可用态写明代价与收益；置灰态写明差什么（门控优先级 =
+            // NoCompanion > ThisYear > Stones，照 gate 单源）
+            let sub = match gate {
+                DualGate::Ready => format!(
+                    "耗灵石 {} · 情谊+5 · 道心+1 气运+1 · 修为+2载",
+                    fmt_int(cost)
+                ),
+                DualGate::ThisYear => "本载已双修 · 推岁一载后方可再修".to_string(),
+                DualGate::Stones => format!("灵石不足（需 {}）", fmt_int(cost)),
+                DualGate::NoCompanion => "此生未结缘".to_string(),
+            };
+            txt_c(
+                &sub,
+                bx + 170.0,
+                by + 34.0, 14,
+                if en {
+                    C_DIM
+                } else {
+                    Color::from_rgba(178, 172, 192, 255)
+                },
+            );
+            return (tap && hot && en).then_some(PanelAct::DualCult);
+        }
+        None => {
+            // 未结缘空态（照 draw_comp_card 引导框语言；历世有缘者立绘兜底已同框）
+            if npc_row_vis(y + 16.0) {
+                txt("道侣 · 此生未结缘", col, y + 16.0, 24, C_PURPLE);
+            }
+            let (gx, gy, gw, gh) = (col, y + 52.0, 560.0, 88.0);
+            if let Some((vy, vh)) = npc_clip_band(gy, gh) {
+                draw_rectangle(gx, vy, gw, vh, Color::from_rgba(24, 17, 40, 190));
+                draw_rectangle_lines(gx, vy, gw, vh, 1.5, C_GOLD_D);
+            }
+            if npc_row_vis(gy + 18.0) {
+                txt(
+                    "模拟中遇『同页天成』事件，选『认下这页』即可结缘。",
+                    gx + 16.0,
+                    gy + 18.0, 16,
+                    C_TEXT,
+                );
+            }
+            if npc_row_vis(gy + 50.0) {
+                if comp_tex.is_some() {
+                    txt(
+                        "此绘承自历世之缘，此生再遇『同页天成』可再续。",
+                        gx + 16.0,
+                        gy + 50.0, 16,
+                        C_TEXT,
+                    );
+                } else {
+                    txt(
+                        "结缘后，她的立绘、情谊与双修加成都会在此页显现。",
+                        gx + 16.0,
+                        gy + 50.0, 16,
+                        C_TEXT,
+                    );
+                }
+            }
+            if npc_row_vis(y + 156.0) {
+                txt(
+                    &format!(
+                        "结缘起步情谊 {}（双修 +{:.0}%），道侣赠礼事件再 +{}。",
+                        COMPANION_BOND_FAV,
+                        (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0,
+                        COMPANION_GIFT_FAV
+                    ),
+                    col,
+                    y + 156.0, 14,
+                    C_CYAN,
+                );
+            }
+            if npc_row_vis(y + 182.0) {
+                txt(DUAL_CULT_HINT, col, y + 182.0, 14, C_GOLD_D);
+            }
+            // 缝页缘行（历世有缘者 feng_bn 已定；此生未结缘也标出来供缘谱对读）
+            if npc_row_vis(y + 208.0) && g.meta.feng_bn != FENG_UNSET {
+                txt(
+                    &format!("三生缝页·缘 {}", g.meta.feng_blv.min(3)),
+                    col,
+                    y + 208.0, 14,
+                    C_GOLD,
+                );
+            }
+            if npc_row_vis(y + 234.0) {
+                txt(
+                    &format!("历世结缘 {} 次", g.meta.companion_lives),
+                    col,
+                    y + 234.0, 14,
+                    C_DIM,
+                );
+            }
+            // 历世有缘者显首段旧谊（照 :953 口径）
+            if g.meta.companion_lives >= 1 && npc_row_vis(y + 260.0) {
+                wrap_draw(COMP_TALES[0], col, y + 260.0, 14, 640.0, 22.0, C_TEXT);
+            }
+            // 剪影下缘小字（历世兜底显真图时不画，照 :959 口径）
+            if comp_tex.is_none() && npc_row_vis(y + 390.0) {
+                draw_rectangle(
+                    x + 16.0,
+                    y + 386.0,
+                    220.0,
+                    22.0,
+                    Color::from_rgba(14, 10, 26, 210),
+                );
+                txt_c(
+                    "结缘之后，立绘自会在此显现",
+                    x + 126.0,
+                    y + 390.0, 14,
+                    C_DIM,
+                );
+            }
+        }
+    }
+    None
+}
+
+// 缘谱行（i=0..=9）：已识紫边 + 名 16px；未识灰边 + ？？？；行内左列二行态，
+// 右缘徽标（缘定三生 紫 / 旧页回声所指 青）。纯文本零立绘（红线：严禁纹理查询）。
+fn draw_bond_row(g: &Game, i: usize, y: f32, cur: bool, best: usize) {
+    let x = 160.0;
+    let bonds = g.meta.comp_bonds[i]; // i 循环界内（0..COMPANION_NAMES.len()），恒界内
+    let known = bond_row_known(bonds, cur);
+    let (bg, border) = if known {
+        (Color::from_rgba(42, 26, 52, 200), C_PURPLE)
+    } else {
+        (
+            Color::from_rgba(26, 22, 42, 190),
+            Color::from_rgba(96, 82, 124, 255),
+        )
+    };
+    npc_card_chrome(x, y, COMP_ROW_H, bg, border);
+    if npc_row_vis(y + 6.0) {
+        if known {
+            txt(COMPANION_NAMES[i], x + 16.0, y + 6.0, 16, C_PURPLE);
+        } else {
+            txt("？？？", x + 16.0, y + 6.0, 16, C_DIM);
+        }
+    }
+    if npc_row_vis(y + 24.0) {
+        if cur {
+            txt("此生同页", x + 16.0, y + 24.0, 14, C_GOLD);
+        } else if known {
+            txt(&format!("曾同页 {} 世", bonds), x + 16.0, y + 24.0, 14, C_TEXT);
+        } else {
+            txt("未识 · 尘封之名", x + 16.0, y + 24.0, 14, C_DIM);
+        }
+    }
+    // 右缘徽标（右对齐 1084 照图鉴计数位；未识不泄标）
+    if let Some(bt) = bond_row_badge(bonds, cur, g.meta.feng_bn, best, i) {
+        if npc_row_vis(y + 14.0) {
+            let bc = if bt == "缘定三生" { C_PURPLE } else { C_CYAN };
+            txt_r(bt, 1084.0, y + 14.0, 14, bc);
+        }
+    }
+}
+
+// 缘谱合计行（第 11 行）：历世结缘总次数（companion_lives）× 同页累计（Σbonds，
+// u8 逐位封顶 255、10 位合计 ≤2550 无溢出面）。
+fn draw_bond_total_row(g: &Game, y: f32) {
+    let x = 160.0;
+    npc_card_chrome(x, y, COMP_ROW_H, Color::from_rgba(30, 24, 50, 200), C_GOLD_D);
+    let total: u32 = g.meta.comp_bonds.iter().map(|&b| b as u32).sum();
+    if npc_row_vis(y + 14.0) {
+        txt(
+            &format!(
+                "合计 · 历世结缘 {} 次 · 同页累计 {} 世",
+                g.meta.companion_lives, total
+            ),
+            x + 16.0,
+            y + 14.0, 14,
+            C_DIM,
+        );
+    }
+}
+
+// v1.17.0 道侣专页首开帧预热（exec_panel_act Tab(6) 单点调用，照图鉴/旧稿先例）：
+// 页静态串 + 十伴名补 24 档（主卡名号 24px；14/16 照图鉴档——18 由菜单期
+// panel_warm_chars 保底覆盖）+ 档次名 @16 + 小传 @14。动态数值行 ASCII 由菜单期
+// panel_warm_chars 保底（先例口径）。
+const COMP_PAGE_PREWARM: &[&str] = &[
+    // 页签/主卡
+    "道侣",
+    "道侣 · 此生未结缘",
+    "情谊",
+    // 缘谱行态
+    "？？？",
+    "此生同页",
+    "缘定三生",
+    "旧页回声所指",
+    "曾同页",
+    "世",
+    "未识 · 尘封之名",
+    "合计 · 历世结缘",
+    "次 · 同页累计",
+    // 缝页/历世
+    "三生缝页·缘",
+    "历世结缘",
+    // 双修
+    "双修共进",
+    DUAL_CULT_HINT,
+    "耗灵石",
+    "· 情谊+5 · 道心+1 气运+1 · 修为+2载",
+    "本载已双修 · 推岁一载后方可再修",
+    "灵石不足（需",
+    "）",
+    // 空态引导（复用现成文案）+ 剪影小字
+    "模拟中遇『同页天成』事件，选『认下这页』即可结缘。",
+    "此绘承自历世之缘，此生再遇『同页天成』可再续。",
+    "结缘后，她的立绘、情谊与双修加成都会在此页显现。",
+    "结缘之后，立绘自会在此显现",
+    // 页脚三态（未结缘引导 / 遗泽口径 / 链10 门控提示）
+    "模拟中遇『同页天成』，选『认下这页』即可结缘；落幕后可承道侣遗泽。",
+    "落幕后可承道侣遗泽：道心+8 气运+8（永久）。",
+    "灯市深处，旧页回声或再现。",
+];
+
+// 空态引导框 @16 档（与 COMP_PAGE_PREWARM @14 同串双档——绘制档见 draw_comp_main_card）
+const COMP_PAGE_PREWARM_16: &[&str] = &[
+    "模拟中遇『同页天成』事件，选『认下这页』即可结缘。",
+    "此绘承自历世之缘，此生再遇『同页天成』可再续。",
+    "结缘后，她的立绘、情谊与双修加成都会在此页显现。",
+];
+
+pub(crate) fn prewarm_comp_page() {
+    for s in COMP_PAGE_PREWARM {
+        prewarm_text(s, &[14]);
+    }
+    // 空态引导框两行 @16（引导框文案绘制档）；双修钮主标 @20（button 带 sub 的主标档）
+    for s in COMP_PAGE_PREWARM_16 {
+        prewarm_text(s, &[16]);
+    }
+    prewarm_text("双修共进", &[20]);
+    // 主卡两条动态 format! 行的静态字集样例串（ASCII 数字与 × 由菜单期保底，
+    // 先例口径）；「放大」鉴赏徽标（zoom_badge @14，本页新消费方补挂）
+    prewarm_text("当前：双修加成 ×0.00（结缘起步+20%，只升不降）", &[14]);
+    prewarm_text("结缘起步情谊 25（双修 +20%），道侣赠礼事件再 +5。", &[14]);
+    prewarm_text("放大", &[14]);
+    // 页签「道侣」@18（chrome button 无 sub 主标档；菜单期 panel_warm 保底之外再灌一道）
+    prewarm_text("道侣", &[18]);
+    // 主卡名号 @24 / 空态标题 @24 / 鉴赏名单 @16（缘谱行名）
+    prewarm_text("道侣 · 此生未结缘", &[24]);
+    for n in COMPANION_NAMES.iter() {
+        prewarm_text(n, &[16, 24]);
+    }
+    // 档次名（主卡 @16）
+    for n in NPC_TIER_NAMES.iter() {
+        prewarm_text(n, &[16]);
+    }
+    // 小传（@14 wrap 两行）
+    for t in COMP_TALES.iter() {
+        prewarm_text(t, &[14]);
+    }
+}
+
 // ---------- 页 0：总览 ----------
 // v1.10.2 借用化：本页纯只读渲染（无 &mut 交互），整页可持 life 借用
 fn draw_overview(g: &Game, l: &Life) {
@@ -1761,4 +2314,76 @@ fn draw_hist_page(g: &Game) {
         630.0, 14,
         C_DIM,
     );
+}
+
+// ---------------- v1.17.0 道侣专页：缘谱行态（纯函数单测，照 comp_portrait_tests 先例） ----------------
+
+#[cfg(test)]
+mod comp_page_tests {
+    use super::*;
+
+    // 已识判定：历世账 >0 或此生同页（gallery known 同口径）；未识两半皆假
+    #[test]
+    fn known_is_bonds_or_current() {
+        assert!(bond_row_known(1, false));
+        assert!(bond_row_known(255, false), "saturating 封顶 255 仍已识");
+        assert!(bond_row_known(0, true));
+        assert!(!bond_row_known(0, false));
+    }
+
+    // 未识行绝不泄标（缘定/旧页回声名单均不漏——未识态隐私口径照图鉴 ？？？）
+    #[test]
+    fn unknown_row_has_no_badge() {
+        let meta = Meta::default();
+        let best = best_bond_idx(&meta.comp_bonds);
+        for i in 0..COMPANION_NAMES.len() {
+            assert_eq!(bond_row_badge(0, false, meta.feng_bn, best, i), None);
+        }
+        // feng_bn 已定但该行未识（旧档 bn= 有值、gbd= 全 0）→ 不标
+        assert_eq!(bond_row_badge(0, false, 4, 9, 4), None);
+    }
+
+    // 徽标优先级：缝页缘定 > 旧页回声所指；旧页标须 bonds>0（cur 零账退化态不标）
+    #[test]
+    fn badge_priority_feng_then_best() {
+        assert_eq!(bond_row_badge(2, false, 2, 2, 2), Some("缘定三生"), "缝页标胜旧页标");
+        assert_eq!(bond_row_badge(4, false, 3, 1, 1), Some("旧页回声所指"));
+        assert_eq!(bond_row_badge(0, true, FENG_UNSET, 0, 0), None, "cur 零账退化态不标");
+        assert_eq!(bond_row_badge(1, false, FENG_UNSET, 5, 4), None, "非最深者不标");
+        // cur 行若为缝页人亦显缘定标（此生同页金标由行内左列表达，两标不互斥）
+        assert_eq!(bond_row_badge(3, true, 6, 0, 6), Some("缘定三生"));
+    }
+
+    // 链10 best_bn 反查单源：charpanel 缘谱与链10 共用 best_bond_idx（game.rs 单口），
+    // 此处钉 std max_by_key 并列取**末**语义不漂移（实测本工具链返回并列最大者的
+    // 最后一个——与链10 123 臂既有行为逐位一致，勿「修」成取首）
+    #[test]
+    fn best_bond_idx_shared_helper() {
+        let mut meta = Meta::default();
+        meta.comp_bonds[4] = 2;
+        meta.comp_bonds[7] = 2;
+        meta.comp_bonds[9] = 1;
+        assert_eq!(best_bond_idx(&meta.comp_bonds), 7, "并列取末（链10 既有语义）");
+    }
+
+    // 预热对账：页脚/主卡/缘谱全部静态串必须入 COMP_PAGE_PREWARM（Tab(6) 开页帧
+    // 一次灌齐——漏灌即首开帧冷栅格化 2048² 图集整图重传，照 recall_chrome 对账先例）
+    #[test]
+    fn page_static_strings_covered_by_prewarm() {
+        for s in [
+            "道侣",
+            "双修共进",
+            DUAL_CULT_HINT,
+            "此生同页",
+            "缘定三生",
+            "旧页回声所指",
+            "三生缝页·缘",
+        ] {
+            assert!(
+                COMP_PAGE_PREWARM.contains(&s),
+                "静态串「{}」不在 COMP_PAGE_PREWARM——Tab(6) 口首开冷栅格化",
+                s
+            );
+        }
+    }
 }

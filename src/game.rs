@@ -48,7 +48,9 @@ pub const CHAIN_TTL: u8 = 8;
 // 77/78/80/81 用 EVENTS 表权重 0 表达「仅链内出现」，无需代码特判。
 // v1.16.15 道侣深化 +3：156 雪窖藏酿/157 同守昙花/158 雨后补瓦；
 // v1.16.16 伴随 +1：182 霜夜补裘（有伴长世生活流第 10 味）
-pub const COMPANION_EVENTS: [usize; 10] = [53, 54, 55, 82, 83, 84, 156, 157, 158, 182];
+// v1.17.0 伴随 +3：183 灯下习字（mr0 白丁有伴层首条）/184 同参一炉（mr2 双修
+// 题材）/185 云海携游（mr4）——此前 10 条 mr 全≥1 且≤3，白丁有伴与 mr4+ 零覆盖
+pub const COMPANION_EVENTS: [usize; 13] = [53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185];
 
 // v1.16.7 置链臂 special 槽位段：20..=31（apply_eff 链裁决据此区分「重写链态」
 // 与「本次抉择即链终局」）。v1.16.8 续编：28/29=链4（灯楼谜约）两段推进、
@@ -219,6 +221,9 @@ pub struct Eff {
 
     pub lingmai: bool,
 
+    pub comp_fav: i32, // v1.17.0 伴随事件好感通道（模拟侧 apply_eff 消费；comp_fav
+                       // 只升不降既定语义——负值在消费口忽略，clamp 100 照道侣赠礼 2642 同款）
+
     pub death: f32,
 
     pub special: u8, // 1洞府探索 2天材地宝 3秘境深入 7心魔检定
@@ -258,6 +263,8 @@ impl Eff {
             sect: false,
 
             lingmai: false,
+
+            comp_fav: 0,
 
             death: 0.0,
 
@@ -525,6 +532,10 @@ pub struct Life {
     pub weather: u8, // 天气 0..=4（WEATHERS 索引，随推岁演化；v1.5.0）
 
     pub path: u8, // v1.10.2 成行择道：道途 0未择/1剑修/2气修/3丹修（存档键 Lpath=，旧档缺键 0；选定终身不改，模拟侧恒 0）
+
+    pub sx_year: u16, // v1.17.0 双修共进：上次双修的现实年岁（存档键 Lsxy=，旧档缺键 0；
+                      // 起始年岁 16 起、恒 >0，0 即「从未双修」零迁移）。每载一次的
+                      // 冷却闩：sx_year == dual_year(age) 时本载已修，推岁后方可再修
 }
 
 impl Default for Life {
@@ -605,6 +616,8 @@ impl Default for Life {
             weather: 0,
 
             path: 0,
+
+            sx_year: 0,
         }
     }
 }
@@ -622,6 +635,15 @@ pub fn path_name(p: u8) -> &'static str {
         PATH_PILL => "丹修",
         _ => "未择道途",
     }
+}
+
+// v1.17.0 双修共进门控态（dual_cult_gate 单源；按钮置灰文案与执行口共以此判定）
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DualGate {
+    Ready,       // 可双修
+    NoCompanion, // 此生未结缘
+    ThisYear,    // 本载已双修（冷却闩 sx_year）
+    Stones,      // 灵石不足
 }
 
 #[derive(Clone)]
@@ -920,6 +942,19 @@ pub fn gain_qi(l: &mut Life, amount: f64) {
     l.qi += amount;
 
     l.gained += amount;
+}
+
+// v1.17.0 缘谱/链10 共用：历世结缘次数最多的同页人下标（旧页回声「反查口径」抽出
+// 单源——原链10 123 臂内联块逐式平移；std max_by_key 并列取**末**（实测本工具链
+// 返回并列最大者的最后一个），与链10 既有行为逐位一致，勿改取首；空表归 0）。
+// 调用方自持 min(len-1) 越界钳制（panic=abort 纪律，链10 臂与道侣专页各自钳）
+pub fn best_bond_idx(bonds: &[u8]) -> usize {
+    bonds
+        .iter()
+        .enumerate()
+        .max_by_key(|&(_, &b)| b)
+        .map(|(i, _)| i)
+        .unwrap_or(0)
 }
 
 // v1.10.2 离线闭关：出关结算卡数据（会话态不进存档；收益在 resume_life 时已入账内存）
@@ -3530,9 +3565,14 @@ impl Game {
             // v1.16.8 章节联动事件：主线章节达成（施工单1章节书系统 chap_done 位掩码）
             // 才入池——模拟侧的章节涟漪，照 sect/lingmai/blank_used 同点结算：
             // 74 血仇余响 = 第三章·血仇得报已了（bit2）；75 同页灯约 = 第六章·
-            // 同页之缘已了（bit5）且有伴（宿命双门控——无伴时该题不可述）
+            // 同页之缘已了（bit5）且有伴（宿命双门控——无伴时该题不可述）。
+            // v1.17.0 章节联动 +2（一/四章首获覆盖，照 74/75 同一 if 勿拆两段）：
+            // 190 雨夜寻印 = 第一章·雨夜执印已了（bit0）；191 文狱退牒 =
+            // 第四章·文狱讨牒已了（bit3）
             if (id == 74 && self.meta.chap_done & (1 << 2) == 0)
                 || (id == 75 && (self.meta.chap_done & (1 << 5) == 0 || !comp))
+                || (id == 190 && self.meta.chap_done & (1 << 0) == 0)
+                || (id == 191 && self.meta.chap_done & (1 << 3) == 0)
             {
                 ww = 0.0;
             }
@@ -3574,7 +3614,8 @@ impl Game {
             // （weights 只被 sim_event 调用、sim 恒 Some）防御归零。
             // v1.16.16 老年层 +2（170 炉暖旧器/171 灯影授业，「交托回望」散件）
             // ——老年层从两条独占扩到四条，缓「每世凡人局必经层的重见率」
-            if (id == 88 || id == 89 || id == 170 || id == 171)
+            // v1.17.0 老年层 +1（189 旧履还坊）——四条扩到五条
+            if (id == 88 || id == 89 || id == 170 || id == 171 || id == 189)
                 && !self
                     .sim
                     .as_ref()
@@ -6081,16 +6122,10 @@ impl Game {
                 // v1.16.16 具名升级：历世结缘次数最多的同页人（comp_bonds 反查
                 // COMPANION_NAMES，零新键）——「某一世里与你同页的人」泛称升具名，
                 // 情感密度落地。兜底纪律照 85 臂：门控 121 已保证 comp_bonds 任意
-                // >0，此处下标仍 min 钳制防御（panic=abort 纪律）
-                let best_bn = self
-                    .meta
-                    .comp_bonds
-                    .iter()
-                    .enumerate()
-                    .max_by_key(|&(_, &b)| b)
-                    .map(|(i, _)| i)
-                    .unwrap_or(0)
-                    .min(COMPANION_NAMES.len() - 1);
+                // >0，此处下标仍 min 钳制防御（panic=abort 纪律）。
+                // v1.17.0 反查式抽 best_bond_idx 单源（道侣专页缘谱「旧页回声所指」
+                // 同式共用；std max_by_key 并列取末语义单测钉死，行为零变化）
+                let best_bn = best_bond_idx(&self.meta.comp_bonds).min(COMPANION_NAMES.len() - 1);
                 let cn = COMPANION_NAMES[best_bn];
                 card.text = format!(
                     "摊主取出的那页新墨，背面洇着一行小字批注——笔迹你认得：{}。摊主说：「{}也在找这页。找了很多年。」",
@@ -7304,6 +7339,223 @@ impl Game {
                 card.opts.push(("披裘添炭".into(), e2));
             }
 
+            // ================= v1.17.0 扩池 10 条（183..=192） =================
+            183 => {
+                // 伴随事件：灯下习字（mr0 白丁有伴层首条伴随——遗泽玩家的白丁推演
+                // 此前零伴随；Comp 立绘照 82 反查模式，呼应道侣专页）
+                card.title = "灯下习字".into();
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = format!(
+                    "{}在灯下临你的字帖，一横一竖描得极慢：「你的字有一笔总写歪——不是手的事，是心里那一笔没落稳。」",
+                    cn
+                );
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.luck = 1.0;
+                e1.msg = vec![
+                    "你们各临一页。写歪的那一处，两份字迹里竟都稳了。道心+2，气运+1".into(),
+                ];
+                card.opts.push(("受教同临".into(), e1));
+                let mut e2 = Eff::new();
+                e2.qi_pct = 0.05;
+                e2.msg = vec![
+                    "你把那页收进袖中——留着她说的那一笔，来年再看。修为+5%".into(),
+                ];
+                card.opts.push(("笑而不答".into(), e2));
+            }
+            184 => {
+                // 伴随事件：同参一炉（mr2 双修题材——呼应现实侧双修共进与
+                // COMPANION_CULT_MULT 好感档；Eff.comp_fav 好感通道首用，
+                // +5 照 COMPANION_GIFT_FAV 量级）
+                card.title = "同参一炉".into();
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = format!(
+                    "{}把两份引气图并在一案：「单修如独焰，双修如对火——你借我一分气，我还你一分神。」",
+                    cn
+                );
+                let mut e1 = Eff::new();
+                e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
+                e1.dao = 1.0;
+                e1.msg = vec![format!(
+                    "一炉火候，两息相衔。出关时神完气足。（好感+{}）道心+1",
+                    crate::data::COMPANION_GIFT_FAV
+                )];
+                card.opts.push(("对坐同参".into(), e1));
+                let mut e2 = Eff::new();
+                e2.qi_pct = 0.05;
+                e2.msg = vec!["同室不同功，各走各的周天，也自相安。修为+5%".into()];
+                card.opts.push(("各自用功".into(), e2));
+            }
+            185 => {
+                // 伴随事件：云海携游（mr4+ 有伴层——此前伴随 mr 全≤3，mr4+ 零覆盖）
+                card.title = "云海携游".into();
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = format!(
+                    "{}御风携你入云海：「高处风大，抓稳——书上说云下众生如蚁，我想让你亲眼看看。」",
+                    cn
+                );
+                let mut e1 = Eff::new();
+                e1.luck = 2.0;
+                e1.msg = vec!["云开处山河万里，你们在风里笑出声来。气运+2".into()];
+                card.opts.push(("同御长风".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.msg = vec![
+                    "你在云隙间认出走过的每一处——原来路也一直记着人。道心+2".into(),
+                ];
+                card.opts.push(("俯察来路".into(), e2));
+            }
+            186 => {
+                // 恶缘：仙曹索卷（mr5 独占——高境墨气冲霄才有人来索；mr5 无条件
+                // 常态池 7→9 条补薄）
+                card.title = "仙曹索卷".into();
+                card.text = "一名佩牍仙曹踏云而至，展册点名：「你名下稿卷墨气冲霄，按例当入天曹文库里架——交卷归档，或领催墨单。」".into();
+                let mut e1 = Eff::new();
+                e1.stones_pct = -0.08;
+                e1.good = false;
+                e1.msg = vec!["你以灵石润笔，买回这一稿的着落。灵石-8%".into()];
+                card.opts.push(("补墨留卷".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.msg = vec![
+                    "你按卷不交，报出名讳。仙曹搁笔而去——天曹账上，从此记了条硬骨头。道心+2".into(),
+                ];
+                card.opts.push(("据卷力争".into(), e2));
+            }
+            187 => {
+                // 善缘：星槎访客（mr5 独占——前路无名的问路者）
+                card.title = "星槎访客".into();
+                card.text = "一叶星槎泊于云端，槎上客披星而下，向你讨一盏茶：「行到此处，前路无名——借高士一盏茶的工夫，问一问路。」".into();
+                let mut e1 = Eff::new();
+                e1.qi_pct = 0.08;
+                e1.dao = 1.0;
+                e1.msg = vec![
+                    "星客饮罢，以指为笔在你掌心画下一道星轨。修为+8%，道心+1".into(),
+                ];
+                card.opts.push(("奉茶指路".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 2.0;
+                e2.msg = vec![
+                    "你们把一夜说成了一生。天明槎去，云上留一颗温热的星子。气运+2".into(),
+                ];
+                card.opts.push(("相伴一夜".into(), e2));
+            }
+            188 => {
+                // 恶缘：灵税催帖（mr3 恶缘薄档补位——仙府催赋题材此前零覆盖）
+                card.title = "灵税催帖".into();
+                card.text = "仙府催帖贴上洞府门楣：岁修灵税逾期，按例当缴——落款朱印鲜然，不容分说。".into();
+                let mut e1 = Eff::new();
+                e1.stones_pct = -0.06;
+                e1.msg = vec!["灵石入库，朱印划去你的名讳——今年清净了。灵石-6%".into()];
+                card.opts.push(("如数缴讫".into(), e1));
+                let mut e2 = Eff::new();
+                e2.stones_pct = -0.10;
+                e2.good = false;
+                e2.msg = vec![
+                    "你闭门不见。税吏坐到日暮，留下一张加层的催单走了。灵石-10%".into(),
+                ];
+                card.opts.push(("闭门缓缴".into(), e2));
+            }
+            189 => {
+                // 老年层：旧履还坊（「回望交托」散件第五条；余量≤10 载门控同批扩）
+                card.title = "旧履还坊".into();
+                card.text = "脚上这双履陪了你大半世。鞋匠铺老匠接过去端详半晌：「底磨得偏左——半世的路，都往一边偏。」".into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    "老匠纳好新底递还：「偏过的路不必正回来，记下就行。」道心+2".into(),
+                ];
+                card.opts.push(("换底重纳".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    "你没换底，只请他把旧底擦净——路走到头了，鞋是干净的。气运+1".into(),
+                ];
+                card.opts.push(("原样带走".into(), e2));
+            }
+            190 => {
+                // 章节联动（第一章·雨夜执印已了门控 bit0）：雨夜回访——原点重临
+                card.title = "雨夜寻印".into();
+                card.text = "又是雨夜。路过乱葬岗，新坟旁一枚无字方印半埋土中，印身划痕层层叠叠——与你怀中那枚，一模一样。".into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    "两印相贴，划痕严丝合缝：原是同一枚，同一个雨夜。道心+2".into(),
+                ];
+                card.opts.push(("并印相认".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    "你把印埋了回去：名字被写错的，从来不止你一个。气运+1".into(),
+                ];
+                card.opts.push(("覆土掩印".into(), e2));
+            }
+            191 => {
+                // 章节联动（第四章·文狱讨牒已了门控 bit3）：牒成的回响——文狱来问
+                card.title = "文狱退牒".into();
+                card.text = "一名文书吏抱着一摞职牒拦路：「讨牒六张的名讳，文狱都记着——有人托我问一句：牒多了，压手么？」".into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.luck = 1.0;
+                e1.msg = vec![
+                    "你把职牒摊开。文书吏数罢长揖：「压手——但压得住。」道心+2，气运+1".into(),
+                ];
+                card.opts.push(("以牒相示".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.msg = vec![
+                    "你收牒入袖，只留一句：压不压手，问笔台上自见分晓。道心+1".into(),
+                ];
+                card.opts.push(("收牒不语".into(), e2));
+            }
+            192 => {
+                // 开局层：书僮窃墨（mr0 w4——摊薄开局头部集中度）
+                card.title = "书僮窃墨".into();
+                card.text = "借宿的书院里，小书僮揣了你一块松烟墨，被你堵在墙角——他仰起头理直气壮：「先生罚抄的《千字文》，我差一页的墨。」".into();
+                let mut e1 = Eff::new();
+                e1.dao = 1.0;
+                e1.msg = vec![
+                    "你把墨递还给他：「抄错的字，比抄对的长记性。」道心+1".into(),
+                ];
+                card.opts.push(("赠墨宽宥".into(), e1));
+                let mut e2 = Eff::new();
+                e2.qi_pct = 0.05;
+                e2.msg = vec![
+                    "罚他替你研一夜的墨。天明时墨细如霜，你写的字也顺了。修为+5%".into(),
+                ];
+                card.opts.push(("罚研一夜墨".into(), e2));
+            }
+
             _ => {}
         }
 
@@ -8442,6 +8694,12 @@ impl Game {
                 s.pills[p] += n;
             }
 
+            // v1.17.0 伴随事件好感通道：comp_fav 只升不降——负值忽略（红线：
+            // 好感无降口），clamp 100 照道侣赠礼 2642 同款
+            if e.comp_fav > 0 {
+                s.comp_fav = (s.comp_fav + e.comp_fav).min(NPC_FAV_MAX);
+            }
+
             e.death > 0.0 && gen_range(0.0, 1.0) < e.death
         };
 
@@ -9053,6 +9311,86 @@ impl Game {
         self.sync_save();
 
         rate
+    }
+
+    // ================= v1.17.0 双修共进（道侣专页钮，现实侧主动双修） =================
+    // 收益/代价定稿：耗灵石 500×(1+realm)（照 exchange_points 境界定价口径）、
+    // 情谊+5（COMPANION_GIFT_FAV 同量级）、修为 += 2×cult_gain_per_year（直加 l.qi
+    // 照 act_cultivate 同口——勿动 cult_rate 乘链，否则离线/周天/弹层三路径被静默
+    // 放大）、道心+1 气运+1（clamp 100 照遗泽 8921/8916 口）；不推岁（冷却挂年岁闩）。
+    // 限制每载一次：Life.sx_year 记上次双修年岁（键 Lsxy=，缺键 0 零迁移；起始年岁
+    // 16 起，0 即「从未双修」天然无碰撞）。comp_fav 只升不降既定语义（此为新增升口，
+    // 现实侧唯一日常增长口，恰补赠礼事件外的空缺）。
+
+    /// 双修年岁取整单口（纯函数供门控/写档/单测共用）：age 越界钳 u16（防御纪律）
+    pub fn dual_year(age: f64) -> u16 {
+        (age as i64).clamp(0, u16::MAX as i64) as u16
+    }
+
+    /// 双修定价单口（照 exchange_cost 先例，按钮文案与执行口共用一价）
+    pub fn dual_cult_cost(&self) -> i64 {
+        let realm = self.life.as_ref().map(|l| l.realm).unwrap_or(0);
+        (500.0 * (1.0 + realm as f64)) as i64
+    }
+
+    /// 双修门控（纯函数供按钮态/执行口/单测三处单源）：
+    /// NoCompanion > ThisYear > Stones 优先级（按钮置灰依次提示差什么）
+    pub fn dual_cult_gate(l: Option<&Life>, cost: i64) -> DualGate {
+        let Some(l) = l else {
+            return DualGate::NoCompanion;
+        };
+        if l.companion.is_none() {
+            return DualGate::NoCompanion;
+        }
+        if l.sx_year == Self::dual_year(l.age) {
+            return DualGate::ThisYear;
+        }
+        if l.stones < cost {
+            return DualGate::Stones;
+        }
+        DualGate::Ready
+    }
+
+    /// 双修共进执行（道侣专页按钮单口）：门控全再校验（按钮仅 UI 门，照 gift_npc
+    /// 「内部再校验」先例）；修为直加 l.qi 不入乘链（cult_gain_per_year 单一来源纪律）
+    pub fn act_dual_cult(&mut self) {
+        let cost = self.dual_cult_cost();
+        if matches!(Self::dual_cult_gate(self.life.as_ref(), cost), DualGate::Stones) {
+            self.toast("灵石不足", C_RED);
+            return;
+        }
+        if !matches!(
+            Self::dual_cult_gate(self.life.as_ref(), cost),
+            DualGate::Ready
+        ) {
+            return; // 未结缘/本载已修：静默拒绝（按钮置灰态本不可达，防御口）
+        }
+        let gain = self.cult_gain_per_year() * 2.0;
+        let cn = self
+            .life
+            .as_ref()
+            .and_then(|l| l.companion.clone())
+            .unwrap_or_default();
+        {
+            let l = self.life.as_mut().unwrap();
+            l.stones -= cost;
+            l.qi += gain; // 直加照 act_cultivate 同口（不入 cult_rate 乘链）
+            l.sx_year = Self::dual_year(l.age);
+            l.dao = (l.dao + 1.0).min(100.0);
+            l.luck = (l.luck + 1.0).min(100.0);
+        }
+        crate::npc::add_comp_fav(self, crate::data::COMPANION_GIFT_FAV);
+        self.log(
+            format!(
+                "你与{}双修共进，息脉相合一夜悟道：情谊+{}，道心+1，气运+1，修为+{}。",
+                cn,
+                crate::data::COMPANION_GIFT_FAV,
+                fmt_num(gain)
+            ),
+            C_GOLD,
+        );
+        self.play(crate::sounds::Which::Ascend);
+        self.sync_save();
     }
 
     // ================= v1.9.25 周天吐纳：现实自动修炼（放置主循环补完） =================
@@ -12923,6 +13261,11 @@ mod chain_event_tests {
             (84, false, None),
             (92, false, None),
             (0, false, None),
+            // v1.17.0 扩池抽检：散件全 (非稀有, 无段标)——w3/w4 均不入稀有区
+            (183, false, None),
+            (186, false, None),
+            (187, false, None),
+            (192, false, None),
         ] {
             g.modal = None;
             g.build_event(id);
@@ -14034,9 +14377,9 @@ mod event_batch_v1173_tests {
         // v1.16.11 扩池 16 → 134 条；v1.16.12 洞府联动 3 → 137 条；v1.16.13 扩池
         // 14 → 151 条；v1.16.14 扩池 5 → 156 条；v1.16.15 扩池 9 → 165 条；
         // v1.16.16 两批：结局回响/书外之章 5 → 170 条、老年/开局/链14/恶缘/
-        // 高境/伴随 13 → 183 条，稀有基权合计口径见 data.rs 各批注释——账本
-        // 数字一律以重算为准）
-        assert_eq!(EVENTS.len(), 183);
+        // 高境/伴随 13 → 183 条；v1.17.0 扩池 10 → 193 条，稀有基权合计口径见
+        // data.rs 各批注释——账本数字一律以重算为准）
+        assert_eq!(EVENTS.len(), 193);
     }
 }
 
@@ -14528,13 +14871,15 @@ mod v11615_reward_and_pool_tests {
         }
     }
 
-    // 账本钉死：总基权 607、稀有 13 条 23 基权（≈3.79%）——权重手滑入稀有区
+    // 账本钉死：总基权 638、稀有 13 条 23 基权（≈3.60%）——权重手滑入稀有区
     // （w∈1..=RARE_W）或批注漂移由本测试拦截（账本数字一律以重算为准；
-    // v1.16.16 批 +36：老年 2/开局 3/链14 3/恶缘 2/高境 2/伴随 1，新增全 w≤5）
+    // v1.16.16 批 +36：老年 2/开局 3/链14 3/恶缘 2/高境 2/伴随 1，新增全 w≤5；
+    // v1.17.0 批 +31：mr5 2/mr3 1/伴随 3/老年 1/章节 2/开局 1，全批 w≤4
+    // 稀有区零新增——稀有占比 3.79%→3.60% 纯稀释）
     #[test]
     fn pool_ledger_recheck() {
         let total: i32 = EVENTS.iter().map(|&(_, w, _, _)| w).sum();
-        assert_eq!(total, 607, "总基权漂移——照 data.rs v1.16.16 批注重算");
+        assert_eq!(total, 638, "总基权漂移——照 data.rs v1.17.0 批注重算");
         let rare: Vec<(usize, i32)> = EVENTS
             .iter()
             .filter(|&&(_, w, _, _)| w > 0 && w <= crate::data::RARE_W)
@@ -14610,5 +14955,334 @@ mod v11615_reward_and_pool_tests {
         let g4 = sim_game(2, 40.0);
         let (ws4, _) = g4.sim_event_weights(40.0, 2, false, false, true);
         assert!(ws4[182] > 0.0, "有伴：伴随事件 182 入池");
+    }
+}
+
+// ---------------- v1.17.0 双修共进：门控/定价/收益/冷却闩（现实侧主动双修） ----------------
+
+#[cfg(test)]
+mod dual_cult_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    fn bonded_life() -> Life {
+        let mut l = Life::default();
+        l.companion = Some(COMPANION_NAMES[0].to_string());
+        l.comp_fav = 25;
+        l
+    }
+
+    // 门控四态与优先级：未结缘 > 本载已修 > 灵石不足 > 就绪
+    //（NoCompanion 含 life=None——面板仅在 Reality 打开，防御口径）
+    #[test]
+    fn gate_priorities() {
+        assert_eq!(Game::dual_cult_gate(None, 100), DualGate::NoCompanion);
+        assert_eq!(
+            Game::dual_cult_gate(Some(&Life::default()), 100),
+            DualGate::NoCompanion
+        );
+        // 本载已修优先于灵石不足（sx_year == 当前年岁、stones=0 仍判 ThisYear）
+        let mut l = bonded_life();
+        l.age = 30.0;
+        l.sx_year = 30;
+        l.stones = 0;
+        assert_eq!(Game::dual_cult_gate(Some(&l), 500), DualGate::ThisYear);
+        // 灵石不足
+        let mut l = bonded_life();
+        l.stones = 499;
+        assert_eq!(Game::dual_cult_gate(Some(&l), 500), DualGate::Stones);
+        // 就绪
+        let mut l = bonded_life();
+        l.stones = 500;
+        assert_eq!(Game::dual_cult_gate(Some(&l), 500), DualGate::Ready);
+    }
+
+    // 定价：500×(1+realm)（境界定价口径照 exchange_cost；realm=0 → 500、2 → 1500）
+    #[test]
+    fn cost_scales_with_realm() {
+        let g = game_with(Life::default(), None);
+        assert_eq!(g.dual_cult_cost(), 500);
+        let mut l = Life::default();
+        l.realm = 2;
+        let g2 = game_with(l, None);
+        assert_eq!(g2.dual_cult_cost(), 1500);
+    }
+
+    // 年岁闩取整单口：负值/极端大值钳 0..=u16::MAX（panic=abort 纪律）
+    #[test]
+    fn dual_year_clamped() {
+        assert_eq!(Game::dual_year(0.0), 0);
+        assert_eq!(Game::dual_year(33.0), 33);
+        assert_eq!(Game::dual_year(33.9), 33, "浮点截断向下");
+        assert_eq!(Game::dual_year(-5.0), 0);
+        assert_eq!(Game::dual_year(1.0e9), u16::MAX);
+    }
+
+    // 收益结算：灵石扣定价、修为+2载（直加不进乘链）、情谊+5、道心/气运+1、闩记本载
+    #[test]
+    fn act_dual_cult_grants_and_costs() {
+        let mut l = bonded_life();
+        l.stones = 5000;
+        l.qi = 0.0;
+        l.dao = 50.0;
+        l.luck = 40.0;
+        l.age = 33.0;
+        let mut g = game_with(l, None);
+        let gain = g.cult_gain_per_year() * 2.0;
+        let cost = g.dual_cult_cost();
+        g.act_dual_cult();
+        let nl = g.life.as_ref().unwrap();
+        assert_eq!(nl.stones, 5000 - cost, "灵石扣定价");
+        assert!((nl.qi - gain).abs() < 1e-9, "修为 += 2×每载收益");
+        assert_eq!(nl.comp_fav, 30, "情谊+5");
+        assert!((nl.dao - 51.0).abs() < 1e-6, "道心+1");
+        assert!((nl.luck - 41.0).abs() < 1e-6, "气运+1");
+        assert_eq!(nl.sx_year, 33, "闩记本载年岁");
+        // 修为直加不入乘链：cult_gain_per_year 基准不变（乘链单一来源纪律）
+        assert!(
+            (g.cult_gain_per_year() * 2.0 - gain).abs() < 1e-9,
+            "双修不得放大每载收益基准"
+        );
+    }
+
+    // 每载一次：同年内二连点零损耗（灵石/情谊/四维/闩全不动）
+    #[test]
+    fn act_dual_cult_twice_same_year_noop() {
+        let mut l = bonded_life();
+        l.stones = 5000;
+        l.age = 20.0;
+        let mut g = game_with(l, None);
+        g.act_dual_cult();
+        let s1 = g.life.as_ref().unwrap().stones;
+        let f1 = g.life.as_ref().unwrap().comp_fav;
+        g.act_dual_cult();
+        let nl = g.life.as_ref().unwrap();
+        assert_eq!(nl.stones, s1, "同年二连点不再扣灵石");
+        assert_eq!(nl.comp_fav, f1, "同年二连点不再涨情谊");
+        assert_eq!(nl.sx_year, 20);
+    }
+
+    // 推岁一载后解锁再修（act_cultivate 现实推岁口唯一，闩随年岁自然过期）
+    #[test]
+    fn next_year_unlocks_again() {
+        let mut l = bonded_life();
+        l.stones = 5000;
+        l.age = 20.0;
+        let mut g = game_with(l, None);
+        g.act_dual_cult();
+        assert_eq!(
+            Game::dual_cult_gate(g.life.as_ref(), g.dual_cult_cost()),
+            DualGate::ThisYear
+        );
+        g.act_cultivate(false);
+        assert_eq!(g.life.as_ref().unwrap().age, 21.0);
+        assert_eq!(
+            Game::dual_cult_gate(g.life.as_ref(), g.dual_cult_cost()),
+            DualGate::Ready,
+            "推岁一载后冷却过期"
+        );
+    }
+
+    // 四维与情谊封顶：道心/气运 100 顶、情谊 100 顶（clamp 口照遗泽/好感既有语义）
+    #[test]
+    fn dao_luck_fav_clamped_at_100() {
+        let mut l = bonded_life();
+        l.stones = 5000;
+        l.dao = 100.0;
+        l.luck = 99.5;
+        l.comp_fav = 98;
+        let mut g = game_with(l, None);
+        g.act_dual_cult();
+        let nl = g.life.as_ref().unwrap();
+        assert!((nl.dao - 100.0).abs() < 1e-6);
+        assert!((nl.luck - 100.0).abs() < 1e-6);
+        assert_eq!(nl.comp_fav, 100);
+    }
+
+    // 未结缘/无档执行口静默拒绝（按钮仅 UI 门，执行口单源全再校验）
+    #[test]
+    fn act_dual_cult_without_companion_noop() {
+        let mut g = game_with(Life::default(), None);
+        g.act_dual_cult();
+        let nl = g.life.as_ref().unwrap();
+        assert_eq!(nl.sx_year, 0, "未结缘不置闩");
+        assert_eq!(nl.stones, Life::default().stones);
+    }
+}
+
+// ================= v1.17.0 扩池 10 条（183..=192）：门控/立绘/好感通道/账本 =================
+
+#[cfg(test)]
+mod v1170_pool_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // 三表同长 + 新增段 id 连续（全局同长/唯一测试之外，钉新增段不漂移）
+    #[test]
+    fn batch_tables_aligned() {
+        assert_eq!(EVENTS.len(), 193);
+        assert_eq!(EVENT_NAMES.len(), 193);
+        assert_eq!(EVENT_BRIEF.len(), 193);
+        for id in 183..=192usize {
+            assert_eq!(EVENTS[id].0, id, "新增段 id 连续");
+            assert!(!EVENT_NAMES[id].is_empty());
+            assert!(!EVENT_BRIEF[id].is_empty());
+        }
+    }
+
+    // 卡面良构：新 10 条标题双源/正文非空/两选项/抉择 apply_eff 全链不 panic
+    //（章节门控两臂以 chap_done 全开进卡；伴随三条以有伴进卡）
+    #[test]
+    fn batch_cards_well_formed() {
+        for id in 183..=192 {
+            let mut g = sim_game(5, 40.0);
+            g.sim.as_mut().unwrap().companion = Some(COMPANION_NAMES[1].to_string());
+            g.meta.chap_done = 0x1FF; // 九章全开，章节联动两臂可入卡
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
+            assert_eq!(card.title, EVENT_NAMES[id], "标题双源 id {}", id);
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两选项", id);
+            g.choose_option(0); // apply_eff 全链不 panic（sync_save 仅置脏不落盘）
+        }
+    }
+
+    // 伴随层补位：183/184/185 白名单门控（无伴归零/有伴入池）；白丁有伴
+    //（realm0）183 入池——白丁层伴随从 0→1 条；185 mr4 门槛 realm3 归零
+    #[test]
+    fn companion_batch_gates_and_tiers() {
+        for id in [183usize, 184, 185] {
+            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
+            let mut g0 = sim_game(5, 40.0);
+            g0.recent_events.clear();
+            let (ws0, _) = g0.sim_event_weights(40.0, 5, false, false, false);
+            assert_eq!(ws0[i], 0.0, "无伴：伴随事件 {} 不入池", id);
+            let mut g1 = sim_game(5, 40.0);
+            g1.recent_events.clear();
+            let (ws1, _) = g1.sim_event_weights(40.0, 5, false, false, true);
+            assert!(ws1[i] > 0.0, "有伴：伴随事件 {} 应入池", id);
+        }
+        // 白丁有伴（mr0）
+        let mut g = sim_game(0, 40.0);
+        g.recent_events.clear();
+        let (ws, _) = g.sim_event_weights(40.0, 0, false, false, true);
+        assert!(ws[183] > 0.0, "白丁有伴：183 应入池");
+        // mr4 门槛
+        let mut g2 = sim_game(3, 40.0);
+        g2.recent_events.clear();
+        let (ws2, _) = g2.sim_event_weights(40.0, 3, false, false, true);
+        assert_eq!(ws2[185], 0.0, "realm<4：185 归零");
+    }
+
+    // 立绘：183/184/185 挂 Comp 立绘且锁定当前道侣下标（照 82 反查模式）
+    #[test]
+    fn companion_batch_actor_comp() {
+        for id in [183usize, 184, 185] {
+            let mut g = sim_game(5, 40.0);
+            g.sim.as_mut().unwrap().companion = Some(COMPANION_NAMES[3].to_string());
+            g.modal = None;
+            g.build_event(id);
+            let card = g.modal.as_ref().unwrap();
+            assert!(
+                matches!(card.actor, Some(CardActor::Comp(3))),
+                "事件 {} 立绘应锁定道侣 3",
+                id
+            );
+        }
+    }
+
+    // 好感通道首用：184 opt0 同参 → comp_fav +5（COMPANION_GIFT_FAV）；满值
+    // clamp 100；非伴随事件（192）好感不动（Eff.comp_fav 默认零不误伤）；
+    // 只升不降红线：通道消费口负值忽略
+    #[test]
+    fn event184_fav_channel() {
+        let mut g = sim_game(5, 40.0);
+        {
+            let s = g.sim.as_mut().unwrap();
+            s.companion = Some(COMPANION_NAMES[0].to_string());
+            s.comp_fav = 25;
+        }
+        g.modal = None;
+        g.build_event(184);
+        g.choose_option(0);
+        assert_eq!(g.sim.as_ref().unwrap().comp_fav, 30, "好感+5");
+
+        let mut g2 = sim_game(5, 40.0);
+        {
+            let s = g2.sim.as_mut().unwrap();
+            s.companion = Some(COMPANION_NAMES[0].to_string());
+            s.comp_fav = 100;
+        }
+        g2.modal = None;
+        g2.build_event(184);
+        g2.choose_option(0);
+        assert_eq!(g2.sim.as_ref().unwrap().comp_fav, 100, "clamp 100");
+
+        let mut g3 = sim_game(5, 40.0);
+        let f3 = g3.sim.as_ref().unwrap().comp_fav;
+        g3.modal = None;
+        g3.build_event(192);
+        g3.choose_option(0);
+        assert_eq!(g3.sim.as_ref().unwrap().comp_fav, f3, "非好感通道事件不动好感");
+    }
+
+    // 章节门控：190 需 bit0（第一章）、191 需 bit3（第四章）——未达归零/已达
+    // 入池（照 74/75 直测同款；同一 if 双门控勿拆两段的写法由本测钉住）
+    #[test]
+    fn chapter_batch_gates() {
+        for (id, bit) in [(190usize, 0u32), (191usize, 3u32)] {
+            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
+            let mut g0 = sim_game(5, 40.0);
+            g0.recent_events.clear();
+            let (ws0, _) = g0.sim_event_weights(40.0, 5, false, false, false);
+            assert_eq!(ws0[i], 0.0, "章节未了：{} 不入池", id);
+            let mut g1 = sim_game(5, 40.0);
+            g1.recent_events.clear();
+            g1.meta.chap_done |= 1 << bit;
+            let (ws1, _) = g1.sim_event_weights(40.0, 5, false, false, false);
+            assert!(ws1[i] > 0.0, "章节已了：{} 应入池", id);
+        }
+    }
+
+    // 老年门控：189 与 88/89/170/171 同门控（余量≤10 载入池；余量富余归零）
+    #[test]
+    fn elder_batch_gate_189() {
+        let mut g1 = sim_game(2, 40.0);
+        {
+            let s = g1.sim.as_mut().unwrap();
+            s.age = s.lifespan - 5.0;
+        }
+        let (ws1, _) = g1.sim_event_weights(40.0, 2, false, false, false);
+        assert!(ws1[189] > 0.0, "老年余量≤10：189 入池");
+        let g2 = sim_game(2, 40.0);
+        let (ws2, _) = g2.sim_event_weights(40.0, 2, false, false, false);
+        assert_eq!(ws2[189], 0.0, "余量富余：189 归零");
+    }
+
+    // mr5 补薄：186/187 realm5 入池、realm4 归零——mr5 无条件常态池 7→9 条
+    #[test]
+    fn mr5_batch_in_pool_at_realm5() {
+        let mut g = sim_game(5, 40.0);
+        g.recent_events.clear();
+        let (ws, _) = g.sim_event_weights(40.0, 5, false, false, false);
+        assert!(ws[186] > 0.0, "mr5 事件 186 realm5 应入池");
+        assert!(ws[187] > 0.0, "mr5 事件 187 realm5 应入池");
+        let g4 = sim_game(4, 40.0);
+        let (ws4, _) = g4.sim_event_weights(40.0, 4, false, false, false);
+        assert_eq!(ws4[186], 0.0, "realm<5：186 归零");
+        assert_eq!(ws4[187], 0.0, "realm<5：187 归零");
     }
 }

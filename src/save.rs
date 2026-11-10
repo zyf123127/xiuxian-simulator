@@ -268,6 +268,9 @@ fn life_text(l: &Life) -> String {
     s.push_str(&format!("Lweather={}\n", l.weather));
     // v1.10.2 成行择道：道途（0..=3；旧档缺键 0=未择，越界归 0，选定终身不改）
     s.push_str(&format!("Lpath={}\n", l.path));
+    // v1.17.0 双修共进：上次双修的现实年岁（旧档缺键 0=从未双修零迁移；起始年岁
+    // 16 起、恒 >0，0 无碰撞）
+    s.push_str(&format!("Lsxy={}\n", l.sx_year));
     s
 }
 
@@ -558,6 +561,9 @@ fn parse_save(text: &str) -> Meta {
                     _ => 0,
                 };
             }
+            // v1.17.0 双修共进：上次双修年岁（缺键 0=从未双修；坏值/负值静默回 0，
+            // 照 Lpath 先例；u16 解析天然拒负——冷却闩只对比不索引，无越界面）
+            "Lsxy" => life.sx_year = v.trim().parse::<u16>().unwrap_or(0),
             "Lflags" => {
                 let a = nums(v);
                 life.sect = a.first().copied().unwrap_or(0.0) > 0.5;
@@ -907,6 +913,32 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
             .collect::<Vec<_>>()
             .join("\n");
         assert_eq!(parse_save(&bad).life.as_ref().unwrap().path, 0);
+    }
+
+    // v1.17.0 双修共进：Lsxy= 回环 / 旧档缺键 0（从未双修）/ 坏值 0（照 Lpath 先例）
+    #[test]
+    fn lsxy_roundtrip_missing_and_bad() {
+        let mut m = Meta::default();
+        let mut l = Life::default();
+        l.sx_year = 42;
+        m.life = Some(l);
+        let text = save_text(&m);
+        assert!(text.contains("Lsxy=42\n"));
+        assert_eq!(parse_save(&text).life.as_ref().unwrap().sx_year, 42);
+
+        // 旧档缺 Lsxy → 0 = 从未双修（向后兼容零迁移）
+        let old: String = text
+            .lines()
+            .filter(|l| !l.starts_with("Lsxy="))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(parse_save(&old).life.as_ref().unwrap().sx_year, 0);
+
+        // 坏值/负值 → 0（u16 解析天然拒负，冷却闩只对比不索引）
+        let bad = format!("{}Lsxy=abc\n", OLD_BASE);
+        assert_eq!(parse_save(&bad).life.as_ref().unwrap().sx_year, 0);
+        let neg = format!("{}Lsxy=-3\n", OLD_BASE);
+        assert_eq!(parse_save(&neg).life.as_ref().unwrap().sx_year, 0);
     }
 
     // v1.12.0 P0 修复：道侣落盘——Lcomp= 回环 / 空串 None / 旧档缺键 None

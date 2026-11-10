@@ -840,7 +840,10 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         // v1.16.16 主线章签（横带右段常驻小签）：chapter_current 单口复用——任何指引
         // 叶下都可见「主线在第几章」。事件帧预热照 guide_last 先例：仅当前章变化帧灌
         // 14px 两串（ch.num/ch.name 静态字面量）；布局右缘锚 1098（按钮 1112 前 14px），
-        // num 起点 992 与最长提示叶（终局叶，实测 18px 字宽 ~966px 止）留 ~26px 安全隙
+        // num 起点 992 与最长提示叶（终局叶 guide.rs 27 全角+5 半角）留安全隙——
+        // v1.16.17 复核：真字体 hmtx 静态度量 @18px 宽 522.4px → 右端 ~966px →
+        // 隙 ~25.6px（≈26px 成立；tools/static_measure.py 可复算，缩叶改文案须同步；
+        // macroquad advance 与 hmtx 同源无 kerning，运行期 measure 未另测）
         let curch = crate::game::Game::chapter_current(&g.meta);
         if g.guide_chap_last != Some(curch) {
             let chc = &crate::data::CHAPTERS[curch];
@@ -2324,7 +2327,7 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
             .find(|gl| !crate::game::Game::chapter_goal_met(&g.meta, gl.pid))
             .map(|gl| gl.text)
             .unwrap_or("主线已了——十万稿废纸，终有一册");
-        txt(goal, 470.0, 522.0, 14, C_TEXT);
+        txt(goal, 470.0, 524.0, 14, C_TEXT);
         if ch
             .goals
             .iter()
