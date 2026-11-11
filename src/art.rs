@@ -143,7 +143,26 @@ async fn load_portrait_wasm(name: &'static str) -> Option<Texture2D> {
             t.set_filter(FilterMode::Linear);
             Some(t)
         }
-        Err(_) => None, // 404/网络抖动 → 永久像素兜底（与原缺图语义一致）
+        Err(_) => {
+            // v1.17.0 修3：唯一静默失败点补真机诊断埋点——此前 Err 沉 Done(None) 会话
+            // 恒书卷剪影，404/CDN/缓存无法分辨。首败一行（name+URL）后静默（会话级
+            // 单次防刷屏，AtomicBool 无锁；桌面同源类型检查，桌面无调用方恒空转）。
+            // 语义不变：仍 None 兜底、无重试（严禁每帧重拉，性能十戒——配套 triage：
+            // 报障者导出 localStorage xiuxian_save 查 gbd= 可同步确认结缘账已落）
+            diag_log_once(&format!("portrait load fail: {}", url));
+            None
+        }
+    }
+}
+
+// v1.17.0 修3 诊断单次口（cfg 无分叉——桌面也编译，同源过 cargo check 类型检查；
+// wasm 经 miniquad log-impl 宏 → console.info，桌面 → println）。本会话首败打印、
+// 后续静默；纹理加载失败是事件帧级路径，format! 一次性分配不在帧路径红线内。
+#[allow(dead_code)] // 桌面无调用方（load_portrait_wasm 仅 wasm），保留同源类型检查
+fn diag_log_once(msg: &str) {
+    static LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if !LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        miniquad::info!("{}", msg);
     }
 }
 

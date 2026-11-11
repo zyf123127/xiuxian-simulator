@@ -2277,6 +2277,12 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
         g.play(crate::sounds::Which::Ding);
         g.finish_inherit();
     }
+    // v1.17.0 搭车⑥：Inherit 页补画 toast/banner（render_reality/Sim 先例
+    // draw.rs:1160-1161/1741-1742）——治「朱批已留」toast（本页 :2214 弹出）在本页
+    // 永不可见的既有缺。单槽后写胜：同帧若另有终局横幅 banner 亦后写胜（朱批 toast
+    // 与终局 banner 不同帧触发，实际无冲突面；可接受口径照勘察红线先行声明）
+    draw_banner(g);
+    draw_toast(g);
     version_mark();
 }
 

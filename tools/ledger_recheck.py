@@ -35,7 +35,8 @@ mr0_reg = sorted([(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 
 top4 = sum(w for _, w in mr0_reg[:4])
 mr0_nocomp = [(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 and i not in set(ev_idx for ev_idx, in [])]
 # 无伴口径剔除伴随白名单成员
-COMPANION = {53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185}
+# v1.17.0 扩池伴随 +1：203 云海拾简（与 game.rs COMPANION_EVENTS 白名单同批同步）
+COMPANION = {53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185, 203}
 mr0_nocomp = sorted([(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 and i not in COMPANION], key=lambda t: -t[1])
 top4_nc = sum(w for _, w in mr0_nocomp[:4])
 tot_nc = sum(w for _, w in mr0_nocomp)
