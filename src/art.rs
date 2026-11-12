@@ -81,6 +81,12 @@ impl LazyTex {
                 return t.clone();
             }
         }
+        self.get_miss()
+    }
+
+    // v1.16.19 拆口：get() 的未命中臂（Idle→首取 / Loading→None）供限流口复用，
+    // 语义与原 get() 逐行等价（纯搬移，先例 scroll_list_tick 抽口不动机）。
+    fn get_miss(&self) -> Option<Texture2D> {
         #[cfg(target_arch = "wasm32")]
         {
             // Idle → Loading + 协程异步拉图（drop 锁再 spawn，防协程写回时再入死锁；
@@ -117,6 +123,40 @@ impl LazyTex {
             None
         }
     }
+
+    /// v1.16.19 只读窥视（新出场点收口）：绝不触发解码/XHR——Idle/Loading 返外层
+    /// None（「尚未定案」），Done 返 Some(内层)，内层 None=缺图定案（本会话本槽
+    /// 恒兜底）。供缘谱行/旧稿行这类一帧多行出场点「只消费已加载纹理」与限流口
+    /// 降级臂（单帧首取红线 ≤2/帧，人物页 charpanel.rs:193 纪律同源）。
+    pub fn peek(&self) -> Option<Option<Texture2D>> {
+        let g = self.cell.lock().unwrap();
+        match &*g {
+            TexSlot::Done(t) => Some(t.clone()),
+            _ => None,
+        }
+    }
+}
+
+// v1.16.19 每帧首取预算（单帧 ≤2 槽，照人物页「任意帧 ≤2 卡在画」纪律外推到行卡
+// 出场点）：缘谱行/旧稿行一帧可见可达 10 行，桌面同步解码最坏 10 槽/帧一次性
+// 30-80ms 卡帧（勘察红线）——本口把「Idle→首取」限到每帧 2 次，超额降级 peek
+// 只消费已加载纹理（wasm 侧 XHR 起协程异步本无此险，桌面是硬约束，两端口径统一）。
+// Done(Some) 常态零预算消耗；Done(None) 缺图定案经 peek 命中后不再走 get，防缺图
+// 槽每帧吃满预算饿死同页其余槽（LazyTex 三态语义零改动）。
+static QUOTA_STAMP: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static QUOTA_LEFT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(2);
+
+// 预算扣减：同帧判定用 get_time()（macroquad 每帧帧首更新一次，同帧多次调用同值
+// ——跨帧必然递增）；fetch_update 单口扣减，预算尽返 false。绘制帧单线程，Relaxed
+// 已足（照 diag_log_once AtomicBool 同级口径）。
+fn first_fetch_budget_take() -> bool {
+    use std::sync::atomic::Ordering::Relaxed;
+    let now = macroquad::time::get_time().to_bits();
+    if QUOTA_STAMP.load(Relaxed) != now {
+        QUOTA_STAMP.store(now, Relaxed);
+        QUOTA_LEFT.store(2, Relaxed);
+    }
+    QUOTA_LEFT.fetch_update(Relaxed, Relaxed, |v| v.checked_sub(1)).is_ok()
 }
 
 // v1.16.9：协程写回查槽——三组 LazyTex 数组统一按 name 定位（name 构造期定死恒唯一）。
@@ -178,6 +218,24 @@ impl Art {
     /// 女道侣立绘（comp_0..9）
     pub fn comp_tex(&self, i: usize) -> Option<Texture2D> {
         self.comp_ovr[i.min(9)].get()
+    }
+    /// v1.16.19 一帧多行出场点限流口（缘谱行/旧稿行）：优先 peek——Done(Some) 真图
+    /// 零预算直返；Done(None) 缺图定案直返 None 不占预算；未定案槽预算内才首取
+    /// （get，桌面同步解码/wasm 起协程），超额返 None 由调用方兜底绘制。显示判定
+    /// 与既有 comp_tex 调用方同源（bond_row_known / r.comp< len），本口只管「何时
+    /// 允许首取」不管「谁该显示」。
+    pub fn comp_tex_capped(&self, i: usize) -> Option<Texture2D> {
+        let s = &self.comp_ovr[i.min(9)];
+        match s.peek() {
+            Some(t) => t,
+            None => {
+                if first_fetch_budget_take() {
+                    s.get_miss()
+                } else {
+                    None
+                }
+            }
+        }
     }
 }
 

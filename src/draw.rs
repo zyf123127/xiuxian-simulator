@@ -2294,7 +2294,10 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
     txt_c("退 稿 结 算", V_W * 0.5, 112.0, 28, C_GOLD);
     if let Some(s) = &g.settle {
         let hh = wrap_draw(&s.cause, 250.0, 160.0, 18, 780.0, 27.0, C_TEXT);
-        let mut y = 160.0 + hh + 16.0;
+        // v1.16.19 死因行下一句收束语（按境界档静态 &'static str，SettleInfo.coda
+        // real_die 事件帧定值 + 预热；settle 帧 format! 豁免不含本句——本行零分配）
+        txt_c(s.coda, V_W * 0.5, 160.0 + hh + 4.0, 14, C_DIM);
+        let mut y = 160.0 + hh + 30.0;
         draw_rectangle(250.0, y, 780.0, 1.0, Color::from_rgba(96, 76, 130, 160));
         y += 14.0;
         for (label, v) in &s.lines {
@@ -3401,7 +3404,43 @@ pub fn draw_ending_page(g: &mut Game, idx: usize, from_book: bool) {
         ),
     );
     title_ornament(V_W * 0.5, 162.0, card_a);
-    wrap_draw(e.body, 260.0, 186.0, 17, 760.0, 30.0, fade(C_TEXT, body_a));
+    // v1.16.19 道侣谢幕像（立绘沉浸扩展②）：此生同行者（life.companion 推导——
+    // 人物页 comp_portrait_idx 此生半边同语言，from_book 重看路径同式生效）在
+    // 900 宽卡右缘收 ~160×300 立绘（npc_portrait_box_a 底边锚 478，alpha 挂
+    // gain_a 相位与收益行同拍淡入）。道侣槽已被随行小像/道侣专页首取（≈零新增
+    // 解码；即便冷槽也 ≤1 查询/帧，远低于首取红线）。版式纪律：正文换行宽随
+    // 「有伴」收 760→560——该判定读 companion 账（覆层存续期不变量），不读纹理
+    // 存在性，故 XHR 到图只换图不改几何（meeting latched draw.rs:1867 同款）；
+    // 无图（wasm Loading 期/缺图定案）画同尺寸暗槽占位，到图切换零位移。
+    let comp_idx = g
+        .life
+        .as_ref()
+        .and_then(|l| l.companion.as_deref())
+        .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn));
+    let body_w = if comp_idx.is_some() { 560.0 } else { 760.0 };
+    wrap_draw(e.body, 260.0, 186.0, 17, body_w, 30.0, fade(C_TEXT, body_a));
+    if let Some(ci) = comp_idx {
+        let (px, py, pw, ph) = (906.0, 182.0, 170.0, 296.0); // 卡右缘（卡体 190..1090，右缩 14）
+        let alpha = gain_a.clamp(0.0, 1.0);
+        match crate::art::art().comp_tex(ci) {
+            Some(t) => {
+                crate::charpanel::npc_portrait_box_a(
+                    Some(&t),
+                    &crate::art::art().icon_pill,
+                    px,
+                    py,
+                    pw,
+                    ph,
+                    ph,
+                    alpha,
+                );
+            }
+            None => {
+                draw_rectangle(px, py, pw, ph, fade(Color::from_rgba(30, 24, 50, 160), alpha));
+                draw_rectangle_lines(px, py, pw, ph, 1.0, fade(C_PURPLE, alpha));
+            }
+        }
+    }
     for (j, ln) in e.gain.lines().enumerate() {
         txt_c(ln, V_W * 0.5, 412.0 + j as f32 * 26.0, 16, fade(C_CYAN, gain_a));
     }

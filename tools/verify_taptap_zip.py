@@ -55,6 +55,12 @@ assert not zero, f"零字节条目: {zero}"
 assert not names or all(n.startswith("taptap_h5/") for n in names), "根层混入 taptap_h5/ 之外条目"
 assert b"xx_storage" in wasm, "wasm 内未见 xx_storage 导出符号"
 assert b"xx_font_len" in wasm, "wasm 内未见 xx_font_len 导入符号（v1.16.10 字体外置三方成对断言）"
+# v1.16.19 包体门禁（勘察④）：wasm 硬上限 1,050,000B（保守口径 1.05MB=10^6 量级；
+# v1.16.18 末实测 965,864B，余量 84,136B ≈ 6 批 +14KB/批）——此前只打印 size 无
+# 拦截，「上限 1.05MB」人工口径固化为门禁；超限即红，需瘦身评审再发版
+assert (
+    len(wasm) <= 1_050_000
+), f"wasm 超保守上限 1,050,000B: {len(wasm)}B（超限需瘦身评审，勿放宽阈值了事）"
 for token in (f'GAME_VER = "{CARGO_VER}"', "miniquad_add_plugin", "xx_storage", "xx_font", '"use strict"'):
     assert token in idx, f"包内 index.html 缺: {token}"
 assert 'xiuxian.wasm?v=' in idx, "包内 index.html 缺 wasm 缓存穿透参数"

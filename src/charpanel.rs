@@ -5,7 +5,9 @@
 //   格 16=弑神者、格 17=雨夜执印者——v1.16.10 章节称号，首章达成即授；
 //   格 18=执笔人——v1.16.15 全卷称号，四结局全览即授）
 // 6 道侣（v1.17.0）：道侣专页——主卡（立绘/名号/情谊条/双修加成/缝页缘/双修共进钮）
-//   + 缘谱十行（同页人历世账，纯文本零立绘）；展示数据全在既有持久化字段，零新键
+//   + 缘谱十行（同页人历世账；v1.16.19 行首 32×32 小像走 art::comp_tex_capped
+//     限流口——每帧首取 ≤2 槽 + Done(None) 定案不占预算 + 未识行零纹理查询）；
+//     展示数据全在既有持久化字段，零新键
 use crate::art::draw_cultivator;
 use crate::data::*;
 use crate::draw::{bar, bar_glow, button, panel_card};
@@ -89,7 +91,7 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             g.play(crate::sounds::Which::Page);
         }
         PanelAct::Tab(i) => {
-            // v1.17.0 P0 修（道侣专页立绘「整页空白」确定性根因）：切页签整批归零
+            // v1.16.18 P0 修（道侣专页立绘「整页空白」确定性根因）：切页签整批归零
             // 滚动会话态——npc_scroll/drag/vel/anim + ev_recall 全在单口
             // npc_scroll_reset 内（先例 ×/Esc 臂 charpanel.rs:88、main.rs:341）。
             // 三页共用 g.npc_scroll 而各页 max 不同（人物页 1698 / 专页 554 / 图鉴
@@ -1004,10 +1006,15 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
 // 一页两段（滚动列表，会话态共用 g.npc_scroll 系列照图鉴先例，本页自有 max 钳制
 // 收敛；snap=false——主卡 430 与缘谱行 52 两栅格失配，自由停留照图鉴手札区口径）：
 //   主卡 960×430（照人物页道侣卡几何：立绘 220×402 + 右列文本）+ 间距 12
-//   + 缘谱 11 行（十同页人 + 合计行；46 高 + 6 间隙步进 52，纯文本零立绘）。
+//   + 缘谱 11 行（十同页人 + 合计行；46 高 + 6 间隙步进 52；行首小像见下红线）。
 // 内容高 = 430 + 12 + 11×52 = 1014，尾白 40；滚动钳 = 1014 + 40 − 500(视口) = 554。
-// 性能红线：全页只允许主卡 1 次 comp_tex 查询（LazyTex 懒解码，未结缘 None → 剪影
-// 兜底）；缘谱行严禁立绘（照图鉴「严禁预解码全部 10 张」红线）。立绘鉴赏 hit 照
+// 性能红线：主卡 1 次 comp_tex 查询（LazyTex 懒解码，未结缘 None → 剪影
+// 兜底）。v1.16.19 缘谱行放开为「限流小像」：行首 32×32 头像槽走 art::
+// comp_tex_capped 单口——每帧首取 ≤2 槽（桌面同步解码峰值收口，照人物页
+// 「任意帧 ≤2 卡」纪律外推）+ Done(None) 缺图定案槽 peek 直返不占预算 + 未识
+// 行零纹理查询不泄存在；旧「缘谱行严禁立绘」红线由该单口替代（严禁的是
+// 「无界全量首取」，不是立绘本身——图鉴「严禁预解码全部 10 张」动机不变）。
+// 立绘鉴赏 hit 照
 // 人物页立绘盒口径 + tap 纵夹视口带（图鉴 tap_y_in_view 同语言）；双修钮 hit 抄
 // 赠礼钮「整钮可见才可点 + 抬起位移<8px」口径。展示数据全在 gbd=/bn=/blv=/
 // companion_lives/Lcomp/Lcfav 既有持久化字段，纯推导渲染零新存档键（per-伴初遇
@@ -1112,7 +1119,8 @@ fn draw_comp_page(g: &mut Game) -> Option<PanelAct> {
         tap,
     );
 
-    // ---------- 缘谱十一行（整行剔除；纯文本零立绘零纹理查询）----------
+    // ---------- 缘谱十一行（整行剔除；行首 32×32 小像走 comp_tex_capped 限流口，
+    // 未识行零纹理查询——见 draw_bond_row / 本页头注释红线口径）----------
     let cur_comp: Option<usize> = l.and_then(|x| {
         x.companion
             .as_deref()
@@ -1438,7 +1446,12 @@ fn draw_comp_main_card(
 }
 
 // 缘谱行（i=0..=9）：已识紫边 + 名 16px；未识灰边 + ？？？；行内左列二行态，
-// 右缘徽标（缘定三生 紫 / 旧页回声所指 青）。纯文本零立绘（红线：严禁纹理查询）。
+// 右缘徽标（缘定三生 紫 / 旧页回声所指 青）。
+// v1.16.19 行首 32×32 头像槽（立绘沉浸扩展，照随行小像 draw.rs:1708-1720 头裁剪
+// 同语言）：已识行查 comp_tex_capped（每帧 ≤2 槽首取限流 + Done(None) 定案不占
+// 预算，LazyTex peek 同口收边——本页旧「严禁纹理查询」红线由全局限流口替代，
+// 见本页头注释）；未识行只画灰槽零纹理查询（不泄存在性）。槽位/文本列恒画——
+// 布局不随到图切换（meeting latched 纪律，draw.rs:1867），文本列右移 40px（16→56）。
 fn draw_bond_row(g: &Game, i: usize, y: f32, cur: bool, best: usize) {
     let x = 160.0;
     let bonds = g.meta.comp_bonds[i]; // i 循环界内（0..COMPANION_NAMES.len()），恒界内
@@ -1452,20 +1465,60 @@ fn draw_bond_row(g: &Game, i: usize, y: f32, cur: bool, best: usize) {
         )
     };
     npc_card_chrome(x, y, COMP_ROW_H, bg, border);
+    // 行首头像槽（行已被页口整行剔除，此处必在视口带内；上缘越行走 npc_row_vis 同款防御）
+    if npc_row_vis(y + 7.0) {
+        let (av_x, av_y) = (x + 8.0, y + 7.0);
+        draw_rectangle(av_x, av_y, 32.0, 32.0, Color::from_rgba(30, 24, 50, 160));
+        draw_rectangle_lines(
+            av_x,
+            av_y,
+            32.0,
+            32.0,
+            1.0,
+            if known {
+                Color::from_rgba(150, 120, 190, 255)
+            } else {
+                Color::from_rgba(96, 82, 124, 255)
+            },
+        );
+        if known {
+            // 已识行头裁剪：顶部 35% 方形（人物页头像条/随行小像同语言，1:1 不变形）
+            if let Some(t) = crate::art::art().comp_tex_capped(i) {
+                let side = (t.height().max(1.0) * 0.35).min(t.width());
+                draw_texture_ex(
+                    &t,
+                    av_x,
+                    av_y,
+                    WHITE,
+                    DrawTextureParams {
+                        source: Some(Rect::new(
+                            (t.width() - side) * 0.5,
+                            0.0,
+                            side,
+                            side,
+                        )),
+                        dest_size: Some(vec2(32.0, 32.0)),
+                        ..Default::default()
+                    },
+                );
+            }
+        }
+    }
+    let tx = x + 56.0;
     if npc_row_vis(y + 6.0) {
         if known {
-            txt(COMPANION_NAMES[i], x + 16.0, y + 6.0, 16, C_PURPLE);
+            txt(COMPANION_NAMES[i], tx, y + 6.0, 16, C_PURPLE);
         } else {
-            txt("？？？", x + 16.0, y + 6.0, 16, C_DIM);
+            txt("？？？", tx, y + 6.0, 16, C_DIM);
         }
     }
     if npc_row_vis(y + 24.0) {
         if cur {
-            txt("此生同页", x + 16.0, y + 24.0, 14, C_GOLD);
+            txt("此生同页", tx, y + 24.0, 14, C_GOLD);
         } else if known {
-            txt(&format!("曾同页 {} 世", bonds), x + 16.0, y + 24.0, 14, C_TEXT);
+            txt(&format!("曾同页 {} 世", bonds), tx, y + 24.0, 14, C_TEXT);
         } else {
-            txt("未识 · 尘封之名", x + 16.0, y + 24.0, 14, C_DIM);
+            txt("未识 · 尘封之名", tx, y + 24.0, 14, C_DIM);
         }
     }
     // 右缘徽标（右对齐 1084 照图鉴计数位；未识不泄标）
@@ -2346,8 +2399,46 @@ fn draw_hist_page(g: &Game) {
             y + 36.0, 14,
             if r.comp != 255 { C_PURPLE } else { C_DIM },
         );
+        // v1.16.19 行右 32×32 头像槽（立绘沉浸扩展③，缘谱行同款限流口）：该世道侣
+        // 快照 r.comp<10 才画槽查 comp_tex_capped（每帧 ≤2 首取，无伴行 255 零纹理
+        // 查询）；槽位恒画——布局不随到图切换（meeting latched 纪律）。槽位选行卡
+        // 右上 (1076, y+10)：与剧情摘要行（x620 + ≤32 字×14px=448 → 终点 ≤1068，
+        // story 预算 32 字见 game.rs story_from_highlights）水平净空 ≥8px，与头行
+        // （x176 起 ≤20 字×16px）水平净空极大，像素零重叠。
+        if (r.comp as usize) < COMPANION_NAMES.len() {
+            let (av_x, av_y) = (1076.0, y + 10.0);
+            draw_rectangle(av_x, av_y, 32.0, 32.0, Color::from_rgba(30, 24, 50, 160));
+            draw_rectangle_lines(
+                av_x,
+                av_y,
+                32.0,
+                32.0,
+                1.0,
+                Color::from_rgba(150, 120, 190, 255),
+            );
+            if let Some(t) = crate::art::art().comp_tex_capped(r.comp as usize) {
+                let side = (t.height().max(1.0) * 0.35).min(t.width());
+                draw_texture_ex(
+                    &t,
+                    av_x,
+                    av_y,
+                    WHITE,
+                    DrawTextureParams {
+                        source: Some(Rect::new(
+                            (t.width() - side) * 0.5,
+                            0.0,
+                            side,
+                            side,
+                        )),
+                        dest_size: Some(vec2(32.0, 32.0)),
+                        ..Default::default()
+                    },
+                );
+            }
+        }
         // v1.16.7 剧情摘要行：数值行右侧 x620..1120（本为空档）单行 14px 紫；
-        // None（旧档缺 hq= 行）完全跳过零位移。≤28 字 ×14px ≈392px 不越卡右缘；
+        // None（旧档缺 hq= 行）完全跳过零位移。预算 32 字 ×14px=448px → 终点
+        // ≤1068 不越卡右缘（v1.16.19 行右头像槽 1076 起，净空 8px）；
         // prewarm_hist 同循环补挂防首帧栅格化整图重传
         if let Some(st) = &r.story {
             txt(st, 620.0, y + 36.0, 14, C_PURPLE);
@@ -2380,6 +2471,48 @@ mod comp_page_tests {
         assert!(bond_row_known(255, false), "saturating 封顶 255 仍已识");
         assert!(bond_row_known(0, true));
         assert!(!bond_row_known(0, false));
+    }
+
+    // v1.16.19 行首小像显示判定与既有 comp_tex 判定同源不分叉（红线口径）：头像
+    // 查 comp_tex_capped 的门 = bond_row_known(bonds, cur)，与图鉴同页人卡 known
+    // （comp_bonds[i] > 0 || cur）逐组合等价——行首有像 ⟺ 卡面有真图资格，两处
+    // 判定永不分叉（真实/兜底观感同源）
+    #[test]
+    fn bond_row_avatar_gate_matches_gallery_known() {
+        let mut meta = Meta::default();
+        meta.comp_bonds[2] = 1;
+        meta.comp_bonds[7] = 3;
+        for i in 0..COMPANION_NAMES.len() {
+            for cur in [false, true] {
+                let bonds = meta.comp_bonds[i];
+                let gallery_known = bonds > 0 || cur;
+                assert_eq!(
+                    bond_row_known(bonds, cur),
+                    gallery_known,
+                    "行 {} bonds={} cur={} 两处 known 判定分叉",
+                    i,
+                    bonds,
+                    cur
+                );
+            }
+        }
+    }
+
+    // v1.16.19 旧稿行小像门界：r.comp<COMPANION_NAMES.len() 才画槽查图（255=无伴
+    // 哨兵与越界脏值 10..254 一律零纹理查询）；行内「侣：」名回退用同一比较式，
+    // 且哨兵 255 恒落 len 外（len=10 < 255，表扩员也不得越过哨兵语义）
+    #[test]
+    fn hist_avatar_gate_boundaries() {
+        assert_eq!(COMPANION_NAMES.len(), 10, "十同页人定稿（255 哨兵口径前提）");
+        assert!(COMPANION_NAMES.len() < 255);
+        // 门式逐值钉死：0..=9 有槽；10..=254（越界脏值）与 255（无伴）无槽
+        for c in 0u8..=255u8 {
+            let slot = (c as usize) < COMPANION_NAMES.len();
+            assert_eq!(slot, c < 10, "comp={} 槽门漂移", c);
+            // 名判定与槽门同式（行内同名回退「无」——有槽必有名，两判定不分叉）
+            let name = if slot { COMPANION_NAMES[c as usize] } else { "无" };
+            assert_eq!(name == "无", !slot);
+        }
     }
 
     // 未识行绝不泄标（缘定/旧页回声名单均不漏——未识态隐私口径照图鉴 ？？？）
