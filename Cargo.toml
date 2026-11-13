@@ -1,6 +1,6 @@
 [package]
 name = "xiuxian"
-version = "1.16.19"
+version = "1.16.20"
 edition = "2021"
 
 [dependencies]
@@ -27,7 +27,7 @@ macroquad = { path = "vendor/macroquad" }
 # 实证：模拟中点跳过/选项触发一次 panic 后输入全灭、errlog 刷屏、看门狗重载
 # 循环）。vendor/miniquad 0.4.11 同版本，改 UnsafeCell 裸访问（单线程 wasm
 # 无真并发；JS 侧 import 处理器不回调 wasm 导出，无重入路径），trap 后自愈。
-# v1.17.0 修3 备注：miniquad "log-impl" feature 经 macroquad 依赖默认已开
+# v1.16.18 修3 备注：miniquad "log-impl" feature 经 macroquad 依赖默认已开
 # （vendor/macroquad/Cargo.toml [dependencies.miniquad] features），art.rs 诊断
 # 埋点 miniquad::info! 即走此通道（wasm→console.info / 桌面→println），本文件零改动。
 miniquad = { path = "vendor/miniquad" }

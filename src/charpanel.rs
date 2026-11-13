@@ -4,7 +4,7 @@
 // 2 成就·称号：左成就 2 列带进度 / 右称号 19 格（点击佩戴，格 0=自动跟随、
 //   格 16=弑神者、格 17=雨夜执印者——v1.16.10 章节称号，首章达成即授；
 //   格 18=执笔人——v1.16.15 全卷称号，四结局全览即授）
-// 6 道侣（v1.17.0）：道侣专页——主卡（立绘/名号/情谊条/双修加成/缝页缘/双修共进钮）
+// 6 道侣（v1.16.17）：道侣专页——主卡（立绘/名号/情谊条/双修加成/缝页缘/双修共进钮）
 //   + 缘谱十行（同页人历世账；v1.16.19 行首 32×32 小像走 art::comp_tex_capped
 //     限流口——每帧首取 ≤2 槽 + Done(None) 定案不占预算 + 未识行零纹理查询）；
 //     展示数据全在既有持久化字段，零新键
@@ -34,7 +34,7 @@ pub fn draw_char_panel(g: &mut Game) {
     // ×/页签点击帧的金条高亮切换晚一帧生效（16ms，不可见），其余行为逐项等价。
     // v1.16.0：图鉴页（页签 4）同为单列滚动列表——上下遮幅带同样盖住页签行，
     // chrome 须最后重铺；与人物页共用本双绘条件。
-    // v1.17.0：道侣专页（页签 6）同为滚动列表（主卡+缘谱行），并入本双绘条件
+    // v1.16.17：道侣专页（页签 6）同为滚动列表（主卡+缘谱行），并入本双绘条件
     let npc_tab = g.char_tab == 3 || g.char_tab == 4 || g.char_tab == 6;
     let mut act = draw_panel_chrome_act(g);
     if act.is_none() {
@@ -46,7 +46,7 @@ pub fn draw_char_panel(g: &mut Game) {
             4 => crate::gallery::draw_gallery_page(g),
             // v1.16.5 旧稿档案：近 5 稿结算快照（纯只读固定列表，无滚动无 &mut 交互）
             5 => draw_hist_page(g),
-            // v1.17.0 道侣专页：主卡（立绘/名号/情谊/缝页/双修）+ 缘谱十行（滚动，
+            // v1.16.17 道侣专页：主卡（立绘/名号/情谊/缝页/双修）+ 缘谱十行（滚动，
             // 双修钮/立绘鉴赏以 PanelAct 传出）
             6 => act = draw_comp_page(g),
             // v1.10.2：总览页纯只读，整页持 life 借用（防御 None：面板仅在 Reality 打开）
@@ -79,7 +79,7 @@ enum PanelAct {
     Equip(usize),   // 装备法宝
     Title(i32),     // 佩戴称号
     Zoom(crate::game::ZoomArt), // v1.16.1：立绘鉴赏开启（人物页卡立绘点按）
-    DualCult,       // v1.17.0：双修共进（act_dual_cult 单口，内部再全门控校验）
+    DualCult,       // v1.16.17：双修共进（act_dual_cult 单口，内部再全门控校验）
 }
 
 fn exec_panel_act(g: &mut Game, a: PanelAct) {
@@ -119,7 +119,7 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             if i == 2 {
                 prewarm_title_page();
             }
-            // v1.17.0 道侣专页首开帧预热（同图鉴/旧稿先例）：页静态串 + 十伴名补
+            // v1.16.17 道侣专页首开帧预热（同图鉴/旧稿先例）：页静态串 + 十伴名补
             // 24 档（主卡名号 24px）——漏灌则首开帧冷栅格化触发图集整图重传
             if i == 6 {
                 prewarm_comp_page();
@@ -144,7 +144,7 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             g.play(crate::sounds::Which::Click);
         }
         PanelAct::DualCult => {
-            // v1.17.0 双修共进：执行口 act_dual_cult 单源（门控/定价/收益/落盘全在口内；
+            // v1.16.17 双修共进：执行口 act_dual_cult 单源（门控/定价/收益/落盘全在口内；
             // 音效随执行成败由口内自定，此处零旁路）
             g.act_dual_cult();
         }
@@ -159,7 +159,7 @@ fn draw_panel_chrome_act(g: &Game) -> Option<PanelAct> {
         return Some(PanelAct::Close);
     }
     // ---------- 页签（v1.6.0 D：第 4 页「人物」；v1.16.0：第 5 页「图鉴」；v1.16.5：第 6 页「旧稿」；
-    // v1.17.0：第 7 页「道侣」专页——7 钮宽 116→98，五处同批：本数组/宽两处/净空注释/npc_tab/预热分支） ----------
+    // v1.16.17：第 7 页「道侣」专页——7 钮宽 116→98，五处同批：本数组/宽两处/净空注释/npc_tab/预热分支） ----------
     // 7 钮 x=300+i*98（宽 140→116→98）：末钮 888..986，与 × 钮（1064..1108）净空 78px 不重叠
     let tabs = ["总览", "法宝", "成就·称号", "人物", "图鉴", "旧稿", "道侣"];
     for (i, t) in tabs.iter().enumerate() {
@@ -1002,7 +1002,7 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
     }
 }
 
-// ================= v1.17.0 页 6：道侣专页 =================
+// ================= v1.16.17 页 6：道侣专页 =================
 // 一页两段（滚动列表，会话态共用 g.npc_scroll 系列照图鉴先例，本页自有 max 钳制
 // 收敛；snap=false——主卡 430 与缘谱行 52 两栅格失配，自由停留照图鉴手札区口径）：
 //   主卡 960×430（照人物页道侣卡几何：立绘 220×402 + 右列文本）+ 间距 12
@@ -1057,7 +1057,7 @@ fn bond_row_badge(bonds: u8, cur: bool, feng_bn: u8, best: usize, i: usize) -> O
     None
 }
 
-// v1.17.0 口径弥合三文案单口（纯函数供单测；判定函数零改动——dual_cult_gate 是
+// v1.16.18 口径弥合三文案单口（纯函数供单测；判定函数零改动——dual_cult_gate 是
 // 按钮/执行/单测三处单源，此处只分流「说什么」不分流「门开不开」）：此生未伴
 // （life.companion=None）而历世有缘（comp_portrait_idx 历世半边命中 comp_idx=Some）
 // 时，同框真立绘与「未结缘」字样互相否认的口径分裂，按指纹法修为「历世有缘 ·
@@ -1132,6 +1132,26 @@ fn draw_comp_page(g: &mut Game) -> Option<PanelAct> {
             continue;
         }
         draw_bond_row(g, i, y, cur_comp == Some(i), best);
+        // v1.16.20 立绘沉浸续作③（缘谱行头像点按鉴赏）：行首 32×32 槽命中 →
+        // Zoom(Comp(i))（照主卡鉴赏 hit :1146 同语言，命中传出经 exec_panel_act
+        // 单口执行）。门全与行内小像显示同源不分叉：行已识（bond_row_known——
+        // 图鉴 known 同口径，comp_page_tests 单测钉死）∧ 槽在视口带（npc_row_vis
+        // (y+7)——与行内绘制同门）∧ 槽真图在画（comp_tex_capped 限流口命中——
+        // 剪影/暗槽不进鉴赏，照主卡 comp_tex.is_some() 门）。纹理查询短路置于
+        // 指针入槽之后（仅 tap 帧可达；Done 槽 peek 零预算，未定案槽走限流口
+        // 不绕预算），稳态帧零新增查询；帧路径零分配（矩形常量比较）。
+        if act.is_none()
+            && tap
+            && mx >= 168.0
+            && mx <= 200.0
+            && my >= y + 7.0
+            && my <= y + 39.0
+            && npc_row_vis(y + 7.0)
+            && bond_row_known(g.meta.comp_bonds[i], cur_comp == Some(i))
+            && crate::art::art().comp_tex_capped(i).is_some()
+        {
+            act = Some(PanelAct::Zoom(crate::game::ZoomArt::Comp(i)));
+        }
     }
     let ty = NPC_VIEW_Y0
         + COMP_CARD_H
@@ -1167,7 +1187,7 @@ fn draw_comp_page(g: &mut Game) -> Option<PanelAct> {
     // ---------- 页脚引导（固定视口外一行，照人物页 y630；三态复用现成文案单次 format! 豁免）----------
     // 未结缘 → 人物页空态同句 + 遗泽口径；已结缘 → INHERITS[8] 口径；
     // 历世有缘（comp_bonds 任意 >0）→ 链10 门控提示（灯市旧页回声）。
-    // v1.17.0 口径弥合：head 三态抽 comp_footer_head 单口——历世有缘档页脚不再说
+    // v1.16.18 口径弥合：head 三态抽 comp_footer_head 单口——历世有缘档页脚不再说
     // 「即可结缘」（账上已有缘），改「即可再续」（与主卡标题同口径）
     let bonded = l.is_some_and(|x| x.companion.is_some());
     let head = comp_footer_head(bonded, comp_idx.is_some());
@@ -1331,7 +1351,7 @@ fn draw_comp_main_card(
                 DualGate::ThisYear => "本载已双修 · 推岁一载后方可再修".to_string(),
                 DualGate::Stones => format!("灵石不足（需 {}）", fmt_int(cost)),
                 // NoCompanion 本臂（Some(companion) 分支）按 gate 单源不可达，纯防御
-                // 口径；v1.17.0 文案仍随历世账分流保持单口径（comp_nocompanion_sub
+                // 口径；v1.16.18 文案仍随历世账分流保持单口径（comp_nocompanion_sub
                 // 单口；历世账直查 bonds>0——此处 comp_idx 是此生伴下标，不能当 hist 判据）
                 DualGate::NoCompanion => comp_nocompanion_sub(
                     g.meta.comp_bonds.iter().any(|&b| b > 0)
@@ -1352,7 +1372,7 @@ fn draw_comp_main_card(
         }
         None => {
             // 未结缘空态（照 draw_comp_card 引导框语言；历世有缘者立绘兜底已同框）。
-            // v1.17.0 口径弥合：标题随历世账分流——None 臂内 comp_idx=Some 即历世
+            // v1.16.18 口径弥合：标题随历世账分流——None 臂内 comp_idx=Some 即历世
             // 兜底半边命中（立绘判定单源同帧同值），不再对同框真图写「未结缘」
             if npc_row_vis(y + 16.0) {
                 txt(comp_empty_title(comp_idx.is_some()), col, y + 16.0, 24, C_PURPLE);
@@ -1549,7 +1569,7 @@ fn draw_bond_total_row(g: &Game, y: f32) {
     }
 }
 
-// v1.17.0 道侣专页首开帧预热（exec_panel_act Tab(6) 单点调用，照图鉴/旧稿先例）：
+// v1.16.17 道侣专页首开帧预热（exec_panel_act Tab(6) 单点调用，照图鉴/旧稿先例）：
 // 页静态串 + 十伴名补 24 档（主卡名号 24px；14/16 照图鉴档——18 由菜单期
 // panel_warm_chars 保底覆盖）+ 档次名 @16 + 小传 @14。动态数值行 ASCII 由菜单期
 // panel_warm_chars 保底（先例口径）。
@@ -1584,7 +1604,7 @@ const COMP_PAGE_PREWARM: &[&str] = &[
     "此绘承自历世之缘，此生再遇『同页天成』可再续。",
     "结缘后，她的立绘、情谊与双修加成都会在此页显现。",
     "结缘之后，立绘自会在此显现",
-    // v1.17.0 口径弥合两态（空态标题/双修副标 @24 另灌 + 页脚历世有缘句 @14）
+    // v1.16.18 口径弥合两态（空态标题/双修副标 @24 另灌 + 页脚历世有缘句 @14）
     "历世有缘 · 此生未续",
     "历世有缘，此生未续——模拟中遇『同页天成』，选『认下这页』即可再续；落幕后可承道侣遗泽。",
     // 页脚三态（未结缘引导 / 遗泽口径 / 链10 门控提示）
@@ -1616,7 +1636,7 @@ pub(crate) fn prewarm_comp_page() {
     prewarm_text("放大", &[14]);
     // 页签「道侣」@18（chrome button 无 sub 主标档；菜单期 panel_warm 保底之外再灌一道）
     prewarm_text("道侣", &[18]);
-    // 主卡名号 @24 / 空态标题 @24（v1.17.0 两态）/ 鉴赏名单 @16（缘谱行名）
+    // 主卡名号 @24 / 空态标题 @24（v1.16.17 两态）/ 鉴赏名单 @16（缘谱行名）
     prewarm_text("道侣 · 此生未结缘", &[24]);
     prewarm_text("历世有缘 · 此生未续", &[24]);
     for n in COMPANION_NAMES.iter() {
@@ -2458,7 +2478,7 @@ fn draw_hist_page(g: &Game) {
     );
 }
 
-// ---------------- v1.17.0 道侣专页：缘谱行态（纯函数单测，照 comp_portrait_tests 先例） ----------------
+// ---------------- v1.16.17 道侣专页：缘谱行态（纯函数单测，照 comp_portrait_tests 先例） ----------------
 
 #[cfg(test)]
 mod comp_page_tests {
@@ -2562,7 +2582,7 @@ mod comp_page_tests {
             "缘定三生",
             "旧页回声所指",
             "三生缝页·缘",
-            // v1.17.0 口径弥合两态（标题/双修副标 + 页脚历世有缘句）
+            // v1.16.18 口径弥合两态（标题/双修副标 + 页脚历世有缘句）
             "历世有缘 · 此生未续",
             comp_footer_head(false, true),
         ] {
@@ -2574,7 +2594,7 @@ mod comp_page_tests {
         }
     }
 
-    // v1.17.0 P0 回归：切页签必须整批归零滚动会话态（人物页 max 1698 翻底
+    // v1.16.18 P0 回归：切页签必须整批归零滚动会话态（人物页 max 1698 翻底
     // scroll=1698 → 点「道侣」页签，专页 max 554 下主卡/缘谱 y 全负整卡剔除→
     // 整页视口空白的确定性显示 bug；单口 npc_scroll_reset 与 ×/Esc 臂同批）。
     // 取 Tab(1)（法宝页无预热分支——Tab(6) 首开帧灌字形需 GPU 图集，测试环境
@@ -2596,7 +2616,7 @@ mod comp_page_tests {
         assert!(g.ev_recall.is_none(), "v1.16.11 覆层清态并入本口后语义不变");
     }
 
-    // v1.17.0 口径弥合文案分流：历世有缘档不再写「未结缘」（同框真图互认），历世
+    // v1.16.18 口径弥合文案分流：历世有缘档不再写「未结缘」（同框真图互认），历世
     // 无缘档原样（未结缘玩家画面零变化）；双修副标/页脚头句同口径
     #[test]
     fn empty_state_copy_split_follows_bond_account() {
@@ -2633,7 +2653,7 @@ mod comp_page_tests {
         assert_eq!(comp_empty_title(true), "历世有缘 · 此生未续");
     }
 
-    // v1.17.0 名字→立绘下标全表映射：伴名无重复（s.companion 字串 position 反查
+    // v1.16.17 名字→立绘下标全表映射：伴名无重复（s.companion 字串 position 反查
     // 唯一口径）；十名逐一对应 comp_0..9 且 web/portraits/（wasm 外置包）与
     // assets/portraits_wasm/（桌面内嵌 EMBED 表）同名 png 双通道齐备——缺一字即红
     #[test]

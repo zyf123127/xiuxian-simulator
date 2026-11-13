@@ -2132,6 +2132,38 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     // 左：此生摘要
     panel_card(60.0, 84.0, 420.0, 480.0);
     txt("此 生", 84.0, 116.0, 20, C_GOLD);
+    // v1.16.20 立绘沉浸续作①（继承屏伴小像）：此生同行者在左卡右上角显影——
+    // 判定与结局页谢幕像/随行小像同源（sr.comp 名账 → COMPANION_NAMES 位置，
+    // SimResult 会话态零新键）。独占屏（继承）直查 comp_tex 1 槽（红线口径：
+    // 模态/结算/继承独占屏直查 ≤1 槽，无预算竞争面）；无伴零绘制零位移；XHR
+    // 到图前画同尺寸暗槽兜底（结局页 :3438 先例），到图只换图零位移（槽几何按
+    // companion 账锁定，不读纹理存在性——meeting latched 纪律）。槽位 (424,298)
+    // 与道韵行（x84..140）/大事记头行（y336 起 x84..280）/朱批行热点（y356 起）
+    // 水平垂直双净空，零版式改动。
+    let inh_comp = sr
+        .comp
+        .as_deref()
+        .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn));
+    if let Some(ci) = inh_comp {
+        txt_r(COMPANION_NAMES[ci], 416.0, 306.0, 14, C_PURPLE);
+        let (av_x, av_y) = (424.0, 298.0);
+        draw_rectangle(av_x, av_y, 32.0, 32.0, Color::from_rgba(30, 24, 50, 160));
+        draw_rectangle_lines(av_x, av_y, 32.0, 32.0, 1.0, Color::from_rgba(150, 120, 190, 255));
+        if let Some(t) = crate::art::art().comp_tex(ci) {
+            let side = (t.height().max(1.0) * 0.35).min(t.width());
+            draw_texture_ex(
+                &t,
+                av_x,
+                av_y,
+                WHITE,
+                DrawTextureParams {
+                    source: Some(Rect::new((t.width() - side) * 0.5, 0.0, side, side)),
+                    dest_size: Some(vec2(32.0, 32.0)),
+                    ..Default::default()
+                },
+            );
+        }
+    }
     wrap_draw(&sr.cause, 84.0, 146.0, 16, 372.0, 25.0, C_RED);
     txt(
         &format!(
@@ -2277,7 +2309,7 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
         g.play(crate::sounds::Which::Ding);
         g.finish_inherit();
     }
-    // v1.17.0 搭车⑥：Inherit 页补画 toast/banner（render_reality/Sim 先例
+    // v1.16.18 搭车⑥：Inherit 页补画 toast/banner（render_reality/Sim 先例
     // draw.rs:1160-1161/1741-1742）——治「朱批已留」toast（本页 :2214 弹出）在本页
     // 永不可见的既有缺。单槽后写胜：同帧若另有终局横幅 banner 亦后写胜（朱批 toast
     // 与终局 banner 不同帧触发，实际无冲突面；可接受口径照勘察红线先行声明）
@@ -2317,6 +2349,34 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
             16,
             C_DIM,
         );
+        // v1.16.20 立绘沉浸续作②（结算屏谢幕像）：此生同行者立于卡外右缘（结局页
+        // 谢幕像 :3422 同款语言——npc_portrait_box_a + None 暗槽兜底）。快照读
+        // SettleInfo.comp（real_die 事件帧定格的 companion 账终值），几何不随到图
+        // 切换（meeting latched 纪律）；无伴零绘制零位移。独占屏（结算）直查
+        // comp_tex 1 槽（红线口径 ≤1 槽/独占屏）。置卡外右缘 (1084..1254, 176..476)：
+        // 卡体右缘 1070、卡内列宽 ≤1030（死因 wrap/数值 txt_r 1030）、双钮右缘 960、
+        // 下一章行 prog 右锚 1040——水平全净空，零版式改动零碰撞。
+        if let Some(ci) = s.comp {
+            let (px, py, pw, ph) = (1084.0, 176.0, 170.0, 300.0);
+            match crate::art::art().comp_tex(ci) {
+                Some(t) => {
+                    crate::charpanel::npc_portrait_box_a(
+                        Some(&t),
+                        &crate::art::art().icon_pill,
+                        px,
+                        py,
+                        pw,
+                        ph,
+                        ph,
+                        1.0,
+                    );
+                }
+                None => {
+                    draw_rectangle(px, py, pw, ph, Color::from_rgba(30, 24, 50, 160));
+                    draw_rectangle_lines(px, py, pw, ph, 1.0, C_PURPLE);
+                }
+            }
+        }
     }
     // v1.16.8 主线感：下一章预告一行（章节书当前章+首未了目标，全静态分片绘制
     // 零 format!——帧路径零分配红线；主线全了走字面量收束行）
