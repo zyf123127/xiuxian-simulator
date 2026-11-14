@@ -41,8 +41,10 @@ mr0_nocomp = [(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 an
 # v1.16.20 扩池伴随 +2：225 同数流星（mr6 有伴层首条）/226 霜晨共伞（mr0 有伴
 # 第 2 条）——白名单 17→19，与 game.rs COMPANION_EVENTS 同批同步（漏一处
 # 账本口径对不上）
+# v1.16.22 伴随 +2：240 药圃赌芽（mr3 第 2 条）/241 踏云题字（mr7 有伴首条）
+# ——白名单 19→21，与 game.rs COMPANION_EVENTS 同批同步（漏一处账本口径对不上）
 COMPANION = {53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185, 203,
-             210, 211, 212, 225, 226}
+             210, 211, 212, 225, 226, 240, 241}
 mr0_nocomp = sorted([(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 and i not in COMPANION], key=lambda t: -t[1])
 top4_nc = sum(w for _, w in mr0_nocomp[:4])
 tot_nc = sum(w for _, w in mr0_nocomp)

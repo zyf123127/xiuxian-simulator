@@ -1209,7 +1209,13 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             wrap_draw(step_text, 280.0, 240.0, 16, 720.0, 26.0, C_TEXT);
             // v1.6.0 B：双钮纵排 + 副标签（收益/风险一眼可读，替代原单行提示文案）
             // v1.16.21 P8 胜率副标（懒缓存照 modal_desc 先例：步号变更帧重建一次，
-            // 稳态逐帧零分配；缓存缺失兜底旧静态文案）。与 exp_choose 同源 exp_p
+            // 稳态逐帧零分配；缓存缺失兜底旧静态文案）。与 exp_choose 同源 exp_p。
+            // v1.16.22 清账·缓存键仅步号 cur 的自洽口径：远征屏是模态（close_world
+            // 拒中途离场），屏内改 life 的唯一口 exp_choose 每次必推进 cur——键随
+            // 每次结算变更即重建，键-值恒同帧同源；外部改 life 的理论漂移至下一
+            // 步号自愈，不影响 exp_choose 结算（结算直算不走缓存）。若日后键扩维
+            // （realm/body/luck/dao 派生 power），勿漏 kind 与 map_region（risk 读
+            // region_mech(g.meta.map_region)，漏维=漂移换壳）
             if g.exp_p_cache.as_ref().map_or(true, |(c, _, _)| *c != cur) {
                 let (p0, p1) = if let Some(l) = g.life.as_ref() {
                     let risk = region_mech(g.meta.map_region).exped_risk;
