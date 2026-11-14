@@ -6,7 +6,9 @@ pack_text.py —— v1.16.23 减包刀②（文案资产化）：把 game.rs bui
 raw=源码转义形态单行），源码侧原地替换为 evtx(N)/* 原文：<raw> */（查池函数
 data::evtx，避让 ui.rs::txt 绘制函数重名），并产出：
   - assets/textpack.bin    raw-deflate(wbits=-15, level 9) 的串接 blob
-  - src/text_offsets.inc   pub static TXT_OFFS: [u32; K] = [...];（data.rs include!）
+  - src/text_offsets.inc   pub static TXT_ANCH: [u32; A]（每 K32=32 条一个绝对锚）
+                           + TXT_DELTA: [u16; N]（组内 delta，v1.16.28 刀C 两级表）
+                           + 双表三段基址六常量（data.rs include!）
 运行期 data.rs::init_text() boot 一次 miniz_oxide::inflate::decompress_to_vec
 （与 ui.rs 字体同款通路），txt(i) O(1) 切片零分配。
 
@@ -65,6 +67,10 @@ BRIEF_TABLE = 'EVENT_BRIEF'
 #（首轮施工批手分；此后每次重跑回读 .inc 幂等 emit；append-only 旧 N 不变号）
 NAME2_BASE_MANIFEST = 1402
 BRIEF2_BASE_MANIFEST = 1410
+# v1.16.28 扩池起：段二（8 条）满员后新批连号追加为段三（10 条：名 1442..=1451/
+# 简 1452..=1461，真相源手写连号段先于正文；与 data.rs EV_SEG2=299 同批登记）
+NAME3_BASE_MANIFEST = 1442
+BRIEF3_BASE_MANIFEST = 1452
 
 dry = '--dry-run' in sys.argv
 collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测用；表收编后自动幂等）
@@ -413,7 +419,7 @@ def table_bases_from_inc():
     if OFFS.exists():
         txt = OFFS.read_text(encoding='utf-8')
         for key in ('TXT_NAME_BASE', 'TXT_BRIEF_BASE', 'TXT_NAME2_BASE',
-                    'TXT_BRIEF2_BASE'):
+                    'TXT_BRIEF2_BASE', 'TXT_NAME3_BASE', 'TXT_BRIEF3_BASE'):
             mm = re.search(r'pub static %s: u32 = (\d+);' % key, txt)
             if mm:
                 out[key] = int(mm.group(1))
@@ -479,6 +485,22 @@ assert offs[0] == 0 and len(offs) == len(table) + 1, 'offset table mismatch'
 for k in range(len(offs) - 1):
     assert offs[k] <= offs[k + 1], 'offsets not monotonic at %d' % k
 
+# v1.16.28 减包刀C：offsets 产物 [u32;N]（5772B）改「u32 锚 + u16 组内 delta」两级
+# 表——每 K32=32 条一个绝对锚 TXT_ANCH（offs[k*32]），TXT_DELTA[i]=offs[i]−组首。
+# 运行期 evtx 解码 = ANCH[i>>5] + DELTA[i]，O(1) 纯算术零分配（热路径等价）；
+# 组内 32 条串长和 ≤64KB 恒成立（单条 <200B×32），u16 域 assert 固化。
+K32 = 32
+anchors = offs[::K32]
+assert len(anchors) == (len(offs) + K32 - 1) // K32, 'anchor count mismatch'
+deltas = []
+# 纪律：循环变量勿用 i——模块级 i 是 build_event 定位索引（:83），泄漏覆盖会把
+# :521 的 src[:i] 截断到文件头（v1.16.28 施工现场事故：4059 行被压成 1 行，
+# 修复后循环变量改名 di 绝不复用）
+for di, o in enumerate(offs):
+    a = offs[(di // K32) * K32]
+    assert 0 <= o - a <= 0xFFFF, 'delta overflow at %d (%d-%d)' % (di, o, a)
+    deltas.append(o - a)
+
 # ---- 等价性纪律 2：blob 切片逐条 == 原串解码值 ----
 for pos, raw, vb, n in lit_items:
     assert blob[offs[n]:offs[n + 1]] == vb, 'blob slice mismatch at N=%d' % n
@@ -528,8 +550,13 @@ if dry:
 SOURCE.write_text(''.join('%d\t%s\n' % (n, table[n]) for n in sorted(table)),
                   encoding='utf-8')
 PACK.write_bytes(packed)
-inc = ('pub static TXT_OFFS: [u32; %d] = [\n' % len(offs)
-       + ', '.join(str(o) for o in offs)
+# v1.16.28 刀C：TXT_OFFS [u32;N] → TXT_ANCH [u32;A]+TXT_DELTA [u16;N] 两级表
+#（data.rs evtx 解码 = ANCH[i>>5]+DELTA[i]，语义与旧 offs 逐值等价）
+inc = ('pub static TXT_ANCH: [u32; %d] = [\n' % len(anchors)
+       + ', '.join(str(a) for a in anchors)
+       + '\n];\n'
+       + 'pub static TXT_DELTA: [u16; %d] = [\n' % len(deltas)
+       + ', '.join(str(d) for d in deltas)
        + '\n];\n')
 if name_base is not None:
     inc += emit_base('TXT_NAME_BASE', name_base)
@@ -541,6 +568,13 @@ if name_base is not None:
 if brief_base is not None:
     inc += emit_base('TXT_BRIEF2_BASE',
                      inc_bases.get('TXT_BRIEF2_BASE', BRIEF2_BASE_MANIFEST))
+# v1.16.28 段三基址（首轮 emit 取 manifest 手分值；此后回读 .inc 幂等）
+if name_base is not None:
+    inc += emit_base('TXT_NAME3_BASE',
+                     inc_bases.get('TXT_NAME3_BASE', NAME3_BASE_MANIFEST))
+if brief_base is not None:
+    inc += emit_base('TXT_BRIEF3_BASE',
+                     inc_bases.get('TXT_BRIEF3_BASE', BRIEF3_BASE_MANIFEST))
 OFFS.write_text(inc, encoding='utf-8')
 GAME.write_text(new_src, encoding='utf-8')
 print('written: %s / %s / %s; game.rs updated' % (SOURCE.name, PACK.name, OFFS.name))

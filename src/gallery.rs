@@ -157,7 +157,7 @@ pub fn prewarm_event_book(g: &Game) {
 pub fn event_badge(id: usize) -> (&'static str, Color) {
     // 越界防御：表外 id 落「遭遇」，绝不把 w=0 哨兵误判成链段（panic=abort 纪律）
     let w = match EVENTS.get(id) {
-        Some(&(_, p)) => ev_w(p), // v1.16.23 收窄读点口径零变；v1.16.27 刀⑥位域解码
+        Some(&p) => ev_w(p), // v1.16.28 刀B：EVENTS 裁 id 列 [u16;N]——下标即 id，get 直解码
         None => return ("遭遇", C_DIM),
     };
     if COMPANION_EVENTS.contains(&id) {
@@ -185,10 +185,13 @@ pub fn event_badge(id: usize) -> (&'static str, Color) {
         // v1.16.27 老年徽标扩 291（换窗新纸，老年层）与 297（重缝冬衣，双门控
         // 第 6 条——同 288 口径不入 COMPANION 白名单，老年臂先命中出「老年」
         // 徽标）；293 袖里暖石入 COMPANION 白名单走上方伴随臂，勿挂本臂。
+        // v1.16.28 老年徽标扩 299（合誊旧稿，双门控第 7 条——同 297 口径不入
+        // COMPANION 白名单，老年臂先命中出「老年」徽标）；300 晨课互校入
+        // COMPANION 白名单走上方伴随臂，勿挂本臂。
         // 212 相扶看雪同为老年×有伴双门控，但在 COMPANION_EVENTS 白名单内，
         // 上方 COMPANION 臂先命中恒出「伴随」徽标——不入本臂（死模式勿挂）
         88 | 89 | 170 | 171 | 189 | 198 | 199 | 204 | 215 | 216 | 227 | 239 | 268 | 288
-        | 291 | 297 => {
+        | 291 | 297 | 299 => {
             return ("老年", C_GOLD_D)
         }
         // v1.16.26 宿敌徽标扩 289（同门销踪，宿敌回响——照 110 夺积余波口径，
@@ -384,7 +387,7 @@ fn draw_event_note_row(g: &Game, i: usize, y: f32) {
     let x = 160.0;
     let cnt = g.meta.ev_cnt[i]; // i 循环界内（0..EVENTS.len()），恒界内
     let seen = cnt > 0;
-    let w = ev_w(EVENTS[i].1); // v1.16.23 收窄读点口径零变；v1.16.27 刀⑥位域解码
+    let w = ev_w(EVENTS[i]); // v1.16.28 刀B：EVENTS 裁 id 列 [u16;N]——下标即 id，直解码
     let rare = w > 0 && w <= crate::data::RARE_W;
     let (bg, border) = if seen {
         (
@@ -478,7 +481,7 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(8, 5, 16, 244));
     panel_card(340.0, 100.0, 600.0, 500.0);
     // 卡描边照 draw_modal_card 语言（2.5 同位覆盖）：链段青/稀有紫/普通卡不叠边
-    let w = ev_w(EVENTS[id].1); // v1.16.23 收窄读点口径零变；v1.16.27 刀⑥位域解码
+    let w = ev_w(EVENTS[id]); // v1.16.28 刀B：EVENTS 裁 id 列 [u16;N]——下标即 id，直解码
     let rare = w > 0 && w <= crate::data::RARE_W;
     let (badge_t, badge_c) = event_badge(id);
     let is_chain = badge_t == "链起" || badge_t == "链段";

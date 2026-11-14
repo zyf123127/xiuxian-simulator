@@ -39,15 +39,66 @@ for ww, t in best[:3]:
     print(f'  叶宽 {ww:6.1f}px  {t}')
 
 # ---- EVENT_BRIEF 实测最长简（A① 注释定稿依据）----
+# v1.16.28 清账：EVENT_BRIEF 自 v1.16.27 刀③起收编进 textpack（data.rs 已改
+# EvTable 查表器，pub const 数组不存在）——旧按 data.rs 数组解析必崩，改为按
+# 段基址读真相源 assets/text_source.txt 三段连号行（与 tools/tables_recheck.py 同口径）
+ESC = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\", "'": "'", "0": "\0"}
+
+
+def decode_raw(raw):
+    if "\\" not in raw:
+        return raw
+    out = []
+    k = 0
+    while k < len(raw):
+        c = raw[k]
+        if c != "\\":
+            out.append(c)
+            k += 1
+            continue
+        k += 1
+        d = raw[k]
+        if d == "u":
+            close = raw.index("}", k + 2)
+            out.append(chr(int(raw[k + 2:close], 16)))
+            k = close + 1
+        elif d in ESC:
+            out.append(ESC[d])
+            k += 1
+        else:
+            return None
+    return "".join(out)
+
+
 d = open('src/data.rs', encoding='utf-8').read()
-m = re.search(r'pub const EVENT_BRIEF: \[&str; (\d+)\] = \[(.*?)\n\];', d, re.S)
-n = int(m.group(1))
-briefs = re.findall(r'"([^"]+)"', m.group(2))
-briefs = [b for b in briefs if not b.startswith('v1.')]  # 剔注释混入（正则只吃串，注释在 // 内不会命中——防御）
-assert len(briefs) == n, f'brief 数 {len(briefs)} != 声明 {n}'
+src_rows = {}
+for line in open('assets/text_source.txt', encoding='utf-8'):
+    if not line.strip():
+        continue
+    n_s, _, raw = line.rstrip('\n').partition('\t')
+    src_rows[int(n_s)] = raw
+inc = open('src/text_offsets.inc', encoding='utf-8').read()
+_SEG1, _SEG2 = 291, 299
+bases = []
+for key in ('TXT_BRIEF_BASE', 'TXT_BRIEF2_BASE', 'TXT_BRIEF3_BASE'):
+    m = re.search(r'pub static %s: u32 = (\d+);' % key, inc)
+    bases.append(int(m.group(1)) if m else None)
+n_events = int(re.search(r'pub const N_EVENTS: usize = (\d+);', d).group(1))
+briefs = []
+for i in range(n_events):
+    if i < _SEG1:
+        n = bases[0] + i
+    elif i < _SEG2:
+        assert bases[1] is not None, '扩池后段二基址缺失'
+        n = bases[1] + (i - _SEG1)
+    else:
+        assert bases[2] is not None, '扩池后段三基址缺失'
+        n = bases[2] + (i - _SEG2)
+    assert n in src_rows, f'EVENT_BRIEF 段缺行 N={n}'
+    briefs.append(decode_raw(src_rows[n]))
 lens = [(len(b), b) for b in briefs]
 lens.sort(reverse=True)
-print(f'EVENT_BRIEF {n} 条；最长 {lens[0][0]} 字：{lens[0][1]}')
+print(f'EVENT_BRIEF {n_events} 条；最长 {lens[0][0]} 字：{lens[0][1]}')
 top = sorted(set(l for l, _ in lens), reverse=True)[:5]
 print('长度分布 top5:', top)
 over18 = [(l, b) for l, b in lens if l > 18]

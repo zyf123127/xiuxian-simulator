@@ -51,8 +51,9 @@ mr0_nocomp = [(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 an
 # v1.16.25 伴随 +1：272 寒江共网（mr2 第 4 条）——白名单 23→24，与 game.rs 同批同步
 # v1.16.26 伴随 +1：283 纵马霜原（mr5 有伴第 2 条）——白名单 24→25，与 game.rs 同批同步
 # v1.16.27 伴随 +1：293 袖里暖石（mr6 有伴第 3 条）——白名单 25→26，与 game.rs 同批同步
+# v1.16.28 伴随 +1：300 晨课互校（mr7 有伴第 2 条）——白名单 26→27，与 game.rs 同批同步
 COMPANION = {53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185, 203,
-             210, 211, 212, 225, 226, 240, 241, 257, 262, 272, 283, 293}
+             210, 211, 212, 225, 226, 240, 241, 257, 262, 272, 283, 293, 300}
 mr0_nocomp = sorted([(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 and i not in COMPANION], key=lambda t: -t[1])
 top4_nc = sum(w for _, w in mr0_nocomp[:4])
 tot_nc = sum(w for _, w in mr0_nocomp)

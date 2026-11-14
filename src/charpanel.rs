@@ -124,6 +124,13 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             if i == 6 {
                 prewarm_comp_page();
             }
+            // v1.16.28 江湖声望行标签首开帧预热（照图鉴/旧稿先例）：总览页右列新增
+            // 「声望」标签与「江湖声望」值前缀四字不在 PANEL_WARM_CHARS，漏灌则
+            // 首开帧冷栅格化触发图集整图重传——页 0 首开一次灌齐（动态数字 0..=9
+            // 已在 WARM 表）
+            if i == 0 {
+                prewarm_text("声望江湖", &[14]);
+            }
             g.char_tab = i;
             g.play(crate::sounds::Which::Page);
         }
@@ -1889,6 +1896,16 @@ fn draw_overview(g: &Game, l: &Life) {
         ),
         col2 + 45.0,
         380.0, 14,
+        C_TEXT,
+    );
+    // v1.16.28 江湖声望行（右列四标签格式的第五行：y=410 居成就与生涯分隔线
+    // 440 之间，零版式位移零碰撞——标签照「宿敌/道侣/成就」col2+值 col2+45 惯例）
+    txt("声望", col2, 410.0, 14, C_DIM);
+    txt(
+        &format!("江湖声望 {}", g.meta.fame),
+        col2 + 45.0,
+        410.0,
+        14,
         C_TEXT,
     );
     // 生涯两行

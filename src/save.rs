@@ -129,6 +129,10 @@ pub fn save_text_with_ts(m: &Meta, ts: u64) -> String {
     // 旧档缺键 → vec![0; EVENTS.len()] 零迁移；独立成行置于 h= 旧稿块之前——
     // 勿插 h=/hq= 之间，文件序约定同 ch=/sy=）
     s.push_str(&format!("evc={:?}\n", m.ev_cnt));
+    // v1.16.28 江湖声望 fa=（跨世持久炫耀性计数：事件帧+1/斩杀宿敌+3/破境+2，
+    // saturating 封顶 255；缺键 → 0 零迁移；独立成行紧随 evc=、置于 h= 旧稿块
+    // 之前——勿插 h=/hq= 之间，文件序约定同 ch=/sy=/evc=）
+    s.push_str(&format!("fa={}\n", m.fame));
     // v1.16.5 旧稿档案：近 5 次模拟结算快照，每条一行 h=（前 8 段空格分隔照 Lstat=
     // 先例，cause 取第 9 段整段余量照 note= 自由文本先例——死因含空格不能全切；
     // 缺键 → 空表 = 默认值，零迁移）
@@ -430,6 +434,9 @@ fn parse_save(text: &str) -> Meta {
                 }
                 m.ev_cnt = fixed;
             }
+            // v1.16.28 江湖声望（缺键 → 0 零迁移；负值/坏值 parse 失败归 0、
+            // >255 顶格截断照 evc= 逐值 min 口径）
+            "fa" => m.fame = (v.trim().parse::<u64>().unwrap_or(0)).min(255) as u8,
             // v1.16.5 旧稿档案：h=<life> <run> <realm> <age> <years> <dy> <stones> <comp> <cause…>
             // splitn(9,' ') 取余量（cause 含空格照 note= 先例不能全切；值内 '=' 安全——
             // split_once 只切首对）。数字坏值 unwrap_or 回退；realm clamp 0..=14、
@@ -1327,6 +1334,47 @@ h=1 2 3 50.0 40 100 800 255 乙
         let m3 = parse_save(&format!("{}{}", OLD_BASE, long));
         assert_eq!(m3.ev_cnt.len(), crate::data::EVENTS.len());
         assert_eq!(m3.ev_cnt[117], 117);
+    }
+
+    // ---------------- v1.16.28 江湖声望 fa= 键（回环/文件序/缺键/越值） ----------------
+    // 照 evc= 回环单测先例：fa= 独立成行紧随 evc=、置于 h= 旧稿块之前（文件序约定
+    // 同 ch=/sy=/evc=）；缺键 → 0 零迁移；负值/坏值归 0、>255 顶格截断
+    #[test]
+    fn fame_roundtrip_file_order_and_bounds() {
+        let mut m = Meta::default();
+        m.fame = 42;
+        let text = save_text(&m);
+        assert!(text.contains("fa="));
+        // fa= 行必须先于 h= 旧稿块且紧随 evc=（文件序约定；按行首匹配防子串误中）
+        let fa_pos = text
+            .lines()
+            .position(|l| l.starts_with("fa="))
+            .expect("fa= 行缺失");
+        let evc_pos = text
+            .lines()
+            .position(|l| l.starts_with("evc="))
+            .expect("evc= 行缺失");
+        let h_pos = text
+            .lines()
+            .position(|l| l.starts_with("h="))
+            .map(|p| p as isize)
+            .unwrap_or(isize::MAX);
+        assert!(evc_pos < fa_pos, "fa= 必须紧随 evc=");
+        assert!(fa_pos < h_pos as usize, "fa= 必须在 h= 旧稿块之前");
+        let back = parse_save(&text);
+        assert_eq!(back.fame, 42);
+        // 越值口径：>255 顶格、负值归 0
+        let m2 = parse_save(&format!("{}fa=300\n", OLD_BASE));
+        assert_eq!(m2.fame, 255, "越值顶格");
+        let m3 = parse_save(&format!("{}fa=-2\n", OLD_BASE));
+        assert_eq!(m3.fame, 0, "负值归 0");
+    }
+
+    // 旧档缺 fa= → 0（零迁移）
+    #[test]
+    fn fame_missing_default() {
+        let m = parse_save(OLD_BASE);
+        assert_eq!(m.fame, 0);
     }
 }
 

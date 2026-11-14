@@ -3428,6 +3428,11 @@ fn draw_chapter_view(g: &mut Game) {
     let ch = &crate::data::CHAPTERS[cur];
     txt(ch.num, 490.0, 188.0, 14, C_GOLD_D);
     txt(ch.name, 552.0, 184.0, 20, C_GOLD);
+    // v1.16.28 章回联句：章名行右侧同行尾挂（@14 dim——章名 4 字 20px 至 ~640，
+    // 联句 ≤14 字约 170px 收在卡内右缘前，同行零版式位移零碰撞；结算屏「下一章」
+    // 行已被 goal/礼行/进度三段占满不加挤，单点显示维持宁缺毋滥）。字形经结算屏
+    // real_die 章签预热口灌齐（同串同字号，两页共用缓存）
+    txt(ch.couplet, 648.0, 190.0, 14, C_DIM);
     wrap_draw(ch.intro, 490.0, 222.0, 16, 600.0, 28.0, C_TEXT);
     draw_rectangle(490.0, 340.0, 610.0, 1.5, Color::from_rgba(96, 76, 130, 160));
     txt("本章目标", 490.0, 352.0, 16, C_GOLD_D);
