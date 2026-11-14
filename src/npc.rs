@@ -145,6 +145,9 @@ pub fn npc_event_card(i: usize) -> Option<EventCard> {
         actor: Some(crate::game::CardActor::Npc(i)),
         rare: false,
         stage: None,
+        cat: None, // v1.16.21 类目 chip 仅模拟池（build_event）挂——现实好感卡带【名】前缀自辨
+        scene: None,
+        brk: false,
         title: format!("【{}】{}", NPC_NAMES[i], def.title),
         text: def.text.to_string(),
         opts: Vec::new(),
@@ -222,10 +225,15 @@ pub fn choose_roption(g: &mut Game, i: usize) {
 // 借用纪律：life.as_mut 圈在小作用域，日志在块外。
 fn apply_reff(g: &mut Game, e: &Eff) {
     let mut logs: Vec<(String, macroquad::prelude::Color)> = Vec::new();
+    // v1.16.21 抉择后果可见化（现实侧）：净变动差值——块内快照/块尾求差，块外
+    // 聚合成行（灵石/道心/气运/寿元此前静默；修为已单独记账、道韵/贡献无 clamp
+    // 从 Eff 直读）。块内 life None 即整体 return，四差值块尾必然已赋值
+    let (d_stones, d_dao, d_luck, d_life);
     {
         let Some(l) = g.life.as_mut() else {
             return;
         };
+        let (b_stones, b_dao, b_luck, b_life) = (l.stones, l.dao, l.luck, l.lifespan);
         if e.qi_pct != 0.0 {
             let v = qi_need(l) * e.qi_pct as f64;
             gain_qi(l, v);
@@ -264,6 +272,10 @@ fn apply_reff(g: &mut Game, e: &Eff) {
         if let Some((p, n)) = e.pill {
             l.pills[p] += n;
         }
+        d_stones = l.stones - b_stones;
+        d_dao = (l.dao - b_dao) as f64;
+        d_luck = (l.luck - b_luck) as f64;
+        d_life = l.lifespan - b_life;
     }
     // meta 侧（借用圈外）
     if e.dy != 0 {
@@ -271,6 +283,19 @@ fn apply_reff(g: &mut Game, e: &Eff) {
     }
     if e.contrib > 0 {
         g.meta.sect_contrib += e.contrib;
+    }
+    // v1.16.21 净变动聚合行（叙事自述行之前——故事句恒最新，与现实侧金行同语）：
+    // 全零不发；relic 折价灵石同入净账（账行只报实际差值，与自述行互补）
+    if let Some((led, lc)) = crate::game::ledger_line(
+        d_stones,
+        d_dao,
+        d_luck,
+        d_life,
+        0.0,
+        e.dy,
+        if e.contrib > 0 { e.contrib as i64 } else { 0 },
+    ) {
+        logs.push((led, lc));
     }
     // 事件自述行 + 机制行（日志在借用块外）
     for m in &e.msg {

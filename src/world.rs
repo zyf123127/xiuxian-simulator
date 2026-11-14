@@ -294,6 +294,7 @@ pub fn exp_start(g: &mut Game) {
         cur: 0,
         loot: Vec::new(),
     });
+    g.exp_p_cache = None; // v1.16.21 P8 胜率副标缓存随新远征清（步号可重复防串）
     g.log("你踏入落霞秘境，霞光在身后合拢——远征开始了。", C_CYAN);
     g.play(crate::sounds::Which::Page);
     g.sync_save();
@@ -310,6 +311,22 @@ fn push_loot(g: &mut Game, s: String) {
     if let Some(e) = g.world.exp.as_mut() {
         e.loot.push(s);
     }
+}
+
+// v1.16.21 远征步次成功率单口（纯函数零状态）：kind=EXPED_STEPS.kind、padj=激进
+// -0.10/谨慎 +0.10、rm_risk=region_mech().exped_risk。exp_choose 与卡面副标同源
+//（把既有 ±10% 文案升级为可读概率）；公式逐行平移自 exp_choose 原内联段，clamp
+// 语义勿动
+pub fn exp_p(l: &Life, kind: usize, padj: f32, rm_risk: f32) -> f32 {
+    let base = match kind {
+        0 => 0.55
+            + ((power(l) / (REALMS[l.realm].power * 1.2) - 1.0).clamp(-0.2, 0.2)) as f32
+            + l.body / 500.0,
+        1 => 0.65 + l.luck / 400.0,
+        2 => 0.50 + l.dao / 400.0,
+        _ => 0.85 + l.dao / 600.0,
+    };
+    (base + padj - rm_risk).clamp(0.05, 0.95)
 }
 
 // 远征抉择：i=0 激进（成功率-0.10、收益×1.5）；i=1 谨慎（+0.10、×0.6）
@@ -345,19 +362,10 @@ pub fn exp_choose(g: &mut Game, i: usize) {
     let wxm = weather_loc_mult(wx, NODE_RUINS);
     // v1.8.0 C2：区域机制（大漠秘藏/瘴惑灵芽影响远征收益与风险）
     let rm = region_mech(g.meta.map_region);
+    // v1.16.21 P8：成功率抽取单口（与卡面副标同源，exp_p 公式逐行平移）
     let p = {
         let l = g.life.as_ref().unwrap();
-        let base = match kind {
-            0 => {
-                0.55
-                    + ((power(l) / (REALMS[l.realm].power * 1.2) - 1.0).clamp(-0.2, 0.2)) as f32
-                    + l.body / 500.0
-            }
-            1 => 0.65 + l.luck / 400.0,
-            2 => 0.50 + l.dao / 400.0,
-            _ => 0.85 + l.dao / 600.0,
-        };
-        (base + padj - rm.exped_risk).clamp(0.05, 0.95)
+        exp_p(l, kind, padj, rm.exped_risk)
     };
     let ok = gen_range(0.0, 1.0f32) < p;
     let cur = g.world.exp.as_ref().unwrap().cur;
@@ -521,6 +529,7 @@ pub fn exp_quit(g: &mut Game) {
         }
     }
     g.world.exp = None;
+    g.exp_p_cache = None; // v1.16.21 P8 缓存随远征终了清
     g.sync_save();
 }
 
@@ -1199,28 +1208,38 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             }
             wrap_draw(step_text, 280.0, 240.0, 16, 720.0, 26.0, C_TEXT);
             // v1.6.0 B：双钮纵排 + 副标签（收益/风险一眼可读，替代原单行提示文案）
+            // v1.16.21 P8 胜率副标（懒缓存照 modal_desc 先例：步号变更帧重建一次，
+            // 稳态逐帧零分配；缓存缺失兜底旧静态文案）。与 exp_choose 同源 exp_p
+            if g.exp_p_cache.as_ref().map_or(true, |(c, _, _)| *c != cur) {
+                let (p0, p1) = if let Some(l) = g.life.as_ref() {
+                    let risk = region_mech(g.meta.map_region).exped_risk;
+                    (exp_p(l, kind, -0.10, risk), exp_p(l, kind, 0.10, risk))
+                } else {
+                    (0.5, 0.5)
+                };
+                g.exp_p_cache = Some((
+                    cur,
+                    format!("收获 ×1.5 · 胜算约{:.0}%", p0 * 100.0),
+                    format!("稳妥 ×0.6 · 胜算约{:.0}%", p1 * 100.0),
+                ));
+            }
             let labels = EXPED_CHOICE_LABELS[kind.min(3)];
-            if button(
-                290.0,
-                396.0,
-                620.0,
-                52.0,
-                labels[0],
-                Some("收获 ×1.5 · 风险 +10%"),
-                true,
-            ) {
+            // 副标借用随各钮条件求值即还（NLL）——缓存串稳态零分配，兜底旧静态文案
+            let sub0 = g
+                .exp_p_cache
+                .as_ref()
+                .map(|(_, a, _)| a.as_str())
+                .unwrap_or("收获 ×1.5 · 风险 +10%");
+            if button(290.0, 396.0, 620.0, 52.0, labels[0], Some(sub0), true) {
                 g.play(crate::sounds::Which::Click);
                 exp_choose(g, 0);
             }
-            if button(
-                290.0,
-                456.0,
-                620.0,
-                52.0,
-                labels[1],
-                Some("稳妥 ×0.6 · 风险 -10%"),
-                true,
-            ) {
+            let sub1 = g
+                .exp_p_cache
+                .as_ref()
+                .map(|(_, _, b)| b.as_str())
+                .unwrap_or("稳妥 ×0.6 · 风险 -10%");
+            if button(290.0, 456.0, 620.0, 52.0, labels[1], Some(sub1), true) {
                 g.play(crate::sounds::Which::Click);
                 exp_choose(g, 1);
             }

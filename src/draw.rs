@@ -1595,6 +1595,18 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
         );
     }
     for (i, ll) in g.sim_log[start..].iter().enumerate() {
+        // v1.16.21 日志流左缘色标：非灰行加 2.5px 色条——金=大事记、红=受挫、
+        // 琥珀=对价账、青=进益一眼可扫（灰=常事不打标）。纯矩形零分配，
+        // ≤24 矩形/帧（可视行数上限）
+        if ll.color != C_DIM {
+            draw_rectangle(
+                11.0,
+                area_y + 13.0 + i as f32 * line_h,
+                2.5,
+                line_h - 10.0,
+                ll.color,
+            );
+        }
         txt(
             &ll.text,
             24.0,
@@ -1860,10 +1872,19 @@ pub fn draw_modal_card(g: &mut Game) {
     };
     // v1.16.7 稀有/链段标记采样（纯会话态随卡生灭；rare=EVENTS w≤RARE_W、
     // stage=链段进度，build_event 尾统一置位）
-    let (card_rare, card_stage) = {
+    let (card_rare, card_stage, card_cat, card_brk) = {
         let card = g.rmodal.as_ref().or(g.modal.as_ref()).unwrap();
-        (card.rare, card.stage)
+        (card.rare, card.stage, card.cat, card.brk)
     };
+    // v1.16.21 场景要素行采样（&str 借用横跨绘制段——与 modal_desc 同为只读，
+    // 段内唯一 &mut 是段尾 modal_min，借用纪律不破）
+    let scene: Option<&str> = g
+        .rmodal
+        .as_ref()
+        .or(g.modal.as_ref())
+        .unwrap()
+        .scene
+        .as_deref();
     // v1.16.9 复审修（立绘外置后）①：meeting 按 card.actor 锁定版式——开卡帧即定
     // 800×520/600×400 几何。wasm 立绘外置后 XHR 拉图期 get() 返 None，若按原
     // portrait.is_some() 判定，卡先走旧版式、图到位（1~3s）切邂逅版式 → 标题/正文/
@@ -1906,11 +1927,14 @@ pub fn draw_modal_card(g: &mut Game) {
     if meeting {
         panel_card_a(240.0, 100.0 + dy, 800.0, 520.0, card_a);
         // v1.16.7 稀有/链段卡描边：叠于 panel_card_a 金描边之上（2.5 同位覆盖）——
-        // 链段卡青、稀有卡紫，链首段 50 两者兼有时链段优先；稳态随卡面全显
+        // 链段卡青、稀有卡紫、v1.16.21 破境抉择卡琥珀（新色位不占既有语义），
+        // 链首段 50 两者兼有时链段优先；稳态随卡面全显
         let edge = if card_stage.is_some() {
             Some(C_CYAN)
         } else if card_rare {
             Some(C_PURPLE)
+        } else if card_brk {
+            Some(C_AMBER)
         } else {
             None
         };
@@ -1932,6 +1956,14 @@ pub fn draw_modal_card(g: &mut Game) {
                 fade(C_CYAN, card_a),
             );
         }
+        // v1.16.21 类目徽标 chip：标题左侧镜像 stage 徽标位（736..804 关于版式中轴
+        // 640 → 476..544；事件标题 ≤6 字（568..712）恒不相交）。底色取徽标色 α0.24
+        if let Some((cw, cc)) = card_cat {
+            let (bx, by) = (476.0, 122.0 + dy);
+            draw_rectangle(bx, by, 68.0, 26.0, fade(Color::new(cc.r, cc.g, cc.b, 0.24), card_a));
+            draw_rectangle_lines(bx, by, 68.0, 26.0, 1.0, fade(cc, card_a));
+            txt_c(cw, bx + 34.0, by + 4.0, 16, fade(cc, card_a));
+        }
         draw_rectangle(
             270.0,
             148.0 + dy,
@@ -1945,6 +1977,11 @@ pub fn draw_modal_card(g: &mut Game) {
             ),
         );
         title_ornament(V_W * 0.5, 148.0 + dy, card_a);
+        // v1.16.21 场景要素行：分隔线右端「青云宗 · 雨」@14 C_DIM（152..166，
+        // 正文列 170 起/暂避钮底 148——双不交，零版式位移）
+        if let Some(sc) = scene {
+            txt_r(sc, 1010.0, 151.0 + dy, 14, fade(C_DIM, card_a));
+        }
         // 立绘盒 (270,160) 220×420、底边锚 580（box_h=bottom_off=420：顶 = 580−dh ≥ 160，
         // 恒落 npc_clip_band 116..616 视口内不裁）；v1.16.9 复审修后 AI 图未到/缺失
         // 时 portrait 走像素/剪影兜底恒 Some（actor 有恒邂逅版式，见 meeting latched）
@@ -1987,6 +2024,8 @@ pub fn draw_modal_card(g: &mut Game) {
             Some(C_CYAN)
         } else if card_rare {
             Some(C_PURPLE)
+        } else if card_brk {
+            Some(C_AMBER)
         } else {
             None
         };
@@ -2007,6 +2046,14 @@ pub fn draw_modal_card(g: &mut Game) {
                 fade(C_CYAN, card_a),
             );
         }
+        // v1.16.21 类目徽标 chip：标题左侧镜像 stage 徽标位（736..804 关于版式中轴
+        // 640 → 476..544；事件标题 ≤6 字（568..712）恒不相交）。底色取徽标色 α0.24
+        if let Some((cw, cc)) = card_cat {
+            let (bx, by) = (476.0, cy + 13.0 + dy);
+            draw_rectangle(bx, by, 68.0, 26.0, fade(Color::new(cc.r, cc.g, cc.b, 0.24), card_a));
+            draw_rectangle_lines(bx, by, 68.0, 26.0, 1.0, fade(cc, card_a));
+            txt_c(cw, bx + 34.0, by + 4.0, 16, fade(cc, card_a));
+        }
         draw_rectangle(
             380.0,
             cy + 48.0 + dy,
@@ -2020,6 +2067,11 @@ pub fn draw_modal_card(g: &mut Game) {
             ),
         );
         title_ornament(V_W * 0.5, cy + 48.0 + dy, card_a);
+        // v1.16.21 场景要素行：分隔线右端「青云宗 · 雨」@14 C_DIM（cy+51..cy+65，
+        // 正文列 cy+64 起/暂避钮底 cy+40——双不交，零版式位移）
+        if let Some(sc) = scene {
+            txt_r(sc, 900.0, cy + 51.0 + dy, 14, fade(C_DIM, card_a));
+        }
         if kind_is_npc {
             // 分段淡入正文（复审②：秒标度 t，稳态全段恒 1 与旧单次 wrap_draw
             // 逐像素一致）；v1.16.9 文本区像素预算上移（cy+64..316 钮区）：
@@ -2073,7 +2125,9 @@ pub fn draw_modal_card(g: &mut Game) {
             (380.0, 316.0 + dy + i as f32 * step, 520.0, bh)
         };
         let accent = matches!(kind_acc, Some(crate::game::CardKind::Path) if i == 0)
-            || matches!(kind_acc, Some(crate::game::CardKind::Finale) if i == 1);
+            || matches!(kind_acc, Some(crate::game::CardKind::Finale) if i == 1)
+            // v1.16.21 破境抉择卡首钮（立即破境/立即问笔）推荐位金描边
+            || (card_brk && i == 0);
         if button_accent(bx, by, bw, bhh, label, Some(descs[i].1.as_str()), true, accent) {
             picked = Some(i);
         }

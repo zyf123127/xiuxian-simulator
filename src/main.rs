@@ -949,6 +949,9 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
                     actor: None, // 仙人问道无人物立绘，维持原版式
                     rare: false,
                     stage: None,
+                    cat: None,
+                    scene: None,
+                    brk: false,
                     title: "仙人问道".into(),
                     text: "云端降下一位白须仙人，含笑看你：「小子，老夫可指你一条路，要哪般？」"
                         .into(),
