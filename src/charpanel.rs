@@ -192,8 +192,12 @@ fn draw_panel_chrome_act(g: &Game) -> Option<PanelAct> {
 //     越界整行跳过。必要：max scroll 1698 时上一卡顶可到 y=-282，遮幅带盖不住越出
 //     面板的溢出（y<60 会画到面板外暗场上）。
 // 性能：整卡剔除（card_y≥616 或 card_y+430≤116 连立绘查询一并跳过，任意帧 ≤2 卡在
-// 画）；LazyTex 仅可见卡与头像条取纹理，首开最多解码 npc_elder/npc_merchant 两张
-// （无立绘卡零解码，LazyTex 缓存 None 不重查）。立绘 contain 收进 220×402、底边
+// 画）；LazyTex 仅可见卡与头像条取纹理——v1.15.5 起 npc_senior/npc_drunk 补齐、
+// 18 张全齐（EMBED 表 art.rs，wasm 外置 portraits/ 同名同源），桌面首开同步解码
+// ≤5 张（可见卡直查 ≤2 + 头像条 npc 限流口 ≤2 + 道侣槽列表级单查 1；v1.16.25 起
+// 头像条 4 个 NPC 槽走 npc_tex_capped 行级限流口 ≤2/帧，与缘谱/旧稿行级口共享
+// first_fetch_budget_take 预算——capped 未中预算的帧由像素立绘兜底，数帧内补齐）；
+// 无立绘卡零解码，LazyTex 缓存 None 不重查。立绘 contain 收进 220×402、底边
 // 对齐（实测素材宽高比 0.456..0.628 → 绘宽 183..220，较 v1.16.0 的 141..195 加宽
 // 30%+ 不变形）；NPC 无 AI 图回退 v1.14.0 程序化像素立绘（art::npc_pixel_tex，
 // 宁清霜/醉道人不再拿 12×12 图标冒充人像），道侣未结缘回退书卷剪影
@@ -618,12 +622,16 @@ fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
     // 头像取立绘顶部约 35% 高度方形头裁剪（1:1 不变形）；v1.14.0 兜底同步卡内口径：
     // NPC 缺 AI 图用像素立绘（28×40 → 头裁剪 14×14 整数倍放大不糊）、道侣未结缘用
     // 书卷剪影（已结缘 comp_0..9 恒真立绘）；当前卡金框
+    // v1.16.25 限流收口：4 个 NPC 槽恒可见（非滚动剔除域）——原 npc_tex 直查每帧
+    // 4 槽，改走 npc_tex_capped 行级限流口（≤2/帧全局预算，与缘谱/旧稿同口）；
+    // capped 返 None 只是「本帧不首取」，槽位/金框布局不随纹理存在性变化，缺图
+    // 槽 or_else 像素立绘兜底链原样。道侣槽（i==4）沿用 :545 列表级单查豁免不动。
     for i in 0..5usize {
         let (ax, ay) = (920.0 + i as f32 * 42.0, 620.0);
         let (tex, icon) = if i < 4 {
             (
                 crate::art::art()
-                    .npc_tex(i)
+                    .npc_tex_capped(i)
                     .or_else(|| crate::art::npc_pixel_tex(i)),
                 &crate::art::art().icon_yun,
             )

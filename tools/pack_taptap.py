@@ -164,7 +164,10 @@ def main() -> int:
     print("OK 打包完成:")
     print(f"  {ZIP_PATH.relative_to(ROOT)}  {len(expect)} 条目  {kb(ZIP_PATH)}")
     for name in FILES:
-        print(f"    taptap_h5/{name}  {kb(SRC[name])}")
+        # v1.16.25：印部署件（H5_DIR）实际字节数——index.html 走内联最小化，
+        # 与源 web/index.html 字节数不同，原 kb(SRC[name]) 误报部署体量；
+        # wasm/font 两项 copyfile 逐字节同源，改后口径不变
+        print(f"    taptap_h5/{name}  {kb(H5_DIR / name)}")
     print(f"    taptap_h5/portraits/  {PORTRAIT_COUNT} 张  {kb(pdir)}")
     print(f"  目录刷新: {H5_DIR.relative_to(ROOT)}")
     print(f"  本地调试: {WEB_WASM.relative_to(ROOT)}  {kb(WEB_WASM)} + web/portraits/")

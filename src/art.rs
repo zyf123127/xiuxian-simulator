@@ -237,6 +237,26 @@ impl Art {
             }
         }
     }
+
+    /// v1.16.25 头像跳转条 NPC 槽限流口（照 comp_tex_capped 逐行同构，共享
+    /// first_fetch_budget_take ≤2/帧全局预算）：charpanel.rs 人物页底部头像条
+    /// 4 个 NPC 槽恒可见（非滚动剔除域），原 npc_tex 直查每帧 4 槽吃满 Mutex
+    /// 锁+解码首取——与缘谱/旧稿行级口同一预算收口。槽位 self.npc_ovr[i.min(3)]
+    /// 照 npc_tex 钳制（panic=abort 纪律）；peek→预算→get_miss 三段语义与
+    /// comp 口零分叉，显示判定（槽恒画）与兜底链（or_else 像素立绘）不变。
+    pub fn npc_tex_capped(&self, i: usize) -> Option<Texture2D> {
+        let s = &self.npc_ovr[i.min(3)];
+        match s.peek() {
+            Some(t) => t,
+            None => {
+                if first_fetch_budget_take() {
+                    s.get_miss()
+                } else {
+                    None
+                }
+            }
+        }
+    }
 }
 
 static ART: std::sync::OnceLock<Art> = std::sync::OnceLock::new();
@@ -1537,5 +1557,41 @@ mod pixel_fallback_tests {
             let opaque = img.to_rgba8().pixels().filter(|p| p[3] > 0).count();
             assert!(opaque > 0, "{} fully transparent", n.to_string_lossy());
         }
+    }
+}
+
+// ================= v1.16.25 头像条限流收口回归（纹理预算等价断言） =================
+// 测试环境无 macroquad 上下文（get_time()/Texture2D 构造均不可达），收口断言落
+// 预算口与 peek 语义两个纯数据面：QUOTA 常量钉死 ≤2/帧、peek 未定案恒 None
+//（降级臂「本帧不首取」的前提）。comp_tex_capped/npc_tex_capped 两方法同构调用
+// 同一 peek→budget→get_miss 三段，本面钉死即两口共享上限钉死。
+#[cfg(test)]
+mod strip_cap_tests {
+    use super::*;
+
+    // 首取预算常量钉死：全局 ≤2/帧（QUOTA_LEFT 初值 2、QUOTA_STAMP 初值 0——
+    // 测试环境无绘制帧不可变味；行级 capped 口与头像条 NPC 槽 capped 口共享）
+    #[test]
+    fn first_fetch_budget_pinned_two() {
+        use std::sync::atomic::Ordering::Relaxed;
+        assert_eq!(QUOTA_LEFT.load(Relaxed), 2, "首取预算必须 ≤2/帧（行级+头像条共享）");
+        assert_eq!(QUOTA_STAMP.load(Relaxed), 0, "预算帧号初值必须为零点");
+    }
+
+    // peek 三态语义之未定案臂：Idle 槽 peek 恒外层 None——capped 超预算降级
+    // 「本帧不首取」由它兜住；纯 Mutex 读绝不触发解码（peek 语义零改动纪律）
+    #[test]
+    fn peek_undecided_slot_returns_none() {
+        let s = LazyTex::new("strip_cap_probe_idle");
+        assert!(s.peek().is_none(), "未定案槽 peek 必须 None");
+        assert!(s.peek().is_none(), "peek 只读不改内部态（二次读同值）");
+    }
+
+    // 槽位钳制口径：npc 槽 4（头像条 i<4 段 1:1）与 comp 槽 10（comp_0..9）——
+    // min(3)/min(9) 钳制永不截断合法槽位（扩员须同批改钳制与头像条段界）
+    #[test]
+    fn strip_slot_counts_pinned() {
+        assert_eq!(crate::data::NPC_NAMES.len(), 4, "头像条 NPC 槽段界 4 同源");
+        assert_eq!(crate::data::COMPANION_NAMES.len(), 10, "道侣槽 comp_0..9 同源");
     }
 }

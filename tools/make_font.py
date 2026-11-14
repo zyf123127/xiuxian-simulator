@@ -6,6 +6,11 @@
 # 无 raw string），注释不再入集（实测注释独占 311 个非 ASCII 字符）。
 # 改后必跑全量复查防豆腐块：python .mumu/fontcov_full.py（字面量口径逐字
 # 符对源字体 cmap）与 python tools/check_chars.py（历史缺字回归）。
+# v1.16.25 扩口径：追加扫描 assets/text_source.txt（textpack 真相源）解码值
+# ——v1.16.23 起文案资产化，build_event 臂内长串收编为 evtx(N)/* 原文 */ 注释
+# 后不再出现在字面量里；若此时按纯字面量口径重建，会把已收编文案的字从字体
+# 里丢掉（实测 225 字 → 运行期 tofu）。运行期渲染面 = 字面量 ∪ textpack，
+# 两者都必须入集；裸字面量先过字形检查再收编的跑序纪律不变。
 import glob, os, re, sys
 from fontTools import subset
 
@@ -40,6 +45,56 @@ for f in glob.glob(os.path.join(SRC, "*.rs")):
         chars.update(m.group(1))
     for m in PAT_CHR.finditer(src):
         chars.update(m.group(1))
+
+# v1.16.25 追加：textpack 真相源逐行解码（Rust 源码转义形态→真实文本，与
+# tools/pack_text.py decode_raw 同款口径），解码失败的行保守跳过
+_ESC = {'n': '\n', 't': '\t', 'r': '\r', '"': '"', '\\': '\\', "'": "'", '0': '\0'}
+
+
+def _decode_raw(raw):
+    if '\\' not in raw:
+        return raw
+    out = []
+    k = 0
+    while k < len(raw):
+        c = raw[k]
+        if c != '\\':
+            out.append(c)
+            k += 1
+            continue
+        k += 1
+        if k >= len(raw):
+            return None
+        d = raw[k]
+        if d == 'u':
+            if raw[k + 1:k + 2] != '{':
+                return None
+            close = raw.index('}', k + 2)
+            try:
+                out.append(chr(int(raw[k + 2:close], 16)))
+            except ValueError:
+                return None
+            k = close + 1
+        elif d in _ESC:
+            out.append(_ESC[d])
+            k += 1
+        else:
+            return None
+    return ''.join(out)
+
+
+_SRC_TXT = os.path.join(ROOT, "assets", "text_source.txt")
+if os.path.exists(_SRC_TXT):
+    _n_txt = 0
+    for _line in open(_SRC_TXT, encoding="utf-8").read().splitlines():
+        if not _line.strip():
+            continue
+        _, _, _raw = _line.partition('\t')
+        _val = _decode_raw(_raw)
+        if _val:
+            chars.update(_val)
+            _n_txt += 1
+    print(f"textpack rows scanned: {_n_txt}")
 
 text = "".join(sorted(chars))
 print(f"unique chars: {len(text)}")
