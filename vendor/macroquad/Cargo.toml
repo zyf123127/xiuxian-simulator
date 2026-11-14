@@ -209,9 +209,10 @@ features = ["scalar-math"]
 
 [dependencies.image]
 version = "0.24"
+# PATCH(getfish) v1.16.23 size-knife: drop "tga" - game only loads png
+# (load_texture on art assets) and programmatic Image; no .tga asset ships.
 features = [
     "png",
-    "tga",
 ]
 default-features = false
 

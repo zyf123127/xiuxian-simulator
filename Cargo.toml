@@ -1,6 +1,6 @@
 [package]
 name = "xiuxian"
-version = "1.16.23"
+version = "1.16.24"
 edition = "2021"
 
 [dependencies]

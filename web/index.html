@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.16.23";</script>
+    <script>var GAME_VER = "1.16.24";</script>
     <!-- v1.16.10 字体外置：font.ttf.deflate 与 wasm 下载全并行预取（唯一能赢的时序
          ——env 导入回传方案 vs wasm 内 load_file await：后者把字体下载排到实例化
          之后串行，反而更慢）。就绪态存 __xxFont（state 0=下载中 1=就绪 -1=失败），
@@ -123,6 +123,17 @@
                 })["catch"](xxFontFail);
             } catch (e) { xxFontFail(); }
         })();
+    </script>
+    <!-- v1.16.24 加载提速⑤：wasm 头部预取——与字体预取同窗口并行起跑，省掉
+         bundle 内联脚本执行期的下载串行（量级 100~300ms）。__xxWasmP 存原始
+         fetch Promise（此处 window.fetch 尚未被下方进度包装器包装，天然单层）；
+         下方 fetch 包装器命中预取后走原 tee 进度逻辑。取走即置空防双下载；
+         预取失败由包装器回退原 fetch 重拉（失败文案链与看门狗不变，绝不静默）。 -->
+    <script>
+        window.__xxWasmP = null;
+        try {
+            window.__xxWasmP = fetch("xiuxian.wasm?v=" + GAME_VER);
+        } catch (e) { window.__xxWasmP = null; }
     </script>
     <!-- v1.9.10 固定超采样（修真机"画质变模糊"）：dpr=1 坐标制保持不变（坐标正确性
          的根基，绝不回退），清晰度改为在 canvas 尺寸源头叠加固定倍率 SS=3——
@@ -322,7 +333,7 @@
             } catch (e) { /* 包装失败维持原状：流式可用则用，不可用走旧分支 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.16.23"></script>
+    <script src="mq_js_bundle.js?v=1.16.24"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -1123,8 +1134,16 @@
                         url = typeof input === "string" ? input : (input && input.url) || "";
                     } catch (e) {}
                     if (url.indexOf("xiuxian.wasm") < 0) return _fetch.apply(this, arguments);
-                    var p = _fetch.apply(this, arguments);
-                    return p.then(function (res) {
+                    // v1.16.24 加载提速⑤：命中头部预取（__xxWasmP）直接消费防双下载
+                    //——Promise 取走即置空；预取失败回退原 _fetch 重拉（行为与无预取
+                    // 时一致），tee 进度逻辑与 MIME 兜底重拉路径不变
+                    var p = window.__xxWasmP;
+                    window.__xxWasmP = null;
+                    var args = arguments;
+                    if (!p) p = _fetch.apply(this, arguments);
+                    return p["catch"](function () {
+                        return _fetch.apply(this, args);
+                    }).then(function (res) {
                         try {
                             if (!res || !res.body || !res.body.tee) return res;
                             var total = parseInt(res.headers.get("content-length") || "0", 10) || 0;

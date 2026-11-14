@@ -84,7 +84,7 @@ display: none;
 </div>
 <div id="errlog"></div>
 <canvas id="glcanvas" tabindex='1'></canvas>
-<script>var GAME_VER = "1.16.23";</script>
+<script>var GAME_VER = "1.16.24";</script>
 <script>
 window.__xxFont = { state: 0, bytes: null };
 (function () {
@@ -115,6 +115,12 @@ window.__xxFont.state = 1;
 })["catch"](xxFontFail);
 } catch (e) { xxFontFail(); }
 })();
+</script>
+<script>
+window.__xxWasmP = null;
+try {
+window.__xxWasmP = fetch("xiuxian.wasm?v=" + GAME_VER);
+} catch (e) { window.__xxWasmP = null; }
 </script>
 <script>
 (function () {
@@ -868,8 +874,13 @@ try {
 url = typeof input === "string" ? input : (input && input.url) || "";
 } catch (e) {}
 if (url.indexOf("xiuxian.wasm") < 0) return _fetch.apply(this, arguments);
-var p = _fetch.apply(this, arguments);
-return p.then(function (res) {
+var p = window.__xxWasmP;
+window.__xxWasmP = null;
+var args = arguments;
+if (!p) p = _fetch.apply(this, arguments);
+return p["catch"](function () {
+return _fetch.apply(this, args);
+}).then(function (res) {
 try {
 if (!res || !res.body || !res.body.tee) return res;
 var total = parseInt(res.headers.get("content-length") || "0", 10) || 0;

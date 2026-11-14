@@ -521,9 +521,11 @@ pub fn exp_quit(g: &mut Game) {
         .map(|e| e.loot.clone())
         .unwrap_or_default();
     if loot.is_empty() {
-        g.log("你自秘境收手归返，此行平平。", C_DIM);
+        // v1.16.24 成金：出秘境句与 298 行入场句「霞光在身后合拢」对仗收口（等长字节中性）
+        g.log("你收手出秘境，霞光重新合拢。", C_DIM);
     } else {
-        g.log("远征归来，此行所获：", C_GOLD);
+        // v1.16.24 成金：「点算行囊」呼应全书对账主题（等长字节中性）
+        g.log("远征归来，点算行囊：", C_GOLD);
         for s in &loot {
             g.log(format!("· {}", s), C_TEXT);
         }
