@@ -4,11 +4,13 @@ import re
 
 src = open('src/data.rs', encoding='utf-8').read()
 # v1.16.23 减包刀③：EVENTS 元组收窄 (usize,i32,..)→(u16,u8,..)，正则放宽兼容两代口径
-m = re.search(r'pub const EVENTS: \[\((?:usize|u16), (?:i32|u8), (?:usize|u8), bool\); (\d+)\] = \[(.*?)\n\];', src, re.S)
-decl_n = int(m.group(1))
+# v1.16.27 减包刀⑥：行常量改名 EVENTS_ROWS（4 元组可读形态零变）；运行期 EVENTS 为
+# 打包位域 static（game.rs events_bitfield_pack_lossless 钉测兜底），本脚本仍按行解析
+m = re.search(r'pub const EVENTS(?:_ROWS)?: \[\((?:usize|u16), (?:i32|u8), (?:usize|u8), bool\); ((?:\d+|N_EVENTS))\] = \[(.*?)\n\];', src, re.S)
+decl_n = int(m.group(1)) if m.group(1).isdigit() else None
 body = m.group(2)
 rows = re.findall(r'\((\d+), (-?\d+), (\d+), (true|false)\)', body)
-assert len(rows) == decl_n, f'声明 {decl_n} != 实析 {len(rows)}'
+assert decl_n is None or len(rows) == decl_n, f'声明 {decl_n} != 实析 {len(rows)}'
 ev = [(int(a), int(w), int(mr), good == 'true') for a, w, mr, good in rows]
 
 total = sum(w for _, w, _, _ in ev)
@@ -48,8 +50,9 @@ mr0_nocomp = [(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 an
 # v1.16.24 伴随 +1：262 同研一笺（mr1 第 10 条）——白名单 22→23，与 game.rs 同批同步
 # v1.16.25 伴随 +1：272 寒江共网（mr2 第 4 条）——白名单 23→24，与 game.rs 同批同步
 # v1.16.26 伴随 +1：283 纵马霜原（mr5 有伴第 2 条）——白名单 24→25，与 game.rs 同批同步
+# v1.16.27 伴随 +1：293 袖里暖石（mr6 有伴第 3 条）——白名单 25→26，与 game.rs 同批同步
 COMPANION = {53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185, 203,
-             210, 211, 212, 225, 226, 240, 241, 257, 262, 272, 283}
+             210, 211, 212, 225, 226, 240, 241, 257, 262, 272, 283, 293}
 mr0_nocomp = sorted([(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 and i not in COMPANION], key=lambda t: -t[1])
 top4_nc = sum(w for _, w in mr0_nocomp[:4])
 tot_nc = sum(w for _, w in mr0_nocomp)

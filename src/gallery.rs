@@ -157,7 +157,7 @@ pub fn prewarm_event_book(g: &Game) {
 pub fn event_badge(id: usize) -> (&'static str, Color) {
     // 越界防御：表外 id 落「遭遇」，绝不把 w=0 哨兵误判成链段（panic=abort 纪律）
     let w = match EVENTS.get(id) {
-        Some(&(_, w, _, _)) => w as i32, // v1.16.23 收窄读点：u8→RARE_W(i32) 口径零变
+        Some(&(_, p)) => ev_w(p), // v1.16.23 收窄读点口径零变；v1.16.27 刀⑥位域解码
         None => return ("遭遇", C_DIM),
     };
     if COMPANION_EVENTS.contains(&id) {
@@ -182,9 +182,13 @@ pub fn event_badge(id: usize) -> (&'static str, Color) {
         // COMPANION 白名单，老年臂先命中出「老年」徽标）。
         // v1.16.26 老年徽标扩 288（同封岁坛，双门控第 5 条——同 268 口径不入
         // COMPANION 白名单，老年臂先命中出「老年」徽标）。
+        // v1.16.27 老年徽标扩 291（换窗新纸，老年层）与 297（重缝冬衣，双门控
+        // 第 6 条——同 288 口径不入 COMPANION 白名单，老年臂先命中出「老年」
+        // 徽标）；293 袖里暖石入 COMPANION 白名单走上方伴随臂，勿挂本臂。
         // 212 相扶看雪同为老年×有伴双门控，但在 COMPANION_EVENTS 白名单内，
         // 上方 COMPANION 臂先命中恒出「伴随」徽标——不入本臂（死模式勿挂）
-        88 | 89 | 170 | 171 | 189 | 198 | 199 | 204 | 215 | 216 | 227 | 239 | 268 | 288 => {
+        88 | 89 | 170 | 171 | 189 | 198 | 199 | 204 | 215 | 216 | 227 | 239 | 268 | 288
+        | 291 | 297 => {
             return ("老年", C_GOLD_D)
         }
         // v1.16.26 宿敌徽标扩 289（同门销踪，宿敌回响——照 110 夺积余波口径，
@@ -380,7 +384,7 @@ fn draw_event_note_row(g: &Game, i: usize, y: f32) {
     let x = 160.0;
     let cnt = g.meta.ev_cnt[i]; // i 循环界内（0..EVENTS.len()），恒界内
     let seen = cnt > 0;
-    let w = EVENTS[i].1 as i32; // v1.16.23 收窄读点：u8→RARE_W(i32) 口径零变
+    let w = ev_w(EVENTS[i].1); // v1.16.23 收窄读点口径零变；v1.16.27 刀⑥位域解码
     let rare = w > 0 && w <= crate::data::RARE_W;
     let (bg, border) = if seen {
         (
@@ -398,7 +402,6 @@ fn draw_event_note_row(g: &Game, i: usize, y: f32) {
         if seen {
             let name = EVENT_NAMES
                 .get(i)
-                .copied()
                 .unwrap_or("？？？"); // 防御：表行错位落 ？？？ 绝不越界
             txt(name, x + 16.0, y + 6.0, 14, if rare { C_PURPLE } else { C_TEXT });
         } else {
@@ -408,7 +411,7 @@ fn draw_event_note_row(g: &Game, i: usize, y: f32) {
     if npc_row_vis(y + 24.0) {
         if seen {
             // 简一 display-only（EVENT_BRIEF 静态表；未遇不显示不泄题）
-            let brief = EVENT_BRIEF.get(i).copied().unwrap_or("");
+            let brief = EVENT_BRIEF.get(i).unwrap_or("");
             if !brief.is_empty() {
                 txt(brief, x + 16.0, y + 24.0, 14, C_DIM);
             }
@@ -475,7 +478,7 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(8, 5, 16, 244));
     panel_card(340.0, 100.0, 600.0, 500.0);
     // 卡描边照 draw_modal_card 语言（2.5 同位覆盖）：链段青/稀有紫/普通卡不叠边
-    let w = EVENTS[id].1 as i32; // v1.16.23 收窄读点：u8→RARE_W(i32) 口径零变
+    let w = ev_w(EVENTS[id].1); // v1.16.23 收窄读点口径零变；v1.16.27 刀⑥位域解码
     let rare = w > 0 && w <= crate::data::RARE_W;
     let (badge_t, badge_c) = event_badge(id);
     let is_chain = badge_t == "链起" || badge_t == "链段";
@@ -490,7 +493,7 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
         draw_rectangle_lines(340.0, 100.0, 600.0, 500.0, 2.5, ec);
     }
     txt(RECALL_CHROME[0], 380.0, 112.0, 14, C_DIM);
-    let name = EVENT_NAMES.get(id).copied().unwrap_or("？？？"); // 防御同手札行口径
+    let name = EVENT_NAMES.get(id).unwrap_or("？？？"); // 防御同手札行口径
     txt_c(name, V_W * 0.5, 128.0, 24, C_GOLD);
     draw_rectangle(
         380.0,

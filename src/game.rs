@@ -67,14 +67,17 @@ pub const CHAIN_TTL: u8 = 8;
 // 白名单 23→24。Comp 立绘反查照 262/257 模式。
 // v1.16.26 伴随 +1：283 纵马霜原（mr5 有伴第 2 条，摊薄 211 独苗）——
 // 白名单 24→25。Comp 立绘反查照 262/257 模式。
+// v1.16.27 伴随 +1：293 袖里暖石（mr6 有伴第 3 条，摊薄 211/225 独苗）——
+// 白名单 25→26。Comp 立绘反查照 262/257 模式。
 // 第三处硬编码副本 tools/ledger_recheck.py COMPANION 集合同批同步（漏一处
 // 账本 mr0 无伴口径对不上）
-pub const COMPANION_EVENTS: [usize; 25] = [
+pub const COMPANION_EVENTS: [usize; 26] = [
     53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185, 203, 210, 211, 212,
     225, 226, 240, 241, 257, // v1.16.23 扩池 +1：257 灯市挑灯（mr4 第 3 条）
     262, // v1.16.24 扩池 +1：262 同研一笺（mr1 第 10 条）
     272, // v1.16.25 扩池 +1：272 寒江共网（mr2 第 4 条）
     283, // v1.16.26 扩池 +1：283 纵马霜原（mr5 有伴第 2 条）
+    293, // v1.16.27 扩池 +1：293 袖里暖石（mr6 有伴第 3 条）
 ];
 
 // v1.16.7 置链臂 special 槽位段：20..=31（apply_eff 链裁决据此区分「重写链态」
@@ -3887,7 +3890,10 @@ impl Game {
 
         let mut ws: Vec<f32> = Vec::new();
 
-        for &(id, w, mr, good) in EVENTS.iter() {
+        for &(id, packed) in EVENTS.iter() {
+            let w = ev_w(packed);
+            let mr = ev_mr(packed);
+            let good = ev_good(packed);
             let mut ww = w as f32;
 
             // v1.12.0 空白行：每稿至多一次——门闩置位后权重归零（照 sect/lingmai 先例）
@@ -3981,6 +3987,8 @@ impl Game {
             // ——七条扩到九条，门控同批扩 id 集合）
             // v1.16.20 扩池老年层 +1（227 半檐躲雨）——九条扩到十条；老年层不挂
             // chain_latch、跨世重见率最高层，边际收益递减故仅 +1
+            // v1.16.27 扩池老年层 +1（291 换窗新纸）——十条扩到十一条（单1 减包
+            // 腾量后同批补位，题材照交托回望域）
             if (id == 88
                 || id == 89
                 || id == 170
@@ -3990,7 +3998,8 @@ impl Game {
                 || id == 199
                 || id == 215
                 || id == 216
-                || id == 227)
+                || id == 227
+                || id == 291)
                 && !self
                     .sim
                     .as_ref()
@@ -4010,7 +4019,9 @@ impl Game {
             // 白名单——同 239 口径，徽标走老年臂）
             // v1.16.26 双门控第五条（288 同封岁坛，同 if 并臂勿拆；不入 COMPANION
             // 白名单——同 268 口径，徽标走老年臂）
-            if (id == 204 || id == 212 || id == 239 || id == 268 || id == 288)
+            // v1.16.27 双门控第六条（297 重缝冬衣，同 if 并臂勿拆；不入 COMPANION
+            // 白名单——同 288 口径，徽标走老年臂）
+            if (id == 204 || id == 212 || id == 239 || id == 268 || id == 288 || id == 297)
                 && !(comp
                     && self
                         .sim
@@ -4130,17 +4141,11 @@ impl Game {
                 // v1.16.3 邂逅卡立绘：卡面主角即递稿之人（卡面文本与立绘同源同名；
                 // 认下后的掷名/缝页人重逢逻辑在 special 17，与卡面立绘无涉）
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "晒书日，{}于书摊间递来半页残稿：「两页相贴，缝作同页——可愿？」墨迹在缝口咬合，私语轻得像纸响：这页等了好久。",
-                    cn
-                );
+                card.text = evf(670, &[&(cn)])/* 原文：晒书日，{}于书摊间递来半页残稿：「两页相贴，缝作同页——可愿？」墨迹在缝口咬合，私语轻得像纸响：这页等了好久。 */;
                 let mut e1 = Eff::new();
                 e1.special = 17;
                 // v1.16.22 e1 改画面句（结缘数字账走 slog 信箱通道，此处不再重复记账体）
-                e1.msg = vec![format!(
-                    "缝口在指下咬合，一缕暖意顺纸脊漫上指尖——{}的名字与你的落在同一行。",
-                    cn
-                )];
+                e1.msg = vec![evf(671, &[&(cn)])/* 原文：缝口在指下咬合，一缕暖意顺纸脊漫上指尖——{}的名字与你的落在同一行。 */];
                 card.opts.push(("认下这页".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 5.0;
@@ -4293,7 +4298,7 @@ impl Game {
 
                         e.pill = Some((0, 2));
 
-                        e.msg = vec![format!("获得聚气丹 ×2，灵石-{}", fmt_int(g))];
+                        e.msg = vec![evf(672, &[&(fmt_int(g))])/* 原文：获得聚气丹 ×2，灵石-{} */];
 
                         card.opts.push(("购下".into(), e));
                     } else {
@@ -4520,7 +4525,7 @@ impl Game {
 
                 e.qi_pct = 0.25;
 
-                e.msg = vec![format!("获得法宝【{}】，修为+25%", RELICS[rl].name)];
+                e.msg = vec![evf(673, &[&(RELICS[rl].name)])/* 原文：获得法宝【{}】，修为+25% */];
 
                 card.opts.push(("入府参悟".into(), e));
             }
@@ -4557,22 +4562,16 @@ impl Game {
 
                 e.stones = -price;
 
-                e.msg = vec![format!("获得洗髓丹 ×1，灵石-{}", fmt_int(price))];
+                e.msg = vec![evf(674, &[&(fmt_int(price))])/* 原文：获得洗髓丹 ×1，灵石-{} */];
 
                 let can = self.sim.as_ref().map_or(false, |s| s.stones >= price);
 
                 if can {
-                    card.text = format!(
-                        "蒙面商人：「洗髓丹一枚，{} 灵石，过了这村没这店。」",
-                        fmt_int(price)
-                    );
+                    card.text = evf(675, &[&(fmt_int(price))])/* 原文：蒙面商人：「洗髓丹一枚，{} 灵石，过了这村没这店。」 */;
 
                     card.opts.push(("买下".into(), e));
                 } else {
-                    card.text = format!(
-                        "蒙面商人：「洗髓丹一枚，{} 灵石，童叟无欺……」你摸了摸储物袋，钱不够。",
-                        fmt_int(price)
-                    );
+                    card.text = evf(676, &[&(fmt_int(price))])/* 原文：蒙面商人：「洗髓丹一枚，{} 灵石，童叟无欺……」你摸了摸储物袋，钱不够。 */;
                 }
 
                 let mut e0 = Eff::new();
@@ -4768,7 +4767,7 @@ impl Game {
 
                 e.qi_pct = 0.30;
 
-                e.msg = vec![format!("盒中是【{}】！修为+30%", RELICS[rl].name)];
+                e.msg = vec![evf(677, &[&(RELICS[rl].name)])/* 原文：盒中是【{}】！修为+30% */];
 
                 card.opts.push(("叩谢仙长".into(), e));
             }
@@ -4797,10 +4796,7 @@ impl Game {
 
                 e2.luck = 8.0;
 
-                e2.msg = vec![format!(
-                    "你留下香火钱。灵石-{}，气运+8",
-                    fmt_int((180.0 * ss) as i64)
-                )];
+                e2.msg = vec![evf(678, &[&(fmt_int((180.0 * ss) as i64))])/* 原文：你留下香火钱。灵石-{}，气运+8 */];
 
                 card.opts.push(("捐些香火".into(), e2));
             }
@@ -4839,7 +4835,7 @@ impl Game {
                 let g = (70.0 * ss * gen_range(0.7, 1.4)) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!("拓片售予坊市书坊，碑中真意却错过了。灵石+{}", fmt_int(g))];
+                e2.msg = vec![evf(679, &[&(fmt_int(g))])/* 原文：拓片售予坊市书坊，碑中真意却错过了。灵石+{} */];
                 card.opts.push(("拓印售卖".into(), e2));
             }
             33 => {
@@ -4880,7 +4876,7 @@ impl Game {
                 let g = (40.0 * ss * gen_range(0.9, 1.5)) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!("货郎硬塞了脚钱。灵石+{}", fmt_int(g))];
+                e2.msg = vec![evf(680, &[&(fmt_int(g))])/* 原文：货郎硬塞了脚钱。灵石+{} */];
                 card.opts.push(("收些脚钱".into(), e2));
             }
             36 => {
@@ -4894,7 +4890,7 @@ impl Game {
                 let g = (50.0 * ss * gen_range(0.7, 1.4)) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!("你拾得谷口自然枯落的药草，售得灵石 {}", fmt_int(g))];
+                e2.msg = vec![evf(681, &[&(fmt_int(g))])/* 原文：你拾得谷口自然枯落的药草，售得灵石 {} */];
                 card.opts.push(("谷口拾遗".into(), e2));
             }
             37 => {
@@ -4936,7 +4932,7 @@ impl Game {
                 let g = (35.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!("你教他烟熏护田之法，老周塞来谢礼。灵石+{}", fmt_int(g))];
+                e2.msg = vec![evf(682, &[&(fmt_int(g))])/* 原文：你教他烟熏护田之法，老周塞来谢礼。灵石+{} */];
                 card.opts.push(("指点几句".into(), e2));
             }
             40 => {
@@ -4963,7 +4959,7 @@ impl Game {
                 let g = (150.0 * ss * gen_range(0.8, 1.5)) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!("手札被藏经楼高价收走。灵石+{}", fmt_int(g))];
+                e2.msg = vec![evf(683, &[&(fmt_int(g))])/* 原文：手札被藏经楼高价收走。灵石+{} */];
                 card.opts.push(("高价转售".into(), e2));
             }
             42 => {
@@ -4990,7 +4986,7 @@ impl Game {
                 let g = (120.0 * ss * gen_range(0.8, 1.4)) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!("外洞石案上散着前人遗落的灵石。灵石+{}", fmt_int(g))];
+                e2.msg = vec![evf(684, &[&(fmt_int(g))])/* 原文：外洞石案上散着前人遗落的灵石。灵石+{} */];
                 card.opts.push(("只探外洞".into(), e2));
             }
 
@@ -5012,10 +5008,7 @@ impl Game {
                 e1.stones = -g;
                 e1.qi_pct = 0.08;
                 e1.special = 20; // 置链：→46 恩怨上门
-                e1.msg = vec![format!(
-                    "你赊下引灵墨，当夜行功，灵气循行快了三分。修为+8%，灵石-{}（赊账一笔，必有后话）",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(685, &[&(fmt_int(g))])/* 原文：你赊下引灵墨，当夜行功，灵气循行快了三分。修为+8%，灵石-{}（赊账一笔，必有后话） */];
                 card.opts.push(("赊墨立契".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
@@ -5085,10 +5078,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.luck = -1.0;
-                e2.msg = vec![format!(
-                    "锦衣修士当场出价购拓，你收钱焚拓。灵石+{}，气运-1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(686, &[&(fmt_int(g))])/* 原文：锦衣修士当场出价购拓，你收钱焚拓。灵石+{}，气运-1 */];
                 card.opts.push(("当场焚拓".into(), e2));
             }
             49 => {
@@ -5137,7 +5127,7 @@ impl Game {
                 let g = (25.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!("老渔翁摇头叹息，赠你两尾灵鱼作谢。灵石+{}", fmt_int(g))];
+                e2.msg = vec![evf(687, &[&(fmt_int(g))])/* 原文：老渔翁摇头叹息，赠你两尾灵鱼作谢。灵石+{} */];
                 card.opts.push(("婉言辞谢".into(), e2));
             }
             52 => {
@@ -5171,10 +5161,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "山亭对坐，{}忽然发问：「你我同修一道，可曾想过，道途尽头是什么模样？」",
-                    cn
-                );
+                card.text = evf(688, &[&(cn)])/* 原文：山亭对坐，{}忽然发问：「你我同修一道，可曾想过，道途尽头是什么模样？」 */;
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
                 e1.dao = 3.0;
@@ -5200,20 +5187,14 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "{}把一柄旧剑系上红绳递来：「早年得的，一直没舍得开锋。今日给你——剑名『同舟』。」",
-                    cn
-                );
+                card.text = evf(689, &[&(cn)])/* 原文：{}把一柄旧剑系上红绳递来：「早年得的，一直没舍得开锋。今日给你——剑名『同舟』。」 */;
                 let mut e1 = Eff::new();
                 e1.special = 5;
                 e1.msg = vec![evtx(105)/* 原文：你接剑入手，只觉道途有伴。战力永久+4% */.into()];
                 card.opts.push(("佩剑同行".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
-                e2.msg = vec![format!(
-                    "你说「剑当护道，不当争斗」，{} 笑了：「也好。」道心+3",
-                    cn
-                )];
+                e2.msg = vec![evf(690, &[&(cn)])/* 原文：你说「剑当护道，不当争斗」，{} 笑了：「也好。」道心+3 */];
                 card.opts.push(("推辞不受".into(), e2));
             }
             55 => {
@@ -5230,10 +5211,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "山道妖兽突袭，你被扫落山涧——黑暗里一只手死死抓住你：「别松手！」是{}。",
-                    cn
-                );
+                card.text = evf(691, &[&(cn)])/* 原文：山道妖兽突袭，你被扫落山涧——黑暗里一只手死死抓住你：「别松手！」是{}。 */;
                 let mut e1 = Eff::new();
                 e1.fight = 1.15;
                 e1.good = false;
@@ -5308,10 +5286,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = -g;
                 e2.luck = 2.0;
-                e2.msg = vec![format!(
-                    "你留下一束笔墨，先生率稚子一揖相送。灵石-{}，气运+2",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(692, &[&(fmt_int(g))])/* 原文：你留下一束笔墨，先生率稚子一揖相送。灵石-{}，气运+2 */];
                 card.opts.push(("捐笔一束".into(), e2));
             }
             60 => {
@@ -5322,7 +5297,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = -g;
                 e1.qi_pct = 0.06;
-                e1.msg = vec![format!("蜜入喉即化，一线暖意沉入丹田。灵石-{}，修为+6%", fmt_int(g))];
+                e1.msg = vec![evf(693, &[&(fmt_int(g))])/* 原文：蜜入喉即化，一线暖意沉入丹田。灵石-{}，修为+6% */];
                 card.opts.push(("买蜜一罐".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
@@ -5343,10 +5318,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = -g;
                 e2.dao = 1.0;
-                e2.msg = vec![format!(
-                    "你婉辞不受留银而去，画师在扉页为你题了半句偈。灵石-{}，道心+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(694, &[&(fmt_int(g))])/* 原文：你婉辞不受留银而去，画师在扉页为你题了半句偈。灵石-{}，道心+1 */];
                 card.opts.push(("婉辞赠银".into(), e2));
             }
             62 => {
@@ -5392,10 +5364,7 @@ impl Game {
                 let g = (60.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = g;
-                e1.msg = vec![format!(
-                    "一路风平浪静，抵岸时船老大塞来一封厚谢仪。灵石+{}",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(695, &[&(fmt_int(g))])/* 原文：一路风平浪静，抵岸时船老大塞来一封厚谢仪。灵石+{} */];
                 card.opts.push(("伴航护船".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
@@ -5413,10 +5382,7 @@ impl Game {
                 let g = (25.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "白石经年泡养微蕴灵气，坊市有人识货。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(696, &[&(fmt_int(g))])/* 原文：白石经年泡养微蕴灵气，坊市有人识货。灵石+{} */];
                 card.opts.push(("掘石携归".into(), e2));
             }
             66 => {
@@ -5440,10 +5406,7 @@ impl Game {
                 let g = (50.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = g;
-                e1.msg = vec![format!(
-                    "炉火在你注视下稳稳渡过子时，老铁匠以铁屑相谢。灵石+{}",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(697, &[&(fmt_int(g))])/* 原文：炉火在你注视下稳稳渡过子时，老铁匠以铁屑相谢。灵石+{} */];
                 card.opts.push(("通宵守炉".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.06;
@@ -5475,10 +5438,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = -g;
                 e2.dao = 2.0;
-                e2.msg = vec![format!(
-                    "你以清水研墨倾入井中，诵声停了，井水甘冽如饴。灵石-{}，道心+2",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(698, &[&(fmt_int(g))])/* 原文：你以清水研墨倾入井中，诵声停了，井水甘冽如饴。灵石-{}，道心+2 */];
                 card.opts.push(("墨祭古井".into(), e2));
             }
             70 => {
@@ -5493,10 +5453,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.dao = 1.0;
-                e2.msg = vec![format!(
-                    "你帮药童碾了一下午药，老叟以药渣里挑出的灵芝相赠。灵石+{}，道心+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(699, &[&(fmt_int(g))])/* 原文：你帮药童碾了一下午药，老叟以药渣里挑出的灵芝相赠。灵石+{}，道心+1 */];
                 card.opts.push(("帮碾灵药".into(), e2));
             }
             71 => {
@@ -5576,10 +5533,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "灯节，放灯的河堤人潮如织。你与{}各执一盏莲灯，灯面上不约而同写着同一个字。",
-                    cn
-                );
+                card.text = evf(700, &[&(cn)])/* 原文：灯节，放灯的河堤人潮如织。你与{}各执一盏莲灯，灯面上不约而同写着同一个字。 */;
                 let mut e1 = Eff::new();
                 e1.luck = 3.0;
                 e1.msg = vec![evtx(149)/* 原文：两盏灯并排漂远，河面金光缠作一股。气运+3 */.into()];
@@ -5619,10 +5573,7 @@ impl Game {
                 let g = (30.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "你不问布下事，只与主人聊各地灯俗，临别赠你一盏小灯。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(701, &[&(fmt_int(g))])/* 原文：你不问布下事，只与主人聊各地灯俗，临别赠你一盏小灯。灵石+{} */];
                 card.opts.push(("只叙灯事".into(), e2));
             }
             78 => {
@@ -5652,10 +5603,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = -g;
                 e2.special = 31; // 置链：→81 愿成符赠
-                e2.msg = vec![format!(
-                    "你说「愿钱我出，戏跳给全村」——班主眼睛亮了。灵石-{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(702, &[&(fmt_int(g))])/* 原文：你说「愿钱我出，戏跳给全村」——班主眼睛亮了。灵石-{} */];
                 card.opts.push(("出钱贴班".into(), e2));
                 self.chain = Some((5, 0, CHAIN_TTL)); // 首段建链：待分支
             }
@@ -5667,10 +5615,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = g;
                 e1.luck = 2.0;
-                e1.msg = vec![format!(
-                    "谢仪之外，你觉出体内有一股旧愿化开的暖意。灵石+{}，气运+2",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(703, &[&(fmt_int(g))])/* 原文：谢仪之外，你觉出体内有一股旧愿化开的暖意。灵石+{}，气运+2 */];
                 card.opts.push(("收下谢仪".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
@@ -5707,10 +5652,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "灯芯剥到三寸，{}就着灯光缝补一页撕损的旧稿，针脚细密——「撕开的页，总要有人缝。」",
-                    cn
-                );
+                card.text = evf(704, &[&(cn)])/* 原文：灯芯剥到三寸，{}就着灯光缝补一页撕损的旧稿，针脚细密——「撕开的页，总要有人缝。」 */;
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
@@ -5735,10 +5677,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "江南霜降，{}拎着竹篮拉你上橘山——霜后的灵橘最甜，早一刻酸，晚一刻鸟啄。",
-                    cn
-                );
+                card.text = evf(705, &[&(cn)])/* 原文：江南霜降，{}拎着竹篮拉你上橘山——霜后的灵橘最甜，早一刻酸，晚一刻鸟啄。 */;
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.06;
                 e1.msg = vec![evtx(167)/* 原文：霜橘入腹，一身寒气散尽。修为+6% */.into()];
@@ -5763,10 +5702,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "论到「墨当写心还是写世」，你与{}各执一词，谁也说不服谁——灯花爆了三次，两人都没再开口。",
-                    cn
-                );
+                card.text = evf(706, &[&(cn)])/* 原文：论到「墨当写心还是写世」，你与{}各执一词，谁也说不服谁——灯花爆了三次，两人都没再开口。 */;
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
@@ -5798,10 +5734,7 @@ impl Game {
                     .as_ref()
                     .map(|n| n.full())
                     .unwrap_or_else(|| evtx(171)/* 原文：删你字的血仇之敌 */.to_string());
-                card.text = format!(
-                    "茶棚歇脚，两个行脚商人压着嗓子议论{}——「近来招兵买马，看样子要办大事。」你摩挲着方印：血仇的名字，从来不需要想起。",
-                    nfull
-                );
+                card.text = evf(707, &[&(nfull)])/* 原文：茶棚歇脚，两个行脚商人压着嗓子议论{}——「近来招兵买马，看样子要办大事。」你摩挲着方印：血仇的名字，从来不需要想起。 */;
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.special = 35; // 置链：→86 仇踪暗访
@@ -5822,10 +5755,7 @@ impl Game {
                     .as_ref()
                     .map(|n| n.name.clone())
                     .unwrap_or_else(|| "那血仇之敌".to_string());
-                card.text = format!(
-                    "循旧册线索，你扮作佣工混进{}的营外围——粮道、岗哨、换防的时辰，一一入画。灶下一碗冷饭的工夫，进出这条路你已走了三遍。",
-                    nname
-                );
+                card.text = evf(708, &[&(nname)])/* 原文：循旧册线索，你扮作佣工混进{}的营外围——粮道、岗哨、换防的时辰，一一入画。灶下一碗冷饭的工夫，进出这条路你已走了三遍。 */;
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
                 e1.special = 36; // 置链：→87 乘虚夺积
@@ -5845,18 +5775,12 @@ impl Game {
                     .as_ref()
                     .map(|n| n.name.clone())
                     .unwrap_or_else(|| "那血仇之敌".to_string());
-                card.text = format!(
-                    "假讯生效，{}的亲信果然倾巢而出。你趁夜摸入主营，帐中只剩一只描金木匣——正是其积攒多年的私库。",
-                    nname
-                );
+                card.text = evf(709, &[&(nname)])/* 原文：假讯生效，{}的亲信果然倾巢而出。你趁夜摸入主营，帐中只剩一只描金木匣——正是其积攒多年的私库。 */;
                 let g0 = (90.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = g0;
                 e1.luck = 2.0;
-                e1.msg = vec![format!(
-                    "匣中灵石尽入行囊，你一把火燎了空帐——等他回营，只剩满地灰烬。灵石+{}，气运+2",
-                    fmt_int(g0)
-                )];
+                e1.msg = vec![evf(710, &[&(fmt_int(g0))])/* 原文：匣中灵石尽入行囊，你一把火燎了空帐——等他回营，只剩满地灰烬。灵石+{}，气运+2 */];
                 card.opts.push(("取匣而走".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
@@ -5996,10 +5920,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = g0;
                 e1.dao = 3.0;
-                e1.msg = vec![format!(
-                    "第三具棺里只有一册无字书。你读完，书页散作灰。棺底殉葬的灵石归了你。道心+3，灵石+{}",
-                    fmt_int(g0)
-                )];
+                e1.msg = vec![evf(711, &[&(fmt_int(g0))])/* 原文：第三具棺里只有一册无字书。你读完，书页散作灰。棺底殉葬的灵石归了你。道心+3，灵石+{} */];
                 card.opts.push(("攀崖探棺".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
@@ -6013,10 +5934,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = g0;
                 e1.luck = 1.0;
-                e1.msg = vec![format!(
-                    "渔村大丰，分你一担头鱼。灵石+{}，气运+1",
-                    fmt_int(g0)
-                )];
+                e1.msg = vec![evf(712, &[&(fmt_int(g0))])/* 原文：渔村大丰，分你一担头鱼。灵石+{}，气运+1 */];
                 card.opts.push(("张网助渔".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
@@ -6093,10 +6011,7 @@ impl Game {
                 let g = (45.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "你替抄经人翻检可卖的旧纸，分得一笔辛苦钱。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(713, &[&(fmt_int(g))])/* 原文：你替抄经人翻检可卖的旧纸，分得一笔辛苦钱。灵石+{} */];
                 card.opts.push(("帮检旧纸".into(), e2));
             }
             101 => {
@@ -6112,10 +6027,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.luck = 1.0;
-                e2.msg = vec![format!(
-                    "冢边秃笔堆里有几杆笔杆蕴着旧灵气，识货人收。灵石+{}，气运+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(714, &[&(fmt_int(g))])/* 原文：冢边秃笔堆里有几杆笔杆蕴着旧灵气，识货人收。灵石+{}，气运+1 */];
                 card.opts.push(("捡拾秃笔".into(), e2));
             }
             102 => {
@@ -6132,10 +6044,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.good = false;
-                e2.msg = vec![format!(
-                    "你袖手旁观，顺手收了两村「评理钱」。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(715, &[&(fmt_int(g))])/* 原文：你袖手旁观，顺手收了两村「评理钱」。灵石+{} */];
                 card.opts.push(("袖手评理".into(), e2));
             }
             103 => {
@@ -6152,10 +6061,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.good = false;
-                e2.msg = vec![format!(
-                    "你把血书交给驿卒充公，换了几文酒钱。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(716, &[&(fmt_int(g))])/* 原文：你把血书交给驿卒充公，换了几文酒钱。灵石+{} */];
                 card.opts.push(("交驿充公".into(), e2));
             }
             104 => {
@@ -6171,10 +6077,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.dao = 1.0;
-                e2.msg = vec![format!(
-                    "你拓下山壁叩痕售予坊市，人称「砚山叩谱」。灵石+{}，道心+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(717, &[&(fmt_int(g))])/* 原文：你拓下山壁叩痕售予坊市，人称「砚山叩谱」。灵石+{}，道心+1 */];
                 card.opts.push(("拓售叩谱".into(), e2));
             }
             105 => {
@@ -6208,10 +6111,7 @@ impl Game {
                 let g = (90.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "你替蚕主收茧整茧，工钱以外分得些头茬茧。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(718, &[&(fmt_int(g))])/* 原文：你替蚕主收茧整茧，工钱以外分得些头茬茧。灵石+{} */];
                 card.opts.push(("帮工收茧".into(), e2));
             }
             107 => {
@@ -6228,10 +6128,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.good = false;
-                e2.msg = vec![format!(
-                    "你收拾舱中值钱物件，报官领了半船赏钱。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(719, &[&(fmt_int(g))])/* 原文：你收拾舱中值钱物件，报官领了半船赏钱。灵石+{} */];
                 card.opts.push(("报官领赏".into(), e2));
             }
             108 => {
@@ -6249,10 +6146,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.good = false;
-                e2.msg = vec![format!(
-                    "你只在鲸背边缘拾得城中抛下的旧物，售得灵石+{}——上城的路，终究没敢走。",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(720, &[&(fmt_int(g))])/* 原文：你只在鲸背边缘拾得城中抛下的旧物，售得灵石+{}——上城的路，终究没敢走。 */];
                 card.opts.push(("缘边拾遗".into(), e2));
             }
             109 => {
@@ -6269,10 +6163,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.good = false;
-                e2.msg = vec![format!(
-                    "你收下一笔「名号分润」，由他顶着去。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(721, &[&(fmt_int(g))])/* 原文：你收下一笔「名号分润」，由他顶着去。灵石+{} */];
                 card.opts.push(("收润默许".into(), e2));
             }
             110 => {
@@ -6284,10 +6175,7 @@ impl Game {
                     .as_ref()
                     .map(|n| n.name.clone())
                     .unwrap_or_else(|| "那血仇之敌".to_string());
-                card.text = format!(
-                    "夺积之夜过后，{}果然倾巢而出寻账——营帐外火把连成一线，把你的藏身谷围成一口锅。",
-                    nname
-                );
+                card.text = evf(722, &[&(nname)])/* 原文：夺积之夜过后，{}果然倾巢而出寻账——营帐外火把连成一线，把你的藏身谷围成一口锅。 */;
                 let mut e1 = Eff::new();
                 e1.fight = 1.05; // 通用战斗单口 sim_fight（勿另写胜率公式）
                 e1.good = false;
@@ -6309,10 +6197,7 @@ impl Game {
                     .as_ref()
                     .map(|n| n.full())
                     .unwrap_or_else(|| evtx(171)/* 原文：删你字的血仇之敌 */.to_string());
-                card.text = format!(
-                    "夜里旧册无风自动，血仇的名字上新添了一行墨——{}.方印上被划掉的痕迹，又深了一层。",
-                    nfull
-                );
+                card.text = evf(723, &[&(nfull)])/* 原文：夜里旧册无风自动，血仇的名字上新添了一行墨——{}.方印上被划掉的痕迹，又深了一层。 */;
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
@@ -6341,10 +6226,7 @@ impl Game {
                 e2.dao = 1.0;
                 // v1.16.15 复审口径：正文立规「雾河渡人不收灵石」——船夫分文不取，
                 // 灵石是你自己压在渡口石上走的（损失自担），规矩不破
-                e2.msg = vec![format!(
-                    "你把灵石压在渡口石上：「我不讲故事。」老船夫摇头拢船自去——石上灵石，你连头也没回。灵石-{}，道心+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(724, &[&(fmt_int(g))])/* 原文：你把灵石压在渡口石上：「我不讲故事。」老船夫摇头拢船自去——石上灵石，你连头也没回。灵石-{}，道心+1 */];
                 card.opts.push(("付石不语".into(), e2));
                 self.chain = Some((7, 0, CHAIN_TTL)); // 首段建链：待分支
             }
@@ -6361,10 +6243,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = -g; // v1.16.10 复审修：买灯是花销，与卡面「灵石-{}」同号（照 112 opt2 同款）
                 e2.luck = 1.0;
-                e2.msg = vec![format!(
-                    "到岸了，你不多问，买下一盏灯带走。灵石-{}，气运+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(725, &[&(fmt_int(g))])/* 原文：到岸了，你不多问，买下一盏灯带走。灵石-{}，气运+1 */];
                 card.opts.push(("买灯登岸".into(), e2));
             }
             114 => {
@@ -6382,10 +6261,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.luck = 2.0;
-                e2.msg = vec![format!(
-                    "你收下老船夫赠的一盏灯：「写完再来讲给你。」灵石+{}，气运+2",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(726, &[&(fmt_int(g))])/* 原文：你收下老船夫赠的一盏灯：「写完再来讲给你。」灵石+{}，气运+2 */];
                 card.opts.push(("携灯而归".into(), e2));
             }
             115 => {
@@ -6417,10 +6293,7 @@ impl Game {
                 let g = (30.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "你只管添柴控火，天亮领了童子的谢银。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(727, &[&(fmt_int(g))])/* 原文：你只管添柴控火，天亮领了童子的谢银。灵石+{} */];
                 card.opts.push(("添柴到天明".into(), e2));
             }
             117 => {
@@ -6531,10 +6404,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = -g; // v1.16.11 复审口径：赎页是花销，与卡面「灵石-{}」同号（照 112/113 同款）
                 e2.luck = 1.0;
-                e2.msg = vec![format!(
-                    "你不肯交出残页，压下一笔灵石只借看一夜。灵石-{}，气运+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(728, &[&(fmt_int(g))])/* 原文：你不肯交出残页，压下一笔灵石只借看一夜。灵石-{}，气运+1 */];
                 card.opts.push(("以石借阅".into(), e2));
             }
             123 => {
@@ -6555,10 +6425,7 @@ impl Game {
                 // 抉择语义（各页各藏），不在卡面缺人。版式随 actor 在本帧锁成
                 // 邂逅版（绘制帧零新查询）；纹理未到走 Comp→剪影兜底链，不进鉴赏
                 card.actor = Some(CardActor::Comp(best_bn));
-                card.text = format!(
-                    "摊主取出的那页新墨，背面洇着一行小字批注——笔迹你认得：{}。摊主说：「{}也在找这页。找了很多年。」",
-                    cn, cn
-                );
+                card.text = evf(729, &[&(cn), &(cn)])/* 原文：摊主取出的那页新墨，背面洇着一行小字批注——笔迹你认得：{}。摊主说：「{}也在找这页。找了很多年。」 */;
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.luck = 2.0;
@@ -6591,10 +6458,7 @@ impl Game {
                 let g = (45.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "你抱琴下山，坊市识货的琴师出了个公道价。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(730, &[&(fmt_int(g))])/* 原文：你抱琴下山，坊市识货的琴师出了个公道价。灵石+{} */];
                 card.opts.push(("抱琴换钱".into(), e2));
             }
             125 => {
@@ -6644,10 +6508,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.good = false;
-                e2.msg = vec![format!(
-                    "你把半偈拓了下来，转手卖给藏家——「卖字这件事，你越来越熟练了。」灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(731, &[&(fmt_int(g))])/* 原文：你把半偈拓了下来，转手卖给藏家——「卖字这件事，你越来越熟练了。」灵石+{} */];
                 card.opts.push(("拓偈易石".into(), e2));
             }
             128 => {
@@ -6679,10 +6540,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.good = false;
-                e2.msg = vec![format!(
-                    "你按行价收了酬金才动手——钱货两讫，领队道谢时眼神发苦。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(732, &[&(fmt_int(g))])/* 原文：你按行价收了酬金才动手——钱货两讫，领队道谢时眼神发苦。灵石+{} */];
                 card.opts.push(("收酬让道".into(), e2));
             }
             130 => {
@@ -6778,10 +6636,7 @@ impl Game {
                 card.text = evtx(294)/* 原文：你名下灵田垦到三等沃腴——岁末灵稻垂穗，田埂雾气未散，山下的散修都来讨一捧新米尝鲜。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones = g;
-                e1.msg = vec![format!(
-                    "你售了三成新谷，换来的灵石比往年厚了一倍有余。获得灵石 {}",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(733, &[&(fmt_int(g))])/* 原文：你售了三成新谷，换来的灵石比往年厚了一倍有余。获得灵石 {} */];
                 card.opts.push(("售谷换石".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
@@ -6844,10 +6699,7 @@ impl Game {
                 let g = (50.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "矿壳是天地劈过的余响，坊市符师收作符材。你拾了七枚，一枚不多拾。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(734, &[&(fmt_int(g))])/* 原文：矿壳是天地劈过的余响，坊市符师收作符材。你拾了七枚，一枚不多拾。灵石+{} */];
                 card.opts.push(("只拾矿壳".into(), e2));
             }
             139 => {
@@ -6885,10 +6737,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = -g; // v1.16.11 复审口径：购书是花销，与卡面「灵石-{}」同号（照 122 赎页同款）
                 e2.luck = 1.0;
-                e2.msg = vec![format!(
-                    "你挑中一册无名手抄。老掌柜只收半价：「识货的，就该便宜。」灵石-{}，气运+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(735, &[&(fmt_int(g))])/* 原文：你挑中一册无名手抄。老掌柜只收半价：「识货的，就该便宜。」灵石-{}，气运+1 */];
                 card.opts.push(("半价购书".into(), e2));
                 self.chain = Some((12, 0, CHAIN_TTL)); // 首段建链：待分支
             }
@@ -6903,10 +6752,7 @@ impl Game {
                 e1.luck = 1.0;
                 e1.stones = g141;
                 e1.special = 48; // 置链：→142 肆后书案
-                e1.msg = vec![format!(
-                    "你写了七日。绸缎商言而有信，书资分毫不差——还多包了一层油纸。灵石+{}，气运+1",
-                    fmt_int(g141)
-                )];
+                e1.msg = vec![evf(736, &[&(fmt_int(g141))])/* 原文：你写了七日。绸缎商言而有信，书资分毫不差——还多包了一层油纸。灵石+{}，气运+1 */];
                 card.opts.push(("应下提要".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
@@ -6947,10 +6793,7 @@ impl Game {
                 let g = (40.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "你替一桩口角的两家称了灵材，各服一口气，谢钱是两家凑的。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(737, &[&(fmt_int(g))])/* 原文：你替一桩口角的两家称了灵材，各服一口气，谢钱是两家凑的。灵石+{} */];
                 card.opts.push(("借秤称物".into(), e2));
             }
             144 => {
@@ -7003,10 +6846,7 @@ impl Game {
                 let g = (55.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "磨坊主人收租，谢你一勺「月磨面」——掺进寻常面里蒸糕，卖相极好。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(738, &[&(fmt_int(g))])/* 原文：磨坊主人收租，谢你一勺「月磨面」——掺进寻常面里蒸糕，卖相极好。灵石+{} */];
                 card.opts.push(("问坊主讨面".into(), e2));
             }
             147 => {
@@ -7022,10 +6862,7 @@ impl Game {
                 let g = (45.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "你把鼠连同丹一起交还掌柜，掌柜赏了谢钱，转头又求你后天再来。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(739, &[&(fmt_int(g))])/* 原文：你把鼠连同丹一起交还掌柜，掌柜赏了谢钱，转头又求你后天再来。灵石+{} */];
                 card.opts.push(("捉鼠还丹".into(), e2));
             }
             148 => {
@@ -7058,10 +6895,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = -g; // 购鞍是花销，与卡面「灵石-{}」同号（照 122/140 同款）
                 e2.luck = 1.0;
-                e2.msg = vec![format!(
-                    "你出钱买下旧鞍。老匠推回一半钱：「信是你读的，鞍钱减半。」灵石-{}，气运+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(740, &[&(fmt_int(g))])/* 原文：你出钱买下旧鞍。老匠推回一半钱：「信是你读的，鞍钱减半。」灵石-{}，气运+1 */];
                 card.opts.push(("买下旧鞍".into(), e2));
             }
             150 => {
@@ -7115,10 +6949,7 @@ impl Game {
                 e1.stones = -g; // 代垫赎资是花销，与卡面「灵石-{}」同号（照 122/140/149 同款）
                 e1.dao = 1.0;
                 e1.special = 50; // 置链：→153 物归旧主
-                e1.msg = vec![format!(
-                    "你回当铺替他赎下旧箫送回药庐。掌柜收了当本，多句：「认物的，今年头一个。」灵石-{}，道心+1",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(741, &[&(fmt_int(g))])/* 原文：你回当铺替他赎下旧箫送回药庐。掌柜收了当本，多句：「认物的，今年头一个。」灵石-{}，道心+1 */];
                 card.opts.push(("代为赎当".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
@@ -7161,10 +6992,7 @@ impl Game {
                 let g = (60.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "你帮山门搭彩、递印捧诰，执事分了份观礼例钱——今岁宗门手笔比往年阔。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(742, &[&(fmt_int(g))])/* 原文：你帮山门搭彩、递印捧诰，执事分了份观礼例钱——今岁宗门手笔比往年阔。灵石+{} */];
                 card.opts.push(("帮接彩头".into(), e2));
             }
             155 => {
@@ -7205,10 +7033,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "入冬第一场雪，{}抱来一坛青梅酒：「埋在檐下，功成之日同启——谁先回来，谁挖。」",
-                    cn
-                );
+                card.text = evf(743, &[&(cn)])/* 原文：入冬第一场雪，{}抱来一坛青梅酒：「埋在檐下，功成之日同启——谁先回来，谁挖。」 */;
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
@@ -7237,10 +7062,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "{}养了一盆昙花，掐着时辰说今夜子时开——「花开一现，错过等来年。」你俩搬了两只蒲团守在花前。",
-                    cn
-                );
+                card.text = evf(744, &[&(cn)])/* 原文：{}养了一盆昙花，掐着时辰说今夜子时开——「花开一现，错过等来年。」你俩搬了两只蒲团守在花前。 */;
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
@@ -7250,10 +7072,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.luck = 2.0;
-                e2.msg = vec![format!(
-                    "你守到四更睡去，醒来花已谢。{}把落花夹进你的书里：「明年它还开，你也还在。」道心+1，气运+2",
-                    cn
-                )];
+                e2.msg = vec![evf(745, &[&(cn)])/* 原文：你守到四更睡去，醒来花已谢。{}把落花夹进你的书里：「明年它还开，你也还在。」道心+1，气运+2 */];
                 card.opts.push(("先睡留话".into(), e2));
             }
             158 => {
@@ -7270,10 +7089,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "夜雨漏了屋一角，天亮你与{}上房补瓦——一人递一人接，谁也没提这屋子本是借宿的。",
-                    cn
-                );
+                card.text = evf(746, &[&(cn)])/* 原文：夜雨漏了屋一角，天亮你与{}上房补瓦——一人递一人接，谁也没提这屋子本是借宿的。 */;
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
@@ -7317,10 +7133,7 @@ impl Game {
                 let g = (40.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "术力分洪不足，你落村中帮各家抢收抢掩——水退后，村老塞给你一口袋谢钱。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(747, &[&(fmt_int(g))])/* 原文：术力分洪不足，你落村中帮各家抢收抢掩——水退后，村老塞给你一口袋谢钱。灵石+{} */];
                 card.opts.push(("落村帮抢收".into(), e2));
             }
             161 => {
@@ -7408,10 +7221,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.luck = 1.0;
-                e2.msg = vec![format!(
-                    "你把话本原样记进随行册——世人的嘴，也是一种稿，稿酬照付。灵石+{}，气运+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(748, &[&(fmt_int(g))])/* 原文：你把话本原样记进随行册——世人的嘴，也是一种稿，稿酬照付。灵石+{}，气运+1 */];
                 card.opts.push(("记下话本".into(), e2));
             }
             166 => {
@@ -7462,10 +7272,7 @@ impl Game {
                 let g = (60.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "你把「另有续行」四字揭裱收藏——书成之后还能吓着天曹，值得喝一杯。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(749, &[&(fmt_int(g))])/* 原文：你把「另有续行」四字揭裱收藏——书成之后还能吓着天曹，值得喝一杯。灵石+{} */];
                 card.opts.push(("揭裱收藏".into(), e2));
             }
             169 => {
@@ -7506,10 +7313,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = g;
                 e2.luck = 1.0;
-                e2.msg = vec![format!(
-                    "你替炉子添了一整夜炭，天明时老匠把煨好的一枚铜铃塞给你：「响的不是铃，是念想。」灵石+{}，气运+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(750, &[&(fmt_int(g))])/* 原文：你替炉子添了一整夜炭，天明时老匠把煨好的一枚铜铃塞给你：「响的不是铃，是念想。」灵石+{}，气运+1 */];
                 card.opts.push(("添火守炉".into(), e2));
             }
             171 => {
@@ -7545,10 +7349,7 @@ impl Game {
                 e2.stones = -g;
                 e2.good = false;
                 e2.dao = 1.0;
-                e2.msg = vec![format!(
-                    "你往香资匣里压下一笔灵石。老船工推辞不过，朝河心拱了拱手：「替你记着这份香火。」灵石-{}，道心+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(751, &[&(fmt_int(g))])/* 原文：你往香资匣里压下一笔灵石。老船工推辞不过，朝河心拱了拱手：「替你记着这份香火。」灵石-{}，道心+1 */];
                 card.opts.push(("香资匣添香".into(), e2));
             }
             173 => {
@@ -7560,10 +7361,7 @@ impl Game {
                 e1.stones = -g;
                 e1.good = false;
                 e1.dao = 2.0;
-                e1.msg = vec![format!(
-                    "你买来两斤灯油放下就走。次日清晨，塾里书声比往日都响。灵石-{}，道心+2",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(752, &[&(fmt_int(g))])/* 原文：你买来两斤灯油放下就走。次日清晨，塾里书声比往日都响。灵石-{}，道心+2 */];
                 card.opts.push(("出钱打油".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
@@ -7587,10 +7385,7 @@ impl Game {
                 e2.stones = -g;
                 e2.good = false;
                 e2.luck = 2.0;
-                e2.msg = vec![format!(
-                    "你买了一圈姜茶挨摊分去。霜天不冷，人间值得。灵石-{}，气运+2",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(753, &[&(fmt_int(g))])/* 原文：你买了一圈姜茶挨摊分去。霜天不冷，人间值得。灵石-{}，气运+2 */];
                 card.opts.push(("姜茶绕桥".into(), e2));
             }
             175 => {
@@ -7646,10 +7441,7 @@ impl Game {
                 e2.stones = -g;
                 e2.good = false;
                 e2.dao = 1.0;
-                e2.msg = vec![format!(
-                    "你把工钱压在针线筐底下。老匠追出门时，你已走进将停的雨里。灵石-{}，道心+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(754, &[&(fmt_int(g))])/* 原文：你把工钱压在针线筐底下。老匠追出门时，你已走进将停的雨里。灵石-{}，道心+1 */];
                 card.opts.push(("压钱离铺".into(), e2));
             }
             178 => {
@@ -7690,10 +7482,7 @@ impl Game {
                 e2.stones = -g;
                 e2.good = false;
                 e2.dao = 1.0;
-                e2.msg = vec![format!(
-                    "你咬牙付钱买下，回去一验果然是赝品——只当破财免灾，记住了那股过火的香。灵石-{}，道心+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(755, &[&(fmt_int(g))])/* 原文：你咬牙付钱买下，回去一验果然是赝品——只当破财免灾，记住了那股过火的香。灵石-{}，道心+1 */];
                 card.opts.push(("付钱买教训".into(), e2));
             }
             180 => {
@@ -7745,10 +7534,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "霜夜露重，你翻出行囊里那件旧裘，针脚还是多年前缝的。{}取过针线：「补补吧。旧物认人，人也认旧物。」",
-                    cn
-                );
+                card.text = evf(756, &[&(cn)])/* 原文：霜夜露重，你翻出行囊里那件旧裘，针脚还是多年前缝的。{}取过针线：「补补吧。旧物认人，人也认旧物。」 */;
                 let mut e1 = Eff::new();
                 e1.luck = 2.0;
                 e1.dao = 1.0;
@@ -7759,11 +7545,7 @@ impl Game {
                 let g = (40.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "你把旧裘披回{}肩上，转身去添炭温酒——旧物认人，今夜不冷。灵石+{}",
-                    cn,
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(757, &[&(cn), &(fmt_int(g))])/* 原文：你把旧裘披回{}肩上，转身去添炭温酒——旧物认人，今夜不冷。灵石+{} */];
                 card.opts.push(("披裘添炭".into(), e2));
             }
 
@@ -7783,10 +7565,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "{}在灯下临你的字帖，一横一竖描得极慢：「你的字有一笔总写歪——不是手的事，是心里那一笔没落稳。」",
-                    cn
-                );
+                card.text = evf(758, &[&(cn)])/* 原文：{}在灯下临你的字帖，一横一竖描得极慢：「你的字有一笔总写歪——不是手的事，是心里那一笔没落稳。」 */;
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
@@ -7817,17 +7596,11 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "{}把两份引气图并在一案：「单修如独焰，双修如对火——你借我一分气，我还你一分神。」",
-                    cn
-                );
+                card.text = evf(759, &[&(cn)])/* 原文：{}把两份引气图并在一案：「单修如独焰，双修如对火——你借我一分气，我还你一分神。」 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
-                e1.msg = vec![format!(
-                    "一炉火候，两息相衔。出关时神完气足。（好感+{}）道心+1",
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(760, &[&(crate::data::COMPANION_GIFT_FAV)])/* 原文：一炉火候，两息相衔。出关时神完气足。（好感+{}）道心+1 */];
                 card.opts.push(("对坐同参".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.05;
@@ -7848,10 +7621,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "{}御风携你入云海：「高处风大，抓稳——书上说云下众生如蚁，我想让你亲眼看看。」",
-                    cn
-                );
+                card.text = evf(761, &[&(cn)])/* 原文：{}御风携你入云海：「高处风大，抓稳——书上说云下众生如蚁，我想让你亲眼看看。」 */;
                 let mut e1 = Eff::new();
                 e1.luck = 2.0;
                 e1.msg = vec![evtx(416)/* 原文：云开处山河万里，你们在风里笑出声来。气运+2 */.into()];
@@ -8176,17 +7946,11 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "与{}踏云归途，云海里浮出一枚残简——简上只有半句，像谁写了一半，被风收走了后半。",
-                    cn
-                );
+                card.text = evf(762, &[&(cn)])/* 原文：与{}踏云归途，云海里浮出一枚残简——简上只有半句，像谁写了一半，被风收走了后半。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
-                e1.msg = vec![format!(
-                    "你们各执一端，把半句补成了全句——这枚简等了几百年，等的是一双同读的人。（好感+{}）道心+1",
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(763, &[&(crate::data::COMPANION_GIFT_FAV)])/* 原文：你们各执一端，把半句补成了全句——这枚简等了几百年，等的是一双同读的人。（好感+{}）道心+1 */];
                 card.opts.push(("合力补全".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
@@ -8210,17 +7974,11 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "炉火将尽，你与{}同席对坐，把共同走过的年岁一年一年数着玩——数到某些年份，两个人同时笑出了声。",
-                    cn
-                );
+                card.text = evf(764, &[&(cn)])/* 原文：炉火将尽，你与{}同席对坐，把共同走过的年岁一年一年数着玩——数到某些年份，两个人同时笑出了声。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 2.0;
-                e1.msg = vec![format!(
-                    "你们把年岁数到了今年。旧事重数不是翻旧账，是再谢一遍。（好感+{}）道心+2",
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(765, &[&(crate::data::COMPANION_GIFT_FAV)])/* 原文：你们把年岁数到了今年。旧事重数不是翻旧账，是再谢一遍。（好感+{}）道心+2 */];
                 card.opts.push(("一年一年数到底".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
@@ -8299,10 +8057,7 @@ impl Game {
                 let g = (30.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "你说「对账可以，谢礼照付」——他笑着摸出一袋旧年攒的星砂抵账。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(766, &[&(fmt_int(g))])/* 原文：你说「对账可以，谢礼照付」——他笑着摸出一袋旧年攒的星砂抵账。灵石+{} */];
                 card.opts.push(("先收对账的谢礼".into(), e2));
             }
             208 => {
@@ -8331,10 +8086,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = -g;
                 e1.good = false;
-                e1.msg = vec![format!(
-                    "你付了重铭的工费。新墨落碑，笔画比旧年深了几分——像谁怕它再洇一次。灵石-{}",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(767, &[&(fmt_int(g))])/* 原文：你付了重铭的工费。新墨落碑，笔画比旧年深了几分——像谁怕它再洇一次。灵石-{} */];
                 card.opts.push(("付工费重铭".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = -0.06;
@@ -8358,17 +8110,11 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "夜雨忽至，你与{}躲进檐下。檐角一只旧铃被雨点敲响——那是旧年你们亲手挂上去的，说好谁忘了归途，就循铃声回来。",
-                    cn
-                );
+                card.text = evf(768, &[&(cn)])/* 原文：夜雨忽至，你与{}躲进檐下。檐角一只旧铃被雨点敲响——那是旧年你们亲手挂上去的，说好谁忘了归途，就循铃声回来。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
-                e1.msg = vec![format!(
-                    "你们谁也没说话，听了一夜的铃。铃声不催人，倒像在替你们把旧话重说了一遍。（好感+{}）道心+1",
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(769, &[&(crate::data::COMPANION_GIFT_FAV)])/* 原文：你们谁也没说话，听了一夜的铃。铃声不催人，倒像在替你们把旧话重说了一遍。（好感+{}）道心+1 */];
                 card.opts.push(("听铃到雨停".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
@@ -8391,17 +8137,11 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "云海之上风平如镜。{}提议放一盏灯——不为许愿，只为看看它究竟能穿多厚的云。灯芯是你亲手搓的，捻得很紧。",
-                    cn
-                );
+                card.text = evf(770, &[&(cn)])/* 原文：云海之上风平如镜。{}提议放一盏灯——不为许愿，只为看看它究竟能穿多厚的云。灯芯是你亲手搓的，捻得很紧。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.luck = 1.0;
-                e1.msg = vec![format!(
-                    "灯穿过了三层云，光透下来的时候，云海亮出了一道细缝——像天替你们掀了掀帘。（好感+{}）气运+1",
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(771, &[&(crate::data::COMPANION_GIFT_FAV)])/* 原文：灯穿过了三层云，光透下来的时候，云海亮出了一道细缝——像天替你们掀了掀帘。（好感+{}）气运+1 */];
                 card.opts.push(("看灯穿云".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
@@ -8424,17 +8164,11 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "今冬初雪。你与{}相扶着坐到廊下看雪，谁也不点灯——雪光够亮了。落雪无声，话也渐渐少了，只剩两件旧棉衣挨在一处。",
-                    cn
-                );
+                card.text = evf(772, &[&(cn)])/* 原文：今冬初雪。你与{}相扶着坐到廊下看雪，谁也不点灯——雪光够亮了。落雪无声，话也渐渐少了，只剩两件旧棉衣挨在一处。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 2.0;
-                e1.msg = vec![format!(
-                    "你把肩往她那边靠了靠，她把毯往你这边挪了挪。雪落了一夜，谁也没觉得冷。（好感+{}）道心+2",
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(773, &[&(crate::data::COMPANION_GIFT_FAV)])/* 原文：你把肩往她那边靠了靠，她把毯往你这边挪了挪。雪落了一夜，谁也没觉得冷。（好感+{}）道心+2 */];
                 card.opts.push(("同看一场雪".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
@@ -8469,10 +8203,7 @@ impl Game {
                 e1.stones = -g;
                 e1.good = false;
                 e1.luck = 1.0;
-                e1.msg = vec![format!(
-                    "你出钱请钟楼老吏登楼验钟——果然是钟舌松了半分。老吏修钟，众心渐安，你手头却紧了。灵石-{}，气运+1",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(774, &[&(fmt_int(g))])/* 原文：你出钱请钟楼老吏登楼验钟——果然是钟舌松了半分。老吏修钟，众心渐安，你手头却紧了。灵石-{}，气运+1 */];
                 card.opts.push(("出钱验钟".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = -0.05;
@@ -8513,10 +8244,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = -g;
                 e2.luck = 2.0;
-                e2.msg = vec![format!(
-                    "你把旧笺揣进袖子，亲自下了山——灯会彻夜不谢，你看到了天明。迟到的约也是约。灵石-{}，气运+2",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(775, &[&(fmt_int(g))])/* 原文：你把旧笺揣进袖子，亲自下了山——灯会彻夜不谢，你看到了天明。迟到的约也是约。灵石-{}，气运+2 */];
                 card.opts.push(("亲自赴约".into(), e2));
             }
             217 => {
@@ -8552,10 +8280,7 @@ impl Game {
                 e2.stones = -g;
                 e2.good = false;
                 e2.dao = 1.0;
-                e2.msg = vec![format!(
-                    "你任它们滚，坐下来慢慢补带——「身外物，追不得」。补好了囊，也补明白了一件事。灵石-{}，道心+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(776, &[&(fmt_int(g))])/* 原文：你任它们滚，坐下来慢慢补带——「身外物，追不得」。补好了囊，也补明白了一件事。灵石-{}，道心+1 */];
                 card.opts.push(("补带不追".into(), e2));
             }
 
@@ -8643,10 +8368,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = g;
                 e1.luck = 1.0;
-                e1.msg = vec![format!(
-                    "你说「数星的人收过谢了，这份替他转收」——他把砂倒进你袖中，微微发温。灵石+{}，气运+1",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(777, &[&(fmt_int(g))])/* 原文：你说「数星的人收过谢了，这份替他转收」——他把砂倒进你袖中，微微发温。灵石+{}，气运+1 */];
                 card.opts.push(("接下星砂".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
@@ -8663,10 +8385,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = -g;
                 e1.good = false;
-                e1.msg = vec![format!(
-                    "你如数付了新例工钱。玉入手温润生光——他拱手：「涨价的是玉，不是手艺。」灵石-{}",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(778, &[&(fmt_int(g))])/* 原文：你如数付了新例工钱。玉入手温润生光——他拱手：「涨价的是玉，不是手艺。」灵石-{} */];
                 card.opts.push(("付新例工钱".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = -0.05;
@@ -8709,17 +8428,11 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "高崖夜静，{}忽然拽你往下指——流星正坠，一前一后有两道。「一人一道，谁也不用让谁。」你们并肩数完了这场流星雨。",
-                    cn
-                );
+                card.text = evf(779, &[&(cn)])/* 原文：高崖夜静，{}忽然拽你往下指——流星正坠，一前一后有两道。「一人一道，谁也不用让谁。」你们并肩数完了这场流星雨。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
-                e1.msg = vec![format!(
-                    "数到最后你们都笑了——两个人数星，快一倍，也暖一倍。（好感+{}）道心+1",
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(780, &[&(crate::data::COMPANION_GIFT_FAV)])/* 原文：数到最后你们都笑了——两个人数星，快一倍，也暖一倍。（好感+{}）道心+1 */];
                 card.opts.push(("并肩数星".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
@@ -8743,17 +8456,11 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "霜晨赶集，{}撑伞追上你——伞不大，她把大半让给你，肩头落霜也不说。半路你接过伞，她笑了：「原来你也会让。」",
-                    cn
-                );
+                card.text = evf(781, &[&(cn)])/* 原文：霜晨赶集，{}撑伞追上你——伞不大，她把大半让给你，肩头落霜也不说。半路你接过伞，她笑了：「原来你也会让。」 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
-                e1.msg = vec![format!(
-                    "一路换了两回伞，谁的肩都没湿。集口粥摊热气扑面——霜晨的暖是让出来的。（好感+{}）道心+1",
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(782, &[&(crate::data::COMPANION_GIFT_FAV)])/* 原文：一路换了两回伞，谁的肩都没湿。集口粥摊热气扑面——霜晨的暖是让出来的。（好感+{}）道心+1 */];
                 card.opts.push(("轮流撑伞".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
@@ -8776,10 +8483,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = -g;
                 e2.luck = 2.0;
-                e2.msg = vec![format!(
-                    "你把旧伞塞给他，摆手走了。身后货郎追了两步喊了声「谢」——声撞在雨里，听着舒服。灵石-{}，气运+2",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(783, &[&(fmt_int(g))])/* 原文：你把旧伞塞给他，摆手走了。身后货郎追了两步喊了声「谢」——声撞在雨里，听着舒服。灵石-{}，气运+2 */];
                 card.opts.push(("以伞相赠".into(), e2));
             }
             228 => {
@@ -8807,10 +8511,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = g;
                 e1.good = false;
-                e1.msg = vec![format!(
-                    "你照契收了抽成。他背着空袋出门，脚步比来时沉——契没改，改的是来年谁还敢佃你的田。灵石+{}",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(784, &[&(fmt_int(g))])/* 原文：你照契收了抽成。他背着空袋出门，脚步比来时沉——契没改，改的是来年谁还敢佃你的田。灵石+{} */];
                 card.opts.push(("照契抽成".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
@@ -8889,10 +8590,7 @@ impl Game {
                 let g = (30.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = g;
-                e2.msg = vec![format!(
-                    "你说「路我自己走」——他也不强留，抛下一袋星砂抵那半幅图的纸钱。灵石+{}",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(785, &[&(fmt_int(g))])/* 原文：你说「路我自己走」——他也不强留，抛下一袋星砂抵那半幅图的纸钱。灵石+{} */];
                 card.opts.push(("把图还他".into(), e2));
             }
             234 => {
@@ -8907,10 +8605,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = -g;
                 e2.dao = 1.0;
-                e2.msg = vec![format!(
-                    "你不答，只把砚买下——「答案自己磨。」摊主目送你远去，若有所思。灵石-{}，道心+1",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(786, &[&(fmt_int(g))])/* 原文：你不答，只把砚买下——「答案自己磨。」摊主目送你远去，若有所思。灵石-{}，道心+1 */];
                 card.opts.push(("买下旧砚".into(), e2));
             }
             235 => {
@@ -8921,10 +8616,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = -g;
                 e1.good = false;
-                e1.msg = vec![format!(
-                    "差价三成。你补了——影市规矩：秤不可回改，账不可重算。灵石-{}",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(787, &[&(fmt_int(g))])/* 原文：差价三成。你补了——影市规矩：秤不可回改，账不可重算。灵石-{} */];
                 card.opts.push(("补差价了事".into(), e1));
                 let mut e2 = Eff::new();
                 e2.stones_pct = -0.05;
@@ -8960,10 +8652,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = -g;
                 e1.good = false;
-                e1.msg = vec![format!(
-                    "剑赋入库，帖角焚作青烟——群剑的鸣声低了三分，像一声「收讫」。灵石-{}",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(788, &[&(fmt_int(g))])/* 原文：剑赋入库，帖角焚作青烟——群剑的鸣声低了三分，像一声「收讫」。灵石-{} */];
                 card.opts.push(("如数奉纳".into(), e1));
                 let mut e2 = Eff::new();
                 e2.fight = 1.0;
@@ -8978,10 +8667,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = -g;
                 e1.good = false;
-                e1.msg = vec![format!(
-                    "照契偿清，执事拱手离去。三年前的一枚手印，今日兑成了银钱。灵石-{}",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(789, &[&(fmt_int(g))])/* 原文：照契偿清，执事拱手离去。三年前的一枚手印，今日兑成了银钱。灵石-{} */];
                 card.opts.push(("照契如偿".into(), e1));
                 let mut e2 = Eff::new();
                 e2.stones_pct = -0.04;
@@ -9009,10 +8695,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "岁暮大雪，檐下你与{}共守一盏岁灯。灯芯爆了个灯花，两个人不约而同笑出了声。",
-                    cn
-                );
+                card.text = evf(790, &[&(cn)])/* 原文：岁暮大雪，檐下你与{}共守一盏岁灯。灯芯爆了个灯花，两个人不约而同笑出了声。 */;
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
@@ -9049,18 +8732,11 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "洞府药圃开了春，你与{}各分一畦新籽，赌谁的芽先顶土。芽没等来，两人先把等芽的闲话说满了一畦。",
-                    cn
-                );
+                card.text = evf(791, &[&(cn)])/* 原文：洞府药圃开了春，你与{}各分一畦新籽，赌谁的芽先顶土。芽没等来，两人先把等芽的闲话说满了一畦。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
-                e1.msg = vec![format!(
-                    "出芽那日你起了个大早——两畦的芽竟是一夜齐冒，谁也没赢。{}笑你：赌约白立了，春色不偏心。（好感+{}）道心+1",
-                    cn,
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(792, &[&(cn), &(crate::data::COMPANION_GIFT_FAV)])/* 原文：出芽那日你起了个大早——两畦的芽竟是一夜齐冒，谁也没赢。{}笑你：赌约白立了，春色不偏心。（好感+{}）道心+1 */];
                 card.opts.push(("认下这个平局".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
@@ -9083,17 +8759,11 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "云海最薄处，你与{}各踏一朵云，以指为笔在云上题字。两朵云缓缓漂近——风把两个字推到了一起。",
-                    cn
-                );
+                card.text = evf(793, &[&(cn)])/* 原文：云海最薄处，你与{}各踏一朵云，以指为笔在云上题字。两朵云缓缓漂近——风把两个字推到了一起。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.luck = 1.0;
-                e1.msg = vec![format!(
-                    "你把她的名字补在自己字旁。风一吹笔画就散——散了再写，云海当纸，一下午写了又擦。（好感+{}）气运+1",
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(794, &[&(crate::data::COMPANION_GIFT_FAV)])/* 原文：你把她的名字补在自己字旁。风一吹笔画就散——散了再写，云海当纸，一下午写了又擦。（好感+{}）气运+1 */];
                 card.opts.push(("把名字补在旁边".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
@@ -9149,10 +8819,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = -g;
                 e1.luck = 2.0;
-                e1.msg = vec![format!(
-                    "你替他清了账。后人郑重收账，他只顾斟酒——「千年利钱，够买一场醉，值。」灵石-{}，气运+2",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(795, &[&(fmt_int(g))])/* 原文：你替他清了账。后人郑重收账，他只顾斟酒——「千年利钱，够买一场醉，值。」灵石-{}，气运+2 */];
                 card.opts.push(("替他清账".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
@@ -9170,10 +8837,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = -g;
                 e1.good = false;
-                e1.msg = vec![format!(
-                    "你掷下灵石了事——修士的时辰比灵石贵，滩头的口水比灵石重。灵石-{}",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(796, &[&(fmt_int(g))])/* 原文：你掷下灵石了事——修士的时辰比灵石贵，滩头的口水比灵石重。灵石-{} */];
                 card.opts.push(("掷钱了事".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = -0.03;
@@ -9207,10 +8871,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = g;
                 e1.luck = 3.0;
-                e1.msg = vec![format!(
-                    "你在市中换得一袋旧年官铸的灵石，成色比今年的足。雾合拢时，市与人都没了。灵石+{}，气运+3",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(797, &[&(fmt_int(g))])/* 原文：你在市中换得一袋旧年官铸的灵石，成色比今年的足。雾合拢时，市与人都没了。灵石+{}，气运+3 */];
                 card.opts.push(("换一袋旧年灵石".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.10;
@@ -9248,10 +8909,7 @@ impl Game {
                 let g = (35.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = g;
-                e1.msg = vec![format!(
-                    "你领回那笔旧款。柜上另贴一行小字：「利息照柜台酒钱算。」胡掌柜摆手：「图个来往长久。」灵石+{}",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(798, &[&(fmt_int(g))])/* 原文：你领回那笔旧款。柜上另贴一行小字：「利息照柜台酒钱算。」胡掌柜摆手：「图个来往长久。」灵石+{} */];
                 card.opts.push(("领回旧款".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
@@ -9353,10 +9011,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.stones = -g;
                 e2.good = false;
-                e2.msg = vec![format!(
-                    "你说「当年的账用酒清」。一桌席面下来，他红着眼走了——灵石-{}，恶气也散了。",
-                    fmt_int(g)
-                )];
+                e2.msg = vec![evf(799, &[&(fmt_int(g))])/* 原文：你说「当年的账用酒清」。一桌席面下来，他红着眼走了——灵石-{}，恶气也散了。 */];
                 card.opts.push(("赔一桌酒".into(), e2));
             }
             255 => {
@@ -9386,10 +9041,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = -g;
                 e1.good = false;
-                e1.msg = vec![format!(
-                    "你替那场把戏清了尾账——年轻人各自散去时朝你行礼。灵石-{}，恶气散了。",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(800, &[&(fmt_int(g))])/* 原文：你替那场把戏清了尾账——年轻人各自散去时朝你行礼。灵石-{}，恶气散了。 */];
                 card.opts.push(("替清尾账".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
@@ -9414,24 +9066,15 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "灯市里{}在摊前停了很久，挑中一盏走马灯举到你眼前：「你看灯影转的山水——像不像那年同去看的那条江？」",
-                    cn
-                );
+                card.text = evf(801, &[&(cn)])/* 原文：灯市里{}在摊前停了很久，挑中一盏走马灯举到你眼前：「你看灯影转的山水——像不像那年同去看的那条江？」 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
-                e1.msg = vec![format!(
-                    "你付了灯钱。灯影一路转到巷口，两人谁也没先说话。（好感+{}）道心+1",
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(802, &[&(crate::data::COMPANION_GIFT_FAV)])/* 原文：你付了灯钱。灯影一路转到巷口，两人谁也没先说话。（好感+{}）道心+1 */];
                 card.opts.push(("提灯同归".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
-                e2.msg = vec![format!(
-                    "你说「再解一盏灯谜，解开的归谁」。结果两盏都归了{}。（气运+1）",
-                    cn
-                )];
+                e2.msg = vec![evf(803, &[&(cn)])/* 原文：你说「再解一盏灯谜，解开的归谁」。结果两盏都归了{}。（气运+1） */];
                 card.opts.push(("再解灯谜".into(), e2));
             }
             258 => {
@@ -9491,10 +9134,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = -g;
                 e1.good = false;
-                e1.msg = vec![format!(
-                    "你数清了三样「钱」，一枚不少拍在船板上。船靠岸，他连头也不回——这买路财，输得起也没输。灵石-{}",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(804, &[&(fmt_int(g))])/* 原文：你数清了三样「钱」，一枚不少拍在船板上。船靠岸，他连头也不回——这买路财，输得起也没输。灵石-{} */];
                 card.opts.push(("掷银过江".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
@@ -9537,24 +9177,15 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "你与{}同研一池新墨，各写半笺——同一句道诀，笔锋起落渐渐合了拍。写到末行，两张纸几乎接成一张。",
-                    cn
-                );
+                card.text = evf(805, &[&(cn)])/* 原文：你与{}同研一池新墨，各写半笺——同一句道诀，笔锋起落渐渐合了拍。写到末行，两张纸几乎接成一张。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
-                e1.msg = vec![format!(
-                    "你提笔把两个半句接成一行，墨色深浅不一，意思却通。（好感+{}）道心+1",
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(806, &[&(crate::data::COMPANION_GIFT_FAV)])/* 原文：你提笔把两个半句接成一行，墨色深浅不一，意思却通。（好感+{}）道心+1 */];
                 card.opts.push(("合写一行".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
-                e2.msg = vec![format!(
-                    "你把两半笺收进同一只匣子：「等老了再拼。」{}把匣口压得更紧了些。（气运+1）",
-                    cn
-                )];
+                e2.msg = vec![evf(807, &[&(cn)])/* 原文：你把两半笺收进同一只匣子：「等老了再拼。」{}把匣口压得更紧了些。（气运+1） */];
                 card.opts.push(("各留半笺".into(), e2));
             }
             263 => {
@@ -9668,18 +9299,11 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "雪压檐的夜里，你与{}围炉温一壶旧年的酒。酒过三巡，各自说起开笔前的事——炉火没急着旺，话也没急着完。",
-                    cn
-                );
+                card.text = evf(808, &[&(cn)])/* 原文：雪压檐的夜里，你与{}围炉温一壶旧年的酒。酒过三巡，各自说起开笔前的事——炉火没急着旺，话也没急着完。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
-                e1.msg = vec![format!(
-                    "你把炭拨匀，火光映亮两张脸。{}把壶往你这边挪了半寸。（好感+{}）道心+1",
-                    cn,
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(809, &[&(cn), &(crate::data::COMPANION_GIFT_FAV)])/* 原文：你把炭拨匀，火光映亮两张脸。{}把壶往你这边挪了半寸。（好感+{}）道心+1 */];
                 card.opts.push(("替他添炭".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
@@ -9771,25 +9395,15 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "你与{}寒江同船，一网收上来半网是鱼半网是碎冰。两支桨把船稳住，雪落进江里，谁也没先说话。",
-                    cn
-                );
+                card.text = evf(810, &[&(cn)])/* 原文：你与{}寒江同船，一网收上来半网是鱼半网是碎冰。两支桨把船稳住，雪落进江里，谁也没先说话。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
-                e1.msg = vec![format!(
-                    "你把网从冰缝里慢慢拖上来，{}在船尾压舱——半篓活鱼在雪里还冒着热气。（好感+{}）道心+1",
-                    cn,
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(811, &[&(cn), &(crate::data::COMPANION_GIFT_FAV)])/* 原文：你把网从冰缝里慢慢拖上来，{}在船尾压舱——半篓活鱼在雪里还冒着热气。（好感+{}）道心+1 */];
                 card.opts.push(("并桨拖网".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
-                e2.msg = vec![format!(
-                    "一篓分两半，雪也分了两肩。{}把大些的半篓塞过来：「网是我撒的，鱼是船稳的。」（气运+1）",
-                    cn
-                )];
+                e2.msg = vec![evf(812, &[&(cn)])/* 原文：一篓分两半，雪也分了两肩。{}把大些的半篓塞过来：「网是我撒的，鱼是船稳的。」（气运+1） */];
                 card.opts.push(("分篓分雪".into(), e2));
             }
             273 => {
@@ -9822,10 +9436,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.stones = -g;
                 e1.good = false;
-                e1.msg = vec![format!(
-                    "你回头把酒钱付了再问一遍。他这才指正路：「路是对的，问的人不对——没带酒的问法。」灵石-{}",
-                    fmt_int(g)
-                )];
+                e1.msg = vec![evf(813, &[&(fmt_int(g))])/* 原文：你回头把酒钱付了再问一遍。他这才指正路：「路是对的，问的人不对——没带酒的问法。」灵石-{} */];
                 card.opts.push(("付酒钱重问".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
@@ -10009,25 +9620,15 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "霜原初晴，你与{}纵马并驰，蹄下踏碎薄雪，两串白气追着马尾跑。到山脊才缓下来，天地一片白。",
-                    cn
-                );
+                card.text = evf(814, &[&(cn)])/* 原文：霜原初晴，你与{}纵马并驰，蹄下踏碎薄雪，两串白气追着马尾跑。到山脊才缓下来，天地一片白。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
-                e1.msg = vec![format!(
-                    "你挑了最稳的道，{}的马紧贴着走——两道蹄印一路排到山脊。（好感+{}）道心+1",
-                    cn,
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(815, &[&(cn), &(crate::data::COMPANION_GIFT_FAV)])/* 原文：你挑了最稳的道，{}的马紧贴着走——两道蹄印一路排到山脊。（好感+{}）道心+1 */];
                 card.opts.push(("并马登脊".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
-                e2.msg = vec![format!(
-                    "回程你把酒壶递过去，{}仰头饮了一口：「霜天纵马，就该配口热的。」（气运+1）",
-                    cn
-                )];
+                e2.msg = vec![evf(816, &[&(cn)])/* 原文：回程你把酒壶递过去，{}仰头饮了一口：「霜天纵马，就该配口热的。」（气运+1） */];
                 card.opts.push(("酒暖归途".into(), e2));
             }
             284 => {
@@ -10119,25 +9720,15 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = format!(
-                    "岁暮封坛，你与{}把新酿的冬酒泥封入窖，只在坛上并排按下两枚指印——来年开坛，谁先尝谁掌灯。",
-                    cn
-                );
+                card.text = evf(817, &[&(cn)])/* 原文：岁暮封坛，你与{}把新酿的冬酒泥封入窖，只在坛上并排按下两枚指印——来年开坛，谁先尝谁掌灯。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
-                e1.msg = vec![format!(
-                    "你把窖口压实，又添了一层稻草。{}在坛身写上来年年份，笔迹正压着你的指印。（好感+{}）道心+1",
-                    cn,
-                    crate::data::COMPANION_GIFT_FAV
-                )];
+                e1.msg = vec![evf(818, &[&(cn), &(crate::data::COMPANION_GIFT_FAV)])/* 原文：你把窖口压实，又添了一层稻草。{}在坛身写上来年年份，笔迹正压着你的指印。（好感+{}）道心+1 */];
                 card.opts.push(("添草封窖".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
-                e2.msg = vec![format!(
-                    "你与{}约定来年同开——两枚指印在泥封上并得很近，像先把来年的灯座好了。（气运+1）",
-                    cn
-                )];
+                e2.msg = vec![evf(819, &[&(cn)])/* 原文：你与{}约定来年同开——两枚指印在泥封上并得很近，像先把来年的灯座好了。（气运+1） */];
                 card.opts.push(("约来年开".into(), e2));
             }
             289 => {
@@ -10180,6 +9771,181 @@ impl Game {
                 ];
                 card.opts.push(("拆套再谈".into(), e2));
             }
+            291 => {
+                // v1.16.27 扩池：老年层（余量≤10 载门控，十条扩到十一条——
+                // v1.16.20 后五轮未补的重见率最高层；题材照交托回望域，避
+                // 170 炉暖旧器/198 窗前晒卷/215 灶火留谱/227 半檐躲雨）
+                card.title = "换窗新纸".into();
+                card.text = evtx(1418)/* 原文：入冬头一场霜，你把窗上的旧纸揭下来重糊。邻家小子伸着手替你按住纸角——糊的是新纸，记的是旧冬，一年一回。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(1419)/* 原文：风从新纸外绕过去，屋里灯不动。你在窗边坐到掌灯，旧冬年年过，新纸年年亮。道心+2 */.into(),
+                ];
+                card.opts.push(("糊好新窗".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1420)/* 原文：你把揭下的旧纸叠好收进箱底——上头有去年记的账。留一句给来年：窗会记得。气运+1 */.into(),
+                ];
+                card.opts.push(("留半张旧纸".into(), e2));
+            }
+            292 => {
+                // v1.16.27 扩池：具名 NPC 玄诚长老 mr4 首卡（Npc(0)，具名与脸
+                // 同源照 248 口径——两人 mr4 零布点补位；题材避 248 巡山/
+                // 253/267/273：讲堂补席是掌课外的事务）
+                card.title = "讲堂补席".into();
+                card.actor = Some(CardActor::Npc(0));
+                card.text = evtx(1421)/* 原文：散了课，玄诚长老蹲在讲堂檐下，把一排旧坐席的破洞逐个缝上：「坐得稳，才问得深——你们要问的题，先得坐得住。」 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(1422)/* 原文：你接针线替他缝完最后一只。他不评行功只评针脚：「线走得匀，气才走得匀。」道心+2 */.into(),
+                ];
+                card.opts.push(("同坐补席".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1423)/* 原文：你下山添了两只新席摆进讲堂——次日课上，多了两个敢开口发问的新脸。气运+1 */.into(),
+                ];
+                card.opts.push(("添两只新席".into(), e2));
+            }
+            293 => {
+                // v1.16.27 扩池：伴随 mr6 善（白名单 25→26，mr6 有伴第 3 条
+                // 摊薄 211/225 独苗）——Comp 立绘反查照 283/272 模板；无伴
+                // 不入池门控在 sim_event_weights
+                card.title = "袖里暖石".into();
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = evf(1424, &[&(cn)])/* 原文：高崖之上云海铺到天边，你与{}看云头翻涌如潮。袖里两块烫手的石头推来推去，最后一人一块——暖分不匀，分了才都暖。 */;
+                let mut e1 = Eff::new();
+                e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
+                e1.dao = 1.0;
+                e1.msg = vec![evf(1425, &[&(cn), &(cn), &(crate::data::COMPANION_GIFT_FAV)])/* 原文：你把滚热的那块塞进{}袖中：「崖上风硬。」{}攥着石头笑了：「石头会凉，递石头的心不会。」（好感+{}）道心+1 */];
+                card.opts.push(("递暖石".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![evf(1426, &[&(cn)])/* 原文：云海散时天边烧成赤金，{}说今日的云走得慢。你们在崖头多坐了一炷香，谁也没提下山的事。（气运+1） */];
+                card.opts.push(("看云到暮".into(), e2));
+            }
+            294 => {
+                // v1.16.27 扩池：mr3 恶（恶缘 6→7 条——题材避 23/125/188/
+                // 201/229/269 与 259/264/271 丹市诸臂：夜摊假丹是骗局侧写）
+                card.title = "假丹换真".into();
+                card.text = evtx(1427)/* 原文：坊市夜摊有人压嗓兜售「上好聚气丹」，你以一枚真丹相换——回房一验，药气浮得像油花。再出门，摊位灯还亮着，人已散了。 */.into();
+                let mut e1 = Eff::new();
+                e1.stones_pct = -0.06;
+                e1.good = false;
+                e1.msg = vec![
+                    evtx(1428)/* 原文：你把假丹收进匣底当个记性——在坊市，「便宜」两个字是最贵的招牌。灵石-6% */.into(),
+                ];
+                card.opts.push(("认栽蚀财".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.msg = vec![
+                    evtx(1429)/* 原文：你把假丹折成两半，药气散得比夜风还快。你把它挂回夜摊原处警示后来人，宁可多走三里去老铺。道心+1 */.into(),
+                ];
+                card.opts.push(("灯下验丹".into(), e2));
+            }
+            295 => {
+                // v1.16.27 扩池：mr5 恶（恶缘 5→6 条，最薄恶层——题材避
+                // 186 仙曹索卷/200 仙籍勾误/235 影市黑秤/254 旧败上门/
+                // 266 官牙抽引：同款压价是行市倾轧）
+                card.title = "符价压市".into();
+                card.text = evtx(1430)/* 原文：一夜之间，坊市涌进几百张同款符纸，价压到你摊上那批的三成——画得比你工整，卖得比你便宜。你收摊时，抛符的正数钱装车。 */.into();
+                let mut e1 = Eff::new();
+                e1.stones_pct = -0.06;
+                e1.good = false;
+                e1.msg = vec![
+                    evtx(1431)/* 原文：你把存符按三成价清给贩子——本蚀了，摊还在。笔是你的，明天再画。灵石-6% */.into(),
+                ];
+                card.opts.push(("蚀本清仓".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.msg = vec![
+                    evtx(1432)/* 原文：你把摊子搬去乡集，一笔一笔照旧画。有客认出你的笔迹，多给两成价——价是市定的，手艺是自己的。道心+1 */.into(),
+                ];
+                card.opts.push(("搬摊改画".into(), e2));
+            }
+            296 => {
+                // v1.16.27 扩池：具名 NPC 醉道人 mr4 首卡（Npc(3)，两人 mr4
+                // 零布点补位；题材避 222 星砂还账/244 酒账千年/261 醉倒门前/
+                // 274：题旗是字债不是酒债）
+                card.title = "醉题酒旗".into();
+                card.actor = Some(CardActor::Npc(3));
+                card.text = evtx(1433)/* 原文：酒旗旧了，你请醉道人题一幅新句。他倒了半壶酒才落笔，字歪得像醉步，写的却是句醒话：「醉是借来的，醒是自己的。」 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 1.0;
+                e1.msg = vec![
+                    evtx(1434)/* 原文：你把歪字句挂上门楣——路人念一遍笑一遍，笑着笑着把后半句记住了。醉道人隔街举壶敬你。道心+1 */.into(),
+                ];
+                card.opts.push(("把句挂上".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1435)/* 原文：你照他的口味烫一壶存在炉边。他隔三日来取，尝了说火候比他自己的稳——往后你摊前多了个常客。气运+1 */.into(),
+                ];
+                card.opts.push(("温酒候取".into(), e2));
+            }
+            297 => {
+                // v1.16.27 扩池：老年×有伴双门控第 6 条（照 204/212/239/268/
+                // 288 模板——余量≤10 载且有伴才入池，不入 COMPANION 白名单，
+                // 徽标走老年臂；题材避 204 同席说岁/212 相扶看雪/239 共守
+                // 岁灯/268 炉边说旧/288 同封岁坛：翻缝冬衣是灯下的旧物新面）
+                card.title = "重缝冬衣".into();
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = evf(1436, &[&(cn)])/* 原文：你把一件穿旧的冬衣翻个面重缝，{}举着灯替你捻线。针脚走得慢，旧年的事一件件从衣角里翻出来，说到了灯芯短。 */;
+                let mut e1 = Eff::new();
+                e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
+                e1.dao = 1.0;
+                e1.msg = vec![evf(1437, &[&(cn), &(cn), &(crate::data::COMPANION_GIFT_FAV)])/* 原文：{}捻线你走针，旧衣翻出新面。{}说这衣像替两个人裁的——针脚里全是旧年。（好感+{}）道心+1 */];
+                card.opts.push(("就灯走针".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1438)/* 原文：补好的冬衣两人换着试——袖长正好，肩线也正。衣是旧的，暖是新的。（气运+1） */.into(),
+                ];
+                card.opts.push(("换着试衣".into(), e2));
+            }
+            298 => {
+                // v1.16.27 扩池：mr6 恶（恶缘 4→5 条——题材避 194/214/242/
+                // 277：灵脉被截是「新契压旧年」的圈地层，守长生世纪律不触
+                // 破境裁决）
+                card.title = "灵脉被截".into();
+                card.text = evtx(1439)/* 原文：上游新贵圈地起楼，把过你洞府的那缕灵脉拦腰截走——地契齐全，官印鲜亮。洞里灵气一夜薄了三成，丹炉火苗细了半分。 */.into();
+                let mut e1 = Eff::new();
+                e1.stones_pct = -0.07;
+                e1.good = false;
+                e1.msg = vec![
+                    evtx(1440)/* 原文：你照市价把缺的三成灵气折成灵石补上——账好算，气难咽。新印鲜亮，压过你旧年的地契。灵石-7% */.into(),
+                ];
+                card.opts.push(("折价补气".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.msg = vec![
+                    evtx(1441)/* 原文：你沿断口往上游走了三日，寻着一缕支脉重新引灵入洞——山不认契，认肯走的人。道心+1 */.into(),
+                ];
+                card.opts.push(("循脉另引".into(), e2));
+            }
 
             _ => {}
         }
@@ -10190,8 +9956,8 @@ impl Game {
         // 链5 两段分支式（79→80|81）
         let w = EVENTS
             .iter()
-            .find(|&&(eid, _, _, _)| eid as usize == id) // v1.16.23 收窄读点
-            .map(|&(_, wt, _, _)| wt as i32)
+            .find(|&&(eid, _)| eid as usize == id) // v1.16.23 收窄读点
+            .map(|&(_, p)| ev_w(p))
             .unwrap_or(0);
         card.rare = w > 0 && w <= crate::data::RARE_W;
         card.stage = match id {
@@ -12859,7 +12625,7 @@ impl Game {
 
             if ok {
                 self.log(
-                    format!("现实突破：你踏入{}，根基扎实无比。", REALMS[r].layers[ly]),
+                    format!("现实突破：你踏入{}，旧阶沉入身后。", REALMS[r].layers[ly]),
                     C_GREEN,
                 );
 
@@ -13081,7 +12847,7 @@ impl Game {
             } else {
                 self.log(
                     format!(
-                        "现实冲击{}境失败！真元反噬受轻伤（现实突破有轮回镜护持，不会身死）。",
+                        "现实冲击{}境失败！真元反噬受轻伤——轮回镜护持，无死劫。",
                         rd.name
                     ),
                     C_RED,
@@ -16167,7 +15933,7 @@ mod chain_event_tests {
                     seg
                 );
             }
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             assert!(
                 b.chars().count() <= 18,
                 "事件 {} 简「{}」超 ≤18 预算",
@@ -16203,7 +15969,7 @@ mod chain_event_tests {
                     seg
                 );
             }
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             assert!(
                 b.chars().count() <= 18,
                 "事件 {} 简「{}」超 ≤18 预算",
@@ -16411,7 +16177,7 @@ mod chain_event_tests {
         let mut g = sim_game(5, 100.0); // 无伴
         let (ws, total) = g.sim_event_weights(100.0, 5, false, false, false);
         for &id in COMPANION_EVENTS.iter() {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
+            let i = EVENTS.iter().position(|&(e, _)| e == id as u16).unwrap();
             assert_eq!(ws[i], 0.0, "无伴时事件 {} 不入池", id);
         }
         let _ = total;
@@ -16423,7 +16189,7 @@ mod chain_event_tests {
         // 全白名单成立；负臂无伴归零与 realm 无涉保持 5）
         let (ws2, _) = g.sim_event_weights(100.0, 7, false, false, true);
         for &id in COMPANION_EVENTS.iter() {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
+            let i = EVENTS.iter().position(|&(e, _)| e == id as u16).unwrap();
             assert!(ws2[i] > 0.0, "有伴时事件 {} 入池", id);
         }
     }
@@ -16434,7 +16200,7 @@ mod chain_event_tests {
         let g = sim_game(5, 100.0);
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
         for id in [45, 46, 48, 49, 51, 52] {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
+            let i = EVENTS.iter().position(|&(e, _)| e == id as u16).unwrap();
             assert_eq!(ws[i], 0.0, "链内段 {} 权重恒 0", id);
         }
     }
@@ -16445,9 +16211,9 @@ mod chain_event_tests {
         let g = sim_game(5, 100.0);
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
         for id in [56, 57, 58] {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
+            let i = EVENTS.iter().position(|&(e, _)| e == id as u16).unwrap();
             assert!(ws[i] > 0.0, "稀有事件 {} 应入池", id);
-            assert!(EVENTS[i].1 <= 2, "稀有层权重 ≤2");
+            assert!(ev_w(EVENTS[i].1) <= 2, "稀有层权重 ≤2");
         }
     }
 
@@ -16685,6 +16451,14 @@ mod chain_event_tests {
             (288, false, None),
             (289, false, None),
             (290, false, None),
+            (291, false, None),
+            (292, false, None),
+            (293, false, None),
+            (294, false, None),
+            (295, false, None),
+            (296, false, None),
+            (297, false, None),
+            (298, false, None),
         ] {
             g.modal = None;
             g.build_event(id);
@@ -16749,13 +16523,28 @@ mod v11610_event_tests {
         }
     }
 
+    // v1.16.27 刀⑥位域无损钉测：EVENTS 打包位域解码 == EVENTS_ROWS 原行（全表逐行）。
+    // w>63（6bit 上限）/mr>7（3bit）当场红——扩池改表后必须过此测才算收口
+    #[test]
+    fn events_bitfield_pack_lossless() {
+        assert_eq!(EVENTS.len(), EVENTS_ROWS.len(), "打包表与行表同长");
+        for k in 0..EVENTS_ROWS.len() {
+            let r = EVENTS_ROWS[k];
+            let (id, p) = EVENTS[k];
+            assert_eq!(id, r.0, "行 {} id 打包漂移", k);
+            assert_eq!(ev_w(p), r.1 as i32, "行 {} 权重打包漂移（w>63 超 6bit？）", k);
+            assert_eq!(ev_mr(p), r.2, "行 {} mr 打包漂移（mr>7 超 3bit？）", k);
+            assert_eq!(ev_good(p), r.3, "行 {} 善缘位打包漂移", k);
+        }
+    }
+
     // 标题双源对账（v1.16.10 图鉴铺设前提）：EVENT_NAMES[id] ⟺ build_event
     // card.title 逐 id 相等；EVENT_BRIEF 非空且 ≤22 字一行（手札行布局预算）
     #[test]
     fn event_names_match_card_titles() {
         assert_eq!(EVENT_NAMES.len(), EVENTS.len(), "名表与事件表同长");
         assert_eq!(EVENT_BRIEF.len(), EVENTS.len(), "简表与事件表同长");
-        for &(id, _, _, _) in EVENTS.iter() {
+        for &(id, _) in EVENTS.iter() {
             let mut g = sim_game(5, 100.0);
             g.modal = None;
             g.build_event(id as usize);
@@ -16766,9 +16555,9 @@ mod v11610_event_tests {
             assert_eq!(
                 card.title, EVENT_NAMES[id as usize],
                 "事件 {} 标题双源漂移: card「{}」≠ 表「{}」",
-                id, card.title, EVENT_NAMES[id as usize]
+                id, card.title, &EVENT_NAMES[id as usize]
             );
-            let b = EVENT_BRIEF[id as usize];
+            let b = &EVENT_BRIEF[id as usize];
             assert!(
                 !b.is_empty() && b.chars().count() <= 22,
                 "事件 {} 简介越一行预算: {} ({}字)",
@@ -16789,7 +16578,7 @@ mod v11610_event_tests {
             0usize, 1, 3, 4, 5, 6, 12, 2, 9, 15, 17, 21, 25, 26, 27, 29, 42, 46, 67, 120, 184,
             188,
         ] {
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             let n = b.chars().count();
             assert!(
                 !b.is_empty() && n <= 18,
@@ -16807,7 +16596,7 @@ mod v11610_event_tests {
     #[test]
     fn brief_rewrite_batch_within_18() {
         for id in [16usize, 102, 109, 137, 140, 155, 178, 179, 194, 200, 201, 238] {
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             let n = b.chars().count();
             assert!(
                 !b.is_empty() && n <= 18,
@@ -17087,8 +16876,8 @@ mod v11610_event_tests {
     #[test]
     fn enemy_echo_events_gated() {
         let mut g = sim_game(5, 100.0);
-        let i110 = EVENTS.iter().position(|&(e, _, _, _)| e == 110).unwrap();
-        let i111 = EVENTS.iter().position(|&(e, _, _, _)| e == 111).unwrap();
+        let i110 = EVENTS.iter().position(|&(e, _)| e == 110).unwrap();
+        let i111 = EVENTS.iter().position(|&(e, _)| e == 111).unwrap();
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, false);
         assert_eq!(ws[i110], 0.0, "链6 未了 110 不入池");
         assert_eq!(ws[i111], 0.0, "未斩宿敌 111 不入池");
@@ -17365,8 +17154,8 @@ mod v11611_event_tests {
     #[test]
     fn chain910_first_segs_gated() {
         let mut g = sim_game(5, 100.0);
-        let i118 = EVENTS.iter().position(|&(e, _, _, _)| e == 118).unwrap();
-        let i121 = EVENTS.iter().position(|&(e, _, _, _)| e == 121).unwrap();
+        let i118 = EVENTS.iter().position(|&(e, _)| e == 118).unwrap();
+        let i121 = EVENTS.iter().position(|&(e, _)| e == 121).unwrap();
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, false);
         assert_eq!(ws[i118], 0.0, "未斩宿敌 118 不入池");
         assert_eq!(ws[i121], 0.0, "历世无结缘 121 不入池");
@@ -17613,7 +17402,7 @@ mod event_batch_v1169_tests {
     #[test]
     fn neme_chain_first_seg_gated_by_neme() {
         let mut g = sim_game(5, 100.0);
-        let i85 = EVENTS.iter().position(|&(e, _, _, _)| e == 85).unwrap();
+        let i85 = EVENTS.iter().position(|&(e, _)| e == 85).unwrap();
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, false);
         assert_eq!(ws[i85], 0.0, "无宿敌 85 不入池");
         g.meta.neme = Some(neme(5));
@@ -17628,8 +17417,8 @@ mod event_batch_v1169_tests {
     #[test]
     fn elder_events_gated_by_lifespan_left() {
         let mut g = sim_game(2, 100.0);
-        let i88 = EVENTS.iter().position(|&(e, _, _, _)| e == 88).unwrap();
-        let i89 = EVENTS.iter().position(|&(e, _, _, _)| e == 89).unwrap();
+        let i88 = EVENTS.iter().position(|&(e, _)| e == 88).unwrap();
+        let i89 = EVENTS.iter().position(|&(e, _)| e == 89).unwrap();
         let (ws, _) = g.sim_event_weights(100.0, 2, false, false, false);
         assert_eq!(ws[i88], 0.0, "余量 59 载 88 不入池");
         assert_eq!(ws[i89], 0.0, "余量 59 载 89 不入池");
@@ -17715,7 +17504,7 @@ mod event_batch_v1169_tests {
         let g = sim_game(5, 100.0);
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
         for id in 90..=99 {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
+            let i = EVENTS.iter().position(|&(e, _)| e == id as u16).unwrap();
             assert!(ws[i] > 0.0, "普通事件 {} realm5 应入池", id);
         }
     }
@@ -17878,7 +17667,7 @@ mod event_batch_v1168_tests {
         let g = sim_game(5, 100.0);
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
         for id in [77, 78, 80, 81, 86, 87] {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
+            let i = EVENTS.iter().position(|&(e, _)| e == id as u16).unwrap();
             assert_eq!(ws[i], 0.0, "链内段 {} 权重恒 0", id);
         }
     }
@@ -17889,9 +17678,9 @@ mod event_batch_v1168_tests {
         let g = sim_game(5, 100.0);
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
         for id in [72, 73] {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
+            let i = EVENTS.iter().position(|&(e, _)| e == id as u16).unwrap();
             assert!(ws[i] > 0.0, "稀有事件 {} 应入池", id);
-            assert!(EVENTS[i].1 <= 2, "稀有层权重 ≤2");
+            assert!(ev_w(EVENTS[i].1) <= 2, "稀有层权重 ≤2");
         }
         let mut g2 = sim_game(5, 100.0);
         g2.modal = None;
@@ -17907,8 +17696,8 @@ mod event_batch_v1168_tests {
     #[test]
     fn chapter_linked_events_gated_by_chap_done() {
         let mut g = sim_game(5, 100.0);
-        let i74 = EVENTS.iter().position(|&(e, _, _, _)| e == 74).unwrap();
-        let i75 = EVENTS.iter().position(|&(e, _, _, _)| e == 75).unwrap();
+        let i74 = EVENTS.iter().position(|&(e, _)| e == 74).unwrap();
+        let i75 = EVENTS.iter().position(|&(e, _)| e == 75).unwrap();
         // 未达成：两卡皆不入池
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, false);
         assert_eq!(ws[i74], 0.0, "第三章未了 74 不入池");
@@ -17936,7 +17725,7 @@ mod event_batch_v1168_tests {
         let mut g = sim_game(5, 100.0);
         g.meta.chap_done = 0;
         g.meta.chap_done |= 1 << 2;
-        let i74 = EVENTS.iter().position(|&(e, _, _, _)| e == 74).unwrap();
+        let i74 = EVENTS.iter().position(|&(e, _)| e == 74).unwrap();
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, false);
         assert!(ws[i74] > 0.0, "位在即入池，与会话态无关");
     }
@@ -17975,7 +17764,7 @@ mod event_batch_v1168_tests {
         let g = sim_game(5, 100.0);
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
         for id in 59..=72 {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
+            let i = EVENTS.iter().position(|&(e, _)| e == id as u16).unwrap();
             assert!(ws[i] > 0.0, "普通事件 {} realm5 应入池", id);
         }
         // EVENTS 总数断言（v1.16.9 扩池后 100 条；v1.16.10 扩池 18 → 118 条；
@@ -17996,10 +17785,11 @@ mod event_batch_v1168_tests {
         // 伴随 272/稀有检定 279/恶缘 277/mr6 善 276/mr7 善 278/mr0 善 280）
         // → 281 条；v1.16.26 扩池 10（NPC 二卡 281/282/伴随 283/稀有检定 284/
         // mr6 善 285/286/mr7 善 287/老年×伴 288/宿敌回响 289/mr0 恶 290）
-        // → 291 条，
+        // → 291 条；v1.16.27 扩池 8（老年层 291/具名 NPC 2 292 玄诚/296 醉道
+        // 人/伴随 293/恶缘 3 294/295/298/老年×伴 297）→ 299 条，
         // 稀有基权合计口径见 data.rs
         // 各批注释——账本数字一律以重算为准）
-        assert_eq!(EVENTS.len(), 291);
+        assert_eq!(EVENTS.len(), 299);
     }
 }
 
@@ -18544,12 +18334,12 @@ mod v11615_reward_and_pool_tests {
     // w3）/宿敌回响 1（289 w3 恶）/mr0 恶 1（290 w3），共 10 条
     #[test]
     fn pool_ledger_recheck() {
-        let total: i32 = EVENTS.iter().map(|&(_, w, _, _)| w as i32).sum();
-        assert_eq!(total, 907, "总基权漂移——照 data.rs v1.16.26 批注重算");
+        let total: i32 = EVENTS.iter().map(|&(_, p)| ev_w(p)).sum();
+        assert_eq!(total, 931, "总基权漂移——照 data.rs v1.16.27 批注重算");
         let rare: Vec<(usize, i32)> = EVENTS
             .iter()
-            .filter(|&&(_, w, _, _)| w > 0 && w as i32 <= crate::data::RARE_W)
-            .map(|&(id, w, _, _)| (id as usize, w as i32))
+            .filter(|&&(_, p)| ev_w(p) > 0 && ev_w(p) <= crate::data::RARE_W)
+            .map(|&(id, p)| (id as usize, ev_w(p)))
             .collect();
         assert_eq!(rare.len(), 22, "稀有条数漂移");
         let rare_w: i32 = rare.iter().map(|&(_, w)| w).sum();
@@ -18643,7 +18433,7 @@ mod v11619_event_tests {
     fn ev_idx(id: usize) -> usize {
         EVENTS
             .iter()
-            .position(|&(e, _, _, _)| e == id as u16)
+            .position(|&(e, _)| e == id as u16)
             .unwrap_or_else(|| panic!("事件 {} 不在 EVENTS 表", id))
     }
 
@@ -18822,7 +18612,7 @@ mod v11619_event_tests {
     #[test]
     fn batch2_briefs_within_18() {
         for id in 205..=218usize {
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             let n = b.chars().count();
             assert!(
                 !b.is_empty() && n <= 18,
@@ -19010,9 +18800,10 @@ mod v11617_pool_tests {
     fn batch_tables_aligned() {
         // v1.16.24 扩池 12 条（259..=270）/v1.16.25 扩池 10 条（271..=280）/
         // v1.16.26 扩池 10 条（281..=290）同批随批注口径 252→291
-        assert_eq!(EVENTS.len(), 291);
-        assert_eq!(EVENT_NAMES.len(), 291);
-        assert_eq!(EVENT_BRIEF.len(), 291);
+        // v1.16.27 扩池 8 条（291..=298）同批随批注口径 291→299
+        assert_eq!(EVENTS.len(), 299);
+        assert_eq!(EVENT_NAMES.len(), 299);
+        assert_eq!(EVENT_BRIEF.len(), 299);
         for id in 183..=204usize {
             assert_eq!(EVENTS[id].0 as usize, id, "新增段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
@@ -19066,6 +18857,13 @@ mod v11617_pool_tests {
             assert!(!EVENT_NAMES[id].is_empty());
             assert!(!EVENT_BRIEF[id].is_empty());
         }
+        // v1.16.27 批次段同口径补钉（名/简第二段连号 N1402..=1409/N1410..=1417，
+        // 段址见 pack_text.py 登记与 text_offsets.inc）
+        for id in 291..=298usize {
+            assert_eq!(EVENTS[id].0 as usize, id, "v1.16.27 段 id 连续");
+            assert!(!EVENT_NAMES[id].is_empty());
+            assert!(!EVENT_BRIEF[id].is_empty());
+        }
     }
 
     // 卡面良构：新 10 条标题双源/正文非空/两选项/抉择 apply_eff 全链不 panic
@@ -19099,7 +18897,7 @@ mod v11617_pool_tests {
     #[test]
     fn companion_batch_gates_and_tiers() {
         for id in [183usize, 184, 185] {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
+            let i = EVENTS.iter().position(|&(e, _)| e == id as u16).unwrap();
             let mut g0 = sim_game(5, 40.0);
             g0.recent_events.clear();
             let (ws0, _) = g0.sim_event_weights(40.0, 5, false, false, false);
@@ -19179,7 +18977,7 @@ mod v11617_pool_tests {
     #[test]
     fn chapter_batch_gates() {
         for (id, bit) in [(190usize, 0u32), (191usize, 3u32), (196usize, 1u32), (197usize, 4u32)] {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
+            let i = EVENTS.iter().position(|&(e, _)| e == id as u16).unwrap();
             let mut g0 = sim_game(5, 40.0);
             g0.recent_events.clear();
             let (ws0, _) = g0.sim_event_weights(40.0, 5, false, false, false);
@@ -19334,7 +19132,7 @@ mod v11620_pool_batch_tests {
                 "事件 {} 标题双源漂移",
                 id
             );
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             assert!(
                 !b.is_empty() && b.chars().count() <= 18,
                 "事件 {} 简越 18 字预算: {} ({}字)",
@@ -19456,7 +19254,7 @@ mod v11620_pool_batch_tests {
         let g4 = sim_game(7, 40.0);
         let (ws4, _) = g4.sim_event_weights(40.0, 7, false, false, false);
         assert!(ws4[224] > 0.0, "mr7 达标 224 入池");
-        assert!(EVENTS[224].1 as i32 <= crate::data::RARE_W, "224 权重 ≤RARE_W");
+        assert!(ev_w(EVENTS[224].1) <= crate::data::RARE_W, "224 权重 ≤RARE_W");
         let g5 = sim_game(6, 40.0);
         let (ws5, _) = g5.sim_event_weights(40.0, 6, false, false, false);
         assert_eq!(ws5[224], 0.0, "realm<mr 归零（224 mr7 独占）");
@@ -19640,7 +19438,7 @@ mod playability_pool_tests {
                 id,
                 card.text
             );
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             assert!(
                 !b.is_empty() && b.chars().count() <= 18,
                 "事件 {} 简越 18 字: {} ({}字)",
@@ -19876,7 +19674,7 @@ mod v11622_pool_tests {
                 id,
                 card.text
             );
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             assert!(
                 !b.is_empty() && b.chars().count() <= 18,
                 "事件 {} 简越 18 字: {} ({}字)",
@@ -20094,7 +19892,7 @@ mod v11623_pool_tests {
             );
             let n = card.text.chars().count();
             assert!(n <= 60, "事件 {} 正文 {} 字超 ≤60 预算：{}", id, n, card.text);
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             assert!(
                 b.chars().count() <= 18,
                 "事件 {} 简「{}」超 ≤18 预算",
@@ -20143,7 +19941,7 @@ mod v11623_pool_tests {
         let mut g0 = sim_game(5, 40.0);
         g0.recent_events.clear();
         let (ws0, _) = g0.sim_event_weights(40.0, 4, false, false, false);
-        let i257 = EVENTS.iter().position(|&(e, _, _, _)| e == 257).unwrap();
+        let i257 = EVENTS.iter().position(|&(e, _)| e == 257).unwrap();
         assert_eq!(ws0[i257], 0.0, "无伴：257 不入池");
         let mut g1 = sim_game(4, 40.0);
         g1.recent_events.clear();
@@ -20159,8 +19957,8 @@ mod v11623_pool_tests {
             matches!(card.actor, Some(CardActor::Comp(6))),
             "257 立绘应锁定道侣 6"
         );
-        // 白名单 24→25 收口（v1.16.26 批 283 入列）
-        assert_eq!(COMPANION_EVENTS.len(), 25, "伴随白名单 24→25");
+        // 白名单 24→25（v1.16.26 批 283 入列）→26（v1.16.27 批 293 入列）
+        assert_eq!(COMPANION_EVENTS.len(), 26, "伴随白名单 25→26");
     }
 }
 
@@ -20202,7 +20000,7 @@ mod v11624_pool_tests {
             );
             let n = card.text.chars().count();
             assert!(n <= 60, "事件 {} 正文 {} 字超 ≤60 预算：{}", id, n, card.text);
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             assert!(
                 b.chars().count() <= 18,
                 "事件 {} 简「{}」超 ≤18 预算",
@@ -20255,7 +20053,7 @@ mod v11624_pool_tests {
         let mut g0 = sim_game(5, 40.0);
         g0.recent_events.clear();
         let (ws0, _) = g0.sim_event_weights(40.0, 1, false, false, false);
-        let i262 = EVENTS.iter().position(|&(e, _, _, _)| e == 262).unwrap();
+        let i262 = EVENTS.iter().position(|&(e, _)| e == 262).unwrap();
         assert_eq!(ws0[i262], 0.0, "无伴：262 不入池");
         let mut g1 = sim_game(1, 40.0);
         g1.recent_events.clear();
@@ -20277,7 +20075,7 @@ mod v11624_pool_tests {
     // 有伴×非老年皆归零，有伴×老年才入池（照 204/212/239 双门控语义）
     #[test]
     fn dual_gate_268_four_quadrants() {
-        let i268 = EVENTS.iter().position(|&(e, _, _, _)| e == 268).unwrap();
+        let i268 = EVENTS.iter().position(|&(e, _)| e == 268).unwrap();
         // 象限 1：无伴 × 非老年 → 0
         let mut g = sim_game(2, 40.0);
         g.recent_events.clear();
@@ -20317,7 +20115,7 @@ mod v11624_pool_tests {
         let idx = |id: usize| {
             EVENTS
                 .iter()
-                .position(|&(e, _, _, _)| usize::from(e) == id)
+                .position(|&(e, _)| usize::from(e) == id)
                 .unwrap()
         };
         // 260：mr0 开局层善缘恶缘各半——realm0 恒在池（recent 清空后）
@@ -20378,7 +20176,7 @@ mod v11625_pool_tests {
             );
             let n = card.text.chars().count();
             assert!(n <= 60, "事件 {} 正文 {} 字超 ≤60 预算：{}", id, n, card.text);
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             assert!(
                 b.chars().count() <= 18,
                 "事件 {} 简「{}」超 ≤18 预算",
@@ -20439,7 +20237,7 @@ mod v11625_pool_tests {
         let mut g0 = sim_game(5, 40.0);
         g0.recent_events.clear();
         let (ws0, _) = g0.sim_event_weights(40.0, 2, false, false, false);
-        let i272 = EVENTS.iter().position(|&(e, _, _, _)| e == 272).unwrap();
+        let i272 = EVENTS.iter().position(|&(e, _)| e == 272).unwrap();
         assert_eq!(ws0[i272], 0.0, "无伴：272 不入池");
         let mut g1 = sim_game(2, 40.0);
         g1.recent_events.clear();
@@ -20489,7 +20287,7 @@ mod v11625_pool_tests {
         let idx = |id: usize| {
             EVENTS
                 .iter()
-                .position(|&(e, _, _, _)| usize::from(e) == id)
+                .position(|&(e, _)| usize::from(e) == id)
                 .unwrap()
         };
         // 280：mr0 开局层——realm0 恒在池（recent 清空后）
@@ -20608,7 +20406,7 @@ mod v11625_pool_tests {
             (242, "旧约"),
             (258, "枯井"),
         ] {
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             let n = b.chars().count();
             assert!(
                 !b.is_empty() && n <= 18,
@@ -20661,7 +20459,7 @@ mod v11626_pool_tests {
             );
             let n = card.text.chars().count();
             assert!(n <= 60, "事件 {} 正文 {} 字超 ≤60 预算：{}", id, n, card.text);
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             assert!(
                 b.chars().count() <= 18,
                 "事件 {} 简「{}」超 ≤18 预算",
@@ -20718,7 +20516,7 @@ mod v11626_pool_tests {
         let mut g0 = sim_game(5, 40.0);
         g0.recent_events.clear();
         let (ws0, _) = g0.sim_event_weights(40.0, 5, false, false, false);
-        let i283 = EVENTS.iter().position(|&(e, _, _, _)| e == 283).unwrap();
+        let i283 = EVENTS.iter().position(|&(e, _)| e == 283).unwrap();
         assert_eq!(ws0[i283], 0.0, "无伴：283 不入池");
         let mut g1 = sim_game(5, 40.0);
         g1.recent_events.clear();
@@ -20736,7 +20534,9 @@ mod v11626_pool_tests {
         );
         // 白名单成员：283 入 COMPANION_EVENTS（v1.16.26 批第 25 条）
         assert!(COMPANION_EVENTS.contains(&283usize), "283 应入伴随白名单");
-        assert_eq!(COMPANION_EVENTS.len(), 25, "伴随白名单 24→25");
+        // 白名单成员：293 入 COMPANION_EVENTS（v1.16.27 批第 26 条）
+        assert!(COMPANION_EVENTS.contains(&293usize), "293 应入伴随白名单");
+        assert_eq!(COMPANION_EVENTS.len(), 26, "伴随白名单 25→26");
     }
 
     // 稀有检定 284（special74）：入稀有区 w2/检定臂结算两态必居其一——
@@ -20766,7 +20566,7 @@ mod v11626_pool_tests {
     // elder_and_companion_expansion_gates 模式）
     #[test]
     fn elder_comp_double_gate_288() {
-        let i288 = EVENTS.iter().position(|&(e, _, _, _)| e == 288).unwrap();
+        let i288 = EVENTS.iter().position(|&(e, _)| e == 288).unwrap();
         // 无伴：归零
         let mut g0 = sim_game(2, 40.0);
         g0.recent_events.clear();
@@ -20798,7 +20598,7 @@ mod v11626_pool_tests {
     // neme_slain=0 归零不入池、neme_slain=1 入池
     #[test]
     fn nemesis_gate_289() {
-        let i289 = EVENTS.iter().position(|&(e, _, _, _)| e == 289).unwrap();
+        let i289 = EVENTS.iter().position(|&(e, _)| e == 289).unwrap();
         let mut g0 = sim_game(2, 40.0);
         g0.recent_events.clear();
         let (ws0, _) = g0.sim_event_weights(40.0, 2, false, false, false);
@@ -20819,7 +20619,7 @@ mod v11626_pool_tests {
         let idx = |id: usize| {
             EVENTS
                 .iter()
-                .position(|&(e, _, _, _)| usize::from(e) == id)
+                .position(|&(e, _)| usize::from(e) == id)
                 .unwrap()
         };
         // 290：mr0 开局层——realm0 恒在池（recent 清空后）
@@ -20884,7 +20684,7 @@ mod v11626_pool_tests {
             (289, "兜售"),
             (290, "索套"),
         ] {
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             let n = b.chars().count();
             assert!(
                 !b.is_empty() && n <= 18,
@@ -20923,7 +20723,7 @@ mod v11626_story_tests {
             (275, "西窗"),
             (278, "岁星砂"),
         ] {
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             let n = b.chars().count();
             assert!(
                 !b.is_empty() && n <= 18,
@@ -20977,6 +20777,262 @@ mod v11626_story_tests {
         assert_eq!(b(283).0, "伴随", "283 入白名单走伴随臂");
         assert_eq!(b(284).0, "稀有", "284 w2 走稀有臂");
         assert_eq!(b(290).0, "遭遇", "290 恶缘散件默认遭遇");
+    }
+}
+
+// ================= v1.16.27 简语画面化第六批（减包协同）+ 破境金句：回归 =================
+
+#[cfg(test)]
+mod v11627_story_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    // v1.16.27 第六批简语画面化 8 条（改写即减字 −30B，textpack 真相源行直改）：
+    // ≤18 字预算照 event_brief_11626_batch5_within_18 模式，kw 取词自对应臂 evtx 行
+    // verbatim（269←616 口信/旧铺、216←494 灯会年年还办、135←294 稻穗/讨新米、
+    // 134←291 三重阵眼无风自鸣、277←636 新墨深一倍、280←644 垒齐分水石、
+    // 223←512 寄磨玉成工钱涨三成、249←568 旧档柜上压三年）
+    #[test]
+    fn event_brief_11627_batch6_within_18() {
+        for (id, kw) in [
+            (269usize, "口信"),
+            (216, "灯会"),
+            (135, "稻穗"),
+            (134, "阵眼"),
+            (277, "新墨"),
+            (280, "垒齐"),
+            (223, "寄磨"),
+            (249, "旧档"),
+        ] {
+            let b = &EVENT_BRIEF[id];
+            let n = b.chars().count();
+            assert!(
+                !b.is_empty() && n <= 18,
+                "事件 {} 简越 18 字预算: {} ({}字)",
+                id,
+                b,
+                n
+            );
+            assert!(b.contains(kw), "事件 {} 简画面化改写漂移: {}", id, b);
+        }
+    }
+
+    // v1.16.27 破境金句钉测（字节中性两处，与 v1.16.26 败句「真气撞关」成对）：
+    // 成句口号腔「根基扎实无比」→「旧阶沉入身后」（6字换6字 0B）；跨境失败句
+    // 括号教程腔「（现实突破有轮回镜护持，不会身死）」→「——轮回镜护持，无死劫」
+    // （安抚同义保留，−21B）。p 循环兜随机（照 chengxing_break_opens_path_card
+    // 先例）：同层成功 p≥0.96；跨境测试置 dao/luck/pills[1]=0 取 big_break_p 下界
+    // 0.72 拉高失败率（钳 [0.05,0.95] 失败率恒 ≥5%）——200 次漏枝概率 <1e-9。
+    #[test]
+    fn story_11627_breakthrough_lines_pinned() {
+        // 成句：同层成功路径（dao=0 → p=0.96）
+        let mut l = Life::default();
+        l.dao = 0.0;
+        l.luck = 0.0;
+        l.realm = 1;
+        l.layer = 0;
+        let mut g = game_with(l, None);
+        for _ in 0..200 {
+            if g.log.iter().any(|x| x.text.contains("旧阶沉入身后")) {
+                break;
+            }
+            {
+                let l2 = g.life.as_mut().unwrap();
+                l2.realm = 1;
+                l2.layer = 0;
+                l2.qi = qi_need(l2);
+                l2.injured = 0;
+            }
+            g.act_break();
+        }
+        assert!(
+            g.log.iter().any(|x| x.text.contains("旧阶沉入身后")),
+            "破境成句金句漂移"
+        );
+        assert!(
+            !g.log.iter().any(|x| x.text.contains("根基扎实无比")),
+            "成句旧句回潮"
+        );
+
+        // 失败句：跨境失败路径（dao/luck/pills[1]=0 → p≈0.72，失败率 28%）
+        let mut l = Life::default();
+        l.dao = 0.0;
+        l.luck = 0.0;
+        l.pills[1] = 0;
+        l.realm = 1;
+        l.layer = REALMS[1].layers.len() - 1;
+        let mut g = game_with(l, None);
+        for _ in 0..200 {
+            if g.log
+                .iter()
+                .any(|x| x.text.contains("——轮回镜护持，无死劫"))
+            {
+                break;
+            }
+            {
+                let l2 = g.life.as_mut().unwrap();
+                l2.realm = 1;
+                l2.layer = REALMS[1].layers.len() - 1;
+                l2.qi = qi_need(l2);
+                l2.injured = 0;
+            }
+            g.act_break();
+        }
+        assert!(
+            g.log
+                .iter()
+                .any(|x| x.text.contains("——轮回镜护持，无死劫")),
+            "轮回镜安抚句漂移"
+        );
+        assert!(
+            !g.log.iter().any(|x| x.text.contains("不会身死")),
+            "失败句旧句回潮"
+        );
+    }
+}
+
+// ================= v1.16.27 扩池 8 条（291..=298）：门控/立绘/卡面良构 =================
+
+#[cfg(test)]
+mod v11627_pool_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    // 免音频初始化与存档 IO 的最小 Game（照 revenge_tests::game_with 复用纪律）
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // 门控三口径权重抽验（照 289/110/111 模式）：291 老年层（余量≤10 载才入池）、
+    // 297 老年×伴双门控（余量且有伴双条件）、293 伴随白名单（comp 参真伪）
+    #[test]
+    fn batch8_gates_elder_double_companion() {
+        let mut g = sim_game(7, 100.0);
+        let i291 = EVENTS.iter().position(|&(e, _)| e == 291).unwrap();
+        let i293 = EVENTS.iter().position(|&(e, _)| e == 293).unwrap();
+        let i297 = EVENTS.iter().position(|&(e, _)| e == 297).unwrap();
+        // 291 老年层：青年态（余量充足）归零；老年态（余量 8 载）入池
+        let (ws, _) = g.sim_event_weights(100.0, 1, false, false, false);
+        assert_eq!(ws[i291], 0.0, "291 余量充足不入老年层");
+        {
+            let s = g.sim.as_mut().unwrap();
+            s.age = s.lifespan - 8.0;
+        }
+        let (ws, _) = g.sim_event_weights(100.0, 1, false, false, false);
+        assert!(ws[i291] > 0.0, "291 余量 8 载≤10 应入老年层");
+        // 297 双门控：余量足或有伴缺一皆归零；双条件齐备入池
+        {
+            let s = g.sim.as_mut().unwrap();
+            s.age = 30.0;
+            s.companion = Some(COMPANION_NAMES[0].to_string());
+        }
+        let (ws, _) = g.sim_event_weights(100.0, 7, false, false, true);
+        assert_eq!(ws[i297], 0.0, "297 余量足不入双门控");
+        {
+            let s = g.sim.as_mut().unwrap();
+            s.age = s.lifespan - 8.0;
+            s.companion = None;
+        }
+        let (ws, _) = g.sim_event_weights(100.0, 7, false, false, false);
+        assert_eq!(ws[i297], 0.0, "297 无伴不入双门控");
+        {
+            let s = g.sim.as_mut().unwrap();
+            s.companion = Some(COMPANION_NAMES[0].to_string());
+        }
+        let (ws, _) = g.sim_event_weights(100.0, 7, false, false, true);
+        assert!(ws[i297] > 0.0, "297 有伴且余量≤10 载应入双门控");
+        // 293 伴随白名单：comp 参真伪决定入池（mr6 门槛 realm6 达标）
+        {
+            let s = g.sim.as_mut().unwrap();
+            s.age = 30.0;
+        }
+        let (ws, _) = g.sim_event_weights(100.0, 6, false, false, false);
+        assert_eq!(ws[i293], 0.0, "293 无伴不入伴随层");
+        let (ws, _) = g.sim_event_weights(100.0, 6, false, false, true);
+        assert!(ws[i293] > 0.0, "293 有伴应入池");
+    }
+
+    // 卡面良构：8 条标题双源/正文非空且段≤60/两选项/special 恒 0/抉择全链不
+    // panic（293/297 以有伴进卡；立绘钉 292=Npc(0) 296=Npc(3) 293/297=Comp）
+    #[test]
+    fn batch8_cards_well_formed() {
+        for id in 291..=298usize {
+            let mut g = sim_game(7, 40.0);
+            g.sim.as_mut().unwrap().companion = Some(COMPANION_NAMES[0].to_string());
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
+            assert_eq!(card.title, EVENT_NAMES[id], "标题双源 id {}", id);
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两选项", id);
+            assert!(card.opts.len() <= 3, "事件 {} 至多三选项", id);
+            for (si, seg) in card.text.split('\n').enumerate() {
+                let n = seg.chars().count();
+                assert!(
+                    n <= 60,
+                    "事件 {} 第 {} 段 {} 字超 ≤60 预算：{}",
+                    id,
+                    si + 1,
+                    n,
+                    seg
+                );
+            }
+            for (label, e) in &card.opts {
+                assert_eq!(e.special, 0, "事件 {} 选项「{}」special 非零", id, label);
+            }
+            match id {
+                292 => assert!(
+                    matches!(card.actor, Some(CardActor::Npc(0))),
+                    "292 立绘应锁定玄诚长老 Npc(0)"
+                ),
+                296 => assert!(
+                    matches!(card.actor, Some(CardActor::Npc(3))),
+                    "296 立绘应锁定醉道人 Npc(3)"
+                ),
+                293 | 297 => assert!(
+                    matches!(card.actor, Some(CardActor::Comp(0))),
+                    "{} 立绘应锁定道侣 Comp(0)",
+                    id
+                ),
+                _ => assert!(card.actor.is_none(), "{} 散件不应挂脸", id),
+            }
+            g.choose_option(0); // apply_eff 全链不 panic（sync_save 仅置脏不落盘）
+        }
+    }
+
+    // 简语预算 + 简-臂同源钉（照 event_brief_11626_batch5_within_18 模式：
+    // ≤18 字非空 + kw 取自臂内原文）
+    #[test]
+    fn event_brief_11627_pool_batch_within_18() {
+        for (id, kw) in [
+            (291usize, "纸角"),
+            (292, "缝旧席"),
+            (293, "暖石"),
+            (294, "假丹"),
+            (295, "压价"),
+            (296, "题旗"),
+            (297, "冬衣"),
+            (298, "截走"),
+        ] {
+            let b = &EVENT_BRIEF[id];
+            let n = b.chars().count();
+            assert!(
+                !b.is_empty() && n <= 18,
+                "事件 {} 简越 18 字预算: {} ({}字)",
+                id,
+                b,
+                n
+            );
+            assert!(b.contains(kw), "事件 {} 简画面化改写漂移: {}", id, b);
+        }
     }
 }
 
@@ -21063,7 +21119,10 @@ mod v11624_immersion_tests {
             // kw 随批对齐臂内原文「你被扫落山涧」——钉测语义（简-臂同源）不变
             (55usize, "山涧"),
             (58, "漩心"),
-            (135, "穗沉"),
+            // v1.16.27 清账：135 简已于第六批画面化改写（名下灵田穗沉，售谷或
+            // 开仓施粥→稻穗垂出田埂，散修讨新米），kw 随批对齐臂内原文
+            // evtx(294)「田埂」——钉测语义（简-臂同源）不变
+            (135, "田埂"),
             (136, "丹炉"),
             (139, "茶烟"),
             (141, "再托"),
@@ -21072,7 +21131,7 @@ mod v11624_immersion_tests {
             (200, "仙籍"),
             (216, "旧笺"),
         ] {
-            let b = EVENT_BRIEF[id];
+            let b = &EVENT_BRIEF[id];
             let n = b.chars().count();
             assert!(
                 !b.is_empty() && n <= 18,
