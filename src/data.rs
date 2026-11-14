@@ -1666,7 +1666,11 @@ pub const ORIGINS: [OriginDef; 6] = [
 // 设施满级才入池（门控在 game.rs sim_event_weights，读 meta.dongfu 跨世持久态）。
 // 本批重算账本：总基权 478→489（本批 +11，全常规无稀有），稀有 11 条 19 基权
 // ≈3.89%（分母增大略降，守 ~4% 口径）；mr 分布 0:42/1:36/2:35/3:11/4:9/5:4
-pub const EVENTS: [(usize, i32, usize, bool); 252] = [
+// v1.16.23 减包刀③：元组收窄 (usize,i32,usize,bool)=16B/条 → (u16,u8,u8,bool)=5B/条
+// （252 条 data 段 4032B→1260B）。id 字段语义不变（下标==id 的对账防线照旧，
+// game.rs test 行 id 连续断言仍在）；读点统一 as usize 转换，下游类型零变。
+// 权重上限 255（现单条最大 12，tools/tables_recheck.py 静态对账同步收窄口径）。
+pub const EVENTS: [(u16, u8, u8, bool); 259] = [
     (0, 12, 0, true),  // 灵草满坡
     (1, 11, 0, false), // 妖兽拦路
     (2, 6, 1, true),   // 上古洞府
@@ -2121,6 +2125,18 @@ pub const EVENTS: [(usize, i32, usize, bool); 252] = [
     (249, 3, 1, true),  // 万宝旧档（具名 Npc(1) 胡掌柜）
     (250, 3, 7, true),  // 云窟归卷（链18 首段，mr7 零链补位）
     (251, 0, 0, true),  // 补笔归卷·续（链18 末段，仅链内）
+    // v1.16.23 扩池 7 条（252..=258 尾部追加，id==下标纪律勿插中）：账本以
+    // tools/ledger_recheck.py 重算为准（794+20=814；稀有 18→19 条 33→35 权
+    // ≈4.30%；恶缘常规 48→50 条 180→186 权 ≈22.9%）。宁清霜散件首卡照
+    // 248/249 具名+脸同源模式（正文钉名⟺Npc(n)）；mr6/7 新条守长生世纪律
+    // （不写寿元将尽、不触破境裁决）；链19 不做（special73 与下一检定槽互斥）
+    (252, 3, 2, true),  // 枰边手谈（宁清霜散件首卡 Npc(2)，mr2 善）
+    (253, 3, 3, true),  // 经阁理简（玄诚长老第二卡 Npc(0)，mr3 善）
+    (254, 3, 5, false), // 旧败上门（mr5 恶 4→5 条）
+    (255, 3, 6, true),  // 旧友茶叙（mr6 善守世纪律）
+    (256, 3, 7, false), // 冒名敛财（mr7 恶 3→4 条守世纪律）
+    (257, 3, 4, true),  // 灯市挑灯（伴随 mr4 第 3 条，白名单 21→22）
+    (258, 2, 1, true),  // 枯井鸣灵（mr1 稀有 w2：57/133 后第 3 条）
 ];
 
 // ---------------- v1.16.10 事件回顾图鉴：静态名/简一一表 ----------------
@@ -2129,7 +2145,7 @@ pub const EVENTS: [(usize, i32, usize, bool); 252] = [
 // 宿敌/老年等动态文案臂的标题本身为静态字面量，动态只在正文）。
 // EVENT_BRIEF[id] 为图鉴『遭遇手札』行的展示简介（一行 ≤18 字，display-only 无
 // 对账约束；未遇事件整行 ？？？ 不显简介不泄题）。
-pub const EVENT_NAMES: [&str; 252] = [
+pub const EVENT_NAMES: [&str; 259] = [
     "灵草满坡",
     "妖兽拦路",
     "上古洞府",
@@ -2405,11 +2421,19 @@ pub const EVENT_NAMES: [&str; 252] = [
     "万宝旧档",
     "云窟归卷",
     "补笔归卷·续",
+    // v1.16.23 扩池 7 条（252..=258）：名表与卡臂 card.title 双源钉死，改字须同批
+    "枰边手谈",
+    "经阁理简",
+    "旧败上门",
+    "旧友茶叙",
+    "冒名敛财",
+    "灯市挑灯",
+    "枯井鸣灵",
 ];
 
 // v1.16.19 前段简随前期高频卡画面化同批改（id 0/1/3/4/5/6/12）：简仍「一行 ≤18 字」
 // 预算（表注见上），由「场景+结果」记账体改画面半句——玩家开局必读的一页不再最平
-pub const EVENT_BRIEF: [&str; 252] = [
+pub const EVENT_BRIEF: [&str; 259] = [
     "满坡灵草露水未干，采满一筐",
     "林风忽静，獠牙自树影里扑出",
     "洞府禁制半塌，门缝里漏出宝光",
@@ -2423,18 +2447,18 @@ pub const EVENT_BRIEF: [&str; 252] = [
     "识海苍老声音，恭聆上古大道",
     "空间裂缝露秘境入口，深入或拾遗",
     "下山入世，烟火气里磨道心",
-    "灵气暴涨如潮，顺势修炼正当时",
-    "黑影暴起夺命，拼死一战",
+    "天地灵气暴涨，如潮水般涌来",
+    "黑影自暗中暴起，招招夺命",
     "山崩石开，遗府门里透出宝光",
     "两妖咬作一团，温润妖丹滚落脚边",
     "蒙面人压低嗓门：洗髓丹，过村无店",
-    "白眉老者点拨，醍醐灌顶",
-    "雪白小兽有缘，收留得气运",
-    "仙人三选一：求道、求武、求寿",
+    "白眉老者点三处，旧稿字字换意",
+    "雪白小兽赶不走，一路跟着你",
+    "云端白须仙人含笑：要哪般？",
     "入泉三日，出水时旧伤尽褪",
     "十万锈剑古冢，中央古剑择主",
     "白骨魔窟，宝光与魔气交织",
-    "雷击古木炼丹材，护神丹之引",
+    "焦黑古木雷光未散，拾回炼丹",
     "商队车圈成阵，管事嘶声求援",
     "鹤影过顶，掷下锦盒便没入云",
     "瞎眼卦师掐指：是福是祸一念间",
@@ -2521,7 +2545,7 @@ pub const EVENT_BRIEF: [&str; 252] = [
     "墨鲸浮水背上有城，登城或远观",
     "山下散修顶着你的名号开坛，徒众不少",
     "夺积之后宿敌倾巢寻账，据守或散财",
-    "新宿敌登册，旧斩之名的余波",
+    "旧册无风自动，血仇名上新墨",
     "雾河渡船人只收旧渡资，讲旧事或付石",
     "灯纸上有你未写过的字迹，追问或登岸",
     "灯上尽是天曹删掉的名字，点灯或携灯",
@@ -2631,7 +2655,7 @@ pub const EVENT_BRIEF: [&str; 252] = [
     "酒渍星图缺一笔，补或留缺",
     "星挪一格，来年之约或收星砂",
     "万剑归冢夜夜自阅武，召你试剑",
-    "界碑名讳洇了雨，索重铭费",
+    "界碑名讳洇了雨，重铭费自付",
     "雨夜檐下，听旧年同挂的那只铃",
     "云海之上放一盏灯，看它穿几层云",
     "两位老人相扶看雪，落雪无声",
@@ -2661,7 +2685,7 @@ pub const EVENT_BRIEF: [&str; 252] = [
     "旧砚无墨自润，叩砚试道心",
     "影市黑秤暗亏，补差或掀秤",
     "云海退处露旧阶，拾级或坐观",
-    "剑冢岁帖索剑赋，纳或以剑代",
+    "岁帖贴上剑鞘：岁纳剑赋，或以剑代",
     "单子出了损，三年前的手印找上门",
     "岁暮与道侣共守一盏岁灯",
     // v1.16.22 扩池 12 简（240..=251，≤18 字一行预算随批钉死）
@@ -2676,7 +2700,15 @@ pub const EVENT_BRIEF: [&str; 252] = [
     "玄诚长老巡山，半页讲义指暗耗",
     "万宝楼翻出旧档，压款整三年",
     "崖窟旧籍风蚀，抄一卷是一卷",
-    "百卷上新纸，留名或推辞",
+    "百卷上新纸，老人请你留名",
+    // v1.16.23 扩池 7 条（252..=258）：简 ≤18 字一行预算（照 240..=251 批口径）
+    "宁清霜手谈半局，败亦有所得",
+    "经阁拓本理册，残卷半页结缘",
+    "旧败者携帮手寻上门，讨要颜面",
+    "百年旧友亭中茶叙，不提岁数",
+    "有人冒名敛财，你留真话擦假名",
+    "灯市挑得一盏走马灯，共提而归",
+    "枯井漏灵，下去是深渊也是机缘",
 ];
 
 // v1.16.7 稀有层阈值：EVENTS 权重 w∈1..=RARE_W 的卡按稀有呈现（描边紫；
@@ -3314,3 +3346,105 @@ pub const MERCHANT_BUY_FAV: i32 = 1; // 坊市购丹好感
 pub const COMPANION_BOND_FAV: i32 = 25; // 结缘起步好感
 pub const COMPANION_GIFT_FAV: i32 = 5; // 道侣赠礼事件好感
 pub const INHERIT_LEGACY_FAV: i32 = 10; // 遗泽承接好感加成
+
+// ---------------- v1.16.23 减包刀②：事件臂文案资产化（textpack）----------------
+// build_event 臂内 >=24B 中文常量串由 tools/pack_text.py 收编进 assets/textpack.bin
+// （raw-deflate，与 assets/font.ttf.deflate 同款通路），源码侧为 txt(N)/* 原文：… */
+// （原文注释回填保 diff 可审计）；真相源 assets/text_source.txt（N<TAB>源码转义形态），
+// 文案编辑改 source 后重跑 pack_text.py 即可，旧 N 永不变号；块内新写的裸字面量
+// 功能照常（只是未压缩），重跑脚本自动收编（append 新 N）。
+// boot 一次性 inflate（main.rs 启动序列，~64KB，miniz inflate <5ms）；txt() 为
+// O(1) 下标切片，帧路径零分配（性能十戒）；文案内容逐字节等价（脚本往返断言），
+// 字体 cmap 与 charset_diff_check 口径不变；存档只存事件 id，零兼容影响。
+pub static TEXTPACK: &[u8] = include_bytes!("../assets/textpack.bin");
+// 生成件（pack_text.py 产出）：完整 pub static TXT_OFFS: [u32; 577] = [...]; 声明，
+// item 位置 include! 展开
+include!("text_offsets.inc");
+
+static TEXT_BLOB: std::sync::OnceLock<&'static [u8]> = std::sync::OnceLock::new();
+
+/// 解包单源（get_or_init 的初始化闭包）：成功返回 leak 后的 blob，失败/校验不
+/// 过返回 EMPTY 哨兵——INIT_TRIED 钉死「只试一次」，失败后不再重试（防帧路径
+/// 反复 inflate）。EMPTY 即失败态（真实 blob 恒非空：576 条非空文案串接）。
+static TEXT_INIT_TRIED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn unpack_text() -> &'static [u8] {
+    use std::sync::atomic::Ordering;
+    static EMPTY: &[u8] = &[];
+    if TEXT_INIT_TRIED.swap(true, Ordering::Relaxed) {
+        return EMPTY;
+    }
+    match miniz_oxide::inflate::decompress_to_vec(TEXTPACK) {
+        Ok(v) => {
+            // from_utf8 全量校验一次：之后 evtx() 的 unchecked 切片以此为安全论证
+            if core::str::from_utf8(&v).is_ok() {
+                Box::leak(v.into_boxed_slice()) as &'static [u8]
+            } else {
+                EMPTY
+            }
+        }
+        Err(_) => EMPTY,
+    }
+}
+
+/// boot 一次性解包（main.rs 启动序列调用；幂等）。get_or_init 并发安全：
+/// 并发首调阻塞等待完成，其余调用直达已装快路径。解压失败/UTF-8 校验失败
+/// 时不装 blob——evtx() 全返空串（文案缺失但不崩，wasm trap 纪律）。
+pub fn init_text() {
+    TEXT_BLOB.get_or_init(unpack_text);
+}
+
+/// O(1) 查池：blob[offsets[i]..offsets[i+1]]。越界/未初始化一律空串兜底
+/// （绝不回错文案；i 由脚本分配的编译期常量，正常路径恒界内）。
+/// 惰性兜底单源：漏调 init_text 的环境（cargo test 等）首调自动解包——
+/// get_or_init 的 once 语义保证并发查池者阻塞至完成（多线程测试不竞态空串）；
+/// 正常路径（boot 已装）等价一次原子 load，帧路径零影响。
+pub fn evtx(i: usize) -> &'static str {
+    let blob = TEXT_BLOB.get_or_init(unpack_text);
+    if blob.is_empty() {
+        return "";
+    }
+    // 防御边界：i >= len-1 即空（i+1 需界内）；写 saturating_sub 令 usize::MAX
+    // 这类极端值不触发加法溢出（dev profile 溢出即 panic——panic=abort 纪律）
+    if i >= TXT_OFFS.len().saturating_sub(1) {
+        return "";
+    }
+    let s = TXT_OFFS[i] as usize;
+    let e = TXT_OFFS[i + 1] as usize;
+    if s <= e && e <= blob.len() {
+        // 安全论证：TEXT_BLOB 只在 from_utf8 全量通过后装入，切片必为合法 UTF-8
+        unsafe { core::str::from_utf8_unchecked(&blob[s..e]) }
+    } else {
+        ""
+    }
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+
+    // v1.16.23 资产化等价性样例断言（pack_text.py 往返断言之外的运行期抽查；
+    // 样例 N 取自 text_source.txt 首批三行，文案改版须同步此三行）
+    #[test]
+    fn textpack_inflate_and_spot_check() {
+        init_text();
+        assert_eq!(evtx(0), "你婉拒道：「一页未成，何以同页。」道心+5");
+        assert_eq!(
+            evtx(1),
+            "十年一度的宗门大比开擂，掌门放话：魁首可入藏经阁任拣一卷功法！"
+        );
+        assert_eq!(evtx(2), "你于台下观摩他人过招，亦有所得。修为+5%");
+        // 全表界内：offsets 单调且末界 == blob 长
+        assert!(TXT_OFFS.len() >= 2);
+        for k in 0..TXT_OFFS.len() - 1 {
+            assert!(TXT_OFFS[k] <= TXT_OFFS[k + 1], "offsets[{}] not monotonic", k);
+        }
+        assert_eq!(
+            TXT_OFFS[TXT_OFFS.len() - 1] as usize,
+            TEXT_BLOB.get().copied().map_or(0, |b| b.len())
+        );
+        // 越界防御：空串兜底（不 panic）
+        assert_eq!(evtx(TXT_OFFS.len()), "");
+        assert_eq!(evtx(usize::MAX), "");
+    }
+}

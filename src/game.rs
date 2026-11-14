@@ -63,9 +63,9 @@ pub const CHAIN_TTL: u8 = 8;
 // 模式；mr0 无伴口径账本不受影响（两新条均 mr≥3）。
 // 第三处硬编码副本 tools/ledger_recheck.py COMPANION 集合同批同步（漏一处
 // 账本 mr0 无伴口径对不上）
-pub const COMPANION_EVENTS: [usize; 21] = [
+pub const COMPANION_EVENTS: [usize; 22] = [
     53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185, 203, 210, 211, 212,
-    225, 226, 240, 241,
+    225, 226, 240, 241, 257, // v1.16.23 扩池 +1：257 灯市挑灯（mr4 第 3 条）
 ];
 
 // v1.16.7 置链臂 special 槽位段：20..=31（apply_eff 链裁决据此区分「重写链态」
@@ -3841,7 +3841,7 @@ impl Game {
         }
 
         // v1.16.5 记入防重复排除池并裁剪至 K（仅事件年调用一次，非帧路径）
-        let cid = EVENTS[chosen].0;
+        let cid = EVENTS[chosen].0 as usize; // v1.16.23 收窄读点：表元 u16→下游 usize 零变
 
         self.recent_events.push(cid);
 
@@ -3875,7 +3875,8 @@ impl Game {
             }
 
             // v1.16.7 道侣同行事件：无伴不入池（白名单门控，与 sect/lingmai 同点）
-            if !comp && COMPANION_EVENTS.contains(&id) {
+            // v1.16.23 收窄读点：表元 id u16，白名单 usize 照旧——转换在读点完成
+            if !comp && COMPANION_EVENTS.contains(&(id as usize)) {
                 ww = 0.0;
             }
 
@@ -3990,7 +3991,7 @@ impl Game {
             // v1.16.16 链缘了闩：本世已缘了的链，其首段不再入池（CHAIN_FIRSTS
             // 查表 id→链 id，bit 位读 chain_latch；chain6_closed 会话态先例的
             // 全线推广——长寿世同链复走封堵；中段弃链不置位，同世仍可重走）
-            if let Some(&(_, cid)) = CHAIN_FIRSTS.iter().find(|&&(eid, _)| eid == id) {
+            if let Some(&(_, cid)) = CHAIN_FIRSTS.iter().find(|&&(eid, _)| eid == id as usize) {
                 if self.chain_latch >> (cid as u32 - 1) & 1 == 1 {
                     ww = 0.0;
                 }
@@ -4035,7 +4036,7 @@ impl Game {
             }
 
             // v1.16.5 防重复：本世最近 K 次抽过 → 权重归零（全灭由 sim_event 退化兜底）
-            if self.recent_events.contains(&id) {
+            if self.recent_events.contains(&(id as usize)) {
                 ww = 0.0;
             }
 
@@ -4048,7 +4049,7 @@ impl Game {
                 ww *= (1.0 - (luck - 40.0) / 160.0).max(0.4);
             }
 
-            if realm < mr {
+            if realm < mr as usize {
                 ww = 0.0;
             }
 
@@ -4111,12 +4112,12 @@ impl Game {
                 card.opts.push(("认下这页".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 5.0;
-                e2.msg = vec!["你婉拒道：「一页未成，何以同页。」道心+5".into()];
+                e2.msg = vec![evtx(0)/* 原文：你婉拒道：「一页未成，何以同页。」道心+5 */.into()];
                 card.opts.push(("专注于道".into(), e2));
             }
             29 => {
                 card.title = "宗门大比".into();
-                card.text = "十年一度的宗门大比开擂，掌门放话：魁首可入藏经阁任拣一卷功法！".into();
+                card.text = evtx(1)/* 原文：十年一度的宗门大比开擂，掌门放话：魁首可入藏经阁任拣一卷功法！ */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.1;
                 e1.special = 18;
@@ -4124,7 +4125,7 @@ impl Game {
                 card.opts.push(("登擂比武".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.05;
-                e2.msg = vec!["你于台下观摩他人过招，亦有所得。修为+5%".into()];
+                e2.msg = vec![evtx(2)/* 原文：你于台下观摩他人过招，亦有所得。修为+5% */.into()];
                 card.opts.push(("台下观摩".into(), e2));
             }
 
@@ -4136,14 +4137,14 @@ impl Game {
                 card.title = "空白行".into();
 
                 card.text =
-                    "翻到这一页——天曹漏写了，整页空白。你握着笔，听见自己的心跳：这一年，你自己写。"
+                    evtx(3)/* 原文：翻到这一页——天曹漏写了，整页空白。你握着笔，听见自己的心跳：这一年，你自己写。 */
                         .into();
 
                 let mut e1 = Eff::new();
 
                 e1.qi_pct = 0.20;
 
-                e1.msg = vec!["你把这页写成修行——字字入纸，修为+20%。".into()];
+                e1.msg = vec![evtx(4)/* 原文：你把这页写成修行——字字入纸，修为+20%。 */.into()];
 
                 card.opts.push(("留墨 · 修为+20%".into(), e1));
 
@@ -4151,7 +4152,7 @@ impl Game {
 
                 e2.life_y = 6.0;
 
-                e2.msg = vec!["你把这页留给岁月——不急，一笔一画慢慢写，寿元+6。".into()];
+                e2.msg = vec![evtx(5)/* 原文：你把这页留给岁月——不急，一笔一画慢慢写，寿元+6。 */.into()];
 
                 card.opts.push(("留纸 · 寿元+6".into(), e2));
 
@@ -4161,7 +4162,7 @@ impl Game {
 
                 e3.special = 19;
 
-                e3.msg = vec!["你在这页写下自己的一行——笔落生根，气运+2。".into()];
+                e3.msg = vec![evtx(6)/* 原文：你在这页写下自己的一行——笔落生根，气运+2。 */.into()];
 
                 card.opts.push(("留行 · 气运+2".into(), e3));
             }
@@ -4173,7 +4174,7 @@ impl Game {
 
                 // v1.16.19 前期高频卡画面化：单段「画面+一断」体（不加减段——邂逅
                 // 版式 5 行判定 draw_event_text 预算不变；下同 id 1/3/4/5/6/12）
-                card.text = "转过山坳，满坡野灵草开得正艳，露水还挂在叶尖。你挽袖采满一筐，心道：这一筐，够换几块灵石了。".into();
+                card.text = evtx(7)/* 原文：转过山坳，满坡野灵草开得正艳，露水还挂在叶尖。你挽袖采满一筐，心道：这一筐，够换几块灵石了。 */.into();
 
                 let mut e = Eff::new();
 
@@ -4187,7 +4188,7 @@ impl Game {
             1 => {
                 card.title = "妖兽拦路".into();
 
-                card.text = "林风忽静。一头妖兽自树影里扑出，獠牙滴涎——它拦的不是路，是你腰间的储物袋。".into();
+                card.text = evtx(8)/* 原文：林风忽静。一头妖兽自树影里扑出，獠牙滴涎——它拦的不是路，是你腰间的储物袋。 */.into();
 
                 let mut e = Eff::new();
 
@@ -4203,7 +4204,7 @@ impl Game {
 
                 // v1.16.20 前期高频卡正文画面化第二批（id 2/9/18，照前批 7 条口径：
                 // 只改字不加段，单段 ≤60 字预算由单测钉死）
-                card.text = "荒山过半，一方洞府禁制塌了半边——门缝里漏出的不是光，是一段没人认领的传承。".into();
+                card.text = evtx(9)/* 原文：荒山过半，一方洞府禁制塌了半边——门缝里漏出的不是光，是一段没人认领的传承。 */.into();
 
                 let mut e1 = Eff::new();
 
@@ -4219,7 +4220,7 @@ impl Game {
                 // 抉择后日志区不再无痕
                 let mut e0 = Eff::new();
 
-                e0.msg = vec!["你朝洞府遥遥一揖，转身下山。".into()];
+                e0.msg = vec![evtx(10)/* 原文：你朝洞府遥遥一揖，转身下山。 */.into()];
 
                 card.opts.push(("敬而远之".into(), e0));
             }
@@ -4230,7 +4231,7 @@ impl Game {
                 if gen_range(0.0, 1.0) < 0.5 {
                     let g = (150.0 * ss * gen_range(0.7, 1.4)) as i64;
 
-                    card.text = "坊市尽头的地摊上，一只积灰储物袋怎么也卖不出去。你掂了掂，解开袋口——".into();
+                    card.text = evtx(11)/* 原文：坊市尽头的地摊上，一只积灰储物袋怎么也卖不出去。你掂了掂，解开袋口—— */.into();
 
                     let mut e = Eff::new();
 
@@ -4252,7 +4253,7 @@ impl Game {
                     let can = self.sim.as_ref().map_or(false, |s| s.stones >= g);
 
                     if can {
-                        card.text = "胡掌柜一把拉住你，压低嗓门：「小哥，这瓶聚气丹，铺里挂双价，你拿走算半价。」".into();
+                        card.text = evtx(12)/* 原文：胡掌柜一把拉住你，压低嗓门：「小哥，这瓶聚气丹，铺里挂双价，你拿走算半价。」 */.into();
 
                         let mut e = Eff::new();
 
@@ -4264,11 +4265,11 @@ impl Game {
 
                         card.opts.push(("购下".into(), e));
                     } else {
-                        card.text = "「小哥，半价卖了。」胡掌柜把丹瓶往你面前推。你摸了摸空瘪的储物袋，摇头把瓶子推了回去。".into();
+                        card.text = evtx(13)/* 原文：「小哥，半价卖了。」胡掌柜把丹瓶往你面前推。你摸了摸空瘪的储物袋，摇头把瓶子推了回去。 */.into();
 
                         let mut e0 = Eff::new();
 
-                        e0.msg = vec!["你把丹瓶放回摊上，讪讪走开。".into()];
+                        e0.msg = vec![evtx(14)/* 原文：你把丹瓶放回摊上，讪讪走开。 */.into()];
 
                         card.opts.push(("讪讪离开".into(), e0));
                     }
@@ -4278,7 +4279,7 @@ impl Game {
             4 => {
                 card.title = "恶修劫道".into();
 
-                card.text = "「此路是我开！」黑衣修士横剑拦道，眼里贪光像淬了毒——他打量你的行囊，比打量你的剑更久。".into();
+                card.text = evtx(15)/* 原文：「此路是我开！」黑衣修士横剑拦道，眼里贪光像淬了毒——他打量你的行囊，比打量你的剑更久。 */.into();
 
                 let mut e1 = Eff::new();
 
@@ -4294,7 +4295,7 @@ impl Game {
 
                 e2.good = false;
 
-                e2.msg = vec!["你破财免灾，交出一部分灵石。".into()];
+                e2.msg = vec![evtx(16)/* 原文：你破财免灾，交出一部分灵石。 */.into()];
 
                 card.opts.push(("破财免灾".into(), e2));
             }
@@ -4302,7 +4303,7 @@ impl Game {
             5 => {
                 card.title = "道友论道".into();
 
-                card.text = "山亭里避雨，遇一位云游道友。两人就着一壶粗茶，从剑谈到琴，从琴谈到天光放晴——各有所得。".into();
+                card.text = evtx(17)/* 原文：山亭里避雨，遇一位云游道友。两人就着一壶粗茶，从剑谈到琴，从琴谈到天光放晴——各有所得。 */.into();
 
                 let mut e = Eff::new();
 
@@ -4320,13 +4321,13 @@ impl Game {
 
                 // v1.16.19 画面化保留括注机制口径（入门收益提示是决策依据，原样保留）
                 card.text =
-                    "宗门执事拦下你，端详半晌：「这身根骨，散修可惜了——可愿入我门下？」（修炼环境+30%，每年俸禄）".into();
+                    evtx(18)/* 原文：宗门执事拦下你，端详半晌：「这身根骨，散修可惜了——可愿入我门下？」（修炼环境+30%，每年俸禄） */.into();
 
                 let mut e1 = Eff::new();
 
                 e1.sect = true;
 
-                e1.msg = vec!["你正式拜入宗门！".into()];
+                e1.msg = vec![evtx(19)/* 原文：你正式拜入宗门！ */.into()];
 
                 card.opts.push(("拜入宗门".into(), e1));
 
@@ -4334,7 +4335,7 @@ impl Game {
 
                 e2.luck = 2.0;
 
-                e2.msg = vec!["你婉言谢绝，逍遥自在。气运+2".into()];
+                e2.msg = vec![evtx(20)/* 原文：你婉言谢绝，逍遥自在。气运+2 */.into()];
 
                 card.opts.push(("婉言谢绝".into(), e2));
             }
@@ -4342,7 +4343,7 @@ impl Game {
             7 => {
                 card.title = "心魔袭扰".into();
 
-                card.text = "静坐之间，旧日执念化作心魔，在你识海中张牙舞爪……".into();
+                card.text = evtx(21)/* 原文：静坐之间，旧日执念化作心魔，在你识海中张牙舞爪…… */.into();
 
                 let mut e = Eff::new();
 
@@ -4356,7 +4357,7 @@ impl Game {
             8 => {
                 card.title = "天材地宝".into();
 
-                card.text = "前方灵气冲霄——一株千年灵乳正在成形！旁边盘着一头护宝妖兽。".into();
+                card.text = evtx(22)/* 原文：前方灵气冲霄——一株千年灵乳正在成形！旁边盘着一头护宝妖兽。 */.into();
 
                 let mut e1 = Eff::new();
 
@@ -4370,7 +4371,7 @@ impl Game {
 
                 let mut e0 = Eff::new();
 
-                e0.msg = vec!["你退入林中，由它静静成形。".into()];
+                e0.msg = vec![evtx(23)/* 原文：你退入林中，由它静静成形。 */.into()];
 
                 card.opts.push(("悄然退去".into(), e0));
             }
@@ -4379,13 +4380,13 @@ impl Game {
                 card.title = "灵脉洞府".into();
 
                 // v1.16.20 正文画面化第二批：括注记账体改画面+机制注（加成数值保留）
-                card.text = "山坳深处泉鸣如琴，灵气浓得化不开——迁入此府，本世修炼环境+50%".into();
+                card.text = evtx(24)/* 原文：山坳深处泉鸣如琴，灵气浓得化不开——迁入此府，本世修炼环境+50% */.into();
 
                 let mut e = Eff::new();
 
                 e.lingmai = true;
 
-                e.msg = vec!["你迁入灵脉洞府！".into()];
+                e.msg = vec![evtx(25)/* 原文：你迁入灵脉洞府！ */.into()];
 
                 card.opts.push(("迁入洞府".into(), e));
             }
@@ -4393,7 +4394,7 @@ impl Game {
             10 => {
                 card.title = "上古传承".into();
 
-                card.text = "一道苍老的声音在识海中响起：「吾道后继有人……」".into();
+                card.text = evtx(26)/* 原文：一道苍老的声音在识海中响起：「吾道后继有人……」 */.into();
 
                 let mut e = Eff::new();
 
@@ -4409,7 +4410,7 @@ impl Game {
             11 => {
                 card.title = "秘境探秘".into();
 
-                card.text = "空间裂缝中露出一座上古秘境的入口，宝光与凶险并存。".into();
+                card.text = evtx(27)/* 原文：空间裂缝中露出一座上古秘境的入口，宝光与凶险并存。 */.into();
 
                 let mut e1 = Eff::new();
 
@@ -4433,7 +4434,7 @@ impl Game {
             12 => {
                 card.title = "红尘历练".into();
 
-                card.text = "你下山入世。市集讨价、桥头让路、替哭闹的孩童变出一朵纸花——烟火气里，道心悄悄稳了一分。".into();
+                card.text = evtx(28)/* 原文：你下山入世。市集讨价、桥头让路、替哭闹的孩童变出一朵纸花——烟火气里，道心悄悄稳了一分。 */.into();
 
                 let mut e = Eff::new();
 
@@ -4449,7 +4450,7 @@ impl Game {
             13 => {
                 card.title = "灵气潮汐".into();
 
-                card.text = "天地灵气忽然暴涨，如潮水般涌来！".into();
+                card.text = evtx(29)/* 原文：天地灵气忽然暴涨，如潮水般涌来！ */.into();
 
                 let mut e = Eff::new();
 
@@ -4463,7 +4464,7 @@ impl Game {
             14 => {
                 card.title = "邪修偷袭".into();
 
-                card.text = "一道黑影自暗中暴起偷袭！招招夺命。".into();
+                card.text = evtx(30)/* 原文：一道黑影自暗中暴起偷袭！招招夺命。 */.into();
 
                 let mut e = Eff::new();
 
@@ -4477,7 +4478,7 @@ impl Game {
             15 => {
                 card.title = "仙人遗府".into();
 
-                card.text = "轰然一声，山体崩开，露出一座流光溢彩的仙人遗府！".into();
+                card.text = evtx(31)/* 原文：轰然一声，山体崩开，露出一座流光溢彩的仙人遗府！ */.into();
 
                 let rl = gen_range(0, RELICS.len());
 
@@ -4495,7 +4496,7 @@ impl Game {
             16 => {
                 card.title = "妖丹入手".into();
 
-                card.text = "你路遇两妖相争两败俱伤，捡漏一枚温润妖丹。".into();
+                card.text = evtx(32)/* 原文：你路遇两妖相争两败俱伤，捡漏一枚温润妖丹。 */.into();
 
                 let mut e = Eff::new();
 
@@ -4544,7 +4545,7 @@ impl Game {
 
                 let mut e0 = Eff::new();
 
-                e0.msg = vec!["你冲商人拱了拱手，转身自去。".into()];
+                e0.msg = vec![evtx(33)/* 原文：你冲商人拱了拱手，转身自去。 */.into()];
 
                 card.opts.push(("摆手离开".into(), e0));
             }
@@ -4553,7 +4554,7 @@ impl Game {
                 card.title = "前辈指点".into();
 
                 // v1.16.20 正文画面化第二批：「醍醐灌顶」结论词改动作画面（只改字不加段）
-                card.text = "白眉老者只随手点了三处，你回头再看旧稿，字字都换了个意思。".into();
+                card.text = evtx(34)/* 原文：白眉老者只随手点了三处，你回头再看旧稿，字字都换了个意思。 */.into();
 
                 let mut e = Eff::new();
 
@@ -4569,7 +4570,7 @@ impl Game {
             19 => {
                 card.title = "灵兽认主".into();
 
-                card.text = "一只雪白小兽一路跟着你，赶也赶不走，与你甚是有缘。".into();
+                card.text = evtx(35)/* 原文：一只雪白小兽一路跟着你，赶也赶不走，与你甚是有缘。 */.into();
 
                 let mut e = Eff::new();
 
@@ -4588,7 +4589,7 @@ impl Game {
                 card.title = "仙人问道".into();
 
                 card.text =
-                    "云端降下一位白须仙人，含笑看你：「小子，老夫可指你一条路，要哪般？」".into();
+                    evtx(36)/* 原文：云端降下一位白须仙人，含笑看你：「小子，老夫可指你一条路，要哪般？」 */.into();
 
                 let mut e1 = Eff::new();
 
@@ -4596,7 +4597,7 @@ impl Game {
 
                 e1.qi_pct = 0.15;
 
-                e1.msg = vec!["你求问道法。道心+8，修为+15%".into()];
+                e1.msg = vec![evtx(37)/* 原文：你求问道法。道心+8，修为+15% */.into()];
 
                 card.opts.push(("求道！".into(), e1));
 
@@ -4606,7 +4607,7 @@ impl Game {
 
                 e2.good = false;
 
-                e2.msg = vec!["你求问武道。战力永久+12%！".into()];
+                e2.msg = vec![evtx(38)/* 原文：你求问武道。战力永久+12%！ */.into()];
 
                 card.opts.push(("求武！".into(), e2));
 
@@ -4614,7 +4615,7 @@ impl Game {
 
                 e3.life_y = 50.0;
 
-                e3.msg = vec!["你求问长生。寿元+50 载".into()];
+                e3.msg = vec![evtx(39)/* 原文：你求问长生。寿元+50 载 */.into()];
 
                 card.opts.push(("求寿！".into(), e3));
             }
@@ -4623,7 +4624,7 @@ impl Game {
                 card.title = "灵泉洞天".into();
 
                 card.text =
-                    "山谷深处一眼温泉汩汩冒泡，灵气凝成白雾，你入泉浸泡三日，通体舒泰。".into();
+                    evtx(40)/* 原文：山谷深处一眼温泉汩汩冒泡，灵气凝成白雾，你入泉浸泡三日，通体舒泰。 */.into();
 
                 let mut e = Eff::new();
 
@@ -4631,7 +4632,7 @@ impl Game {
 
                 e.qi_pct = 0.10;
 
-                e.msg = vec!["寿元+30 载，修为+10%".into()];
+                e.msg = vec![evtx(41)/* 原文：寿元+30 载，修为+10% */.into()];
 
                 card.opts.push(("入泉沐浴".into(), e));
             }
@@ -4640,7 +4641,7 @@ impl Game {
                 card.title = "古剑冢".into();
 
                 card.text =
-                    "荒原上插着十万柄锈剑，剑鸣如龙吟。中央一柄古剑兀自震颤，似在择主。".into();
+                    evtx(42)/* 原文：荒原上插着十万柄锈剑，剑鸣如龙吟。中央一柄古剑兀自震颤，似在择主。 */.into();
 
                 let mut e1 = Eff::new();
 
@@ -4656,7 +4657,7 @@ impl Game {
 
                 e2.dao = 4.0;
 
-                e2.msg = vec!["你恭敬参拜，剑鸣渐息。道心+4".into()];
+                e2.msg = vec![evtx(43)/* 原文：你恭敬参拜，剑鸣渐息。道心+4 */.into()];
 
                 card.opts.push(("躬身参拜".into(), e2));
             }
@@ -4664,7 +4665,7 @@ impl Game {
             23 => {
                 card.title = "魔窟探宝".into();
 
-                card.text = "山腹中一座魔修洞窟，入口白骨累累，深处宝光与魔气交织翻涌。".into();
+                card.text = evtx(44)/* 原文：山腹中一座魔修洞窟，入口白骨累累，深处宝光与魔气交织翻涌。 */.into();
 
                 let mut e1 = Eff::new();
 
@@ -4676,7 +4677,7 @@ impl Game {
 
                 let mut e0 = Eff::new();
 
-                e0.msg = vec!["你不入魔窟，原路下山。".into()];
+                e0.msg = vec![evtx(45)/* 原文：你不入魔窟，原路下山。 */.into()];
 
                 card.opts.push(("转身就走".into(), e0));
             }
@@ -4685,13 +4686,13 @@ impl Game {
                 card.title = "雷击木".into();
 
                 card.text =
-                    "一株遭天雷劈中的古木倒在路边，焦黑树干里雷光未散，正是炼丹好材料。".into();
+                    evtx(46)/* 原文：一株遭天雷劈中的古木倒在路边，焦黑树干里雷光未散，正是炼丹好材料。 */.into();
 
                 let mut e = Eff::new();
 
                 e.pill = Some((5, 2));
 
-                e.msg = vec!["得雷击木，炼成护神丹 ×2".into()];
+                e.msg = vec![evtx(47)/* 原文：得雷击木，炼成护神丹 ×2 */.into()];
 
                 card.opts.push(("采集".into(), e));
             }
@@ -4699,7 +4700,7 @@ impl Game {
             25 => {
                 card.title = "商队护送".into();
 
-                card.text = "一支灵石商队遭妖兽围困，管事高声求援：「护我商队，重金相谢！」".into();
+                card.text = evtx(48)/* 原文：一支灵石商队遭妖兽围困，管事高声求援：「护我商队，重金相谢！」 */.into();
 
                 let mut e1 = Eff::new();
 
@@ -4715,7 +4716,7 @@ impl Game {
 
                 e2.luck = 1.0;
 
-                e2.msg = vec!["你婉拒离去。气运+1".into()];
+                e2.msg = vec![evtx(49)/* 原文：你婉拒离去。气运+1 */.into()];
 
                 card.opts.push(("事不关己".into(), e2));
             }
@@ -4724,7 +4725,7 @@ impl Game {
                 card.title = "仙人赠礼".into();
 
                 card.text =
-                    "一位乘鹤老者路过，随手抛下锦盒：「与你有缘，收着吧。」鹤影转瞬没入云中。"
+                    evtx(50)/* 原文：一位乘鹤老者路过，随手抛下锦盒：「与你有缘，收着吧。」鹤影转瞬没入云中。 */
                         .into();
 
                 let rl = gen_range(0, RELICS.len());
@@ -4744,7 +4745,7 @@ impl Game {
                 card.title = "天机阁卜卦".into();
 
                 card.text =
-                    "天机阁的瞎眼卦师掐指一算：「道友印堂有光，是福是祸，在一念之间。」".into();
+                    evtx(51)/* 原文：天机阁的瞎眼卦师掐指一算：「道友印堂有光，是福是祸，在一念之间。」 */.into();
 
                 let mut e1 = Eff::new();
 
@@ -4752,7 +4753,7 @@ impl Game {
 
                 e1.pill = Some((2, 1));
 
-                e1.msg = vec!["卦师赠你一枚破境丹，道心+6".into()];
+                e1.msg = vec![evtx(52)/* 原文：卦师赠你一枚破境丹，道心+6 */.into()];
 
                 card.opts.push(("求上一卦".into(), e1));
 
@@ -4780,28 +4781,28 @@ impl Game {
             31 => {
                 card.title = "雨夜借宿".into();
                 card.text =
-                    "山雨骤至，你叩响山腰人家的柴门。老丈披衣开门：「道友不嫌简陋，同吃一锅热粥。」"
+                    evtx(53)/* 原文：山雨骤至，你叩响山腰人家的柴门。老丈披衣开门：「道友不嫌简陋，同吃一锅热粥。」 */
                         .into();
                 let mut e1 = Eff::new();
                 e1.dao = 4.0;
                 e1.luck = 1.0;
-                e1.msg = vec!["柴水劈满缸，老丈讲了一夜山中旧事。道心+4，气运+1".into()];
+                e1.msg = vec![evtx(54)/* 原文：柴水劈满缸，老丈讲了一夜山中旧事。道心+4，气运+1 */.into()];
                 card.opts.push(("帮劈柴水".into(), e1));
                 let g = (60.0 * ss) as i64;
                 let mut e2 = Eff::new();
                 e2.stones = -g;
                 e2.luck = 2.0;
-                e2.msg = vec!["你留下一袋灵石作谢，此后路过必有热茶。气运+2".into()];
+                e2.msg = vec![evtx(55)/* 原文：你留下一袋灵石作谢，此后路过必有热茶。气运+2 */.into()];
                 card.opts.push(("留下谢仪".into(), e2));
             }
             32 => {
                 card.title = "古碑残字".into();
                 card.text =
-                    "荒径尽头立着半截古碑，苔痕下残字若隐若现，似是一篇未写完的行功总纲。".into();
+                    evtx(56)/* 原文：荒径尽头立着半截古碑，苔痕下残字若隐若现，似是一篇未写完的行功总纲。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
                 e1.dao = 3.0;
-                e1.msg = vec!["残字入心，如春水化冰。修为+8%，道心+3".into()];
+                e1.msg = vec![evtx(57)/* 原文：残字入心，如春水化冰。修为+8%，道心+3 */.into()];
                 card.opts.push(("拂苔细读".into(), e1));
                 let g = (70.0 * ss * gen_range(0.7, 1.4)) as i64;
                 let mut e2 = Eff::new();
@@ -4811,7 +4812,7 @@ impl Game {
             }
             33 => {
                 card.title = "雾锁迷林".into();
-                card.text = "白雾灌林，方向尽失。雾深处有人低低唤你的名字，一声比一声近。".into();
+                card.text = evtx(58)/* 原文：白雾灌林，方向尽失。雾深处有人低低唤你的名字，一声比一声近。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 0.85;
                 e1.good = false;
@@ -4819,30 +4820,30 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
                 e2.stones_pct = -0.08;
-                e2.msg = vec!["你枯坐守心，雾散时天已放晴。道心+3".into()];
+                e2.msg = vec![evtx(59)/* 原文：你枯坐守心，雾散时天已放晴。道心+3 */.into()];
                 card.opts.push(("原地守心".into(), e2));
             }
             34 => {
                 card.title = "墨市笔坊".into();
-                card.text = "坊市新张一家笔坊，掌柜拍胸脯：「我这兽毫，一笔落纸可定千行！」案上笔杆根根乌亮。".into();
+                card.text = evtx(60)/* 原文：坊市新张一家笔坊，掌柜拍胸脯：「我这兽毫，一笔落纸可定千行！」案上笔杆根根乌亮。 */.into();
                 let g = (100.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
                 e1.qi_pct = 0.10;
-                e1.msg = vec!["新笔饱墨，行气如虹。修为+10%".into()];
+                e1.msg = vec![evtx(61)/* 原文：新笔饱墨，行气如虹。修为+10% */.into()];
                 card.opts.push(("重金购笔".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
-                e2.msg = vec!["你看掌柜制笔半日，悟得几分运笔之要。道心+2".into()];
+                e2.msg = vec![evtx(62)/* 原文：你看掌柜制笔半日，悟得几分运笔之要。道心+2 */.into()];
                 card.opts.push(("观摩制笔".into(), e2));
             }
             35 => {
                 card.title = "断桥济人".into();
-                card.text = "溪桥塌了半边，一位货郎守着翻倒的担子发愁。你袖袍一卷，把货担稳稳送上对岸。".into();
+                card.text = evtx(63)/* 原文：溪桥塌了半边，一位货郎守着翻倒的担子发愁。你袖袍一卷，把货担稳稳送上对岸。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.luck = 3.0;
-                e1.msg = vec!["货郎千恩万谢，逢人便说你仁义。道心+3，气运+3".into()];
+                e1.msg = vec![evtx(64)/* 原文：货郎千恩万谢，逢人便说你仁义。道心+3，气运+3 */.into()];
                 card.opts.push(("分文不取".into(), e1));
                 let g = (40.0 * ss * gen_range(0.9, 1.5)) as i64;
                 let mut e2 = Eff::new();
@@ -4852,7 +4853,7 @@ impl Game {
             }
             36 => {
                 card.title = "瘴谷寻药".into();
-                card.text = "瘴气谷口石碑刻着「药王留谷，取之有度」，谷底灵药成片，雾气泛着幽绿。".into();
+                card.text = evtx(65)/* 原文：瘴气谷口石碑刻着「药王留谷，取之有度」，谷底灵药成片，雾气泛着幽绿。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.05;
                 e1.pill = Some((0, 2));
@@ -4866,7 +4867,7 @@ impl Game {
             }
             37 => {
                 card.title = "渡灵舟".into();
-                card.text = "灵舟行至江心，墨色巨浪忽然立起，船家面色发白：「水妖翻浪——稳住！」".into();
+                card.text = evtx(66)/* 原文：灵舟行至江心，墨色巨浪忽然立起，船家面色发白：「水妖翻浪——稳住！」 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.0;
                 e1.good = false;
@@ -4874,31 +4875,31 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.stones_pct = -0.10;
-                e2.msg = vec!["船身颠簸如筛，行囊湿了大半。道心+2".into()];
+                e2.msg = vec![evtx(67)/* 原文：船身颠簸如筛，行囊湿了大半。道心+2 */.into()];
                 card.opts.push(("闭舱守心".into(), e2));
             }
             38 => {
                 card.title = "残卷拍卖".into();
-                card.text = "拍卖行压轴一幅无名残卷，起拍百灵石——据说落款处藏着一篇功法总纲。".into();
+                card.text = evtx(68)/* 原文：拍卖行压轴一幅无名残卷，起拍百灵石——据说落款处藏着一篇功法总纲。 */.into();
                 let g = (180.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
                 e1.qi_pct = 0.15;
                 e1.dao = 2.0;
-                e1.msg = vec!["你连夜参详，卷中总纲果然不凡。修为+15%，道心+2".into()];
+                e1.msg = vec![evtx(69)/* 原文：你连夜参详，卷中总纲果然不凡。修为+15%，道心+2 */.into()];
                 card.opts.push(("举牌竞得".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
-                e2.msg = vec!["残卷被锦衣修士天价拍走。不动心，也是修行。道心+2".into()];
+                e2.msg = vec![evtx(70)/* 原文：残卷被锦衣修士天价拍走。不动心，也是修行。道心+2 */.into()];
                 card.opts.push(("袖手旁观".into(), e2));
             }
             39 => {
                 card.title = "灵田佃户".into();
-                card.text = "灵田佃户老周拦路作揖：「仙长，田里灵谷一夜白穗，您给瞧瞧是何缘故？」".into();
+                card.text = evtx(71)/* 原文：灵田佃户老周拦路作揖：「仙长，田里灵谷一夜白穗，您给瞧瞧是何缘故？」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 4.0;
                 e1.luck = 2.0;
-                e1.msg = vec!["你以灵力驱尽谷虫，老周赠新米一斗。道心+4，气运+2".into()];
+                e1.msg = vec![evtx(72)/* 原文：你以灵力驱尽谷虫，老周赠新米一斗。道心+4，气运+2 */.into()];
                 card.opts.push(("亲往除虫".into(), e1));
                 let g = (35.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -4908,7 +4909,7 @@ impl Game {
             }
             40 => {
                 card.title = "酒楼斗法".into();
-                card.text = "坊市酒楼里两名外乡修士斗法，桌椅横飞波及无辜，掌柜朝你直使眼色。".into();
+                card.text = evtx(73)/* 原文：坊市酒楼里两名外乡修士斗法，桌椅横飞波及无辜，掌柜朝你直使眼色。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.15;
                 e1.good = false;
@@ -4916,16 +4917,16 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
                 e2.stones_pct = -0.05;
-                e2.msg = vec!["你护着凡人客人撤到街外，毁了一身行头。道心+3".into()];
+                e2.msg = vec![evtx(74)/* 原文：你护着凡人客人撤到街外，毁了一身行头。道心+3 */.into()];
                 card.opts.push(("掩护撤离".into(), e2));
             }
             41 => {
                 card.title = "前人手札".into();
-                card.text = "旧书摊的线装手札里夹着几页批注，墨迹已淡，隐约指着一处行功捷径。".into();
+                card.text = evtx(75)/* 原文：旧书摊的线装手札里夹着几页批注，墨迹已淡，隐约指着一处行功捷径。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.20;
                 e1.dao = 3.0;
-                e1.msg = vec!["你按批注行功一月，水到渠成。修为+20%，道心+3".into()];
+                e1.msg = vec![evtx(76)/* 原文：你按批注行功一月，水到渠成。修为+20%，道心+3 */.into()];
                 card.opts.push(("依注苦修".into(), e1));
                 let g = (150.0 * ss * gen_range(0.8, 1.5)) as i64;
                 let mut e2 = Eff::new();
@@ -4935,21 +4936,21 @@ impl Game {
             }
             42 => {
                 card.title = "废墟道场".into();
-                card.text = "山雾散处露出一座废弃道场，蒲团积尘盈寸，梁上剑痕犹新。".into();
+                card.text = evtx(77)/* 原文：山雾散处露出一座废弃道场，蒲团积尘盈寸，梁上剑痕犹新。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.12;
                 e1.life_y = 8.0;
-                e1.msg = vec!["你入定七日，出关时步履生风。修为+12%，寿元+8".into()];
+                e1.msg = vec![evtx(78)/* 原文：你入定七日，出关时步履生风。修为+12%，寿元+8 */.into()];
                 card.opts.push(("蒲团参悟".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 5.0;
-                e2.msg = vec!["你替道场扫尘七日——扫地亦是修行。道心+5".into()];
+                e2.msg = vec![evtx(79)/* 原文：你替道场扫尘七日——扫地亦是修行。道心+5 */.into()];
                 // v1.16.15 复审口径：正文是废弃道场无塔，选项照 msg 同词改「扫尘」
                 card.opts.push(("扫尘七日".into(), e2));
             }
             43 => {
                 card.title = "沙暴藏窟".into();
-                card.text = "沙暴过后，崖壁上裸出一处洞窟，铁链断了一半，深处隐隐透出陈年墨香。".into();
+                card.text = evtx(80)/* 原文：沙暴过后，崖壁上裸出一处洞窟，铁链断了一半，深处隐隐透出陈年墨香。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.2;
                 e1.good = false;
@@ -4973,7 +4974,7 @@ impl Game {
                 card.title = "货郎奇遇".into();
                 card.actor = Some(CardActor::Npc(1));
                 // v1.16.7 两段文案（邂逅版式 5 行内）：叙述与叫卖分段，段间 8px
-                card.text = "山道拐角，万宝楼外柜的货郎拦住你，担子里一支墨锭透着幽光，隐有灵气盘旋。\n「引灵墨，观道友有缘——先拿去用，账回头再算。」".into();
+                card.text = evtx(81)/* 原文：山道拐角，万宝楼外柜的货郎拦住你，担子里一支墨锭透着幽光，隐有灵气盘旋。\n「引灵墨，观道友有缘——先拿去用，账回头再算。」 */.into();
                 let g = (60.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
@@ -4987,7 +4988,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.special = 21; // 置链：→45 罗盘相赠
-                e2.msg = vec!["货郎也不恼，笑言「缘法未到」。道心+2".into()];
+                e2.msg = vec![evtx(82)/* 原文：货郎也不恼，笑言「缘法未到」。道心+2 */.into()];
                 card.opts.push(("婉拒不买".into(), e2));
                 self.chain = Some((1, 0, CHAIN_TTL)); // 首段建链：待分支
             }
@@ -4995,22 +4996,22 @@ impl Game {
                 // 链1 分支b 段（仅链内）：两个选项均无置链臂 → 抉择即链终局
                 card.title = "罗盘相赠·续".into();
                 card.actor = Some(CardActor::Npc(1));
-                card.text = "数年后山道再遇货郎。他认出你，把一枚破旧罗盘塞进你手里，铜壳磨得发亮，针尾还系着个红线结：「当初不买是我看走眼——赠你把玩，结个善缘。」".into();
+                card.text = evtx(83)/* 原文：数年后山道再遇，货郎认出你，把一枚旧罗盘塞进你手里，针尾还系着个红线结：「当初不买是我看走眼——赠你把玩，结个善缘。」 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 3.0;
-                e1.msg = vec!["罗盘针自转不止，你行路却顺遂了许多。气运+3".into()];
+                e1.msg = vec![evtx(84)/* 原文：罗盘针自转不止，你行路却顺遂了许多。气运+3 */.into()];
                 card.opts.push(("收下罗盘".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.luck = 1.0;
-                e2.msg = vec!["你以热茶相敬，两人聊了一路掌故。道心+2，气运+1".into()];
+                e2.msg = vec![evtx(85)/* 原文：你以热茶相敬，两人聊了一路掌故。道心+2，气运+1 */.into()];
                 card.opts.push(("煮茶相敬".into(), e2));
             }
             46 => {
                 // 链1 分支a 段（仅链内）：战或赔都终结这条孽缘
                 card.title = "恩怨上门·续".into();
                 card.actor = Some(CardActor::Npc(1));
-                card.text = "夜半拍门声急。货郎躲在门外，脸色发白：「兄台，你赊的那支墨……原主寻上门了，说要么十倍赔付，要么见血！」".into();
+                card.text = evtx(86)/* 原文：夜半拍门声急。货郎躲在门外，脸色发白：「兄台，你赊的那支墨……原主寻上门了，说要么十倍赔付，要么见血！」 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.3;
                 e1.good = false;
@@ -5020,33 +5021,33 @@ impl Game {
                 e2.good = false;
                 // v1.16.20 链尾余味（故事沉浸续作）：记账体改画面句——赔付有了动作与
                 // 分寸感（msg 只改字不改正文段数，:4700 版式预算不动）
-                e2.msg = vec!["你数出十倍墨价放在门槛上——门里门外，从此两清。灵石-20%".into()];
+                e2.msg = vec![evtx(87)/* 原文：你数出十倍墨价放在门槛上——门里门外，从此两清。灵石-20% */.into()];
                 card.opts.push(("十倍赔付".into(), e2));
             }
             47 => {
                 // 链2 首段：雾中古碑（文案基因承 id32 古碑残字，为另一方碑）
                 card.title = "古碑残篇".into();
                 // v1.16.7 两段文案共 4 行 → 首个走加高版式（600×440）的剧情卡
-                card.text = "雾锁的山坳立着一方丈高古碑，苔痕不生，碑面无字——山风过处，隐有金石摩挲之声。\n你走近时，指尖竟渗出墨意，在碑上洇出半个「行」字，如有人隔世落笔。".into();
+                card.text = evtx(88)/* 原文：雾锁的山坳立着一方丈高古碑，苔痕不生，碑面无字——山风过处，隐有金石摩挲之声。\n你走近时，指尖竟渗出墨意，在碑上洇出半个「行」字，如有人隔世落笔。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.06;
                 e1.special = 22; // 置链：→48 拓印风波
-                e1.msg = vec!["血墨相引，碑文渐显，你连夜拓下前半卷。修为+6%".into()];
+                e1.msg = vec![evtx(89)/* 原文：血墨相引，碑文渐显，你连夜拓下前半卷。修为+6% */.into()];
                 card.opts.push(("以血引墨".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
-                e2.msg = vec!["你敬畏未显之文，覆土掩碑而去。道心+3".into()];
+                e2.msg = vec![evtx(90)/* 原文：你敬畏未显之文，覆土掩碑而去。道心+3 */.into()];
                 card.opts.push(("覆土掩碑".into(), e2));
                 self.chain = Some((2, 0, CHAIN_TTL));
             }
             48 => {
                 // 链2 中段（仅链内）：焚拓 = 「碑随雾散」自洽收尾
                 card.title = "拓印风波·续".into();
-                card.text = "你携拓片到坊市装裱，老裱工却变了脸色：「此拓火气太重，三日必有争端——要么焚了它，要么我引你去见一个人。」".into();
+                card.text = evtx(91)/* 原文：你携拓片到坊市装裱，老裱工却变了脸色：「此拓火气太重，三日必有争端——要么焚了它，要么我引你去见一个人。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.special = 23; // 置链：→49 守碑人
-                e1.msg = vec!["你随他冒雨入山。道心+2".into()];
+                e1.msg = vec![evtx(92)/* 原文：你随他冒雨入山。道心+2 */.into()];
                 card.opts.push(("随他见人".into(), e1));
                 let g = (80.0 * ss * gen_range(0.8, 1.4)) as i64;
                 let mut e2 = Eff::new();
@@ -5061,42 +5062,45 @@ impl Game {
             49 => {
                 // 链2 末段（仅链内）：special4 道心检定臂（过授功法，败负内创）
                 card.title = "守碑人·续".into();
+                // 历史复用（v1.16.7）：守碑人非玄诚长老本体，仅共用其脸——
+                // 勿当 v1.16.22「具名与脸同源」先例抄：新卡正文未钉名者不挂 Npc
                 card.actor = Some(CardActor::Npc(0));
-                card.text = "雾中竟有人守碑。青衣老者负手而立：「碑文是我一生道途。拓它者，须过我三问——问错了，便把它留下。」".into();
+                card.text = evtx(93)/* 原文：雾中竟有人守碑。青衣老者负手而立：「碑文是我一生道途。拓它者，须过我三问——问错了，便把它留下。」 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 4;
                 e1.good = false;
                 card.opts.push(("受此三问".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
-                e2.msg = vec!["你长揖而退，守碑人在雾中颔首。道心+1".into()];
+                e2.msg = vec![evtx(94)/* 原文：你长揖而退，守碑人在雾中颔首。道心+1 */.into()];
                 card.opts.push(("告退离山".into(), e2));
             }
             50 => {
                 // 链3 首段：江底墨匣
                 card.title = "江底墨匣".into();
                 // v1.16.7 两段文案共 4 行 → 加高版式
-                card.text = "渡舟行至江心，你失足落水。呛了几口江水，指尖却触到江底一只冰凉的铜匣，匣身纹路温润如墨玉。\n匣面錾着「沉墨候主」四字——指腹刚碰到，匣身微微发热，湍急的江水竟在你四周静了下来。".into();
+                card.text = evtx(95)/* 原文：渡舟行至江心，你失足落水。呛了几口江水，指尖却触到江底一只冰凉的铜匣，匣身纹路温润如墨玉。\n匣面錾着「沉墨候主」四字——指腹刚碰到，匣身微微发热，湍急的江水竟在你四周静了下来。 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
                 e1.special = 24; // 置链：→51 渔村释疑
-                e1.msg = vec!["你把铜匣收进袖中，舟行一顺到底。气运+1".into()];
+                e1.msg = vec![evtx(96)/* 原文：你把铜匣收进袖中，舟行一顺到底。气运+1 */.into()];
                 card.opts.push(("收匣启程".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
-                e2.msg = vec!["匣沉江底，水面泛起一圈墨色涟漪，久久不散。道心+2".into()];
+                e2.msg = vec![evtx(97)/* 原文：匣沉江底，水面泛起一圈墨色涟漪，久久不散。道心+2 */.into()];
                 card.opts.push(("抛回江底".into(), e2));
                 self.chain = Some((3, 0, CHAIN_TTL));
             }
             51 => {
-                // 链3 中段（仅链内）：老渔翁（复用醉道人脸）
+                // 链3 中段（仅链内）：老渔翁（复用醉道人脸）——历史复用勿当
+                // v1.16.22 具名同源先例抄（正文未钉名「醉道人」）
                 card.title = "渔村释疑·续".into();
                 card.actor = Some(CardActor::Npc(3));
-                card.text = "沿江渔村有位不苟言笑的老渔翁，见匣惊起：「这是『沉墨』——墨痴三十年前沉江的遗物。他说『匣候有缘，缘至当还』。」".into();
+                card.text = evtx(98)/* 原文：沿江渔村有位不苟言笑的老渔翁，见匣惊起：「这是『沉墨』——墨痴三十年前沉江的遗物。他说『匣候有缘，缘至当还』。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.special = 25; // 置链：→52 匣底真迹
-                e1.msg = vec!["你随老渔翁驾舟往江心去。道心+2".into()];
+                e1.msg = vec![evtx(99)/* 原文：你随老渔翁驾舟往江心去。道心+2 */.into()];
                 card.opts.push(("随往江心".into(), e1));
                 let g = (25.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -5107,17 +5111,17 @@ impl Game {
             52 => {
                 // 链3 末段（仅链内）：special12 参悟入大事记
                 card.title = "匣底真迹·续".into();
-                card.text = "江心礁下，铜匣无风自开——匣底一页真迹，笔势枯润相生。你看得入神，竟忘了身在水中，灵气自四面八方涌来。".into();
+                card.text = evtx(100)/* 原文：江心礁下，铜匣无风自开——匣底一页真迹，笔势枯润相生。你看得入神，竟忘了身在水中，灵气自四面八方涌来。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.18;
                 e1.dao = 3.0;
                 e1.special = 12;
-                e1.msg = vec!["真迹入心，如醍醐灌顶。修为+18%，道心+3".into()];
+                e1.msg = vec![evtx(101)/* 原文：真迹入心，如醍醐灌顶。修为+18%，道心+3 */.into()];
                 card.opts.push(("参悟真迹".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 4.0;
                 e2.luck = 2.0;
-                e2.msg = vec!["老渔翁捧页大恸，拜了三拜——那是他师兄的绝笔。道心+4，气运+2".into()];
+                e2.msg = vec![evtx(102)/* 原文：老渔翁捧页大恸，拜了三拜——那是他师兄的绝笔。道心+4，气运+2 */.into()];
                 card.opts.push(("转赠渔翁".into(), e2));
             }
             53 => {
@@ -5142,12 +5146,12 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
                 e1.dao = 3.0;
-                e1.msg = vec!["你们以同一功法互证，各悟出对方的长处。修为+10%，道心+3".into()];
+                e1.msg = vec![evtx(103)/* 原文：你们以同一功法互证，各悟出对方的长处。修为+10%，道心+3 */.into()];
                 card.opts.push(("同参一道".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.life_y = 2.0;
-                e2.msg = vec!["一盏茶从午后喝到落雪，谁也没答，谁也不必答。气运+2，寿元+2".into()];
+                e2.msg = vec![evtx(104)/* 原文：一盏茶从午后喝到落雪，谁也没答，谁也不必答。气运+2，寿元+2 */.into()];
                 card.opts.push(("煮茶听雪".into(), e2));
             }
             54 => {
@@ -5170,7 +5174,7 @@ impl Game {
                 );
                 let mut e1 = Eff::new();
                 e1.special = 5;
-                e1.msg = vec!["你接剑入手，只觉道途有伴。战力永久+4%".into()];
+                e1.msg = vec![evtx(105)/* 原文：你接剑入手，只觉道途有伴。战力永久+4% */.into()];
                 card.opts.push(("佩剑同行".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
@@ -5207,14 +5211,14 @@ impl Game {
                 e2.luck = 2.0;
                 e2.good = false;
                 e2.msg = vec![
-                    "你把身后让给道侣，自己硬受了这一击——行囊尽毁，却听见那追来的脚步声。灵石-10%，气运+2".into(),
+                    evtx(106)/* 原文：你把身后让给道侣，自己硬受了这一击——行囊尽毁，却听见那追来的脚步声。灵石-10%，气运+2 */.into(),
                 ];
                 card.opts.push(("护身后人先走".into(), e2));
             }
             56 => {
                 // 稀有：星坠荒原（w2；special6 五五开试炼臂）
                 card.title = "星坠荒原".into();
-                card.text = "夜半天穹忽亮，一颗流星坠入荒原。追到坑口，陨铁未冷，坑底静卧一卷星纹绢书。".into();
+                card.text = evtx(107)/* 原文：夜半天穹忽亮，一颗流星坠入荒原。追到坑口，陨铁未冷，坑底静卧一卷星纹绢书。 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 6;
                 e1.good = false;
@@ -5222,14 +5226,14 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.10;
                 e2.dao = 2.0;
-                e2.msg = vec!["你拾绢书而去，星纹入梦。修为+10%，道心+2".into()];
+                e2.msg = vec![evtx(108)/* 原文：你拾绢书而去，星纹入梦。修为+10%，道心+2 */.into()];
                 card.opts.push(("拾书而归".into(), e2));
             }
             57 => {
                 // 稀有：无面镜客（w1；special26 赌命臂 / fight 碎镜）
                 card.title = "无面镜客".into();
                 // v1.16.7 两段文案共 4 行 → 加高版式（镜中怪谈的节奏感靠分段撑）
-                card.text = "荒庙断壁前立着一面古镜，镜中人没有脸。它抬手，你也抬手；它偏头，你也偏头。\n而后它开口，用的正是你的声音：「赌一次么？赢，得我半生修为；输，留十年寿数。」".into();
+                card.text = evtx(109)/* 原文：荒庙断壁前立着一面古镜，镜中人没有脸。它抬手，你也抬手；它偏头，你也偏头。\n而后它开口，用的正是你的声音：「赌一次么？赢，得我半生修为；输，留十年寿数。」 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 26;
                 e1.good = false;
@@ -5242,14 +5246,14 @@ impl Game {
             58 => {
                 // 稀有：灵潮倒卷（w2；special27 漩心洞府臂）
                 card.title = "灵潮倒卷".into();
-                card.text = "地脉异动，灵潮倒卷成漩——漩心隐见一座前人闭死的洞府，灵气疯狂外泄，诱人至极，也凶险至极。".into();
+                card.text = evtx(110)/* 原文：地脉异动，灵潮倒卷成漩——漩心隐见一座前人闭死的洞府，灵气疯狂外泄，诱人至极，也凶险至极。 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 27;
                 e1.good = false;
                 card.opts.push(("冒死入漩".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.15;
-                e2.msg = vec!["你在外围引外泄灵气入体，修为+15%".into()];
+                e2.msg = vec![evtx(111)/* 原文：你在外围引外泄灵气入体，修为+15% */.into()];
                 card.opts.push(("外围引气".into(), e2));
             }
 
@@ -5263,10 +5267,10 @@ impl Game {
             59 => {
                 // 普通：书院讲经
                 card.title = "书院讲经".into();
-                card.text = "山坳蒙学书院，白发先生讲《上清章句》，学童齐声诵读，书声里隐有文气流转。".into();
+                card.text = evtx(112)/* 原文：山坳蒙学书院，白发先生讲《上清章句》，学童齐声诵读，书声里隐有文气流转。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
-                e1.msg = vec!["你于廊下坐听半日，稚子清音涤荡心尘。道心+2".into()];
+                e1.msg = vec![evtx(113)/* 原文：你于廊下坐听半日，稚子清音涤荡心尘。道心+2 */.into()];
                 card.opts.push(("坐听半日".into(), e1));
                 let g = (30.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -5281,7 +5285,7 @@ impl Game {
             60 => {
                 // 普通：灵蜂酿蜜
                 card.title = "灵蜂酿蜜".into();
-                card.text = "崖壁灵蜂采百花蕊酿蜜，蜂巢边缘凝着一点金芒——那是花髓千日一滴的精华。".into();
+                card.text = evtx(114)/* 原文：崖壁灵蜂采百花蕊酿蜜，蜂巢边缘凝着一点金芒——那是花髓千日一滴的精华。 */.into();
                 let g = (40.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
@@ -5291,17 +5295,17 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.luck = 1.0;
-                e2.msg = vec!["你以石子驱走贪蜜的灵雀，蜂群绕你三匝而舞。道心+1，气运+1".into()];
+                e2.msg = vec![evtx(115)/* 原文：你以石子驱走贪蜜的灵雀，蜂群绕你三匝而舞。道心+1，气运+1 */.into()];
                 card.opts.push(("驱鸟护巢".into(), e2));
             }
             61 => {
                 // 普通：画师留影
                 card.title = "画师留影".into();
-                card.text = "云游画师道人拦路，称见你「眉间有墨」，要为你白描一幅小像，分文不取。".into();
+                card.text = evtx(116)/* 原文：云游画师道人拦路，称见你「眉间有墨」，要为你白描一幅小像，分文不取。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
-                e1.msg = vec!["画成之日，画师赞「此子有书卷气」，赠你原稿。道心+2，气运+1".into()];
+                e1.msg = vec![evtx(117)/* 原文：画成之日，画师赞「此子有书卷气」，赠你原稿。道心+2，气运+1 */.into()];
                 card.opts.push(("慨然入画".into(), e1));
                 let g = (20.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -5316,27 +5320,27 @@ impl Game {
             62 => {
                 // 普通：雪崩沟谷（危机双臂皆负——受创换气运/损耗绕行）
                 card.title = "雪崩沟谷".into();
-                card.text = "沟谷雪线在头顶断裂，积雪裹着碎石轰然倾泻——退已不及，寒气先一步蚀骨。".into();
+                card.text = evtx(118)/* 原文：沟谷雪线在头顶断裂，积雪裹着碎石轰然倾泻——退已不及，寒气先一步蚀骨。 */.into();
                 let mut e1 = Eff::new();
                 e1.injure = true;
                 e1.luck = 2.0;
                 e1.good = false;
                 e1.msg = vec![
-                    "你以身撞开雪墙滚落沟底——大难不死，气运反涨。重伤，气运+2".into(),
+                    evtx(119)/* 原文：你以身撞开雪墙滚落沟底——大难不死，气运反涨。重伤，气运+2 */.into(),
                 ];
                 card.opts.push(("以身开道".into(), e1));
                 let mut e2 = Eff::new();
                 e2.stones_pct = -0.06;
                 e2.good = false;
                 e2.msg = vec![
-                    "你退回原路绕行远道，行囊里的干粮耗去一成。灵石-6%".into(),
+                    evtx(120)/* 原文：你退回原路绕行远道，行囊里的干粮耗去一成。灵石-6% */.into(),
                 ];
                 card.opts.push(("绕行远路".into(), e2));
             }
             63 => {
                 // 普通：赌坊押擂（good=false；登台走 fight 臂照 id46 先例）
                 card.title = "赌坊押擂".into();
-                card.text = "坊市地窖里开着一处地下斗擂，庄家嘶声吆喝——押赢的抱银子，上台的赌性命。".into();
+                card.text = evtx(121)/* 原文：坊市地窖里开着一处地下斗擂，庄家嘶声吆喝——押赢的抱银子，上台的赌性命。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.2;
                 e1.good = false;
@@ -5345,14 +5349,14 @@ impl Game {
                 e2.stones_pct = -0.05;
                 e2.good = false;
                 e2.msg = vec![
-                    "你押了庄家对头——十赌九输，庄家笑纳注银，还请你一盏酒。灵石-5%".into(),
+                    evtx(122)/* 原文：你押了庄家对头——十赌九输，庄家笑纳注银，还请你一盏酒。灵石-5% */.into(),
                 ];
                 card.opts.push(("只押注".into(), e2));
             }
             64 => {
                 // 普通：漕运夜航
                 card.title = "漕运夜航".into();
-                card.text = "夜航漕船满载灵米北上，船老大拱手相邀：近来水路不太平，缺一位护道的。".into();
+                card.text = evtx(123)/* 原文：夜航漕船满载灵米北上，船老大拱手相邀：近来水路不太平，缺一位护道的。 */.into();
                 let g = (60.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = g;
@@ -5363,16 +5367,16 @@ impl Game {
                 card.opts.push(("伴航护船".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
-                e2.msg = vec!["你倚着米袋读了一夜书，橹声欸乃如节拍。道心+2".into()];
+                e2.msg = vec![evtx(124)/* 原文：你倚着米袋读了一夜书，橹声欸乃如节拍。道心+2 */.into()];
                 card.opts.push(("舱中夜读".into(), e2));
             }
             65 => {
                 // 普通：温泉濯尘
                 card.title = "温泉濯尘".into();
-                card.text = "山间野温泉雾气氤氲，泉底铺着圆润的白石，水温恰能化开筋骨里的滞涩。".into();
+                card.text = evtx(125)/* 原文：山间野温泉雾气氤氲，泉底铺着圆润的白石，水温恰能化开筋骨里的滞涩。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.05;
-                e1.msg = vec!["泡到浑身通红，经脉滞涩尽数化开。修为+5%".into()];
+                e1.msg = vec![evtx(126)/* 原文：泡到浑身通红，经脉滞涩尽数化开。修为+5% */.into()];
                 card.opts.push(("濯尘泡浴".into(), e1));
                 let g = (25.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -5386,21 +5390,21 @@ impl Game {
             66 => {
                 // 普通：棋枰斗弈
                 card.title = "棋枰斗弈".into();
-                card.text = "山亭里两位老叟对弈，一局棋下了三年——落子处松针积了寸许，无人肯先离席。".into();
+                card.text = evtx(127)/* 原文：山亭里两位老叟对弈，一局棋下了三年——落子处松针积了寸许，无人肯先离席。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
-                e1.msg = vec!["你观至中盘，忽然懂了「弃子」二字。道心+3".into()];
+                e1.msg = vec![evtx(128)/* 原文：你观至中盘，忽然懂了「弃子」二字。道心+3 */.into()];
                 card.opts.push(("观棋不语".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.luck = 2.0;
-                e2.msg = vec!["你替僵局落了一子，两叟同时抚掌大笑。道心+1，气运+2".into()];
+                e2.msg = vec![evtx(129)/* 原文：你替僵局落了一子，两叟同时抚掌大笑。道心+1，气运+2 */.into()];
                 card.opts.push(("举手投子".into(), e2));
             }
             67 => {
                 // 普通：铸兵守炉
                 card.title = "铸兵守炉".into();
-                card.text = "铸兵铺的老铁匠要闭关淬一口剑胚，请你替他守一夜炉火——火候差一分，前功尽弃。".into();
+                card.text = evtx(130)/* 原文：铸兵铺的老铁匠要闭关淬一口剑胚，请你替他守一夜炉火——火候差一分，前功尽弃。 */.into();
                 let g = (50.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = g;
@@ -5411,29 +5415,29 @@ impl Game {
                 card.opts.push(("通宵守炉".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.06;
-                e2.msg = vec!["你抡锤二十下，臂酸三日，气机却顺了。修为+6%".into()];
+                e2.msg = vec![evtx(131)/* 原文：你抡锤二十下，臂酸三日，气机却顺了。修为+6% */.into()];
                 card.opts.push(("助锻一锤".into(), e2));
             }
             68 => {
                 // 普通：蜃楼残景（mr3 高界一条）
                 card.title = "蜃楼残景".into();
-                card.text = "海市蜃楼现于海上，楼台街市皆前人笔意——那是仙域投在凡世的一道残影，转瞬即散。".into();
+                card.text = evtx(132)/* 原文：海市蜃楼现于海上，楼台街市皆前人笔意——那是仙域投在凡世的一道残影，转瞬即散。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 4.0;
-                e1.msg = vec!["残影入眼即化，你记住了飞檐上的一笔弧度。道心+4".into()];
+                e1.msg = vec![evtx(133)/* 原文：残影入眼即化，你记住了飞檐上的一笔弧度。道心+4 */.into()];
                 card.opts.push(("凝望参悟".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.10;
-                e2.msg = vec!["你以指为笔临于袖上，仙域气韵入体三分。修为+10%".into()];
+                e2.msg = vec![evtx(134)/* 原文：你以指为笔临于袖上，仙域气韵入体三分。修为+10% */.into()];
                 card.opts.push(("画下残景".into(), e2));
             }
             69 => {
                 // 普通：井底传声
                 card.title = "井底传声".into();
-                card.text = "荒村古井夜半传声，井底有人断断续续诵经——村人说，井是前朝道士封的。".into();
+                card.text = evtx(135)/* 原文：荒村古井夜半传声，井底有人断断续续诵经——村人说，井是前朝道士封的。 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 2.0;
-                e1.msg = vec!["井底无物，唯壁上一行刻字被水光映亮，你记住了它。气运+2".into()];
+                e1.msg = vec![evtx(136)/* 原文：井底无物，唯壁上一行刻字被水光映亮，你记住了它。气运+2 */.into()];
                 card.opts.push(("探井底".into(), e1));
                 let g = (15.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -5448,10 +5452,10 @@ impl Game {
             70 => {
                 // 普通：药市问诊
                 card.title = "药市问诊".into();
-                card.text = "药市义诊的悬壶老叟搭住你的腕：「气是够的，就是走岔了道——老朽替你顺一顺？」".into();
+                card.text = evtx(137)/* 原文：药市义诊的悬壶老叟搭住你的腕：「气是够的，就是走岔了道——老朽替你顺一顺？」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
-                e1.msg = vec!["老叟三指一按一拨，滞气应手而散。修为+8%".into()];
+                e1.msg = vec![evtx(138)/* 原文：老叟三指一按一拨，滞气应手而散。修为+8% */.into()];
                 card.opts.push(("求一脉案".into(), e1));
                 let g = (20.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -5466,35 +5470,35 @@ impl Game {
             71 => {
                 // 普通：驿壁题诗
                 card.title = "驿壁题诗".into();
-                card.text = "官道驿站粉壁斑驳，留满前人题诗——最末一行墨迹未干：「此身虽微，万世可期。」".into();
+                card.text = evtx(139)/* 原文：官道驿站粉壁斑驳，留满前人题诗——最末一行墨迹未干：「此身虽微，万世可期。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
-                e1.msg = vec!["你题罢掷笔，满壁字迹似都亮了一亮。道心+2，气运+1".into()];
+                e1.msg = vec![evtx(140)/* 原文：你题罢掷笔，满壁字迹似都亮了一亮。道心+2，气运+1 */.into()];
                 card.opts.push(("题诗一首".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.05;
-                e2.msg = vec!["你抄下半壁好句，一路低吟。修为+5%".into()];
+                e2.msg = vec![evtx(141)/* 原文：你抄下半壁好句，一路低吟。修为+5% */.into()];
                 card.opts.push(("抄录佳句".into(), e2));
             }
             72 => {
                 // 稀有：墨渊垂钓（w2；special33 墨叟一问检定 / 静观悟道）
                 card.title = "墨渊垂钓".into();
-                card.actor = Some(CardActor::Npc(3)); // 蓑衣钓叟（复用醉道人脸）
-                card.text = "夜半墨渊，蓑衣老叟垂钓，钩上无饵——钓的是水里的「字」。老叟头也不回：「来者可是爱字之人？老朽钓上一个，你认得，便归你。」".into();
+                card.actor = Some(CardActor::Npc(3)); // 蓑衣钓叟（复用醉道人脸——历史复用勿当同源先例抄）
+                card.text = evtx(142)/* 原文：夜半墨渊，蓑衣老叟垂钓，钩上无饵——钓的是水里的「字」。老叟头也不回：「来者可是爱字之人？老朽钓上一个，你认得，便归你。」 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 33;
                 e1.good = false;
                 card.opts.push(("受墨叟一问".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
-                e2.msg = vec!["你坐到天明，老叟竿起竿落，一字未得亦一字未失。道心+3".into()];
+                e2.msg = vec![evtx(143)/* 原文：你坐到天明，老叟竿起竿落，一字未得亦一字未失。道心+3 */.into()];
                 card.opts.push(("静观不语".into(), e2));
             }
             73 => {
                 // 稀有：纸人夜行（w1 mr3；special34 拦问检定 / 避道小损）
                 card.title = "纸人夜行".into();
-                card.text = "深夜纸扎铺无人，纸人却列队而出，抬着一口巴掌大的小棺，步调整齐得可怕。".into();
+                card.text = evtx(144)/* 原文：深夜纸扎铺无人，纸人却列队而出，抬着一口巴掌大的小棺，步调整齐得可怕。 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 34;
                 e1.good = false;
@@ -5503,26 +5507,26 @@ impl Game {
                 e2.luck = -1.0;
                 e2.good = false;
                 e2.msg = vec![
-                    "你贴墙让路，纸人行过时齐齐侧头看了你一眼。气运-1".into(),
+                    evtx(145)/* 原文：你贴墙让路，纸人行过时齐齐侧头看了你一眼。气运-1 */.into(),
                 ];
                 card.opts.push(("避道让行".into(), e2));
             }
             74 => {
                 // 章节联动（第三章·血仇得报已了门控）：文狱余波——血仇从来传代
                 card.title = "血仇余响".into();
-                card.text = "被斩宿敌的门生循着旧档寻上门，声言讨一个「说法」——文狱的账，从来传代。".into();
+                card.text = evtx(146)/* 原文：被斩宿敌的门生循着旧档寻上门，声言讨一个「说法」——文狱的账，从来传代。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你报出斩其师承的名号，来人脸色数变，长揖而退。道心+2，气运+1".into(),
+                    evtx(147)/* 原文：你报出斩其师承的名号，来人脸色数变，长揖而退。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("报出名号".into(), e1));
                 let mut e2 = Eff::new();
                 e2.stones_pct = -0.05;
                 e2.good = false;
                 e2.msg = vec![
-                    "你闭门三日，门外的脚步声来去——走了，但账没清。灵石-5%".into(),
+                    evtx(148)/* 原文：你闭门三日，门外的脚步声来去——走了，但账没清。灵石-5% */.into(),
                 ];
                 card.opts.push(("闭门避锋".into(), e2));
             }
@@ -5546,11 +5550,11 @@ impl Game {
                 );
                 let mut e1 = Eff::new();
                 e1.luck = 3.0;
-                e1.msg = vec!["两盏灯并排漂远，河面金光缠作一股。气运+3".into()];
+                e1.msg = vec![evtx(149)/* 原文：两盏灯并排漂远，河面金光缠作一股。气运+3 */.into()];
                 card.opts.push(("同放莲灯".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
-                e2.msg = vec!["你们沿堤走到灯尽，把彼此的来路说了一遍。道心+2".into()];
+                e2.msg = vec![evtx(150)/* 原文：你们沿堤走到灯尽，把彼此的来路说了一遍。道心+2 */.into()];
                 card.opts.push(("灯下叙旧".into(), e2));
             }
             76 => {
@@ -5558,15 +5562,15 @@ impl Game {
                 card.title = "灯楼谜约".into();
                 card.actor = Some(CardActor::Npc(2));
                 // v1.16.7 两段文案（邂逅版式 5 行内）：谜面独立成段
-                card.text = "上元灯会，临水灯楼悬一盏无火自明的青灯，楼主人立灯下：「青灯有主三十载，只候一个能对上灯谜的人。」\n谜面只有一行小字：「写它的人不在了，读它的人还没来。」".into();
+                card.text = evtx(151)/* 原文：上元灯会，临水灯楼悬一盏无火自明的青灯，楼主人立灯下：「青灯有主三十载，只候一个能对上灯谜的人。」\n谜面只有一行小字：「写它的人不在了，读它的人还没来。」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.06;
                 e1.special = 28; // 置链：→77 灯下问答
-                e1.msg = vec!["你道：「在我。」灯焰忽然一跳。修为+6%".into()];
+                e1.msg = vec![evtx(152)/* 原文：你道：「在我。」灯焰忽然一跳。修为+6% */.into()];
                 card.opts.push(("揭谜应约".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
-                e2.msg = vec!["有些谜不是给此刻的你出的。你转身汇入灯流。道心+2".into()];
+                e2.msg = vec![evtx(153)/* 原文：有些谜不是给此刻的你出的。你转身汇入灯流。道心+2 */.into()];
                 card.opts.push(("折返离楼".into(), e2));
                 self.chain = Some((4, 0, CHAIN_TTL)); // 首段建链：待分支
             }
@@ -5574,11 +5578,11 @@ impl Game {
                 // 链4 中段（仅链内）：灯楼主人设问（复用宁清霜脸）
                 card.title = "灯下问答·续".into();
                 card.actor = Some(CardActor::Npc(2));
-                card.text = "灯楼主人引你上楼，满架残卷蒙尘，唯第三层遮着素布：「布下是我未写完的书。你若问得三问，便替我揭了它。」".into();
+                card.text = evtx(154)/* 原文：灯楼主人引你上楼，满架残卷蒙尘，唯第三层遮着素布：「布下是我未写完的书。你若问得三问，便替我揭了它。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.special = 29; // 置链：→78 青灯问藏
-                e1.msg = vec!["你在素布前坐定，第一问从灯焰里升起。道心+2".into()];
+                e1.msg = vec![evtx(155)/* 原文：你在素布前坐定，第一问从灯焰里升起。道心+2 */.into()];
                 card.opts.push(("应主人之问".into(), e1));
                 let g = (30.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -5593,25 +5597,25 @@ impl Game {
                 // 链4 末段（仅链内）：special32 青灯三问检定臂收尾
                 card.title = "青灯问藏·续".into();
                 card.actor = Some(CardActor::Npc(2));
-                card.text = "三问已毕，青灯灯火忽然大盛。主人手按素布：「最后一问没有答案——你自己的书，写到哪里了？」".into();
+                card.text = evtx(156)/* 原文：三问已毕，青灯灯火忽然大盛。主人手按素布：「最后一问没有答案——你自己的书，写到哪里了？」 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 32;
                 e1.good = false;
                 card.opts.push(("受青灯三问".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
-                e2.msg = vec!["你说「写到下一章」，主人笑着为你揭了素布一角。道心+1".into()];
+                e2.msg = vec![evtx(157)/* 原文：你说「写到下一章」，主人笑着为你揭了素布一角。道心+1 */.into()];
                 card.opts.push(("只借书一晚".into(), e2));
             }
             79 => {
                 // 链5 首段：傩面还愿（村野戏台无立绘；双分支皆推链照链1 special20/21）
                 card.title = "傩面还愿".into();
-                card.text = "村中傩班唱还愿戏，班主捧出一副彩面：「欠了笔墨债的，戴它跳一场『谢墨傩』，债便两清——你面相上，有债。」".into();
+                card.text = evtx(158)/* 原文：村中傩班唱还愿戏，班主捧出一副彩面：「欠了笔墨债的，戴它跳一场『谢墨傩』，债便两清——你面相上，有债。」 */.into();
                 let g = (25.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
                 e1.special = 30; // 置链：→80 戏毕面热
-                e1.msg = vec!["面具覆脸的一瞬，鼓点自己追上了你的脚步。气运+1".into()];
+                e1.msg = vec![evtx(159)/* 原文：面具覆脸的一瞬，鼓点自己追上了你的脚步。气运+1 */.into()];
                 card.opts.push(("戴面代跳".into(), e1));
                 let mut e2 = Eff::new();
                 e2.stones = -g;
@@ -5626,7 +5630,7 @@ impl Game {
             80 => {
                 // 链5 分支a 段（仅链内）：两选项均无置链臂 → 抉择即链终局
                 card.title = "戏毕面热·续".into();
-                card.text = "一场傩戏跳罢，面具内里温热如体温。班主朝你长揖：「面里封着老辈一笔愿——你替他还了。」".into();
+                card.text = evtx(160)/* 原文：一场傩戏跳罢，面具内里温热如体温。班主朝你长揖：「面里封着老辈一笔愿——你替他还了。」 */.into();
                 let g = (45.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = g;
@@ -5638,22 +5642,22 @@ impl Game {
                 card.opts.push(("收下谢仪".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
-                e2.msg = vec!["你把谢仪推了回去：「两清便好。」鼓声送你出村。道心+3".into()];
+                e2.msg = vec![evtx(161)/* 原文：你把谢仪推了回去：「两清便好。」鼓声送你出村。道心+3 */.into()];
                 card.opts.push(("只愿两清".into(), e2));
             }
             81 => {
                 // 链5 分支b 段（仅链内）：两选项均无置链臂 → 抉择即链终局
                 card.title = "愿成符赠·续".into();
-                card.text = "戏台收场，班主取下傩面一角削成木符递你：「戏钱抵了愿钱，这符镇夜路。」".into();
+                card.text = evtx(162)/* 原文：戏台收场，班主取下傩面一角削成木符递你：「戏钱抵了愿钱，这符镇夜路。」 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 3.0;
-                e1.msg = vec!["木符入手微温，夜行的狼嚎从此远了。气运+3".into()];
+                e1.msg = vec![evtx(163)/* 原文：木符入手微温，夜行的狼嚎从此远了。气运+3 */.into()];
                 card.opts.push(("佩符于身".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你把符塞给看戏入迷的稚童——愿这种东西，传下去才灵。道心+2，气运+1".into(),
+                    evtx(164)/* 原文：你把符塞给看戏入迷的稚童——愿这种东西，传下去才灵。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("转赠孩童".into(), e2));
             }
@@ -5678,11 +5682,11 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
-                e1.msg = vec!["你把灯芯剔亮，针脚落得又稳又密。道心+2，气运+1".into()];
+                e1.msg = vec![evtx(165)/* 原文：你把灯芯剔亮，针脚落得又稳又密。道心+2，气运+1 */.into()];
                 card.opts.push(("帮掌灯".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.05;
-                e2.msg = vec!["缝完那页，你们把各自的来路絮了一遍。修为+5%".into()];
+                e2.msg = vec![evtx(166)/* 原文：缝完那页，你们把各自的来路絮了一遍。修为+5% */.into()];
                 card.opts.push(("絮话至深夜".into(), e2));
             }
             83 => {
@@ -5705,12 +5709,12 @@ impl Game {
                 );
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.06;
-                e1.msg = vec!["霜橘入腹，一身寒气散尽。修为+6%".into()];
+                e1.msg = vec![evtx(167)/* 原文：霜橘入腹，一身寒气散尽。修为+6% */.into()];
                 card.opts.push(("就树分食".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.dao = 1.0;
-                e2.msg = vec!["你们把橘核埋在向阳坡上，约好下一世来看。道心+1，气运+2".into()];
+                e2.msg = vec![evtx(168)/* 原文：你们把橘核埋在向阳坡上，约好下一世来看。道心+1，气运+2 */.into()];
                 card.opts.push(("留核试种".into(), e2));
             }
             84 => {
@@ -5735,13 +5739,13 @@ impl Game {
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你说「写心也好写世也罢，同页就好」——灯花又爆了一声，像是应了。道心+2，气运+1".into(),
+                    evtx(169)/* 原文：你说「写心也好写世也罢，同页就好」——灯花又爆了一声，像是应了。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("先开口和好".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.06;
                 e2.msg = vec![
-                    "你们背对背各坐一夜，醒来时功法里各自多了对方那一路的意思。修为+6%".into(),
+                    evtx(170)/* 原文：你们背对背各坐一夜，醒来时功法里各自多了对方那一路的意思。修为+6% */.into(),
                 ];
                 card.opts.push(("各自静修".into(), e2));
             }
@@ -5761,7 +5765,7 @@ impl Game {
                     .neme
                     .as_ref()
                     .map(|n| n.full())
-                    .unwrap_or_else(|| "删你字的血仇之敌".to_string());
+                    .unwrap_or_else(|| evtx(171)/* 原文：删你字的血仇之敌 */.to_string());
                 card.text = format!(
                     "茶棚歇脚，两个行脚商人压着嗓子议论{}——「近来招兵买马，看样子要办大事。」你摩挲着方印：血仇的名字，从来不需要想起。",
                     nfull
@@ -5769,11 +5773,11 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.special = 35; // 置链：→86 仇踪暗访
-                e1.msg = vec!["你不动声色，把行踪记入旧册——来日方长。道心+1".into()];
+                e1.msg = vec![evtx(172)/* 原文：你不动声色，把行踪记入旧册——来日方长。道心+1 */.into()];
                 card.opts.push(("循踪暗记".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
-                e2.msg = vec!["血仇宜缓不宜急，你连夜收拾行装避开风口。气运+1".into()];
+                e2.msg = vec![evtx(173)/* 原文：血仇宜缓不宜急，你连夜收拾行装避开风口。气运+1 */.into()];
                 card.opts.push(("当夜就走".into(), e2));
                 self.chain = Some((6, 0, CHAIN_TTL)); // 首段建链：待分支
             }
@@ -5793,11 +5797,11 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
                 e1.special = 36; // 置链：→87 乘虚夺积
-                e1.msg = vec!["你散出「携重宝夜行」的假讯，专候其亲信出营。气运+1".into()];
+                e1.msg = vec![evtx(174)/* 原文：你散出「携重宝夜行」的假讯，专候其亲信出营。气运+1 */.into()];
                 card.opts.push(("布饵设伏".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
-                e2.msg = vec!["虚实已探，来日再举。你抹去痕迹悄然退走。道心+1".into()];
+                e2.msg = vec![evtx(175)/* 原文：虚实已探，来日再举。你抹去痕迹悄然退走。道心+1 */.into()];
                 card.opts.push(("就此罢手".into(), e2));
             }
             87 => {
@@ -5829,7 +5833,7 @@ impl Game {
                 // v1.16.20 链尾余味：与取匣臂「满地灰烬」撞像消解——不烧，原样放回，
                 // 余味落在「他永远不知道自己漏在哪一夜」的留白上
                 e2.msg = vec![
-                    "你不取分文，只把布防图原样放回匣中——让他永远不知道，自己漏在哪一夜。道心+3".into(),
+                    evtx(176)/* 原文：你不取分文，只把布防图原样放回匣中——让他永远不知道，自己漏在哪一夜。道心+3 */.into(),
                 ];
                 card.opts.push(("毁其布防".into(), e2));
             }
@@ -5838,28 +5842,28 @@ impl Game {
             // 寿元再变化（无面镜客/仙人赠礼）不撤卡
             88 => {
                 card.title = "灯下了愿".into();
-                card.text = "灯芯将尽。你把这些年欠下的愿一件件数过——有些还了，有些再不还就来不及了。\n今夜把灯挑亮，了结最后一桩。".into();
+                card.text = evtx(177)/* 原文：灯芯将尽。你把这些年欠下的愿一件件数过——有些还了，有些再不还就来不及了。\n今夜把灯挑亮，了结最后一桩。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.10;
                 e1.dao = 4.0;
                 e1.msg = vec![
-                    "散尽浮财，了却旧愿。灯花爆了一声，你心头忽然轻了。灵石-10%，道心+4".into(),
+                    evtx(178)/* 原文：散尽浮财，了却旧愿。灯花爆了一声，你心头忽然轻了。灵石-10%，道心+4 */.into(),
                 ];
                 card.opts.push(("重金还愿".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.luck = 2.0;
-                e2.msg = vec!["不必惊动旁人，对着一盏灯把话说尽。道心+2，气运+2".into()];
+                e2.msg = vec![evtx(179)/* 原文：不必惊动旁人，对着一盏灯把话说尽。道心+2，气运+2 */.into()];
                 card.opts.push(("只了心结".into(), e2));
             }
             89 => {
                 card.title = "薪火相托".into();
-                card.text = "山下少年仰着脸问：「先生，您这一身本事，往后传给谁？」\n你望着他，像望见很多年前那个没名没姓的自己。".into();
+                card.text = evtx(180)/* 原文：山下少年仰着脸问：「先生，您这一身本事，往后传给谁？」\n你望着他，像望见很多年前那个没名没姓的自己。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你收他做了记名弟子，倾囊相授。道统有继，此生不算白来。道心+3，气运+1".into(),
+                    evtx(181)/* 原文：你收他做了记名弟子，倾囊相授。道统有继，此生不算白来。道心+3，气运+1 */.into(),
                 ];
                 card.opts.push(("收徒传艺".into(), e1));
                 let mut e2 = Eff::new();
@@ -5867,95 +5871,95 @@ impl Game {
                 // 的严格支配（dao 少一分但多一线善缘）
                 e2.dao = 2.0;
                 e2.luck = 2.0;
-                e2.msg = vec!["你把一部旧稿送他：「看得懂是缘，看不懂是命。」道心+2，气运+2".into()];
+                e2.msg = vec![evtx(182)/* 原文：你把一部旧稿送他：「看得懂是缘，看不懂是命。」道心+2，气运+2 */.into()];
                 card.opts.push(("赠稿不收徒".into(), e2));
             }
             // 高境界补充（90..=91）：mr 地板 EVENTS 第三元直写即生效（weights 内
             // realm<mr→0），补高境界普通层缺口——原 mr≥4 仅 15/26 两条稀有
             90 => {
                 card.title = "雷池遗蜕".into();
-                card.text = "雷池深处，一具渡劫失败的前辈遗蜕盘坐如生，周身雷纹未散，池底沉着半截焦雷之髓。".into();
+                card.text = evtx(183)/* 原文：雷池深处，一具渡劫失败的前辈遗蜕盘坐如生，周身雷纹未散，池底沉着半截焦雷之髓。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.12;
                 e1.msg = vec![
-                    "雷髓入体，经脉如遭雷洗——痛过之后，灵气行得比从前快。修为+12%".into(),
+                    evtx(184)/* 原文：雷髓入体，经脉如遭雷洗——痛过之后，灵气行得比从前快。修为+12% */.into(),
                 ];
                 card.opts.push(("取雷髓炼体".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你长揖一礼，敬而退走——前辈的道，不由外人取。气运+2，道心+1".into(),
+                    evtx(185)/* 原文：你长揖一礼，敬而退走——前辈的道，不由外人取。气运+2，道心+1 */.into(),
                 ];
                 card.opts.push(("敬而退走".into(), e2));
             }
             91 => {
                 card.title = "仙门论道".into();
-                card.text = "仙门真传云游至此，与你论道三日。对方执仙家礼数，你以十万废稿为注——一场论下来，谁也没说服谁。".into();
+                card.text = evtx(186)/* 原文：仙门真传云游至此，与你论道三日。对方执仙家礼数，你以十万废稿为注——一场论下来，谁也没说服谁。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 4.0;
                 e1.msg = vec![
-                    "真传捧着你一册旧稿良久，叹道：「此稿……不在仙家谱系里。」道心+4".into(),
+                    evtx(187)/* 原文：真传捧着你一册旧稿良久，叹道：「此稿……不在仙家谱系里。」道心+4 */.into(),
                 ];
                 card.opts.push(("以稿为注".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 3.0;
-                e2.msg = vec!["不立文字，一笑而别。气运+3".into()];
+                e2.msg = vec![evtx(188)/* 原文：不立文字，一笑而别。气运+3 */.into()];
                 card.opts.push(("论罢即别".into(), e2));
             }
             // 常规批次（92..=99）：题材查重对账见 data.rs 批注（茶棚/染坊/傀儡/
             // 煎茶/悬棺/鱼龙/盐井/矿洞/梦笔，均不撞既有 85 条）
             92 => {
                 card.title = "染坊秘色".into();
-                card.text = "镇尾染坊晾出一匹「会动的青」，布上水色随日光流转，像把去年的一段江装了进去。".into();
+                card.text = evtx(189)/* 原文：镇尾染坊晾出一匹「会动的青」，布上水色随日光流转，像把去年的一段江装了进去。 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "青布裁作里衣，行走时衣角总带着一点洗不掉的水汽。气运+2".into(),
+                    evtx(190)/* 原文：青布裁作里衣，行走时衣角总带着一点洗不掉的水汽。气运+2 */.into(),
                 ];
                 card.opts.push(("买布裁衣".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "老板娘说染的是「去年那条江的颜色」。你记下了这手艺。道心+2".into(),
+                    evtx(191)/* 原文：老板娘说染的是「去年那条江的颜色」。你记下了这手艺。道心+2 */.into(),
                 ];
                 card.opts.push(("讨教染法".into(), e2));
             }
             93 => {
                 card.title = "傀儡戏班".into();
-                card.text = "傀儡戏班夜宿破庙，班主醉后哀叹：祖传三具傀儡，如今只有一具还会动——另两具，是「老了」。".into();
+                card.text = evtx(192)/* 原文：傀儡戏班夜宿破庙，班主醉后哀叹：祖传三具傀儡，如今只有一具还会动——另两具，是「老了」。 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 2.0;
                 e1.dao = 1.0;
                 e1.msg = vec![
-                    "你雇匠人补全丝线。开锣那夜台下只有你一个观众，班主却哭得像个孩子。气运+2，道心+1".into(),
+                    evtx(193)/* 原文：你雇匠人补全丝线。开锣那夜台下只有你一个观众，班主却哭得像个孩子。气运+2，道心+1 */.into(),
                 ];
                 card.opts.push(("出钱修傀儡".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
-                e2.msg = vec!["提线的手法暗合御物之术，你看了一整夜。道心+2".into()];
+                e2.msg = vec![evtx(194)/* 原文：提线的手法暗合御物之术，你看了一整夜。道心+2 */.into()];
                 card.opts.push(("向傀儡学艺".into(), e2));
             }
             94 => {
                 card.title = "雪夜煎茶".into();
-                card.text = "雪夜投宿无门，山亭里一位老者正煎雪水煮茶。见你来，他不多话，只把第二只盏推了过来。".into();
+                card.text = evtx(195)/* 原文：雪夜投宿无门，山亭里一位老者正煎雪水煮茶。见你来，他不多话，只把第二只盏推了过来。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "一盏茶从雪落喝到雪停，你们谁也没问对方来路。道心+2，气运+2".into(),
+                    evtx(196)/* 原文：一盏茶从雪落喝到雪停，你们谁也没问对方来路。道心+2，气运+2 */.into(),
                 ];
                 card.opts.push(("共饮一盏".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.06;
                 e2.msg = vec![
-                    "老者说茶要「等水醒了再下」——你忽然懂了行功的火候。修为+6%".into(),
+                    evtx(197)/* 原文：老者说茶要「等水醒了再下」——你忽然懂了行功的火候。修为+6% */.into(),
                 ];
                 card.opts.push(("讨问茶道".into(), e2));
             }
             95 => {
                 card.title = "断崖悬棺".into();
-                card.text = "断崖半腰悬着七具石棺，绳索早已朽断。风过时，棺中传出极轻的翻书声。".into();
+                card.text = evtx(198)/* 原文：断崖半腰悬着七具石棺，绳索早已朽断。风过时，棺中传出极轻的翻书声。 */.into();
                 let g0 = (50.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = g0;
@@ -5967,12 +5971,12 @@ impl Game {
                 card.opts.push(("攀崖探棺".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
-                e2.msg = vec!["你在崖下焚香三拜。翻书声停了一瞬，像是谁应了。气运+2".into()];
+                e2.msg = vec![evtx(199)/* 原文：你在崖下焚香三拜。翻书声停了一瞬，像是谁应了。气运+2 */.into()];
                 card.opts.push(("拜而去".into(), e2));
             }
             96 => {
                 card.title = "春汛鱼龙".into();
-                card.text = "春汛夜，江面忽然沸腾——成群的银鱼跃出水面，鳞光映月，像一场逆着下的星雨。".into();
+                card.text = evtx(200)/* 原文：春汛夜，江面忽然沸腾——成群的银鱼跃出水面，鳞光映月，像一场逆着下的星雨。 */.into();
                 let g0 = (55.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = g0;
@@ -5985,55 +5989,55 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
                 e2.msg = vec![
-                    "鱼跃龙门只是传说，可那一夜的江水，确实在往上流。道心+3".into(),
+                    evtx(201)/* 原文：鱼跃龙门只是传说，可那一夜的江水，确实在往上流。道心+3 */.into(),
                 ];
                 card.opts.push(("临流观化".into(), e2));
             }
             97 => {
                 card.title = "盐井卤灾".into();
-                card.text = "盐井连日出黑卤，气味刺鼻。井户说井底「有东西翻身」，夜里，井口传来咕咚咕咚的响。".into();
+                card.text = evtx(202)/* 原文：盐井连日出黑卤，气味刺鼻。井户说井底「有东西翻身」，夜里，井口传来咕咚咕咚的响。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 0.9; // 通用战斗乘区（sim_fight 单口；敌按自身战力缩放）
-                e1.msg = vec!["你下井一探究竟——是福是祸，下去才知道。".into()];
+                e1.msg = vec![evtx(203)/* 原文：你下井一探究竟——是福是祸，下去才知道。 */.into()];
                 card.opts.push(("下井除患".into(), e1));
                 let mut e2 = Eff::new();
                 e2.stones_pct = -0.08;
                 e2.luck = 1.0;
                 e2.good = false;
                 e2.msg = vec![
-                    "花一笔封井钱，另凿新眼。破财免灾。灵石-8%，气运+1".into(),
+                    evtx(204)/* 原文：花一笔封井钱，另凿新眼。破财免灾。灵石-8%，气运+1 */.into(),
                 ];
                 card.opts.push(("封井另凿".into(), e2));
             }
             98 => {
                 card.title = "矿洞钟声".into();
-                card.text = "废弃矿洞每逢雨夜自鸣钟声，声如闷雷。挖矿人说，洞底压着「不该醒的东西」。".into();
+                card.text = evtx(205)/* 原文：废弃矿洞每逢雨夜自鸣钟声，声如闷雷。挖矿人说，洞底压着「不该醒的东西」。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
                 e1.injure = true;
                 e1.msg = vec![
-                    "你在钟腹刻下镇文，钟声从此哑了——代价是三天走不利索。修为+8%，受创".into(),
+                    evtx(206)/* 原文：你在钟腹刻下镇文，钟声从此哑了——代价是三天走不利索。修为+8%，受创 */.into(),
                 ];
                 card.opts.push(("入洞镇钟".into(), e1));
                 let mut e2 = Eff::new();
                 e2.stones_pct = -0.10;
                 e2.good = false;
-                e2.msg = vec!["你买断矿脉，封洞立碑。有些东西，不值得惊动。灵石-10%".into()];
+                e2.msg = vec![evtx(207)/* 原文：你买断矿脉，封洞立碑。有些东西，不值得惊动。灵石-10% */.into()];
                 card.opts.push(("买断封洞".into(), e2));
             }
             99 => {
                 card.title = "梦笔生花".into();
-                card.text = "连着三夜梦见同一支笔。第四夜醒来，它就立在案头——笔身无字，笔尖却有墨，像等了很久。".into();
+                card.text = evtx(208)/* 原文：连着三夜梦见同一支笔。第四夜醒来，它就立在案头——笔身无字，笔尖却有墨，像等了很久。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.qi_pct = 0.05;
                 e1.msg = vec![
-                    "醒来案上多了一行字，不是你写的，却认得你的笔迹。道心+3，修为+5%".into(),
+                    evtx(209)/* 原文：醒来案上多了一行字，不是你写的，却认得你的笔迹。道心+3，修为+5% */.into(),
                 ];
                 card.opts.push(("提笔落墨".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
-                e2.msg = vec!["来路不明的笔，你用镇纸压住。第三夜，它自己走了。气运+2".into()];
+                e2.msg = vec![evtx(210)/* 原文：来路不明的笔，你用镇纸压住。第三夜，它自己走了。气运+2 */.into()];
                 card.opts.push(("不碰它".into(), e2));
             }
 
@@ -6046,12 +6050,12 @@ impl Game {
             // 末段抉择即「{名}·缘了」入大事记（stage 表见函数尾）
             100 => {
                 card.title = "焚字炉".into();
-                card.text = "城中焚字炉前，抄经人焚烧废旧经稿。一页稿纸在火里卷了三卷而不化，灰烬让开，显出一行小字。".into();
+                card.text = evtx(211)/* 原文：城中焚字炉前，抄经人焚烧废旧经稿。一页稿纸在火里卷了三卷而不化，灰烬让开，显出一行小字。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你自灰中抢出那页——是前人未写完的行功诀。修为+8%，道心+2".into(),
+                    evtx(212)/* 原文：你自灰中抢出那页——是前人未写完的行功诀。修为+8%，道心+2 */.into(),
                 ];
                 card.opts.push(("灰中抢页".into(), e1));
                 let g = (45.0 * ss) as i64;
@@ -6065,11 +6069,11 @@ impl Game {
             }
             101 => {
                 card.title = "笔冢祭".into();
-                card.text = "山阴处一座笔冢，埋的都是写秃的笔。冢前石桌搁着一盏残灯，灯下压着半页祭文笔账——写账的人不知去了哪。".into();
+                card.text = evtx(213)/* 原文：山阴处一座笔冢，埋的都是写秃的笔。冢前石桌搁着一盏残灯，灯下压着半页祭文笔账——写账的人不知去了哪。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 4.0;
                 e1.msg = vec![
-                    "你把灯挑亮，替他续完了那半页账。冢里似乎轻轻应了一声。道心+4".into(),
+                    evtx(214)/* 原文：你把灯挑亮，替他续完了那半页账。冢里似乎轻轻应了一声。道心+4 */.into(),
                 ];
                 card.opts.push(("续写残账".into(), e1));
                 let g = (40.0 * ss) as i64;
@@ -6084,12 +6088,12 @@ impl Game {
             }
             102 => {
                 card.title = "涸河龙祠".into();
-                card.text = "河床干了三年，龙祠香火早断。村民为最后一眼活泉争得头破血流，祠祝拦都拦不住。".into();
+                card.text = evtx(215)/* 原文：河床干了三年，龙祠香火早断。村民为最后一眼活泉争得头破血流，祠祝拦都拦不住。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "你以灵力探得泉眼另脉，引水分流——两村各得一半。道心+3，气运+2".into(),
+                    evtx(216)/* 原文：你以灵力探得泉眼另脉，引水分流——两村各得一半。道心+3，气运+2 */.into(),
                 ];
                 card.opts.push(("引泉均分".into(), e1));
                 let g = (55.0 * ss) as i64;
@@ -6104,12 +6108,12 @@ impl Game {
             }
             103 => {
                 card.title = "纸鸢传书".into();
-                card.text = "一只断线纸鸢栽在你院里，鸢尾系着半幅血书：山那头采药人坠了涧，字迹潦草，只写了个大概方位。".into();
+                card.text = evtx(217)/* 原文：一只断线纸鸢栽在你院里，鸢尾系着半幅血书：山那头采药人坠了涧，字迹潦草，只写了个大概方位。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 4.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你循书寻人，负他出涧。采药人无以为报，只说「欠你一命」。道心+4，气运+1".into(),
+                    evtx(218)/* 原文：你循书寻人，负他出涧。采药人无以为报，只说「欠你一命」。道心+4，气运+1 */.into(),
                 ];
                 card.opts.push(("循书救人".into(), e1));
                 let g = (30.0 * ss) as i64;
@@ -6124,11 +6128,11 @@ impl Game {
             }
             104 => {
                 card.title = "砚山叩泉".into();
-                card.text = "一座山形如巨砚，叩击山壁的不同方位，石缝里涌出的泉水竟带着墨香——饮之，识海清明。".into();
+                card.text = evtx(219)/* 原文：一座山形如巨砚，叩击山壁的不同方位，石缝里涌出的泉水竟带着墨香——饮之，识海清明。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.12;
                 e1.msg = vec![
-                    "你叩了整夜，寻得涌墨的泉眼，饱饮一腹。修为+12%".into(),
+                    evtx(220)/* 原文：你叩了整夜，寻得涌墨的泉眼，饱饮一腹。修为+12% */.into(),
                 ];
                 card.opts.push(("叩山取泉".into(), e1));
                 let g = (60.0 * ss) as i64;
@@ -6143,30 +6147,30 @@ impl Game {
             }
             105 => {
                 card.title = "古戍点兵".into();
-                card.text = "废戍楼在月圆之夜自燃烽火，楼下空地影影绰绰列队点兵——都是千年前战死者的影子，操练至今。".into();
+                card.text = evtx(221)/* 原文：废戍楼在月圆之夜自燃烽火，楼下空地影影绰绰列队点兵——都是千年前战死者的影子，操练至今。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
                 e1.injure = true;
                 e1.msg = vec![
-                    "你入阵随操练一夜，旧的杀阵章法入了骨——也伤了筋。修为+10%，受创".into(),
+                    evtx(222)/* 原文：你入阵随操练一夜，旧的杀阵章法入了骨——也伤了筋。修为+10%，受创 */.into(),
                 ];
                 card.opts.push(("入阵随操".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
                 e2.good = false;
                 e2.msg = vec![
-                    "你在楼下焚香一拜，替他们收操。影队缓缓散去，天亮了。道心+3".into(),
+                    evtx(223)/* 原文：你在楼下焚香一拜，替他们收操。影队缓缓散去，天亮了。道心+3 */.into(),
                 ];
                 card.opts.push(("焚香收操".into(), e2));
             }
             106 => {
                 card.title = "天蚕茧室".into();
-                card.text = "整座洞窟挂满天蚕茧，万千白茧幽幽吐光。传说万茧之中有一枚「书茧」——茧里裹着蚕读了千年的字。".into();
+                card.text = evtx(224)/* 原文：整座洞窟挂满天蚕茧，万千白茧幽幽吐光。传说万茧之中有一枚「书茧」——茧里裹着蚕读了千年的字。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.15;
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你赌中那枚书茧——茧丝织成一行小字，入眼即化。修为+15%，道心+3".into(),
+                    evtx(225)/* 原文：你赌中那枚书茧——茧丝织成一行小字，入眼即化。修为+15%，道心+3 */.into(),
                 ];
                 card.opts.push(("择茧参悟".into(), e1));
                 let g = (90.0 * ss) as i64;
@@ -6180,12 +6184,12 @@ impl Game {
             }
             107 => {
                 card.title = "空舟拦江".into();
-                card.text = "一艘官船无人自横，拦在江心。舱内桌椅齐整，茶犹温，只有一册翻到一半的无字书——读的人像是一去不回了。".into();
+                card.text = evtx(226)/* 原文：一艘官船无人自横，拦在江心。舱内桌椅齐整，茶犹温，只有一册翻到一半的无字书——读的人像是一去不回了。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "你把书合上，供在案头，推船让出航道。行船人皆道今日江神让路。道心+3，气运+2".into(),
+                    evtx(227)/* 原文：你把书合上，供在案头，推船让出航道。行船人皆道今日江神让路。道心+3，气运+2 */.into(),
                 ];
                 card.opts.push(("供书让道".into(), e1));
                 let g = (80.0 * ss) as i64;
@@ -6201,12 +6205,12 @@ impl Game {
             108 => {
                 // 稀有：墨鲸背城（w2）
                 card.title = "墨鲸背城".into();
-                card.text = "海雾散开，一头墨色巨鲸浮出水面换气——鲸背上竟驮着一座小城，城郭灯火，街市隐隐有人声。".into();
+                card.text = evtx(228)/* 原文：海雾散开，一头墨色巨鲸浮出水面换气——鲸背上竟驮着一座小城，城郭灯火，街市隐隐有人声。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 5.0;
                 e1.luck = 3.0;
                 e1.msg = vec![
-                    "鲸城住民尽是前朝避世的书生。你登城半日，借得满城书香。道心+5，气运+3".into(),
+                    evtx(229)/* 原文：鲸城住民尽是前朝避世的书生。你登城半日，借得满城书香。道心+5，气运+3 */.into(),
                 ];
                 card.opts.push(("登城借书".into(), e1));
                 let g = (120.0 * ss) as i64;
@@ -6221,12 +6225,12 @@ impl Game {
             }
             109 => {
                 card.title = "借名修行".into();
-                card.text = "山下发馆收徒的散修，顶着你的名号开坛讲法——讲得似是而非，偏生徒众不少。".into();
+                card.text = evtx(230)/* 原文：山下发馆收徒的散修，顶着你的名号开坛讲法——讲得似是而非，偏生徒众不少。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你登门只谈了一场，散修面红过耳，当众正名焚了假牒。道心+3，气运+1".into(),
+                    evtx(231)/* 原文：你登门只谈了一场，散修面红过耳，当众正名焚了假牒。道心+3，气运+1 */.into(),
                 ];
                 card.opts.push(("登门正名".into(), e1));
                 let g = (70.0 * ss) as i64;
@@ -6260,7 +6264,7 @@ impl Game {
                 e2.stones_pct = -0.12;
                 e2.good = false;
                 e2.msg = vec![
-                    "你提前散尽劫来的浮财，账无凭据，围了三日自散。灵石-12%".into(),
+                    evtx(232)/* 原文：你提前散尽劫来的浮财，账无凭据，围了三日自散。灵石-12% */.into(),
                 ];
                 card.opts.push(("散财消账".into(), e2));
             }
@@ -6272,7 +6276,7 @@ impl Game {
                     .neme
                     .as_ref()
                     .map(|n| n.full())
-                    .unwrap_or_else(|| "删你字的血仇之敌".to_string());
+                    .unwrap_or_else(|| evtx(171)/* 原文：删你字的血仇之敌 */.to_string());
                 card.text = format!(
                     "夜里旧册无风自动，血仇的名字上新添了一行墨——{}.方印上被划掉的痕迹，又深了一层。",
                     nfull
@@ -6280,24 +6284,24 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你把新名字念了一遍，念得极慢——记仇这件事，你越来越熟练了。道心+3".into(),
+                    evtx(233)/* 原文：你把新名字念了一遍，念得极慢——记仇这件事，你越来越熟练了。道心+3 */.into(),
                 ];
                 card.opts.push(("默记新名".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你合上旧册，就灯磨墨——来日方长，先把今日过好。气运+2".into(),
+                    evtx(234)/* 原文：你合上旧册，就灯磨墨——来日方长，先把今日过好。气运+2 */.into(),
                 ];
                 card.opts.push(("合册安睡".into(), e2));
             }
             112 => {
                 // 链7 首段：灯花渡舟（首段建链待分支）
                 card.title = "灯花渡舟".into();
-                card.text = "起大雾的夜，渡口只有一条不点篙的船。老船夫说：「雾河渡人不收灵石，只收旧渡资——讲一段你记得的旧事，灯花替你付账。」".into();
+                card.text = evtx(235)/* 原文：起大雾的夜，渡口只有一条不点篙的船。老船夫说：「雾河渡人不收灵石，只收旧渡资——讲一段你记得的旧事，灯花替你付账。」 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
                 e1.special = 37; // 置链：→113 灯下旧账
-                e1.msg = vec!["你讲了一段。船离岸，雾自动，灯花爆了第一声。气运+1".into()];
+                e1.msg = vec![evtx(236)/* 原文：你讲了一段。船离岸，雾自动，灯花爆了第一声。气运+1 */.into()];
                 card.opts.push(("以旧事为资".into(), e1));
                 let g = (40.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -6315,11 +6319,11 @@ impl Game {
             113 => {
                 // 链7 中段（仅链内）
                 card.title = "灯下旧账·续".into();
-                card.text = "行至河心，你借灯看清了舱壁——挂满一船灯纸，每张都写着一段旧事。其中一张的字迹，你从未写过，却认得是你自己的。".into();
+                card.text = evtx(237)/* 原文：行至河心，你借灯看清了舱壁——挂满一船灯纸，每张都写着一段旧事。其中一张的字迹，你从未写过，却认得是你自己的。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.special = 38; // 置链：→114 一渡一灯
-                e1.msg = vec!["你问：「这页是谁讲的？」老船夫笑而不答，只添了点灯油。道心+2".into()];
+                e1.msg = vec![evtx(238)/* 原文：你问：「这页是谁讲的？」老船夫笑而不答，只添了点灯油。道心+2 */.into()];
                 card.opts.push(("追问灯纸".into(), e1));
                 let g = (35.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -6334,12 +6338,12 @@ impl Game {
             114 => {
                 // 链7 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
                 card.title = "一渡一灯·续".into();
-                card.text = "老船夫终于开口：「灯上记的，都是天曹删掉的名字——删一笔，我渡一程。船到岸了，客官，你的那页，想怎么写？」".into();
+                card.text = evtx(239)/* 原文：老船夫终于开口：「灯上记的，都是天曹删掉的名字——删一笔，我渡一程。船到岸了，客官，你的那页，想怎么写？」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你借灯火把那页纸点亮：「接着写。」满船灯纸齐齐亮了一瞬。修为+10%，道心+3".into(),
+                    evtx(240)/* 原文：你借灯火把那页纸点亮：「接着写。」满船灯纸齐齐亮了一瞬。修为+10%，道心+3 */.into(),
                 ];
                 card.opts.push(("点灯续写".into(), e1));
                 let g = (75.0 * ss) as i64;
@@ -6355,16 +6359,16 @@ impl Game {
             115 => {
                 // 链8 首段：药炉童子（首段建链待分支）
                 card.title = "药炉童子".into();
-                card.text = "荒废丹房的炉火忽然自己着了。守炉的童子拉住你——看不出年岁的一张小脸：「先生救命，炉要走了！它守着一味丹引，等一个肯读它的人。」".into();
+                card.text = evtx(241)/* 原文：荒废丹房的炉火忽然自己着了。守炉的童子拉住你——看不出年岁的一张小脸：「先生救命，炉要走了！它守着一味丹引，等一个肯读它的人。」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.05;
                 e1.special = 39; // 置链：→116 炉语问心
-                e1.msg = vec!["你留下守炉。炉火伏低了一瞬，像行了个礼。修为+5%".into()];
+                e1.msg = vec![evtx(242)/* 原文：你留下守炉。炉火伏低了一瞬，像行了个礼。修为+5% */.into()];
                 card.opts.push(("留下守炉".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你拂袖而去——来历不明的炉火，不沾。道心+1".into(),
+                    evtx(243)/* 原文：你拂袖而去——来历不明的炉火，不沾。道心+1 */.into(),
                 ];
                 card.opts.push(("拂袖而去".into(), e2));
                 self.chain = Some((8, 0, CHAIN_TTL)); // 首段建链：待分支
@@ -6372,11 +6376,11 @@ impl Game {
             116 => {
                 // 链8 中段（仅链内）
                 card.title = "炉语问心·续".into();
-                card.text = "守到半夜，炉火忽明忽暗，竟像在说话。童子垂首：「炉主走火那晚，把一页烧残的稿子当了丹引咽下去。这炉等这一夜，等了一百年。」".into();
+                card.text = evtx(244)/* 原文：守到半夜，炉火忽明忽暗，竟像在说话。童子垂首：「炉主走火那晚，把一页烧残的稿子当了丹引咽下去。这炉等这一夜，等了一百年。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.special = 40; // 置链：→117 守炉一夜
-                e1.msg = vec!["你俯身问炉：「你要的是炉，还是那页稿？」火苗猛地蹿高三寸。道心+2".into()];
+                e1.msg = vec![evtx(245)/* 原文：你俯身问炉：「你要的是炉，还是那页稿？」火苗猛地蹿高三寸。道心+2 */.into()];
                 card.opts.push(("问炉要什么".into(), e1));
                 let g = (30.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -6390,19 +6394,19 @@ impl Game {
             117 => {
                 // 链8 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
                 card.title = "守炉一夜·续".into();
-                card.text = "天将亮时炉门自开——炉中无丹，只有一页完稿，墨迹如新。童子拜了三拜：「炉主的名字有人接了。炉可以冷了。」".into();
+                card.text = evtx(246)/* 原文：天将亮时炉门自开——炉中无丹，只有一页完稿，墨迹如新。童子拜了三拜：「炉主的名字有人接了。炉可以冷了。」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.15;
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你收稿参悟，百年炉火一字入心。修为+15%，道心+3".into(),
+                    evtx(247)/* 原文：你收稿参悟，百年炉火一字入心。修为+15%，道心+3 */.into(),
                 ];
                 card.opts.push(("收稿参悟".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 4.0;
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你把稿子折好，送回炉膛——有些稿子烧了才是写完了。道心+4，气运+2".into(),
+                    evtx(248)/* 原文：你把稿子折好，送回炉膛——有些稿子烧了才是写完了。道心+4，气运+2 */.into(),
                 ];
                 card.opts.push(("还稿于炉".into(), e2));
             }
@@ -6413,17 +6417,17 @@ impl Game {
             118 => {
                 // 链9 首段：血册投书（首段建链待分支）
                 card.title = "血册投书".into();
-                card.text = "雨夜有物钉门——半页旧册残页，朱笔圈着你斩落的那位血仇之敌的名讳，末行一行新墨：「师仇未雪，门下递呈。」落款七个名字，按入门次序排着。".into();
+                card.text = evtx(249)/* 原文：雨夜有物钉门——半页旧册残页，朱笔圈着你斩落的那位血仇之敌的名讳，末行一行新墨：「师仇未雪，门下递呈。」落款七个名字，按入门次序排着。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.special = 41; // 置链：→119 雪夜拦道
-                e1.msg = vec!["「三日后，断名崖。」你只回了这六个字。道心+1".into()];
+                e1.msg = vec![evtx(250)/* 原文：「三日后，断名崖。」你只回了这六个字。道心+1 */.into()];
                 card.opts.push(("应下战书".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你把残页凑上烛火：「你的账，随你师父一起了了。」灰烬里最末一个名字始终没有显形。道心+2，气运+1".into(),
+                    evtx(251)/* 原文：你把残页凑上烛火：「你的账，随你师父一起了了。」灰烬里最末一个名字始终没有显形。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("焚册不接".into(), e2));
                 self.chain = Some((9, 0, CHAIN_TTL)); // 首段建链：待分支
@@ -6431,34 +6435,34 @@ impl Game {
             119 => {
                 // 链9 中段（仅链内）
                 card.title = "雪夜拦道·续".into();
-                card.text = "你没等三日。雪夜兼程走到半途，山道上一列灯笼拦路——七人皆缟素，为首的捧着那半页册子：「师叔之仇，按门规由我等分摊。先生，请了。」".into();
+                card.text = evtx(252)/* 原文：你没等三日。雪夜兼程走到半途，山道上一列灯笼拦路——七人皆缟素，为首的捧着那半页册子：「师叔之仇，按门规由我等分摊。先生，请了。」 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
                 e1.special = 42; // 置链：→120 断名之局
-                e1.msg = vec!["你把七盏灯一一吹熄：「一个一个来，还是一起上？」雪落无声。气运+1".into()];
+                e1.msg = vec![evtx(253)/* 原文：你把七盏灯一一吹熄：「一个一个来，还是一起上？」雪落无声。气运+1 */.into()];
                 card.opts.push(("逐一应名".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你转身入雪——杀过一次的人，不必向再一场血证什么。道心+1".into(),
+                    evtx(254)/* 原文：你转身入雪——杀过一次的人，不必向再一场血证什么。道心+1 */.into(),
                 ];
                 card.opts.push(("雪中折返".into(), e2));
             }
             120 => {
                 // 链9 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
                 card.title = "断名之局·续".into();
-                card.text = "断名崖下，风把雪吹成一面白幡。为首者递出那半页册：「赢了你撕，输了我等收殓。」你认得他握剑的手势——与他师父，一个师门教出来的。".into();
+                card.text = evtx(255)/* 原文：断名崖下，风把雪吹成一面白幡。为首者递出那半页册：「赢了你撕，输了我等收殓。」你认得他握剑的手势——与他师父，一个师门教出来的。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "多年记仇磨出来的那一剑，比门规快。册页你撕了，名字断在崖底。修为+10%，道心+3".into(),
+                    evtx(256)/* 原文：多年记仇磨出来的那一剑，比门规快。册页你撕了，名字断在崖底。修为+10%，道心+3 */.into(),
                 ];
                 card.opts.push(("一剑断名".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 4.0;
                 e2.msg = vec![
-                    "你收剑，把残页递还：「账清了，册子留给你——记着怎么别走到这一步。」道心+4".into(),
+                    evtx(257)/* 原文：你收剑，把残页递还：「账清了，册子留给你——记着怎么别走到这一步。」道心+4 */.into(),
                 ];
                 card.opts.push(("递册两清".into(), e2));
             }
@@ -6468,16 +6472,16 @@ impl Game {
             121 => {
                 // 链10 首段：旧页回声（首段建链待分支）
                 card.title = "旧页回声".into();
-                card.text = "灯市书摊，一页残稿压在《千字文》下——字迹是你自己的，你却从未写过：那是某一世里，你写给谁的半行。「客官好眼力，这页等一个认得它的人，等了很多年。」".into();
+                card.text = evtx(258)/* 原文：灯市书摊，一页残稿压在《千字文》下——字迹是你自己的，你却从未写过：那是某一世里，你写给谁的半行。「客官好眼力，这页等一个认得它的人，等了很多年。」 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
                 e1.special = 43; // 置链：→122 灯市换页
-                e1.msg = vec!["「从哪儿收来的？」你按住那页纸。摊主笑而不答，朝灯市深处努了努嘴。气运+1".into()];
+                e1.msg = vec![evtx(259)/* 原文：「从哪儿收来的？」你按住那页纸。摊主笑而不答，朝灯市深处努了努嘴。气运+1 */.into()];
                 card.opts.push(("循墨寻摊".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你把残页折进袖中——有些字，不必问来历。道心+1".into(),
+                    evtx(260)/* 原文：你把残页折进袖中——有些字，不必问来历。道心+1 */.into(),
                 ];
                 card.opts.push(("收页入怀".into(), e2));
                 self.chain = Some((10, 0, CHAIN_TTL)); // 首段建链：待分支
@@ -6485,11 +6489,11 @@ impl Game {
             122 => {
                 // 链10 中段（仅链内）
                 card.title = "灯市换页·续".into();
-                card.text = "灯市最深处果然有个不挂灯的摊子。摊主披蓑戴笠，案上摞着几百页旧稿，各朝各代的纸色都有：「只换不卖——一页旧稿，换我一页新墨。」".into();
+                card.text = evtx(261)/* 原文：灯市最深处果然有个不挂灯的摊子。摊主披蓑戴笠，案上摞着几百页旧稿，各朝各代的纸色都有：「只换不卖——一页旧稿，换我一页新墨。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.special = 44; // 置链：→123 换页重逢
-                e1.msg = vec!["你把袖中残页铺开。摊主指尖一顿：「原来在这儿。」——他认得这页。道心+2".into()];
+                e1.msg = vec![evtx(262)/* 原文：你把袖中残页铺开。摊主指尖一顿：「原来在这儿。」——他认得这页。道心+2 */.into()];
                 card.opts.push(("以页换页".into(), e1));
                 let g = (50.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -6520,14 +6524,14 @@ impl Game {
                 e1.dao = 3.0;
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "你把批注与原稿合在一处，请摊主裱作一页。隔世的字迹终于挨在一起。道心+3，气运+2".into(),
+                    evtx(263)/* 原文：你把批注与原稿合在一处，请摊主裱作一页。隔世的字迹终于挨在一起。道心+3，气运+2 */.into(),
                 ];
                 card.opts.push(("批注合璧".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.10;
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你把两页各自收好——重逢不必在场，字在，人就还在。修为+10%，道心+2".into(),
+                    evtx(264)/* 原文：你把两页各自收好——重逢不必在场，字在，人就还在。修为+10%，道心+2 */.into(),
                 ];
                 card.opts.push(("各页各藏".into(), e2));
             }
@@ -6538,11 +6542,11 @@ impl Game {
             // 天梯/断虹，其中稀有 1（133 断虹饮涧 w=2）。查重对账见本批次施工单
             124 => {
                 card.title = "断弦琴意".into();
-                card.text = "山亭里一把无主的旧琴，七弦断其三。亭柱刻着半阙未完的曲名。".into();
+                card.text = evtx(265)/* 原文：山亭里一把无主的旧琴，七弦断其三。亭柱刻着半阙未完的曲名。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你取马尾续弦，就着断谱把那半阙弹完了。山风替你鼓了一回掌。道心+2".into(),
+                    evtx(266)/* 原文：你取马尾续弦，就着断谱把那半阙弹完了。山风替你鼓了一回掌。道心+2 */.into(),
                 ];
                 card.opts.push(("续弦成曲".into(), e1));
                 let g = (45.0 * ss) as i64;
@@ -6556,45 +6560,45 @@ impl Game {
             }
             125 => {
                 card.title = "百窑夜火".into();
-                card.text = "山坳龙窑夜半无火自燃，窑工跪了一地不敢近——窑头说，这窑三年前封的那一炉，「回来了」。".into();
+                card.text = evtx(267)/* 原文：山坳龙窑夜半无火自燃，窑工跪了一地不敢近——窑头说，这窑三年前封的那一炉，「回来了」。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.05;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你贴窑听了半宿，起出一匣遇月自亮的釉灰——带回研墨，笔下的字都稳了三分。修为+5%，气运+1".into(),
+                    evtx(268)/* 原文：你贴窑听了半宿，起出一匣遇月自亮的釉灰——带回研墨，笔下的字都稳了三分。修为+5%，气运+1 */.into(),
                 ];
                 card.opts.push(("探窑起釉".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "「火有主，不扰。」你帮窑工把窑门封土垒严。道心+1".into(),
+                    evtx(269)/* 原文：「火有主，不扰。」你帮窑工把窑门封土垒严。道心+1 */.into(),
                 ];
                 card.opts.push(("封土还窑".into(), e2));
             }
             126 => {
                 card.title = "埙声穿垣".into();
-                card.text = "断垣深处传出埙声，呜咽着反复同一个调子。走近了看——垣心供着一具石埙，无人而自鸣。".into();
+                card.text = evtx(270)/* 原文：断垣深处传出埙声，呜咽着反复同一个调子。走近了看——垣心供着一具石埙，无人而自鸣。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你捧起石埙，把它没吹完的尾音吹完了。埙声停了，像卸下了什么。道心+2".into(),
+                    evtx(271)/* 原文：你捧起石埙，把它没吹完的尾音吹完了。埙声停了，像卸下了什么。道心+2 */.into(),
                 ];
                 card.opts.push(("续完尾音".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "「曲有主。」你把碎垣拢回原位，替它挡了夜风。道心+1，气运+1".into(),
+                    evtx(272)/* 原文：「曲有主。」你把碎垣拢回原位，替它挡了夜风。道心+1，气运+1 */.into(),
                 ];
                 card.opts.push(("拢垣掩埙".into(), e2));
             }
             127 => {
                 card.title = "枯禅遗偈".into();
-                card.text = "崖洞里一位坐化的老僧，壁间遗偈只写了上半——「我于人间留一问」。墨迹已枯了不知多少年。".into();
+                card.text = evtx(273)/* 原文：崖洞里一位坐化的老僧，壁间遗偈只写了上半——「我于人间留一问」。墨迹已枯了不知多少年。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你以指为笔续了下半。搁手时，壁上枯了一甲子的野花无声开了。道心+3".into(),
+                    evtx(274)/* 原文：你以指为笔续了下半。搁手时，壁上枯了一甲子的野花无声开了。道心+3 */.into(),
                 ];
                 card.opts.push(("续偈作答".into(), e1));
                 let g = (40.0 * ss) as i64;
@@ -6609,7 +6613,7 @@ impl Game {
             }
             128 => {
                 card.title = "兽潮围栅".into();
-                card.text = "灵兽潮涌自山脊压下，围了猎户的山栅。栅内孩童哭声一片，栅外兽瞳在暮色里连成一片星。".into();
+                card.text = evtx(275)/* 原文：灵兽潮涌自山脊压下，围了猎户的山栅。栅内孩童哭声一片，栅外兽瞳在暮色里连成一片星。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.05; // 通用战斗单口 sim_fight（勿另写胜率公式）
                 e1.good = false;
@@ -6618,18 +6622,18 @@ impl Game {
                 e2.stones_pct = -0.08;
                 e2.good = false;
                 e2.msg = vec![
-                    "你割了行囊里的干粮肉脯引开兽头，栅民得全——你贴身的灵石撒了一路。灵石-8%".into(),
+                    evtx(276)/* 原文：你割了行囊里的干粮肉脯引开兽头，栅民得全——你贴身的灵石撒了一路。灵石-8% */.into(),
                 ];
                 card.opts.push(("弃饵引潮".into(), e2));
             }
             129 => {
                 card.title = "玉贩困隘".into();
-                card.text = "雪隘口的坡道塌了半边，一队玉贩的车马困在崖沿。领队的朝你长揖：「先生过路，搭把手，玉随您挑。」".into();
+                card.text = evtx(277)/* 原文：雪隘口的坡道塌了半边，一队玉贩的车马困在崖沿。领队的朝你长揖：「先生过路，搭把手，玉随您挑。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你拽车上坡、垫道填辙，忙完只讨了一碗热汤。玉贩硬塞给你一枚暖玉。道心+2，气运+1".into(),
+                    evtx(278)/* 原文：你拽车上坡、垫道填辙，忙完只讨了一碗热汤。玉贩硬塞给你一枚暖玉。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("援手不取".into(), e1));
                 let g = (55.0 * ss) as i64;
@@ -6644,68 +6648,68 @@ impl Game {
             }
             130 => {
                 card.title = "引魂幡影".into();
-                card.text = "荒岭上一杆白幡夜夜招魂，幡影里浮着些看不清的影子，来往客商绕着走。".into();
+                card.text = evtx(279)/* 原文：荒岭上一杆白幡夜夜招魂，幡影里浮着些看不清的影子，来往客商绕着走。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.good = false;
                 e1.msg = vec![
-                    "你一剑断幡。幡下没有魂，只有半册招魂经——操幡的人借幡养念，念断了。道心+3".into(),
+                    evtx(280)/* 原文：你一剑断幡。幡下没有魂，只有半册招魂经——操幡的人借幡养念，念断了。道心+3 */.into(),
                 ];
                 card.opts.push(("断幡散念".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.08;
                 e2.msg = vec![
-                    "你随幡影走了一程——它只是引你到一处避风崖洞，天明自散。修为+8%".into(),
+                    evtx(281)/* 原文：你随幡影走了一程——它只是引你到一处避风崖洞，天明自散。修为+8% */.into(),
                 ];
                 card.opts.push(("随幡借宿".into(), e2));
             }
             131 => {
                 card.title = "磁山迷辙".into();
-                card.text = "磁山吸针，车马的指北针在这里全成了摆设——一队商旅在山坳里兜了两天，辙印绕成一团乱麻。".into();
+                card.text = evtx(282)/* 原文：磁山吸针，车马的指北针在这里全成了摆设——一队商旅在山坳里兜了两天，辙印绕成一团乱麻。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你闭目听了半刻地脉，抬手一指：「从西坳走。」商队出山那天，给你烧了三炷高香。道心+2".into(),
+                    evtx(283)/* 原文：你闭目听了半刻地脉，抬手一指：「从西坳走。」商队出山那天，给你烧了三炷高香。道心+2 */.into(),
                 ];
                 card.opts.push(("循脉指路".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你弃了车马绕山而行，多走三日——慢是慢了点，稳。气运+1".into(),
+                    evtx(284)/* 原文：你弃了车马绕山而行，多走三日——慢是慢了点，稳。气运+1 */.into(),
                 ];
                 card.opts.push(("绕山缓行".into(), e2));
             }
             132 => {
                 card.title = "天梯断级".into();
-                card.text = "通天石梯到此断了一级，断口平整如切——梯上仙气粼然，梯下望不见底。".into();
+                card.text = evtx(285)/* 原文：通天石梯到此断了一级，断口平整如切——梯上仙气粼然，梯下望不见底。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.12;
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你斩雷击木为材，补上断级。梯身嗡鸣如谢，你拾级而上如沐春风。修为+12%，道心+2".into(),
+                    evtx(286)/* 原文：你斩雷击木为材，补上断级。梯身嗡鸣如谢，你拾级而上如沐春风。修为+12%，道心+2 */.into(),
                 ];
                 card.opts.push(("补级而上".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你退后半步，纵身跃过缺口——有些关隘，问都不必问。气运+2".into(),
+                    evtx(287)/* 原文：你退后半步，纵身跃过缺口——有些关隘，问都不必问。气运+2 */.into(),
                 ];
                 card.opts.push(("跃过缺口".into(), e2));
             }
             133 => {
                 card.title = "断虹饮涧".into();
-                card.text = "雨后断虹垂涧，虹脚没入一汪积水——水色映出的天，是你从未见过的那一副。".into();
+                card.text = evtx(288)/* 原文：雨后断虹垂涧，虹脚没入一汪积水——水色映出的天，是你从未见过的那一副。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.15;
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "你俯身照水，把那副天色看了个饱。起身时虹散了，那汪水却再没干过。修为+15%，气运+2".into(),
+                    evtx(289)/* 原文：你俯身照水，把那副天色看了个饱。起身时虹散了，那汪水却再没干过。修为+15%，气运+2 */.into(),
                 ];
                 card.opts.push(("循虹照水".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "「虹是借来的景。」你看完就走，不惊动它。道心+2".into(),
+                    evtx(290)/* 原文：「虹是借来的景。」你看完就走，不惊动它。道心+2 */.into(),
                 ];
                 card.opts.push(("守心不扰".into(), e2));
             }
@@ -6714,25 +6718,25 @@ impl Game {
             // 历年经营」口径（跨世持久，非「本世」所得——照 111/110 措辞纪律）
             134 => {
                 card.title = "阵眼共鸣".into();
-                card.text = "你名下洞府的聚灵阵历年养到三重圆满——今晨山河灵潮过境，阵眼无风自鸣，灵机如细溪汇入你的吐纳。".into();
+                card.text = evtx(291)/* 原文：你名下洞府的聚灵阵历年养到三重圆满——今晨山河灵潮过境，阵眼无风自鸣，灵机如细溪汇入你的吐纳。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.12;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你循阵纹吐纳一昼夜，灵潮与阵眼相和共振，经络里暖意不散。修为+12%，气运+1".into(),
+                    evtx(292)/* 原文：你循阵纹吐纳一昼夜，灵潮与阵眼相和共振，经络里暖意不散。修为+12%，气运+1 */.into(),
                 ];
                 card.opts.push(("循阵吐纳".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你不取灵机，只静观阵纹明灭——历年布阵经营的功夫，今日在悟性里回响。道心+2".into(),
+                    evtx(293)/* 原文：你不取灵机，只静观阵纹明灭——历年布阵经营的功夫，今日在悟性里回响。道心+2 */.into(),
                 ];
                 card.opts.push(("静观阵纹".into(), e2));
             }
             135 => {
                 let g = (120.0 * ss * gen_range(1.0, 1.6)) as i64;
                 card.title = "田畦岁稔".into();
-                card.text = "你名下灵田垦到三等沃腴——岁末灵稻垂穗，田埂雾气未散，山下的散修都来讨一捧新米尝鲜。".into();
+                card.text = evtx(294)/* 原文：你名下灵田垦到三等沃腴——岁末灵稻垂穗，田埂雾气未散，山下的散修都来讨一捧新米尝鲜。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones = g;
                 e1.msg = vec![format!(
@@ -6743,24 +6747,24 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你开仓施粥，散修叩谢而去——来年山道上落下的善意，都记在这碗新米里。气运+2".into(),
+                    evtx(295)/* 原文：你开仓施粥，散修叩谢而去——来年山道上落下的善意，都记在这碗新米里。气运+2 */.into(),
                 ];
                 card.opts.push(("开仓施粥".into(), e2));
             }
             136 => {
                 card.title = "丹房遗香".into();
-                card.text = "你名下丹房历年扩到三重鼎室——开炉取丹时，砖缝里渗出经年的丹香，凝而不散，闻之神思一清。".into();
+                card.text = evtx(296)/* 原文：你名下丹房历年扩到三重鼎室——开炉取丹时，砖缝里渗出经年的丹香，凝而不散，闻之神思一清。 */.into();
                 let mut e1 = Eff::new();
                 e1.pill = Some((0, 1));
                 e1.qi_pct = 0.08;
                 e1.msg = vec![
-                    "鼎室夹层里翻出往年窖藏的一枚聚气丹，就着丹香服下，药力格外醇和。修为+8%，聚气丹+1".into(),
+                    evtx(297)/* 原文：鼎室夹层里翻出往年窖藏的一枚聚气丹，就着丹香服下，药力格外醇和。修为+8%，聚气丹+1 */.into(),
                 ];
                 card.opts.push(("取窖藏丹".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你把三重鼎室细细扫了一遍，火路在指下过了一遭——历年丹火的脾性，你摸得更熟了。道心+2".into(),
+                    evtx(298)/* 原文：你把三重鼎室细细扫了一遍，火路在指下过了一遭——历年丹火的脾性，你摸得更熟了。道心+2 */.into(),
                 ];
                 card.opts.push(("扫炉悟火".into(), e2));
             }
@@ -6775,16 +6779,16 @@ impl Game {
             137 => {
                 // 链11 首段：劫云过境（首段建链待分支）
                 card.title = "劫云过境".into();
-                card.text = "山口茶棚歇脚，邻山之巅劫云盘结——云底雷光垂而未落，云下有遁光不隐不避。老板娘照常添水：「第三位了。渡过去的，下山都来喝碗茶。」".into();
+                card.text = evtx(299)/* 原文：山口茶棚歇脚，邻山之巅劫云盘结——云底雷光垂而未落，云下有遁光不隐不避。老板娘照常添水：「第三位了。渡过去的，下山都来喝碗茶。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.special = 45; // 置链：→138 劫灰拾遗
-                e1.msg = vec!["你讨了壶粗茶坐下。雷声过处，满棚人声都低了——茶碗里的水纹一圈圈往外推。道心+1".into()];
+                e1.msg = vec![evtx(300)/* 原文：你讨了壶粗茶坐下。雷声过处，满棚人声都低了——茶碗里的水纹一圈圈往外推。道心+1 */.into()];
                 card.opts.push(("留棚观劫".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "劫是别人的功课。你结了茶钱绕后山走，走出十里才听见第一声雷。气运+1".into(),
+                    evtx(301)/* 原文：劫是别人的功课。你结了茶钱绕后山走，走出十里才听见第一声雷。气运+1 */.into(),
                 ];
                 card.opts.push(("结账绕行".into(), e2));
                 self.chain = Some((11, 0, CHAIN_TTL)); // 首段建链：待分支
@@ -6792,11 +6796,11 @@ impl Game {
             138 => {
                 // 链11 中段（仅链内）
                 card.title = "劫灰拾遗·续".into();
-                card.text = "劫云散时你行至山腰回望——那道遁光顶着末重雷落了下来，山火燎出一道焦痕，雨一浇，白烟像香。次日你循焦痕拾级，雷火淬过的矿壳沿途散落，拾一枚还在嗡。".into();
+                card.text = evtx(302)/* 原文：劫云散时你行至山腰回望——那道遁光顶着末重雷落了下来，山火燎出一道焦痕，雨一浇，白烟像香。次日你循焦痕拾级，雷火淬过的矿壳沿途散落，拾一枚还在嗡。 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
                 e1.special = 46; // 置链：→139 劫后茶话
-                e1.msg = vec!["焦痕尽头，渡劫客衣袍半焦人却笑着，请你喝劫后酒：「替我数到七的，是不是你？」气运+1".into()];
+                e1.msg = vec![evtx(303)/* 原文：焦痕尽头，渡劫客衣袍半焦人却笑着，请你喝劫后酒：「替我数到七的，是不是你？」气运+1 */.into()];
                 card.opts.push(("探访劫者".into(), e1));
                 let g = (50.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -6810,19 +6814,19 @@ impl Game {
             139 => {
                 // 链11 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
                 card.title = "劫后茶话·续".into();
-                card.text = "渡劫客伤愈将行，临别与你就着茶棚炉火对坐。他说雷劫劈的不是人，是人身上的侥幸——劈完了，剩下的那部分才真正是自己的。老板娘在旁听了一路，给两人都续了茶。".into();
+                card.text = evtx(304)/* 原文：渡劫客伤愈将行，临别与你就着茶棚炉火对坐。他说雷劫劈的不是人，是人身上的侥幸——劈完了，剩下的那部分才真正是自己的。老板娘在旁听了一路，给两人都续了茶。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你把这句话记进随身的册子。归程一路吐纳，念头上再无侥幸可躲。修为+10%，道心+3".into(),
+                    evtx(305)/* 原文：你把这句话记进随身的册子。归程一路吐纳，念头上再无侥幸可躲。修为+10%，道心+3 */.into(),
                 ];
                 card.opts.push(("记下这句话".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你送他到山口。临别他把酒囊塞给你：「劫是各人的，茶是同的。」道心+2，气运+2".into(),
+                    evtx(306)/* 原文：你送他到山口。临别他把酒囊塞给你：「劫是各人的，茶是同的。」道心+2，气运+2 */.into(),
                 ];
                 card.opts.push(("送他一程".into(), e2));
             }
@@ -6832,11 +6836,11 @@ impl Game {
             140 => {
                 // 链12 首段：书肆易主（首段建链待分支）
                 card.title = "书肆易主".into();
-                card.text = "城南书肆挂出「易主」木牌。老掌柜正把架上旧抄本一摞摞装箱，见你翻得仔细，摆手：「随便看。认字的人来了，书就不算白搬一趟。」".into();
+                card.text = evtx(307)/* 原文：城南书肆挂出「易主」木牌。老掌柜正把架上旧抄本一摞摞装箱，见你翻得仔细，摆手：「随便看。认字的人来了，书就不算白搬一趟。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.special = 47; // 置链：→141 代笔提要
-                e1.msg = vec!["你替他搬了一下午箱。临别他塞给你一册无皮抄本：「压箱底的，新书主不识货。」道心+1".into()];
+                e1.msg = vec![evtx(308)/* 原文：你替他搬了一下午箱。临别他塞给你一册无皮抄本：「压箱底的，新书主不识货。」道心+1 */.into()];
                 card.opts.push(("帮搬装箱".into(), e1));
                 let g = (45.0 * ss) as i64;
                 let mut e2 = Eff::new();
@@ -6852,7 +6856,7 @@ impl Game {
             141 => {
                 // 链12 中段（仅链内）
                 card.title = "代笔提要·续".into();
-                card.text = "新书主是个绸缎商，不识修行书，却把铺面翻修得亮堂。他听伙计说你识货，请你替架上旧抄本各写一句提要——写得中肯书就卖得动，酬你一成书资。".into();
+                card.text = evtx(309)/* 原文：新书主是个绸缎商，不识修行书，却把铺面翻修得亮堂。他听伙计说你识货，请你替架上旧抄本各写一句提要——写得中肯书就卖得动，酬你一成书资。 */.into();
                 // v1.16.15 复审口径：卡面既言「酬你一成书资」，msg 补灵石实付
                 // （照 116 添柴 30*ss 同量级取 45*ss，与既有收入事件持平）
                 let g141 = (45.0 * ss) as i64;
@@ -6868,25 +6872,25 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你写完提要不肯署名。绸缎商把「无名氏」三字裱在柜台上，说是镇店的。道心+1".into(),
+                    evtx(310)/* 原文：你写完提要不肯署名。绸缎商把「无名氏」三字裱在柜台上，说是镇店的。道心+1 */.into(),
                 ];
                 card.opts.push(("提要留白".into(), e2));
             }
             142 => {
                 // 链12 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
                 card.title = "肆后书案·续".into();
-                card.text = "书肆生意果然好了。开春时绸缎商在肆后添了张书案，笔墨齐全，说：「给像你这样的人留的——城里的字，总得有人接着认。」".into();
+                card.text = evtx(311)/* 原文：书肆生意果然好了。开春时绸缎商在肆后添了张书案，笔墨齐全，说：「给像你这样的人留的——城里的字，总得有人接着认。」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你把案头当成了书斋。经你批注过的旧书，卖得比新书还贵。修为+8%，道心+3".into(),
+                    evtx(312)/* 原文：你把案头当成了书斋。经你批注过的旧书，卖得比新书还贵。修为+8%，道心+3 */.into(),
                 ];
                 card.opts.push(("常来坐案".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 4.0;
                 e2.msg = vec![
-                    "你荐了个落魄书生来坐案，绸缎商管了他一日两餐。你只出了一句话。道心+4".into(),
+                    evtx(313)/* 原文：你荐了个落魄书生来坐案，绸缎商管了他一日两餐。你只出了一句话。道心+4 */.into(),
                 ];
                 card.opts.push(("荐个坐案人".into(), e2));
             }
@@ -6894,11 +6898,11 @@ impl Game {
             // 灵石、不占 special（战斗不走，题材皆市井山野静态局）
             143 => {
                 card.title = "公道秤".into();
-                card.text = "集市东头有杆老秤，挂在「公道秤」的木牌下，说是称人心。你把储物袋搁上去，秤星自己挪了三格，停在一个不上不下的位置。".into();
+                card.text = evtx(314)/* 原文：集市东头有杆老秤，挂在「公道秤」的木牌下，说是称人心。你把储物袋搁上去，秤星自己挪了三格，停在一个不上不下的位置。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你伸手拨正秤星，秤杆纹丝不动——原来称的是你自家道心。道心+2".into(),
+                    evtx(315)/* 原文：你伸手拨正秤星，秤杆纹丝不动——原来称的是你自家道心。道心+2 */.into(),
                 ];
                 card.opts.push(("校秤".into(), e1));
                 let g = (40.0 * ss) as i64;
@@ -6912,12 +6916,12 @@ impl Game {
             }
             144 => {
                 card.title = "渡蚁桥".into();
-                card.text = "山雨冲断溪上小桥，一队黑蚁衔着碎叶在水面连成一线，摇摇欲坠。队伍尽头，蚁群正往你鞋边爬来。".into();
+                card.text = evtx(316)/* 原文：山雨冲断溪上小桥，一队黑蚁衔着碎叶在水面连成一线，摇摇欲坠。队伍尽头，蚁群正往你鞋边爬来。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你摘两片阔叶替它们续上桥面。蚁群过尽，雨也停了。道心+2，气运+1".into(),
+                    evtx(317)/* 原文：你摘两片阔叶替它们续上桥面。蚁群过尽，雨也停了。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("搭叶为桥".into(), e1));
                 let mut e2 = Eff::new();
@@ -6926,35 +6930,35 @@ impl Game {
                 e2.dao = 1.0;
                 e2.qi_pct = 0.04;
                 e2.msg = vec![
-                    "你以灵气托起整队蚁群送过对岸。它们列队向你颔首——虫豸也识礼数。修为+4%，道心+1".into(),
+                    evtx(318)/* 原文：你以灵气托起整队蚁群送过对岸。它们列队向你颔首——虫豸也识礼数。修为+4%，道心+1 */.into(),
                 ];
                 card.opts.push(("灵气渡蚁".into(), e2));
             }
             145 => {
                 card.title = "冰窖遗鲜".into();
-                card.text = "城中冰窖清底，窖底最深处冻着一枚桃——贡品样式，签条上的年号是三百年前的。管窖的老说，冻着的仙桃不会坏，只会等。".into();
+                card.text = evtx(319)/* 原文：城中冰窖清底，窖底最深处冻着一枚桃——贡品样式，签条上的年号是三百年前的。管窖的老说，冻着的仙桃不会坏，只会等。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 5.0;
                 e1.qi_pct = 0.15;
                 e1.msg = vec![
-                    "你在檐下等它自己化开。三百年前的甜味漫开来的时候，你懂了什么叫「物候不由人」。道心+5，修为+15%".into(),
+                    evtx(320)/* 原文：你在檐下等它自己化开。三百年前的甜味漫开来的时候，你懂了什么叫「物候不由人」。道心+5，修为+15% */.into(),
                 ];
                 card.opts.push(("化而食之".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.luck = 3.0;
                 e2.msg = vec![
-                    "你把桃请回窖中深处：「既等了三百年，不差再等一程。」管窖老朝你长揖。道心+1，气运+3".into(),
+                    evtx(321)/* 原文：你把桃请回窖中深处：「既等了三百年，不差再等一程。」管窖老朝你长揖。道心+1，气运+3 */.into(),
                 ];
                 card.opts.push(("请回窖底".into(), e2));
             }
             146 => {
                 card.title = "夜磨坊".into();
-                card.text = "河湾水磨坊半夜水轮自转，坊里无人。磨眼里的不是麦，是月光——磨出的粉落在石槽上，风一吹就没了。".into();
+                card.text = evtx(322)/* 原文：河湾水磨坊半夜水轮自转，坊里无人。磨眼里的不是麦，是月光——磨出的粉落在石槽上，风一吹就没了。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你帮着把月粉收进陶罐，天亮时罐里只有一捧清水，水底的月影却洗不掉了。道心+3".into(),
+                    evtx(323)/* 原文：你帮着把月粉收进陶罐，天亮时罐里只有一捧清水，水底的月影却洗不掉了。道心+3 */.into(),
                 ];
                 card.opts.push(("守磨一夜".into(), e1));
                 let g = (55.0 * ss) as i64;
@@ -6968,12 +6972,12 @@ impl Game {
             }
             147 => {
                 card.title = "货栈灵鼠".into();
-                card.text = "货栈掌柜愁眉苦脸：栈里灵鼠成精，专偷丹药房那格。你去看时，那鼠正抱着枚培元丹，见你来了，把丹往你脚边一推。".into();
+                card.text = evtx(324)/* 原文：货栈掌柜愁眉苦脸：栈里灵鼠成精，专偷丹药房那格。你去看时，那鼠正抱着枚培元丹，见你来了，把丹往你脚边一推。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你把丹还进药格，放那鼠走了。掌柜直呼晦气，你却觉得这笔账记得漂亮。道心+2，气运+1".into(),
+                    evtx(325)/* 原文：你把丹还进药格，放那鼠走了。掌柜直呼晦气，你却觉得这笔账记得漂亮。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("纵鼠归山".into(), e1));
                 let g = (45.0 * ss) as i64;
@@ -6987,28 +6991,28 @@ impl Game {
             }
             148 => {
                 card.title = "采薇客".into();
-                card.text = "高秋的南崖上有人采薇而歌，歌声不悲不喜，一句一句往云里去。你循声攀上崖，见个青袍人背影，篓里薇菜浅浅一层。".into();
+                card.text = evtx(326)/* 原文：高秋的南崖上有人采薇而歌，歌声不悲不喜，一句一句往云里去。你循声攀上崖，见个青袍人背影，篓里薇菜浅浅一层。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 4.0;
                 e1.msg = vec![
-                    "你坐下来听完那支歌。歌没有词，你却听懂了——关于怎么把日子过成道。道心+4".into(),
+                    evtx(327)/* 原文：你坐下来听完那支歌。歌没有词，你却听懂了——关于怎么把日子过成道。道心+4 */.into(),
                 ];
                 card.opts.push(("坐听一歌".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你把干粮分了他一半。青袍人回身一笑：「山下还有人记得山上人吃饭。」道心+1，气运+2".into(),
+                    evtx(328)/* 原文：你把干粮分了他一半。青袍人回身一笑：「山下还有人记得山上人吃饭。」道心+1，气运+2 */.into(),
                 ];
                 card.opts.push(("分他行粮".into(), e2));
             }
             149 => {
                 card.title = "补鞍匠".into();
-                card.text = "官道旁补鞍的老匠人拆开一副旧马鞍，夹层里掉出一封没有火漆的信，信皮上的字迹被磨得只剩半行。老匠不识字，摊着手问你。".into();
+                card.text = evtx(329)/* 原文：官道旁补鞍的老匠人拆开一副旧马鞍，夹层里掉出一封没有火漆的信，信皮上的字迹被磨得只剩半行。老匠不识字，摊着手问你。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你读给老匠听——是三十年前一个学徒留给师父的。老匠把信缝了回去：「话没送到，鞍就还没补完。」道心+2".into(),
+                    evtx(330)/* 原文：你读给老匠听——是三十年前一个学徒留给师父的。老匠把信缝了回去：「话没送到，鞍就还没补完。」道心+2 */.into(),
                 ];
                 card.opts.push(("代读代寄".into(), e1));
                 let g = (50.0 * ss) as i64;
@@ -7023,18 +7027,18 @@ impl Game {
             }
             150 => {
                 card.title = "雪泥鸿迹".into();
-                card.text = "大雪初霁，雪原上只有一行脚印，从你门前直到林深处——去程的。没有回程的。你认得这脚印的步幅，像极了一个人负手慢行。".into();
+                card.text = evtx(331)/* 原文：大雪初霁，雪原上只有一行脚印，从你门前直到林深处——去程的。没有回程的。你认得这脚印的步幅，像极了一个人负手慢行。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你循迹走到林中空地，雪地上留着一盘没下完的棋。你替黑白各落一子，转身回家。道心+3".into(),
+                    evtx(332)/* 原文：你循迹走到林中空地，雪地上留着一盘没下完的棋。你替黑白各落一子，转身回家。道心+3 */.into(),
                 ];
                 card.opts.push(("循迹而行".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你拿扫帚把那行足迹轻轻拂平——有些来客，不必被后来人惊扰。道心+1，气运+1".into(),
+                    evtx(333)/* 原文：你拿扫帚把那行足迹轻轻拂平——有些来客，不必被后来人惊扰。道心+1，气运+1 */.into(),
                 ];
                 card.opts.push(("拂平足迹".into(), e2));
             }
@@ -7049,16 +7053,16 @@ impl Game {
             151 => {
                 // 链13 首段：当铺死当（首段建链待分支）
                 card.title = "当铺死当".into();
-                card.text = "镇口老当铺的死当架上，一管旧箫落了薄尘，签条一个「死」字——三年无人来赎，按例今岁拆料重铸。箫尾刻着个小小的「归」字，笔画被摩挲得发亮。".into();
+                card.text = evtx(334)/* 原文：镇口老当铺的死当架上，一管旧箫落了薄尘，签条一个「死」字——三年无人来赎，按例今岁拆料重铸。箫尾刻着个小小的「归」字，笔画被摩挲得发亮。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.special = 49; // 置链：→152 访主赎当
-                e1.msg = vec!["你问下这管箫。掌柜翻出当票存根：「物主姓甚忘了，只记得年年冬至来朝铺子里望一眼。」道心+1".into()];
+                e1.msg = vec![evtx(335)/* 原文：你问下这管箫。掌柜翻出当票存根：「物主姓甚忘了，只记得年年冬至来朝铺子里望一眼。」道心+1 */.into()];
                 card.opts.push(("问下死当".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "旧物各有机缘，死当也是归宿。你出门时，掌柜正把箫收进里屋。气运+1".into(),
+                    evtx(336)/* 原文：旧物各有机缘，死当也是归宿。你出门时，掌柜正把箫收进里屋。气运+1 */.into(),
                 ];
                 card.opts.push(("不置一词".into(), e2));
                 self.chain = Some((13, 0, CHAIN_TTL)); // 首段建链：待分支
@@ -7066,7 +7070,7 @@ impl Game {
             152 => {
                 // 链13 中段（仅链内）
                 card.title = "访主赎当·续".into();
-                card.text = "循当票存根寻到城郊药庐，物主是位咳疾缠身的老丹师——当年为给同门购药，把随身旧箫典进了当铺。他说物随缘去，不赎也罢，只是每年冬至会朝镇上望一眼。".into();
+                card.text = evtx(337)/* 原文：循当票存根寻到城郊药庐，物主是位咳疾缠身的老丹师——当年为给同门购药，把随身旧箫典进了当铺。他说物随缘去，不赎也罢，只是每年冬至会朝镇上望一眼。 */.into();
                 let g = (30.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g; // 代垫赎资是花销，与卡面「灵石-{}」同号（照 122/140/149 同款）
@@ -7080,26 +7084,26 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你把存根原样放回，只把「归」字的来历讲给掌柜听。当铺的灯，那晚亮得久些。气运+1".into(),
+                    evtx(338)/* 原文：你把存根原样放回，只把「归」字的来历讲给掌柜听。当铺的灯，那晚亮得久些。气运+1 */.into(),
                 ];
                 card.opts.push(("止步不问".into(), e2));
             }
             153 => {
                 // 链13 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
                 card.title = "物归旧主·续".into();
-                card.text = "旧箫归架那日，老丹师的精神竟好了些。他说箫是故人手制，箫声起时，药庐里经年的药苦味都淡了。曲罢他执意送你到篱外，往你袖里塞了一撮窖了多年的灵茶。".into();
+                card.text = evtx(339)/* 原文：旧箫归架那日，老丹师的精神竟好了些。他说箫是故人手制，箫声起时，药庐里经年的药苦味都淡了。曲罢他执意送你到篱外，往你袖里塞了一撮窖了多年的灵茶。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你在篱外立了半晌——箫声呜咽穿篱而出，胸中滞念竟随曲散了。修为+10%，道心+3".into(),
+                    evtx(340)/* 原文：你在篱外立了半晌——箫声呜咽穿篱而出，胸中滞念竟随曲散了。修为+10%，道心+3 */.into(),
                 ];
                 card.opts.push(("篱外听曲".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你收下灵茶。他说：「物归了主，茶归有缘。」道心+2，气运+2".into(),
+                    evtx(341)/* 原文：你收下灵茶。他说：「物归了主，茶归有缘。」道心+2，气运+2 */.into(),
                 ];
                 card.opts.push(("收下谢礼".into(), e2));
             }
@@ -7108,11 +7112,11 @@ impl Game {
             // ——入池门控（入宗门+东境青云）在 sim_event_weights，见该函数块注
             154 => {
                 card.title = "新掌接印".into();
-                card.text = "青云宗今岁接印大典——老掌门功成闭关，新掌门于观星台受印。山门外候观的散修排成长龙，你随人流上山，满山彩绸映得檐角都在发亮。".into();
+                card.text = evtx(342)/* 原文：青云宗今岁接印大典——老掌门功成闭关，新掌门于观星台受印。山门外候观的散修排成长龙，你随人流上山，满山彩绸映得檐角都在发亮。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
                 e1.msg = vec![
-                    "受印一拜，满山灵机为之一涌。你借势吐纳半日，经络里暖意不散。修为+8%".into(),
+                    evtx(343)/* 原文：受印一拜，满山灵机为之一涌。你借势吐纳半日，经络里暖意不散。修为+8% */.into(),
                 ];
                 card.opts.push(("观礼随喜".into(), e1));
                 let g = (60.0 * ss) as i64;
@@ -7126,18 +7130,18 @@ impl Game {
             }
             155 => {
                 card.title = "旧掌传灯".into();
-                card.text = "老掌门闭关前最后一次开讲，讲的不是功法，是一句「接印容易守印难」。大殿里挤满了人，你坐在窗根下听完，出殿时暮钟正响。".into();
+                card.text = evtx(344)/* 原文：老掌门闭关前最后一次开讲，讲的不是功法，是一句「接印容易守印难」。大殿里挤满了人，你坐在窗根下听完，出殿时暮钟正响。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "「印是担子，不是椅子。」这一句，你在归途上想了很久。道心+2".into(),
+                    evtx(345)/* 原文：「印是担子，不是椅子。」这一句，你在归途上想了很久。道心+2 */.into(),
                 ];
                 card.opts.push(("殿中听讲".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你把讲稿抄了一份，与门外候着的散修分阅——灯传下去，才算灯。道心+1，气运+1".into(),
+                    evtx(346)/* 原文：你把讲稿抄了一份，与门外候着的散修分阅——灯传下去，才算灯。道心+1，气运+1 */.into(),
                 ];
                 card.opts.push(("抄稿分阅".into(), e2));
             }
@@ -7170,13 +7174,13 @@ impl Game {
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你俩把坛子埋进雪里，插了根枯枝作记号。道心+2，气运+1".into(),
+                    evtx(347)/* 原文：你俩把坛子埋进雪里，插了根枯枝作记号。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("埋坛立约".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.05;
                 e2.msg = vec![
-                    "「功成哪有个准头。」你笑道，先斟了一碗——酒是酸的，雪是甜的。修为+5%".into(),
+                    evtx(348)/* 原文：「功成哪有个准头。」你笑道，先斟了一碗——酒是酸的，雪是甜的。修为+5% */.into(),
                 ];
                 card.opts.push(("先启一勺".into(), e2));
             }
@@ -7201,7 +7205,7 @@ impl Game {
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "子时三刻，白瓣一层层张开。有些东西慢——慢到一生只给你看一次。道心+3".into(),
+                    evtx(349)/* 原文：子时三刻，白瓣一层层张开。有些东西慢——慢到一生只给你看一次。道心+3 */.into(),
                 ];
                 card.opts.push(("守到花开".into(), e1));
                 let mut e2 = Eff::new();
@@ -7235,40 +7239,40 @@ impl Game {
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "最后一片瓦压实，日头正好爬上房脊。借宿的屋，补成了家。道心+2，气运+1".into(),
+                    evtx(350)/* 原文：最后一片瓦压实，日头正好爬上房脊。借宿的屋，补成了家。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("细心补全".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.05;
                 e2.msg = vec![
-                    "你以灵气把碎瓦熔凝重塑，比原先还结实三分。修为+5%".into(),
+                    evtx(351)/* 原文：你以灵气把碎瓦熔凝重塑，比原先还结实三分。修为+5% */.into(),
                 ];
                 card.opts.push(("灵气熔凝".into(), e2));
             }
             159 => {
                 card.title = "萤火引路".into();
-                card.text = "夏夜山道起雾迷了路，一列萤火忽然自林间亮起，蜿蜒向北——雾气竟随它们让出一条道来。".into();
+                card.text = evtx(352)/* 原文：夏夜山道起雾迷了路，一列萤火忽然自林间亮起，蜿蜒向北——雾气竟随它们让出一条道来。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你随光而行，半个时辰后雾散月出，回望来路萤火已散。道心+1，气运+1".into(),
+                    evtx(353)/* 原文：你随光而行，半个时辰后雾散月出，回望来路萤火已散。道心+1，气运+1 */.into(),
                 ];
                 card.opts.push(("循光出谷".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你停在道口让萤先行——它们绕你三匝才去。说不清是什么谢礼，但你心里松快。气运+2".into(),
+                    evtx(354)/* 原文：你停在道口让萤先行——它们绕你三匝才去。说不清是什么谢礼，但你心里松快。气运+2 */.into(),
                 ];
                 card.opts.push(("让道萤行".into(), e2));
             }
             160 => {
                 card.title = "山洪改道".into();
-                card.text = "连日暴雨，山洪裹着断木直冲下游村落。你在洪头之上，身边只有一炷香的工夫。".into();
+                card.text = evtx(355)/* 原文：连日暴雨，山洪裹着断木直冲下游村落。你在洪头之上，身边只有一炷香的工夫。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你以术力硬生生把洪头分进废弃故河道——浊浪过境，村中鸡犬不惊。道心+3".into(),
+                    evtx(356)/* 原文：你以术力硬生生把洪头分进废弃故河道——浊浪过境，村中鸡犬不惊。道心+3 */.into(),
                 ];
                 card.opts.push(("分洪入故道".into(), e1));
                 let g = (40.0 * ss) as i64;
@@ -7282,68 +7286,68 @@ impl Game {
             }
             161 => {
                 card.title = "白鹿过涧".into();
-                card.text = "雪霁。一头白鹿自涧底踏雪而过，蹄印落处竟生出一线青草，走到对面山脊才回头望你一眼。".into();
+                card.text = evtx(357)/* 原文：雪霁。一头白鹿自涧底踏雪而过，蹄印落处竟生出一线青草，走到对面山脊才回头望你一眼。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "你循蹄印走到山脊——鹿已不见，蹄印里那线青草却在雪里绿着。道心+1，气运+2".into(),
+                    evtx(358)/* 原文：你循蹄印走到山脊——鹿已不见，蹄印里那线青草却在雪里绿着。道心+1，气运+2 */.into(),
                 ];
                 card.opts.push(("循迹上山脊".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你朝它消失的方向长揖一礼，转身下山——有些相遇，不必追。道心+2".into(),
+                    evtx(359)/* 原文：你朝它消失的方向长揖一礼，转身下山——有些相遇，不必追。道心+2 */.into(),
                 ];
                 card.opts.push(("长揖目送".into(), e2));
             }
             162 => {
                 card.title = "月蚀之夜".into();
-                card.text = "十五夜，圆月被啃去一角。村中锣声四起——老人们说月蚀是天上犬在吞月，要敲响器救它。".into();
+                card.text = evtx(360)/* 原文：十五夜，圆月被啃去一角。村中锣声四起——老人们说月蚀是天上犬在吞月，要敲响器救它。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你击缶和着锣声，直到月轮复圆——狗吠渐歇，月亮干干净净。道心+2，气运+1".into(),
+                    evtx(361)/* 原文：你击缶和着锣声，直到月轮复圆——狗吠渐歇，月亮干干净净。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("击缶救月".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.qi_pct = 0.04;
                 e2.msg = vec![
-                    "你不上街，只在檐下静观月轮一点点吞进去又吐出来——天地自有时刻。修为+4%，道心+1".into(),
+                    evtx(362)/* 原文：你不上街，只在檐下静观月轮一点点吞进去又吐出来——天地自有时刻。修为+4%，道心+1 */.into(),
                 ];
                 card.opts.push(("静观复圆".into(), e2));
             }
             163 => {
                 card.title = "壶中天".into();
-                card.text = "集上老者售一柄陶壶：「壶里有一座山。」你冲水入壶，壶口竟传出一线飞瀑声，久久不歇。".into();
+                card.text = evtx(363)/* 原文：集上老者售一柄陶壶：「壶里有一座山。」你冲水入壶，壶口竟传出一线飞瀑声，久久不歇。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.06;
                 e1.msg = vec![
-                    "你以灵泉日日养壶——瀑声渐清，静坐时如闻真山。修为+6%".into(),
+                    evtx(364)/* 原文：你以灵泉日日养壶——瀑声渐清，静坐时如闻真山。修为+6% */.into(),
                 ];
                 card.opts.push(("灵泉养壶".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你把壶原价转赠村塾的孩童——多年后有人回来说，那孩子成了画山水的名家。气运+2".into(),
+                    evtx(365)/* 原文：你把壶原价转赠村塾的孩童——多年后有人回来说，那孩子成了画山水的名家。气运+2 */.into(),
                 ];
                 card.opts.push(("转赠孩童".into(), e2));
             }
             164 => {
                 card.title = "檐铃无风".into();
-                card.text = "客栈檐角一枚铁铃，无风自响。店家说这铃响时，北面官道必有游子还乡——响一声，还一个。".into();
+                card.text = evtx(366)/* 原文：客栈檐角一枚铁铃，无风自响。店家说这铃响时，北面官道必有游子还乡——响一声，还一个。 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "你搬梯把铃解下擦亮重新挂好——当夜铃响了三声，北面道上灯火三点。气运+2".into(),
+                    evtx(367)/* 原文：你搬梯把铃解下擦亮重新挂好——当夜铃响了三声，北面道上灯火三点。气运+2 */.into(),
                 ];
                 card.opts.push(("擦亮重挂".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你枕着铃音坐到天明——每一声，都替远行的人把家喊了一遍。道心+2".into(),
+                    evtx(368)/* 原文：你枕着铃音坐到天明——每一声，都替远行的人把家喊了一遍。道心+2 */.into(),
                 ];
                 card.opts.push(("坐听一夜".into(), e2));
             }
@@ -7354,11 +7358,11 @@ impl Game {
             165 => {
                 // 结局回响·A 定稿（入正文之人的世界侧写）
                 card.title = "定稿之世".into();
-                card.text = "茶馆说书人开了段新话本，主角的名字你听着耳熟——那是入了正文的人。听客们交头接耳：「这名字一字改不得。」说书人一拍醒木：「天定的稿子，谁敢改。」".into();
+                card.text = evtx(369)/* 原文：茶馆说书人开了段新话本，主角的名字你听着耳熟——那是入了正文的人。听客们交头接耳：「这名字一字改不得。」说书人一拍醒木：「天定的稿子，谁敢改。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你听完末段，替那个名字把茶钱付了——被定稿的人生，也值得一盏热茶。道心+2".into(),
+                    evtx(370)/* 原文：你听完末段，替那个名字把茶钱付了——被定稿的人生，也值得一盏热茶。道心+2 */.into(),
                 ];
                 card.opts.push(("听完这段".into(), e1));
                 let g = (36.0 * ss) as i64;
@@ -7374,46 +7378,46 @@ impl Game {
             166 => {
                 // 结局回响·B 留白（后事不详之地的世界侧写）
                 card.title = "留白之野".into();
-                card.text = "行脚客们多了个去处：某镇外一片无名野地。官册上那一格空着，卦摊说这叫「后事不详」——无名无姓，反倒谁都能去。野草长得很高，高过所有批注。".into();
+                card.text = evtx(371)/* 原文：行脚客们多了个去处：某镇外一片无名野地。官册上那一格空着，卦摊说这叫「后事不详」——无名无姓，反倒谁都能去。野草长得很高，高过所有批注。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你在草里坐到日暮，什么名号也没留——留白处最容得下人。道心+3".into(),
+                    evtx(372)/* 原文：你在草里坐到日暮，什么名号也没留——留白处最容得下人。道心+3 */.into(),
                 ];
                 card.opts.push(("草里坐坐".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.08;
                 e2.msg = vec![
-                    "你沿着野地走了一遭，替后来的行人踩出半条小径。修为+8%".into(),
+                    evtx(373)/* 原文：你沿着野地走了一遭，替后来的行人踩出半条小径。修为+8% */.into(),
                 ];
                 card.opts.push(("踩出小径".into(), e2));
             }
             167 => {
                 // 结局回响·C 执笔（执笔人视点的世界侧写）
                 card.title = "执笔之赠".into();
-                card.text = "废稿市上新添一个怪摊：不卖书，只替人描名字——把磨没了的名字一笔一笔描清楚，分文不取。你蹲看半日，摊主把笔一转，笔杆朝你：「你也描一个？」".into();
+                card.text = evtx(374)/* 原文：废稿市上新添一个怪摊：不卖书，只替人描名字——把磨没了的名字一笔一笔描清楚，分文不取。你蹲看半日，摊主把笔一转，笔杆朝你：「你也描一个？」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "你接过笔，描的是自己最初的名字——笔画很稳，像描过千万遍。道心+2，气运+2".into(),
+                    evtx(375)/* 原文：你接过笔，描的是自己最初的名字——笔画很稳，像描过千万遍。道心+2，气运+2 */.into(),
                 ];
                 card.opts.push(("描一个".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你摇头，只帮他把一摞废稿按名字理齐——有些名字，等得起。气运+1".into(),
+                    evtx(376)/* 原文：你摇头，只帮他把一摞废稿按名字理齐——有些名字，等得起。气运+1 */.into(),
                 ];
                 card.opts.push(("只理废稿".into(), e2));
             }
             168 => {
                 // 书外之章联动（第九章·书外之章已了门控）：天曹余波
                 card.title = "天曹补写".into();
-                card.text = "天曹卷宗房漏了一夜雨，晒卷的小吏发现你那一册的页脚多了行小字，墨色很新，像谁趁夜补写：「此卷之外，另有续行。」小吏不敢涂，上报了事。".into();
+                card.text = evtx(377)/* 原文：天曹卷宗房漏了一夜雨，晒卷的小吏发现你那一册的页脚多了行小字，墨色很新，像谁趁夜补写：「此卷之外，另有续行。」小吏不敢涂，上报了事。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你托梦去问那行字是谁写的，梦里只有翻纸声——书外的路，天曹也只配旁听。道心+3".into(),
+                    evtx(378)/* 原文：你托梦去问那行字是谁写的，梦里只有翻纸声——书外的路，天曹也只配旁听。道心+3 */.into(),
                 ];
                 card.opts.push(("托梦一问".into(), e1));
                 let g = (60.0 * ss) as i64;
@@ -7428,18 +7432,18 @@ impl Game {
             169 => {
                 // 书外之章联动（第九章·书外之章已了门控）：书肆余波
                 card.title = "书肆新声".into();
-                card.text = "书肆最深处新到一册无脊之书，页页相连找不到头尾。掌柜说这书不吃价、只吃缘：「有缘人翻开哪页，就从哪页读起——翻不开的，看一眼脊梁骨都摸不着。」".into();
+                card.text = evtx(379)/* 原文：书肆最深处新到一册无脊之书，页页相连找不到头尾。掌柜说这书不吃价、只吃缘：「有缘人翻开哪页，就从哪页读起——翻不开的，看一眼脊梁骨都摸不着。」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
                 e1.dao = 1.0;
                 e1.msg = vec![
-                    "你一伸手，书自己翻开了——第一行是你的名字。修为+10%，道心+1".into(),
+                    evtx(380)/* 原文：你一伸手，书自己翻开了——第一行是你的名字。修为+10%，道心+1 */.into(),
                 ];
                 card.opts.push(("伸手一翻".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你不翻，只隔柜听人念——念书人每翻一页，你这册就厚一分。气运+2".into(),
+                    evtx(381)/* 原文：你不翻，只隔柜听人念——念书人每翻一页，你这册就厚一分。气运+2 */.into(),
                 ];
                 card.opts.push(("隔柜听念".into(), e2));
             }
@@ -7451,12 +7455,12 @@ impl Game {
             170 => {
                 // 老年层：炉暖旧器（交托回望）
                 card.title = "炉暖旧器".into();
-                card.text = "巷尾老匠的炉火不熄，煨着几件街坊送来的旧物——锈锁、断梳、豁口的陶壶。见你路过，他招手：「后生，搭把手，替我把这封回信捎去城南。人老了，腿脚先老。」".into();
+                card.text = evtx(382)/* 原文：巷尾老匠的炉火不熄，煨着几件街坊送来的旧物——锈锁、断梳、豁口的陶壶。见你路过，他招手：「后生，搭把手，替我把这封回信捎去城南。人老了，腿脚先老。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你把信送到，又把回话捎了回来——老匠听完，笑了半晌。道心+2，气运+1".into(),
+                    evtx(383)/* 原文：你把信送到，又把回话捎了回来——老匠听完，笑了半晌。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("捎信城南".into(), e1));
                 let g = (30.0 * ss) as i64;
@@ -7472,29 +7476,29 @@ impl Game {
             171 => {
                 // 老年层：灯影授业（交托回望）
                 card.title = "灯影授业".into();
-                card.text = "油灯将尽的老屋里，一位白发的教书先生还醒着。他望着你的印，像是认得它的气息：「我不问你从哪来。灯影里还剩半课——年少时我不敢讲，如今敢讲了。」".into();
+                card.text = evtx(384)/* 原文：油灯将尽的老屋里，一位白发的教书先生还醒着。他望着你的印，像是认得它的气息：「我不问你从哪来。灯影里还剩半课——年少时我不敢讲，如今敢讲了。」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
                 e1.dao = 1.0;
                 e1.msg = vec![
-                    "半课讲的是「输」。你听到灯芯结花，屋里亮了一瞬。修为+8%，道心+1".into(),
+                    evtx(385)/* 原文：半课讲的是「输」。你听到灯芯结花，屋里亮了一瞬。修为+8%，道心+1 */.into(),
                 ];
                 card.opts.push(("听完半课".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你默默把灯油添满，退到门外。先生看破不说破，只把那半课讲完了。道心+2".into(),
+                    evtx(386)/* 原文：你默默把灯油添满，退到门外。先生看破不说破，只把那半课讲完了。道心+2 */.into(),
                 ];
                 card.opts.push(("为灯添油".into(), e2));
             }
             172 => {
                 // 开局层：义渡（与 112 灯花渡舟分域——那是灵异奇遇，这是渡口日常）
                 card.title = "义渡".into();
-                card.text = "河面无桥，老船工撑船义渡，船头木牌写着「分文不取，随缘添香」。今日风大，他朝你招手：「后生，来帮我压一压船头。」".into();
+                card.text = evtx(387)/* 原文：河面无桥，老船工撑船义渡，船头木牌写着「分文不取，随缘添香」。今日风大，他朝你招手：「后生，来帮我压一压船头。」 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "一程风浪平稳，对岸等渡的人千恩万谢。老船工塞给你一支旱烟，你没抽，别在了斗笠上。气运+2".into(),
+                    evtx(388)/* 原文：一程风浪平稳，对岸等渡的人千恩万谢。老船工塞给你一支旱烟，你没抽，别在了斗笠上。气运+2 */.into(),
                 ];
                 card.opts.push(("搭手压船".into(), e1));
                 let g = (20.0 * ss) as i64;
@@ -7511,7 +7515,7 @@ impl Game {
             173 => {
                 // 开局层：村塾借灯
                 card.title = "村塾借灯".into();
-                card.text = "夜宿山村，村塾的灯油见了底，老先生摸黑批课业，笔尖全凭手感。他窘迫地笑：「灯借不得，油却买得——穷教书人，只剩这张脸。」".into();
+                card.text = evtx(389)/* 原文：夜宿山村，村塾的灯油见了底，老先生摸黑批课业，笔尖全凭手感。他窘迫地笑：「灯借不得，油却买得——穷教书人，只剩这张脸。」 */.into();
                 let g = (16.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
@@ -7525,18 +7529,18 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你把随行的小灯留在案上。老先生郑重记下你的名字，说来日塾里出了人物，第一个谢你。气运+1".into(),
+                    evtx(390)/* 原文：你把随行的小灯留在案上。老先生郑重记下你的名字，说来日塾里出了人物，第一个谢你。气运+1 */.into(),
                 ];
                 card.opts.push(("留灯而去".into(), e2));
             }
             174 => {
                 // 开局层：霜桥早市
                 card.title = "霜桥早市".into();
-                card.text = "霜天未亮，石桥两廊早市已开：热粥、姜茶、新出炉的炊饼。摊主们跺脚呵手，见你走来，竟不约而同往桥心让了让——像给什么人留位。".into();
+                card.text = evtx(391)/* 原文：霜天未亮，石桥两廊早市已开：热粥、姜茶、新出炉的炊饼。摊主们跺脚呵手，见你走来，竟不约而同往桥心让了让——像给什么人留位。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.06;
                 e1.msg = vec![
-                    "一碗热粥下肚，你在市声里听完半座小镇醒来。修为+6%".into(),
+                    evtx(392)/* 原文：一碗热粥下肚，你在市声里听完半座小镇醒来。修为+6% */.into(),
                 ];
                 card.opts.push(("桥上走一遭".into(), e1));
                 let g = (22.0 * ss) as i64;
@@ -7553,18 +7557,18 @@ impl Game {
             175 => {
                 // 链14 首段：修伞记（凡伞铺老匠——只修凡伞，不识法器；首段建链待分支）
                 card.title = "修伞记".into();
-                card.text = "雨夜投宿，巷口一间伞铺还亮着灯。老匠戴顶破笠，正给一把油纸伞换骨：「小店只修凡伞——金的铁的、会发光的，别拿来。我不识，也不碰。」".into();
+                card.text = evtx(393)/* 原文：雨夜投宿，巷口一间伞铺还亮着灯。老匠戴顶破笠，正给一把油纸伞换骨：「小店只修凡伞——金的铁的、会发光的，别拿来。我不识，也不碰。」 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
                 e1.special = 53; // 置链：→176 伞骨重削
                 e1.msg = vec![
-                    "你把随行的旧伞递过去。老匠验了验骨相：「这伞跟了你许多年吧？明早来取。」气运+1".into(),
+                    evtx(394)/* 原文：你把随行的旧伞递过去。老匠验了验骨相：「这伞跟了你许多年吧？明早来取。」气运+1 */.into(),
                 ];
                 card.opts.push(("请老匠修伞".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你在檐下坐了一夜，看老匠劈骨、穿线、糊面，雨声替他打拍子。道心+1".into(),
+                    evtx(395)/* 原文：你在檐下坐了一夜，看老匠劈骨、穿线、糊面，雨声替他打拍子。道心+1 */.into(),
                 ];
                 card.opts.push(("檐下观工".into(), e2));
                 self.chain = Some((14, 0, CHAIN_TTL)); // 首段建链：待分支
@@ -7572,30 +7576,30 @@ impl Game {
             176 => {
                 // 链14 中段（仅链内）
                 card.title = "伞骨重削·续".into();
-                card.text = "翌日再来，老匠却对着拆开的伞面皱眉：「你这伞骨相古怪——三十六骨该匀不匀，像被法力催过。我照凡伞的规矩重削，你莫怪。」".into();
+                card.text = evtx(396)/* 原文：翌日再来，老匠却对着拆开的伞面皱眉：「你这伞骨相古怪——三十六骨该匀不匀，像被法力催过。我照凡伞的规矩重削，你莫怪。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.special = 54; // 置链：→177 还伞
                 e1.msg = vec![
-                    "你说「照您的规矩来」。老匠一削到底——削下来的伞骨，竟是齐的。道心+2".into(),
+                    evtx(397)/* 原文：你说「照您的规矩来」。老匠一削到底——削下来的伞骨，竟是齐的。道心+2 */.into(),
                 ];
                 card.opts.push(("应他重削".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你说「将能用的将就」。老匠摇头不语，还是把最歪的那根换直了。气运+1".into(),
+                    evtx(398)/* 原文：你说「将能用的将就」。老匠摇头不语，还是把最歪的那根换直了。气运+1 */.into(),
                 ];
                 card.opts.push(("劝他照旧".into(), e2));
             }
             177 => {
                 // 链14 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
                 card.title = "还伞·续".into();
-                card.text = "伞修好了。老匠把伞递还，另塞给你一支新削的伞骨：「竹子这东西，削直了就直一辈子——人也一样。去你的路吧，雨要停了。」".into();
+                card.text = evtx(399)/* 原文：伞修好了。老匠把伞递还，另塞给你一支新削的伞骨：「竹子这东西，削直了就直一辈子——人也一样。去你的路吧，雨要停了。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "你收下伞骨。此后每逢雨夜，你都会想起这间铺子和那句话。道心+2，气运+2".into(),
+                    evtx(400)/* 原文：你收下伞骨。此后每逢雨夜，你都会想起这间铺子和那句话。道心+2，气运+2 */.into(),
                 ];
                 card.opts.push(("收下伞骨".into(), e1));
                 let g = (26.0 * ss) as i64;
@@ -7612,12 +7616,12 @@ impl Game {
             178 => {
                 // 恶缘：沼瘴蚀符（mr2 薄档补恶）
                 card.title = "沼瘴蚀符".into();
-                card.text = "沼地瘴气翻涌如粥，你护身的符纸一夜之间蚀出细密斑点，蜷边发黑——像被什么东西啃着，不急，也不停。".into();
+                card.text = evtx(401)/* 原文：沼地瘴气翻涌如粥，你护身的符纸一夜之间蚀出细密斑点，蜷边发黑——像被什么东西啃着，不急，也不停。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.05;
                 e1.good = false;
                 e1.msg = vec![
-                    "你当机立断弃了蚀符，抢在瘴气合拢前脱身，行囊却被蚀去一角。灵石-5%".into(),
+                    evtx(402)/* 原文：你当机立断弃了蚀符，抢在瘴气合拢前脱身，行囊却被蚀去一角。灵石-5% */.into(),
                 ];
                 card.opts.push(("弃符速离".into(), e1));
                 let mut e2 = Eff::new();
@@ -7625,21 +7629,21 @@ impl Game {
                 e2.good = false;
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你分出一缕修为温养符文，硬把蚀痕一寸寸压了回去。修为-8%，道心+2".into(),
+                    evtx(403)/* 原文：你分出一缕修为温养符文，硬把蚀痕一寸寸压了回去。修为-8%，道心+2 */.into(),
                 ];
                 card.opts.push(("以气养符".into(), e2));
             }
             179 => {
                 // 恶缘·稀有：赝丹局（mr3 薄档补恶；w2 入稀有层）
                 card.title = "赝丹局".into();
-                card.text = "丹市深处，锦衣人低声兜售「九转遗丹」，要价惊人。丹香扑鼻——可香得过火，你识海里那点灵觉隐隐发腻。".into();
+                card.text = evtx(404)/* 原文：丹市深处，锦衣人低声兜售「九转遗丹」，要价惊人。丹香扑鼻——可香得过火，你识海里那点灵觉隐隐发腻。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 2.0;
                 e1.injure = true;
                 e1.good = false;
                 e1.dao = 1.0;
                 e1.msg = vec![
-                    "你当街点破炉温、丹纹、香源三处破绽。锦衣人脸色骤变，袖里滑出符咒——恶战难免。交战 ×2，道心+1".into(),
+                    evtx(405)/* 原文：你当街点破炉温、丹纹、香源三处破绽。锦衣人脸色骤变，袖里滑出符咒——恶战难免。交战 ×2，道心+1 */.into(),
                 ];
                 card.opts.push(("当场揭穿".into(), e1));
                 let g = (150.0 * ss) as i64;
@@ -7656,35 +7660,35 @@ impl Game {
             180 => {
                 // 高境风味：云阶试步（mr5 独占）
                 card.title = "云阶试步".into();
-                card.text = "生花境深处有云阶千级，浮云所砌，每级只承一息。登山的人说：步急了阶散，步滞了云走——唯有自己的呼吸配得上它。".into();
+                card.text = evtx(406)/* 原文：生花境深处有云阶千级，浮云所砌，每级只承一息。登山的人说：步急了阶散，步滞了云走——唯有自己的呼吸配得上它。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
                 e1.msg = vec![
-                    "你以呼吸为尺，一级一级走上云阶。回首时，云海在脚下让出一条路。修为+10%".into(),
+                    evtx(407)/* 原文：你以呼吸为尺，一级一级走上云阶。回首时，云海在脚下让出一条路。修为+10% */.into(),
                 ];
                 card.opts.push(("拾级试步".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你看一位白发行者走完全程，替他记下第九十九级的那一次停顿。道心+2".into(),
+                    evtx(408)/* 原文：你看一位白发行者走完全程，替他记下第九十九级的那一次停顿。道心+2 */.into(),
                 ];
                 card.opts.push(("阶下观人".into(), e2));
             }
             181 => {
                 // 高境风味：观澜悟潮（mr5 独占）
                 card.title = "观澜悟潮".into();
-                card.text = "崖下澜潮昼夜不歇，撞石的声势却循着某种极缓的呼吸。你盘膝崖上，忽然发觉自己的心跳，正在偷偷向潮声看齐。".into();
+                card.text = evtx(409)/* 原文：崖下澜潮昼夜不歇，撞石的声势却循着某种极缓的呼吸。你盘膝崖上，忽然发觉自己的心跳，正在偷偷向潮声看齐。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你索性把呼吸交给潮。一坐整日，起身时衣袂都浸着潮气。修为+8%，道心+2".into(),
+                    evtx(410)/* 原文：你索性把呼吸交给潮。一坐整日，起身时衣袂都浸着潮气。修为+8%，道心+2 */.into(),
                 ];
                 card.opts.push(("随潮入定".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你以指画沙，记下澜潮三段缓急——像记一支不肯散的曲子。气运+2".into(),
+                    evtx(411)/* 原文：你以指画沙，记下澜潮三段缓急——像记一支不肯散的曲子。气运+2 */.into(),
                 ];
                 card.opts.push(("记潮作谱".into(), e2));
             }
@@ -7710,7 +7714,7 @@ impl Game {
                 e1.luck = 2.0;
                 e1.dao = 1.0;
                 e1.msg = vec![
-                    "一针一线到天明，旧裘暖回了从前的样子。气运+2，道心+1".into(),
+                    evtx(412)/* 原文：一针一线到天明，旧裘暖回了从前的样子。气运+2，道心+1 */.into(),
                 ];
                 card.opts.push(("灯下同补".into(), e1));
                 let g = (40.0 * ss) as i64;
@@ -7748,13 +7752,13 @@ impl Game {
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你们各临一页。写歪的那一处，两份字迹里竟都稳了。道心+2，气运+1".into(),
+                    evtx(413)/* 原文：你们各临一页。写歪的那一处，两份字迹里竟都稳了。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("受教同临".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.05;
                 e2.msg = vec![
-                    "你把那页收进袖中——留着她说的那一笔，来年再看。修为+5%".into(),
+                    evtx(414)/* 原文：你把那页收进袖中——留着她说的那一笔，来年再看。修为+5% */.into(),
                 ];
                 card.opts.push(("笑而不答".into(), e2));
             }
@@ -7788,7 +7792,7 @@ impl Game {
                 card.opts.push(("对坐同参".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.05;
-                e2.msg = vec!["同室不同功，各走各的周天，也自相安。修为+5%".into()];
+                e2.msg = vec![evtx(415)/* 原文：同室不同功，各走各的周天，也自相安。修为+5% */.into()];
                 card.opts.push(("各自用功".into(), e2));
             }
             185 => {
@@ -7811,12 +7815,12 @@ impl Game {
                 );
                 let mut e1 = Eff::new();
                 e1.luck = 2.0;
-                e1.msg = vec!["云开处山河万里，你们在风里笑出声来。气运+2".into()];
+                e1.msg = vec![evtx(416)/* 原文：云开处山河万里，你们在风里笑出声来。气运+2 */.into()];
                 card.opts.push(("同御长风".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你在云隙间认出走过的每一处——原来路也一直记着人。道心+2".into(),
+                    evtx(417)/* 原文：你在云隙间认出走过的每一处——原来路也一直记着人。道心+2 */.into(),
                 ];
                 card.opts.push(("俯察来路".into(), e2));
             }
@@ -7824,119 +7828,119 @@ impl Game {
                 // 恶缘：仙曹索卷（mr5 独占——高境墨气冲霄才有人来索；mr5 无条件
                 // 常态池 7→9 条补薄）
                 card.title = "仙曹索卷".into();
-                card.text = "一名佩牍仙曹踏云而至，展册点名：「你名下稿卷墨气冲霄，按例当入天曹文库里架——交卷归档，或领催墨单。」".into();
+                card.text = evtx(418)/* 原文：一名佩牍仙曹踏云而至，展册点名：「你名下稿卷墨气冲霄，按例当入天曹文库里架——交卷归档，或领催墨单。」 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.08;
                 e1.good = false;
-                e1.msg = vec!["你以灵石润笔，买回这一稿的着落。灵石-8%".into()];
+                e1.msg = vec![evtx(419)/* 原文：你以灵石润笔，买回这一稿的着落。灵石-8% */.into()];
                 card.opts.push(("补墨留卷".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你按卷不交，报出名讳。仙曹搁笔而去——天曹账上，从此记了条硬骨头。道心+2".into(),
+                    evtx(420)/* 原文：你按卷不交，报出名讳。仙曹搁笔而去——天曹账上，从此记了条硬骨头。道心+2 */.into(),
                 ];
                 card.opts.push(("据卷力争".into(), e2));
             }
             187 => {
                 // 善缘：星槎访客（mr5 独占——前路无名的问路者）
                 card.title = "星槎访客".into();
-                card.text = "一叶星槎泊于云端，槎上客披星而下，向你讨一盏茶：「行到此处，前路无名——借高士一盏茶的工夫，问一问路。」".into();
+                card.text = evtx(421)/* 原文：一叶星槎泊于云端，槎上客披星而下，向你讨一盏茶：「行到此处，前路无名——借高士一盏茶的工夫，问一问路。」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
                 e1.dao = 1.0;
                 e1.msg = vec![
-                    "星客饮罢，以指为笔在你掌心画下一道星轨。修为+8%，道心+1".into(),
+                    evtx(422)/* 原文：星客饮罢，以指为笔在你掌心画下一道星轨。修为+8%，道心+1 */.into(),
                 ];
                 card.opts.push(("奉茶指路".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你们把一夜说成了一生。天明槎去，云上留一颗温热的星子。气运+2".into(),
+                    evtx(423)/* 原文：你们把一夜说成了一生。天明槎去，云上留一颗温热的星子。气运+2 */.into(),
                 ];
                 card.opts.push(("相伴一夜".into(), e2));
             }
             188 => {
                 // 恶缘：灵税催帖（mr3 恶缘薄档补位——仙府催赋题材此前零覆盖）
                 card.title = "灵税催帖".into();
-                card.text = "仙府催帖贴上洞府门楣：岁修灵税逾期，按例当缴——落款朱印鲜然，不容分说。".into();
+                card.text = evtx(424)/* 原文：仙府催帖贴上洞府门楣：岁修灵税逾期，按例当缴——落款朱印鲜然，不容分说。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.06;
-                e1.msg = vec!["灵石入库，朱印划去你的名讳——今年清净了。灵石-6%".into()];
+                e1.msg = vec![evtx(425)/* 原文：灵石入库，朱印划去你的名讳——今年清净了。灵石-6% */.into()];
                 card.opts.push(("如数缴讫".into(), e1));
                 let mut e2 = Eff::new();
                 e2.stones_pct = -0.10;
                 e2.good = false;
                 e2.msg = vec![
-                    "你闭门不见。税吏坐到日暮，留下一张加层的催单走了。灵石-10%".into(),
+                    evtx(426)/* 原文：你闭门不见。税吏坐到日暮，留下一张加层的催单走了。灵石-10% */.into(),
                 ];
                 card.opts.push(("闭门缓缴".into(), e2));
             }
             189 => {
                 // 老年层：旧履还坊（「回望交托」散件第五条；余量≤10 载门控同批扩）
                 card.title = "旧履还坊".into();
-                card.text = "脚上这双履陪了你大半世。鞋匠铺老匠接过去端详半晌：「底磨得偏左——半世的路，都往一边偏。」".into();
+                card.text = evtx(427)/* 原文：脚上这双履陪了你大半世。鞋匠铺老匠接过去端详半晌：「底磨得偏左——半世的路，都往一边偏。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "老匠纳好新底递还：「偏过的路不必正回来，记下就行。」道心+2".into(),
+                    evtx(428)/* 原文：老匠纳好新底递还：「偏过的路不必正回来，记下就行。」道心+2 */.into(),
                 ];
                 card.opts.push(("换底重纳".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你没换底，只请他把旧底擦净——路走到头了，鞋是干净的。气运+1".into(),
+                    evtx(429)/* 原文：你没换底，只请他把旧底擦净——路走到头了，鞋是干净的。气运+1 */.into(),
                 ];
                 card.opts.push(("原样带走".into(), e2));
             }
             190 => {
                 // 章节联动（第一章·雨夜执印已了门控 bit0）：雨夜回访——原点重临
                 card.title = "雨夜寻印".into();
-                card.text = "又是雨夜。路过乱葬岗，新坟旁一枚无字方印半埋土中，印身划痕层层叠叠——与你怀中那枚，一模一样。".into();
+                card.text = evtx(430)/* 原文：又是雨夜。路过乱葬岗，新坟旁一枚无字方印半埋土中，印身划痕层层叠叠——与你怀中那枚，一模一样。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "两印相贴，划痕严丝合缝：原是同一枚，同一个雨夜。道心+2".into(),
+                    evtx(431)/* 原文：两印相贴，划痕严丝合缝：原是同一枚，同一个雨夜。道心+2 */.into(),
                 ];
                 card.opts.push(("并印相认".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你把印埋了回去：名字被写错的，从来不止你一个。气运+1".into(),
+                    evtx(432)/* 原文：你把印埋了回去：名字被写错的，从来不止你一个。气运+1 */.into(),
                 ];
                 card.opts.push(("覆土掩印".into(), e2));
             }
             191 => {
                 // 章节联动（第四章·文狱讨牒已了门控 bit3）：牒成的回响——文狱来问
                 card.title = "文狱退牒".into();
-                card.text = "一名文书吏抱着一摞职牒拦路：「讨牒六张的名讳，文狱都记着——有人托我问一句：牒多了，压手么？」".into();
+                card.text = evtx(433)/* 原文：一名文书吏抱着一摞职牒拦路：「讨牒六张的名讳，文狱都记着——有人托我问一句：牒多了，压手么？」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你把职牒摊开。文书吏数罢长揖：「压手——但压得住。」道心+2，气运+1".into(),
+                    evtx(434)/* 原文：你把职牒摊开。文书吏数罢长揖：「压手——但压得住。」道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("以牒相示".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你收牒入袖，只留一句：压不压手，问笔台上自见分晓。道心+1".into(),
+                    evtx(435)/* 原文：你收牒入袖，只留一句：压不压手，问笔台上自见分晓。道心+1 */.into(),
                 ];
                 card.opts.push(("收牒不语".into(), e2));
             }
             192 => {
                 // 开局层：书僮窃墨（mr0 w4——摊薄开局头部集中度）
                 card.title = "书僮窃墨".into();
-                card.text = "借宿的书院里，小书僮揣了你一块松烟墨，被你堵在墙角——他仰起头理直气壮：「先生罚抄的《千字文》，我差一页的墨。」".into();
+                card.text = evtx(436)/* 原文：借宿的书院里，小书僮揣了你一块松烟墨，被你堵在墙角——他仰起头理直气壮：「先生罚抄的《千字文》，我差一页的墨。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.msg = vec![
-                    "你把墨递还给他：「抄错的字，比抄对的长记性。」道心+1".into(),
+                    evtx(437)/* 原文：你把墨递还给他：「抄错的字，比抄对的长记性。」道心+1 */.into(),
                 ];
                 card.opts.push(("赠墨宽宥".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = 0.05;
                 e2.msg = vec![
-                    "罚他替你研一夜的墨。天明时墨细如霜，你写的字也顺了。修为+5%".into(),
+                    evtx(438)/* 原文：罚他替你研一夜的墨。天明时墨细如霜，你写的字也顺了。修为+5% */.into(),
                 ];
                 card.opts.push(("罚研一夜墨".into(), e2));
             }
@@ -7944,140 +7948,140 @@ impl Game {
                 // mr6 长生世独占首批·善缘：后辈证道（realm≥6 藏锋起寿 4500 载层
                 // 原零独占——长生世专属叙事首条；realm<mr 归零天然支持零代码）
                 card.title = "后辈证道".into();
-                card.text = "一名后辈在崖下摆开证道台，请帖递上山来：请山中三位最老的前辈观礼。你掐指数了数——这山中比你老的，早就不剩三位了。".into();
+                card.text = evtx(439)/* 原文：一名后辈在崖下摆开证道台，请帖递上山来：请山中三位最老的前辈观礼。你掐指数了数——这山中比你老的，早就不剩三位了。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "观礼毕，后辈登台前只问了一句：前辈可有赠语。你说：路比名长。他怔立良久，深深一拜。道心+2".into(),
+                    evtx(440)/* 原文：观礼毕，后辈登台前只问了一句：前辈可有赠语。你说：路比名长。他怔立良久，深深一拜。道心+2 */.into(),
                 ];
                 card.opts.push(("观礼赠语".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你把一卷写了半世的旧稿托人捎去——纸旧字新，后辈若接着走，这条路又长了一程。气运+2".into(),
+                    evtx(441)/* 原文：你把一卷写了半世的旧稿托人捎去——纸旧字新，后辈若接着走，这条路又长了一程。气运+2 */.into(),
                 ];
                 card.opts.push(("捎一卷旧稿".into(), e2));
             }
             194 => {
                 // mr6 恶缘：冒籍疑云（长生世独占恶缘首条——名讳被冒的高境烦恼）
                 card.title = "冒籍疑云".into();
-                card.text = "仙籍吏登门，面有难色：册上另有一个与你同名同姓同貌的修士，近年在北域行医济世，声名鹊起——籍只有一个，得去一个。".into();
+                card.text = evtx(442)/* 原文：仙籍吏登门，面有难色：册上另有一个与你同名同姓同貌的修士，近年在北域行医济世，声名鹊起——籍只有一个，得去一个。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你提笔把名字让了出去：名是虚的，走过的是真的。仙籍吏搁笔长揖，册页翻过，北域那人在册上落定。道心+2".into(),
+                    evtx(443)/* 原文：你提笔把名字让了出去：名是虚的，走过的是真的。仙籍吏搁笔长揖，册页翻过，北域那人在册上落定。道心+2 */.into(),
                 ];
                 card.opts.push(("让名而去".into(), e1));
                 let mut e2 = Eff::new();
                 e2.stones_pct = -0.08;
                 e2.good = false;
                 e2.msg = vec![
-                    "你据籍力争，文书往来半载，打点耗去灵石一成——籍保住了，名讳下从此多了一行小字：存疑。灵石-8%".into(),
+                    evtx(444)/* 原文：你据籍力争，文书往来半载，打点耗去灵石一成——籍保住了，名讳下从此多了一行小字：存疑。灵石-8% */.into(),
                 ];
                 card.opts.push(("据籍力争".into(), e2));
             }
             195 => {
                 // mr6 善缘：万卷尘页（长生世的回望题材——万卷旧稿只有走过的人读得动）
                 card.title = "万卷尘页".into();
-                card.text = "藏经阁顶层，你搁了不知多少万卷的旧稿自己翻动起来——尘页上的字迹早被岁月洇开，唯独你亲手写下的批注，一笔未褪。".into();
+                card.text = evtx(445)/* 原文：藏经阁顶层，你搁了不知多少万卷的旧稿自己翻动起来——尘页上的字迹早被岁月洇开，唯独你亲手写下的批注，一笔未褪。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.qi_pct = 0.05;
                 e1.msg = vec![
-                    "你坐回尘页之间，把万卷旧稿从头读了一遍——读到的全是路。合卷时，尘皆不惊。修为+5%，道心+2".into(),
+                    evtx(446)/* 原文：你坐回尘页之间，把万卷旧稿从头读了一遍——读到的全是路。合卷时，尘皆不惊。修为+5%，道心+2 */.into(),
                 ];
                 card.opts.push(("坐下来重读".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你抽出一页批注，夹进新到的书堆：后来人翻到时，会有人在几百年前替他点过灯。气运+2".into(),
+                    evtx(447)/* 原文：你抽出一页批注，夹进新到的书堆：后来人翻到时，会有人在几百年前替他点过灯。气运+2 */.into(),
                 ];
                 card.opts.push(("留一页给后来人".into(), e2));
             }
             196 => {
                 // 章节联动（第二章·镜中万象已了门控 bit1）：轮回镜回放首胜
                 card.title = "镜影忆战".into();
-                card.text = "轮回镜无故自亮，映出的不是当下，而是你的第一场胜仗——镜中那人出手时的破绽，隔着这些年岁，如今看得分明。".into();
+                card.text = evtx(448)/* 原文：轮回镜无故自亮，映出的不是当下，而是你的第一场胜仗——镜中那人出手时的破绽，隔着这些年岁，如今看得分明。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你把那一战拆到每一息：原来赢的不是招，是你没退。镜影散时，破绽已补全。道心+2".into(),
+                    evtx(449)/* 原文：你把那一战拆到每一息：原来赢的不是招，是你没退。镜影散时，破绽已补全。道心+2 */.into(),
                 ];
                 card.opts.push(("以镜复盘".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你抬手按灭了镜面：打过就打过，人生不是复盘。镜暗下去之前，那道影子似乎笑了一下。气运+1".into(),
+                    evtx(450)/* 原文：你抬手按灭了镜面：打过就打过，人生不是复盘。镜暗下去之前，那道影子似乎笑了一下。气运+1 */.into(),
                 ];
                 card.opts.push(("一笑关镜".into(), e2));
             }
             197 => {
                 // 章节联动（第五章·山河万象已了门控 bit4）：五域风谣收最后一域
                 card.title = "五域风谣".into();
-                card.text = "一个背满歌册的行脚客拦路讨歌：五域风谣已收齐四域，独缺你脚下这一域——风谣须得本地人亲口唱，可愿补一句？".into();
+                card.text = evtx(451)/* 原文：一个背满歌册的行脚客拦路讨歌：五域风谣已收齐四域，独缺你脚下这一域——风谣须得本地人亲口唱，可愿补一句？ */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你随口唱了半句旧调。行脚客记罢大喜：五域齐了。此后五域的酒肆里，都传唱你这半句。道心+1，气运+1".into(),
+                    evtx(452)/* 原文：你随口唱了半句旧调。行脚客记罢大喜：五域齐了。此后五域的酒肆里，都传唱你这半句。道心+1，气运+1 */.into(),
                 ];
                 card.opts.push(("补一句谣".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你以一页旧稿换他那册四域歌本——歌里走过的路，比你自己走过的还多。气运+2".into(),
+                    evtx(453)/* 原文：你以一页旧稿换他那册四域歌本——歌里走过的路，比你自己走过的还多。气运+2 */.into(),
                 ];
                 card.opts.push(("换一册歌本".into(), e2));
             }
             198 => {
                 // 老年层（余量≤10 载门控）：窗前晒卷——晒的是一辈子的字
                 card.title = "窗前晒卷".into();
-                card.text = "好日头。你把一辈子的卷册搬到窗前晾晒，纸页在风里哗啦啦翻动成一片——每一页都晒出了旧年的声音。".into();
+                card.text = evtx(454)/* 原文：好日头。你把一辈子的卷册搬到窗前晾晒，纸页在风里哗啦啦翻动成一片——每一页都晒出了旧年的声音。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你随手抽出一页，读到当年写坏的一个字，笑了半晌——字没写好，路走直了。道心+2".into(),
+                    evtx(455)/* 原文：你随手抽出一页，读到当年写坏的一个字，笑了半晌——字没写好，路走直了。道心+2 */.into(),
                 ];
                 card.opts.push(("挑一页重读".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你枕着晒暖的卷册睡了一觉。醒来日头正好，风还在翻页——一字未忘。气运+1".into(),
+                    evtx(456)/* 原文：你枕着晒暖的卷册睡了一觉。醒来日头正好，风还在翻页——一字未忘。气运+1 */.into(),
                 ];
                 card.opts.push(("枕卷小睡".into(), e2));
             }
             199 => {
                 // 老年层（余量≤10 载门控）：旧邻问名——名字的来历
                 card.title = "旧邻问名".into();
-                card.text = "山下旧邻的孩童上山采药，坐在你门槛上歇脚，仰头问：前辈的名字，是爹娘取的，还是自己取的？".into();
+                card.text = evtx(457)/* 原文：山下旧邻的孩童上山采药，坐在你门槛上歇脚，仰头问：前辈的名字，是爹娘取的，还是自己取的？ */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你从名字的来历讲起，讲了整整一个下午。孩童下山时，把你的名字也带下了山——名字这东西，原是越讲越有的。道心+2".into(),
+                    evtx(458)/* 原文：你从名字的来历讲起，讲了整整一个下午。孩童下山时，把你的名字也带下了山——名字这东西，原是越讲越有的。道心+2 */.into(),
                 ];
                 card.opts.push(("从头讲给他听".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你只笑了笑。孩童走后你想：来历不急，等他自己走到要改名的年纪再讲不迟。气运+1".into(),
+                    evtx(459)/* 原文：你只笑了笑。孩童走后你想：来历不急，等他自己走到要改名的年纪再讲不迟。气运+1 */.into(),
                 ];
                 card.opts.push(("只笑不答".into(), e2));
             }
             200 => {
                 // mr5 恶缘：仙籍勾误（勾错名讳的文书灾——恶缘薄档补位）
                 card.title = "仙籍勾误".into();
-                card.text = "仙籍吏持册登门，面有难色：上头勾错了名讳，把你的寿数记到了旁人账上——更正要按例核验，得先收一样东西作保。".into();
+                card.text = evtx(460)/* 原文：仙籍吏持册登门，面有难色：上头勾错了名讳，把你的寿数记到了旁人账上——更正要按例核验，得先收一样东西作保。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.08;
                 e1.good = false;
                 e1.msg = vec![
-                    "灵石入库作保，朱笔重新誊写你的名讳与寿数——册上干净了，手头紧了。灵石-8%".into(),
+                    evtx(461)/* 原文：灵石入库作保，朱笔重新誊写你的名讳与寿数——册上干净了，手头紧了。灵石-8% */.into(),
                 ];
                 card.opts.push(("交灵石作保".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你与仙籍吏对册三日，一条条驳到朱笔折了：勾错便是勾错。吏搁笔更正，临走郑重记下了你的较真。道心+2".into(),
+                    evtx(462)/* 原文：你与仙籍吏对册三日，一条条驳到朱笔折了：勾错便是勾错。吏搁笔更正，临走郑重记下了你的较真。道心+2 */.into(),
                 ];
                 card.opts.push(("对册不认".into(), e2));
             }
@@ -8089,29 +8093,29 @@ impl Game {
                 // 「胡掌柜」使文与脸同源；纹理未到走邂逅版式兜底链（npc_pixel_tex
                 // 像素脸），版式由 actor 锁定不跳变
                 card.actor = Some(CardActor::Npc(1));
-                card.text = "坊市胡掌柜寻上门来：多年前赊出去的一批灵材，买主换了东家，新东家翻脸不认——老契在你手里压着，账却没人认了。".into();
+                card.text = evtx(463)/* 原文：坊市胡掌柜寻上门来：多年前赊出去的一批灵材，买主换了东家，新东家翻脸不认——老契在你手里压着，账却没人认了。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.04;
                 e1.good = false;
                 e1.msg = vec![
-                    "你携契上门对了半日旧墨，打点上下认回一笔折半的旧账——讨回的还不够打点的，图个账面干净。灵石-4%".into(),
+                    evtx(464)/* 原文：你携契上门对了半日旧墨，打点上下认回一笔折半的旧账——讨回的还不够打点的，图个账面干净。灵石-4% */.into(),
                 ];
                 card.opts.push(("携契追讨".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你当着中人把老契烧了：账清了，纸也该歇了。火光里想明白一件事——赊出去的时候，原本就没打算收。道心+2".into(),
+                    evtx(465)/* 原文：你当着中人把老契烧了：账清了，纸也该歇了。火光里想明白一件事——赊出去的时候，原本就没打算收。道心+2 */.into(),
                 ];
                 card.opts.push(("勾销旧账".into(), e2));
             }
             202 => {
                 // mr0 恶缘：夜叩柴门（开局层恶缘第 4 条——摊薄妖兽拦路 w11 独大）
                 card.title = "夜叩柴门".into();
-                card.text = "三更，柴门被叩得山响。门外人影幢幢，自称赶夜路的行商——可行商不走夜路，更不会人人在袖里揣着刀。".into();
+                card.text = evtx(466)/* 原文：三更，柴门被叩得山响。门外人影幢幢，自称赶夜路的行商——可行商不走夜路，更不会人人在袖里揣着刀。 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你把门顶死，吹灯坐到天明。门外人四更散去，雪地上留了一圈徘徊的脚印。气运+1".into(),
+                    evtx(467)/* 原文：你把门顶死，吹灯坐到天明。门外人四更散去，雪地上留了一圈徘徊的脚印。气运+1 */.into(),
                 ];
                 card.opts.push(("顶门不开".into(), e1));
                 let mut e2 = Eff::new();
@@ -8148,7 +8152,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你把残简放回云里：写它的人还会回来找的。云海合拢，像一页轻轻翻了过去。气运+2".into(),
+                    evtx(468)/* 原文：你把残简放回云里：写它的人还会回来找的。云海合拢，像一页轻轻翻了过去。气运+2 */.into(),
                 ];
                 card.opts.push(("放回云海".into(), e2));
             }
@@ -8182,7 +8186,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你说火要紧，起身添炭。身后传来笑：数不完的，来年接着数——正是，来年还长着呢。气运+2".into(),
+                    evtx(469)/* 原文：你说火要紧，起身添炭。身后传来笑：数不完的，来年接着数——正是，来年还长着呢。气运+2 */.into(),
                 ];
                 card.opts.push(("先去添一炉火".into(), e2));
             }
@@ -8205,19 +8209,19 @@ impl Game {
                 // 链15 首段：观星问岁（醉道人——醉里数星，指星对账；首段建链待分支）
                 card.title = "观星问岁".into();
                 card.actor = Some(CardActor::Npc(3));
-                card.text = "高山夜清，醉道人拉你在崖头坐下，酒葫芦往石上一搁：「数星星去。天上每一颗都是一笔账——只是记账的那位，岁数大了，时常漏记。」".into();
+                card.text = evtx(470)/* 原文：高山夜清，醉道人拉你崖头坐下，酒葫芦往石上一搁：「数星星去。天上每一颗都是一笔账——记账的那位，岁数大了，时常漏记。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.special = 56; // 置链：→206 指间星图
                 e1.msg = vec![
-                    "你依言抬头替他数星。数到第七颗，他忽然不说话了——盯着其中一颗，看了很久。道心+1".into(),
+                    evtx(471)/* 原文：你依言抬头替他数星。数到第七颗，他忽然不说话了——盯着其中一颗，看了很久。道心+1 */.into(),
                 ];
                 card.opts.push(("替他数星".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你说「账是死的，酒是热的」。他大笑，把葫芦递你抿了一口——星没数成，夜倒是好夜。道心+1，气运+1".into(),
+                    evtx(472)/* 原文：你说「账是死的，酒是热的」。他大笑，把葫芦递你抿了一口——星没数成，夜倒是好夜。道心+1，气运+1 */.into(),
                 ];
                 card.opts.push(("只陪他喝酒".into(), e2));
                 self.chain = Some((15, 0, CHAIN_TTL)); // 首段建链：待分支
@@ -8226,18 +8230,18 @@ impl Game {
                 // 链15 中段（仅链内）
                 card.title = "指间星图·续".into();
                 card.actor = Some(CardActor::Npc(3));
-                card.text = "他以指蘸酒，在石桌上画星图——一笔一划都是旧年的天。画到末了，指头停在一处空缺：「这儿该有一颗的。是我记漏了，还是天漏了？」".into();
+                card.text = evtx(473)/* 原文：他以指蘸酒，石桌上画星图——一笔一划是旧年的天。画到末了，指头停在一处空缺：「这儿该有一颗的。是我记漏了，还是天漏了？」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.special = 57; // 置链：→207 问岁之约
                 e1.msg = vec![
-                    "你接过他的指头，替那颗星补上。酒渍在月光下微微发亮，像真有一颗星落进了石桌。道心+2".into(),
+                    evtx(474)/* 原文：你接过他的指头，替那颗星补上。酒渍在月光下微微发亮，像真有一颗星落进了石桌。道心+2 */.into(),
                 ];
                 card.opts.push(("替他补上".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你说「漏了就漏着，留个缺处透气」。他愣了愣，抚掌大笑——星图到底没补。气运+1".into(),
+                    evtx(475)/* 原文：你说「漏了就漏着，留个缺处透气」。他愣了愣，抚掌大笑——星图到底没补。气运+1 */.into(),
                 ];
                 card.opts.push(("劝他留着缺".into(), e2));
             }
@@ -8245,12 +8249,12 @@ impl Game {
                 // 链15 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
                 card.title = "问岁之约·续".into();
                 card.actor = Some(CardActor::Npc(3));
-                card.text = "醉道人指着方才那颗星：「看，它挪了一格。那是我自己的名字——挪一格，就老一分。」他把星图一角撕给你：「明年今夜，来替我对一次账。」".into();
+                card.text = evtx(476)/* 原文：醉道人指着那颗星：「看，它挪了一格。那是我自己的名字——挪一格，就老一分。」他把星图撕给你：「明年今夜，替我对账。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "你把那角酒渍星图收进怀里，应下来年之约。他想了想，又补一句：「带上酒。」道心+2，气运+2".into(),
+                    evtx(477)/* 原文：你把那角酒渍星图收进怀里，应下来年之约。他想了想，又补一句：「带上酒。」道心+2，气运+2 */.into(),
                 ];
                 card.opts.push(("应下来年之约".into(), e1));
                 let g = (30.0 * ss) as i64;
@@ -8265,25 +8269,25 @@ impl Game {
             208 => {
                 // mr7 长生世风味·善缘：剑冢阅武（realm≥7 铁画起；不触破境裁决）
                 card.title = "剑冢阅武".into();
-                card.text = "万剑归冢的山谷夜夜有剑鸣，如群剑自阅武。今夜鸣声忽然齐了一瞬——冢中有一柄无名剑，朝着你的剑鞘遥遥一引，像在邀你下场走一遭。".into();
+                card.text = evtx(478)/* 原文：万剑归冢的山谷夜夜有剑鸣，如群剑自阅武。今夜鸣声忽然齐了一瞬——冢中无名剑朝你剑鞘遥遥一引，邀你下场走一遭。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.12;
                 e1.dao = 1.0;
                 e1.msg = vec![
-                    "你拔剑入场，与万剑各过一招。剑鸣送你出谷时，齐齐轻颤了三声——是喝彩的意思。修为+12%，道心+1".into(),
+                    evtx(479)/* 原文：你拔剑入场，与万剑各过一招。剑鸣送你出谷时，齐齐轻颤了三声——是喝彩的意思。修为+12%，道心+1 */.into(),
                 ];
                 card.opts.push(("应召赴阅".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你抱剑观礼到天明，把每一路剑势默记在心。晨光里剑鸣渐息，如群剑各自归鞘。道心+2".into(),
+                    evtx(480)/* 原文：你抱剑观礼到天明，把每一路剑势默记在心。晨光里剑鸣渐息，如群剑各自归鞘。道心+2 */.into(),
                 ];
                 card.opts.push(("观而不试".into(), e2));
             }
             209 => {
                 // mr7 长生世风味·恶缘：界碑拓铭（界碑名讳洇雨，拓碑吏索重铭费）
                 card.title = "界碑拓铭".into();
-                card.text = "天地界碑高可摩云，碑上万灵名讳如林。一名拓碑吏踏云而来，面无表情：连日阴雨，你名下那一笔铭文洇了——按例当重铭，工费自付。".into();
+                card.text = evtx(481)/* 原文：界碑高可摩云，碑上万灵名讳如林。一名拓碑吏踏云而来，面无表情：连日阴雨，你名下那一笔铭文洇了——按例当重铭，工费自付。 */.into();
                 let g = (60.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
@@ -8297,7 +8301,7 @@ impl Game {
                 e2.qi_pct = -0.06;
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你说「我的名字，我自己写」。你以修为引气为墨，亲手重铭——笔画入碑三分，行气也耗了三分。修为-6%，道心+2".into(),
+                    evtx(482)/* 原文：你说「我的名字，我自己写」。你以修为引气为墨，亲手重铭——笔画入碑三分，行气也耗了三分。修为-6%，道心+2 */.into(),
                 ];
                 card.opts.push(("亲笔重铭".into(), e2));
             }
@@ -8330,7 +8334,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你把铃翻面重新系好——旧铃换个朝向，声音竟清了一调。你说：「这样走远了也听得见。」气运+2".into(),
+                    evtx(483)/* 原文：你把铃翻面重新系好——旧铃换个朝向，声音竟清了一调。你说：「这样走远了也听得见。」气运+2 */.into(),
                 ];
                 card.opts.push(("替铃换个朝向".into(), e2));
             }
@@ -8363,7 +8367,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "灯走到半程熄了。你说「熄在半路也是到了半路」。两人把灯壳捞回来，说好明年换粗芯再放。道心+2".into(),
+                    evtx(484)/* 原文：灯走到半程熄了。你说「熄在半路也是到了半路」。两人把灯壳捞回来，说好明年换粗芯再放。道心+2 */.into(),
                 ];
                 card.opts.push(("捞回灯壳".into(), e2));
             }
@@ -8382,7 +8386,7 @@ impl Game {
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
                 card.text = format!(
-                    "落了今冬第一场雪。你与{}相扶着坐到廊下看雪，谁也不点灯——雪光够亮了。落雪无声，你们的话也渐渐少了，只剩两件旧棉衣挨在一处。",
+                    "今冬初雪。你与{}相扶着坐到廊下看雪，谁也不点灯——雪光够亮了。落雪无声，话也渐渐少了，只剩两件旧棉衣挨在一处。",
                     cn
                 );
                 let mut e1 = Eff::new();
@@ -8396,31 +8400,31 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你在雪地里倒退着走了一圈，只为让她看一眼两个人的脚印并排印到廊前。她笑出了声。气运+2".into(),
+                    evtx(485)/* 原文：你在雪地里倒退着走了一圈，只为让她看一眼两个人的脚印并排印到廊前。她笑出了声。气运+2 */.into(),
                 ];
                 card.opts.push(("踏一串脚印".into(), e2));
             }
             213 => {
                 // mr6 稀有·善缘：仙池映世（w2 入稀有层；池水映第一世的脸）
                 card.title = "仙池映世".into();
-                card.text = "高岭有一泓仙池，水色如凝墨。临水一照——池中映出的却不是你如今的脸，而是一副你认得又陌生的眉眼：那是你头一世的脸。".into();
+                card.text = evtx(486)/* 原文：高岭有一泓仙池，水色如凝墨。临水一照——池中映出的却不是你如今的脸，而是一副你认得又陌生的眉眼：那是你头一世的脸。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你在池边枯坐一日，看那张脸从陌生看到眼熟。起身时池水轻晃，两张脸叠在一处——原来早已是一个人。道心+3".into(),
+                    evtx(487)/* 原文：你在池边枯坐一日，看那张脸从陌生看到眼熟。起身时池水轻晃，两张脸叠在一处——原来早已是一个人。道心+3 */.into(),
                 ];
                 card.opts.push(("池边枯坐一日".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 3.0;
                 e2.msg = vec![
-                    "你汲起一壶池水收好。水在壶中夜夜映一张不同的旧脸——像有旧相识轮流来看你。气运+3".into(),
+                    evtx(488)/* 原文：你汲起一壶池水收好。水在壶中夜夜映一张不同的旧脸——像有旧相识轮流来看你。气运+3 */.into(),
                 ];
                 card.opts.push(("汲一壶池水".into(), e2));
             }
             214 => {
                 // mr6 恶缘：晚钟误点（钟多敲一记，人心自扰——不触破境裁决）
                 card.title = "晚钟误点".into();
-                card.text = "入夜，境内古钟报晚的钟声多敲了一记。钟声不大，人心却乱了——多一记，依古例是「催岁」，一时满城修者疑心大限，道途都滞了。".into();
+                card.text = evtx(489)/* 原文：入夜，境内古钟报晚的钟声多敲了一记。钟声不大，人心却乱了——多一记，依古例是「催岁」，一时满城修者疑心大限，道途都滞了。 */.into();
                 let g = (40.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
@@ -8435,35 +8439,35 @@ impl Game {
                 e2.qi_pct = -0.05;
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你不理会流言，自行功到天明——可满城疑气入夜不散，行功也滞了三分。修为-5%，道心+1".into(),
+                    evtx(490)/* 原文：你不理会流言，自行功到天明——可满城疑气入夜不散，行功也滞了三分。修为-5%，道心+1 */.into(),
                 ];
                 card.opts.push(("自行不理".into(), e2));
             }
             215 => {
                 // 老年层（余量≤10 载门控）：灶火留谱——把火候留给山下灶口
                 card.title = "灶火留谱".into();
-                card.text = "山下饭铺的灶火总不如你洞府的旺。掌勺的少年上来讨教过几回，眼睛亮——你一辈子的火候，都在几张灶谱的批注里。".into();
+                card.text = evtx(491)/* 原文：山下饭铺的灶火总不如你洞府的旺。掌勺的少年上来讨教过几回，眼睛亮——你一辈子的火候，都在几张灶谱的批注里。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你把批注过的灶谱誊清了一份给他。少年捧谱下山，当晚饭铺的烟火气就变了——火候这东西，原是可以传的。道心+2".into(),
+                    evtx(492)/* 原文：你把批注过的灶谱誊清了一份给他。少年捧谱下山，当晚饭铺的烟火气就变了——火候这东西，原是可以传的。道心+2 */.into(),
                 ];
                 card.opts.push(("誊谱相赠".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "谱可以给，你却只口传，不落纸——「火候在手上，抄在手上的谱丢不了」。少年记住了，你也记起了年轻时的自己。气运+1".into(),
+                    evtx(493)/* 原文：谱可以给，你却只口传，不落纸——「火候在手上，抄在手上的谱丢不了」。少年记住了，你也记起了年轻时的自己。气运+1 */.into(),
                 ];
                 card.opts.push(("只传口诀".into(), e2));
             }
             216 => {
                 // 老年层（余量≤10 载门控）：旧约转托——年轻时未赴的旧约
                 card.title = "旧约转托".into();
-                card.text = "翻旧箱翻出一枚旧笺——年轻时与人约定同去看一场「彻夜不谢的灯」，后来各自西东，笺压了箱底，灯会年年还办。".into();
+                card.text = evtx(494)/* 原文：翻旧箱翻出一枚旧笺——年轻时与人约定同去看一场「彻夜不谢的灯」，后来各自西东，笺压了箱底，灯会年年还办。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你修书一封，连笺一并托后辈代赴，信尾写：「替我看，替我笑，笑出声。」灯会那夜，山下果然有笑声传上来。道心+2".into(),
+                    evtx(495)/* 原文：你修书一封，连笺一并托后辈代赴，信尾写：「替我看，替我笑，笑出声。」灯会那夜，山下果然有笑声传上来。道心+2 */.into(),
                 ];
                 card.opts.push(("托人代赴".into(), e1));
                 let g = (35.0 * ss) as i64;
@@ -8479,29 +8483,29 @@ impl Game {
             217 => {
                 // 章节联动（第七章 bit6）：邻人扛劫——只看旁人扛劫，绝不触玩家自身破境裁决
                 card.title = "邻人扛劫".into();
-                card.text = "邻山方向雷云盘结了一整夜。你登高望去，隔谷有人影立于劫云之下——九重雷一重一重落，那人一重一重扛，始终没有跪。".into();
+                card.text = evtx(496)/* 原文：邻山方向雷云盘结了一整夜。你登高望去，隔谷有人影立于劫云之下——九重雷一重一重落，那人一重一重扛，始终没有跪。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你在崖头点起一盏灯，不为照路，只为让雷光里的人知道有人看着。劫云散时，对面遥遥一揖。道心+2".into(),
+                    evtx(497)/* 原文：你在崖头点起一盏灯，不为照路，只为让雷光里的人知道有人看着。劫云散时，对面遥遥一揖。道心+2 */.into(),
                 ];
                 card.opts.push(("遥遥举灯".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你收了灯，退回洞中静坐——有人扛自己的劫，旁人扰一句都是添乱。天明雷歇，你心里也落定了一事。气运+1".into(),
+                    evtx(498)/* 原文：你收了灯，退回洞中静坐——有人扛自己的劫，旁人扰一句都是添乱。天明雷歇，你心里也落定了一事。气运+1 */.into(),
                 ];
                 card.opts.push(("收灯不扰".into(), e2));
             }
             218 => {
                 // mr0 恶缘：囊带乍断（开局层恶缘——摊薄妖兽拦路独大）
                 card.title = "囊带乍断".into();
-                card.text = "山道转过一处陡坡，行囊背带「啪」地断了——囊口一歪，几块灵石顺着碎石坡骨碌碌往下滚，滚一声，你的心就跟着沉一声。".into();
+                card.text = evtx(499)/* 原文：山道转过一处陡坡，行囊背带「啪」地断了——囊口一歪，几块灵石顺着碎石坡骨碌碌往下滚，滚一声，你的心就跟着沉一声。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.04;
                 e1.good = false;
                 e1.msg = vec![
-                    "你连滚带爬追下去，捡回大半，指缝里还是漏了几块——碎石坡不还你东西。灵石-4%".into(),
+                    evtx(500)/* 原文：你连滚带爬追下去，捡回大半，指缝里还是漏了几块——碎石坡不还你东西。灵石-4% */.into(),
                 ];
                 card.opts.push(("俯身追捡".into(), e1));
                 let g = (18.0 * ss) as i64;
@@ -8534,19 +8538,19 @@ impl Game {
                 // 链16 首段：剑穗生结（宁清霜——旧剑穗磨断，求一个慢结；首段建链待分支）
                 card.title = "剑穗生结".into();
                 card.actor = Some(CardActor::Npc(2));
-                card.text = "演武场边风急。宁清霜解下旧剑——剑穗磨得只剩几缕，她却没丢，递来一束新丝：「替这穗打个结——要打得慢。」".into();
+                card.text = evtx(501)/* 原文：演武场边风急。宁清霜解下旧剑——剑穗磨得只剩几缕，她却没丢，递来一束新丝：「替这穗打个结——要打得慢。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.special = 60; // 置链：→220 剑穗缓结
                 e1.msg = vec![
-                    "你接过丝线。她的剑穗与旁人不同——结要贴着剑格走，急不得。你说「慢工我也有」。道心+1".into(),
+                    evtx(502)/* 原文：你接过丝线。她的剑穗与旁人不同——结要贴着剑格走，急不得。你说「慢工我也有」。道心+1 */.into(),
                 ];
                 card.opts.push(("应下这个结".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你说「剑是主人事，穗也是」。她收线一笑：「倒是稳字当头。」道心+1，气运+1".into(),
+                    evtx(503)/* 原文：你说「剑是主人事，穗也是」。她收线一笑：「倒是稳字当头。」道心+1，气运+1 */.into(),
                 ];
                 card.opts.push(("婉辞".into(), e2));
                 self.chain = Some((16, 0, CHAIN_TTL)); // 首段建链：待分支
@@ -8555,19 +8559,19 @@ impl Game {
                 // 链16 中段（仅链内）
                 card.title = "剑穗缓结·续".into();
                 card.actor = Some(CardActor::Npc(2));
-                card.text = "丝线里缠着一缕旧穗——她师尊留的。这穗要缓结：一日一寸，丝才不吃力。你打了一半，她忽然说：「我等的，是有人陪我慢一回。」".into();
+                card.text = evtx(504)/* 原文：丝线里缠着一缕旧穗——她师尊留的。这穗要缓结：一日一寸，丝才不吃力。你打了一半，她忽然说：「我等的，是有人陪我慢一回。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.special = 61; // 置链：→221 剑成赠穗
                 e1.msg = vec![
-                    "你收了急性，一日结一寸。第七日穗成，贴着剑格，风过不散。道心+2".into(),
+                    evtx(505)/* 原文：你收了急性，一日结一寸。第七日穗成，贴着剑格，风过不散。道心+2 */.into(),
                 ];
                 card.opts.push(("依她一日一寸".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.special = 62; // 窗内不置链臂：中段断链收获（eff_desc「一夜结完」可辨）
                 e2.msg = vec![
-                    "你以剑气定丝，一夜结成——快是快，穗心收得紧。她看了看，笑：「这也像你的剑。」气运+1".into(),
+                    evtx(506)/* 原文：你以剑气定丝，一夜结成——快是快，穗心收得紧。她看了看，笑：「这也像你的剑。」气运+1 */.into(),
                 ];
                 card.opts.push(("替她一夜结完".into(), e2));
             }
@@ -8575,18 +8579,18 @@ impl Game {
                 // 链16 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
                 card.title = "剑成赠穗·续".into();
                 card.actor = Some(CardActor::Npc(2));
-                card.text = "穗成之日，她把旧穗里师尊的那缕丝分出一段，系成小结递给你：「剑穗护手，也护心。这截旧丝跟了我三十年——如今换它护你。」".into();
+                card.text = evtx(507)/* 原文：穗成之日，她把旧穗里师尊的那缕丝分出一段，系成小结递给你：「剑穗护手，也护心。这截旧丝跟了我三十年——如今换它护你。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "你把小结系在腕上。她转身还剑入鞘，剑鸣轻轻——像道谢，又像道别旧物。道心+2，气运+2".into(),
+                    evtx(508)/* 原文：你把小结系在腕上。她转身还剑入鞘，剑鸣轻轻——像道谢，又像道别旧物。道心+2，气运+2 */.into(),
                 ];
                 card.opts.push(("郑重收下".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
                 e2.msg = vec![
-                    "你把小结又塞回她手里：「旧丝护旧主，更稳。」她怔了怔，收穗入怀。道心+3".into(),
+                    evtx(509)/* 原文：你把小结又塞回她手里：「旧丝护旧主，更稳。」她怔了怔，收穗入怀。道心+3 */.into(),
                 ];
                 card.opts.push(("转赠还她".into(), e2));
             }
@@ -8595,7 +8599,7 @@ impl Game {
                 // 不依赖链态；跨世新面孔，他记得的是事不是脸）
                 card.title = "星砂还账".into();
                 card.actor = Some(CardActor::Npc(3));
-                card.text = "醉道人踏月而来，摊开手心一小撮星砂：「去年今夜有人替我数过星。这是谢礼——可惜数星的人换了一副面目，你见着他了么？」".into();
+                card.text = evtx(510)/* 原文：醉道人踏月而来，摊开手心一小撮星砂：「去年今夜有人替我数过星。这是谢礼——可惜数星的人换了一副面目，你见着他了么？」 */.into();
                 let g = (30.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = g;
@@ -8608,14 +8612,14 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你说「数星的账数不完」——两人又坐到天明。他把空葫芦系回腰间：「明年的账，也记你头上。」道心+2".into(),
+                    evtx(511)/* 原文：你说「数星的账数不完」——两人又坐到天明。他把空葫芦系回腰间：「明年的账，也记你头上。」道心+2 */.into(),
                 ];
                 card.opts.push(("陪他再数一夜".into(), e2));
             }
             223 => {
                 // mr7 恶缘：玉价新例（玉价涨，工钱照新例——账目分明不容还价）
                 card.title = "玉价新例".into();
-                card.text = "集尾一位玉匠拦路，捧出你寄磨半载的道玉：「玉成了。只是今年玉价涨了三成——工钱照新例，也涨三成。」账目分明，不容还价。".into();
+                card.text = evtx(512)/* 原文：集尾一位玉匠拦路，捧出你寄磨半载的道玉：「玉成了。只是今年玉价涨了三成——工钱照新例，也涨三成。」账目分明，不容还价。 */.into();
                 let g = (60.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
@@ -8629,7 +8633,7 @@ impl Game {
                 e2.qi_pct = -0.05;
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你以气机压场，硬按旧例付了——他不再争，收钱转身。那玉到你手里，光泽竟暗了一分。修为-5%，道心+1".into(),
+                    evtx(513)/* 原文：你以气机压场，硬按旧例付了——他不再争，收钱转身。那玉到你手里，光泽竟暗了一分。修为-5%，道心+1 */.into(),
                 ];
                 card.opts.push(("凭修为压价".into(), e2));
             }
@@ -8637,18 +8641,18 @@ impl Game {
                 // mr7 稀有·善缘：坠星动冢（w2 入稀有层，mr7 首条；只写万剑向天
                 // 揖让的礼数，不触玩家自身破境裁决）
                 card.title = "坠星动冢".into();
-                card.text = "万剑归冢的山谷忽然静了——一颗坠星划过天顶，星未落，冢中万剑先齐齐低鸣一瞬，如群剑向天揖让。你行经谷口，剑鞘嗡嗡相和。".into();
+                card.text = evtx(514)/* 原文：万剑归冢的山谷忽然静了——一颗坠星划过天顶，星未落，冢中万剑先齐齐低鸣一瞬，如群剑向天揖让。你行经谷口，剑鞘嗡嗡相和。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.15;
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你按剑驻足，把那一瞬的静记进心里——万剑让的是天，不是星。出谷时行功顺了三分。修为+15%，道心+2".into(),
+                    evtx(515)/* 原文：你按剑驻足，把那一瞬的静记进心里——万剑让的是天，不是星。出谷时行功顺了三分。修为+15%，道心+2 */.into(),
                 ];
                 card.opts.push(("驻足观礼".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 3.0;
                 e2.msg = vec![
-                    "你解下剑鞘，朝天一拜——不为坠星，为万剑的礼数。谷风送你出山，一路顺遂。气运+3".into(),
+                    evtx(516)/* 原文：你解下剑鞘，朝天一拜——不为坠星，为万剑的礼数。谷风送你出山，一路顺遂。气运+3 */.into(),
                 ];
                 card.opts.push(("解鞘一拜".into(), e2));
             }
@@ -8681,7 +8685,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你说「流星许愿一人一个」——你们各许各的，谁也没偷听谁的。气运+2".into(),
+                    evtx(517)/* 原文：你说「流星许愿一人一个」——你们各许各的，谁也没偷听谁的。气运+2 */.into(),
                 ];
                 card.opts.push(("各许各的".into(), e2));
             }
@@ -8715,18 +8719,18 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你把伞整个倾向她那边，自己湿了半边肩——她板起脸把你拽回伞下：「胡闹。」气运+1".into(),
+                    evtx(518)/* 原文：你把伞整个倾向她那边，自己湿了半边肩——她板起脸把你拽回伞下：「胡闹。」气运+1 */.into(),
                 ];
                 card.opts.push(("整伞相让".into(), e2));
             }
             227 => {
                 // 老年层（余量≤10 载门控）：半檐躲雨——半边檐下两人一雨
                 card.title = "半檐躲雨".into();
-                card.text = "急雨没处躲，你挨进一处半檐——檐下已站了个避雨的货郎，见你年事高，默默往里让了半步。两个人，一场雨，谁也没说话。".into();
+                card.text = evtx(519)/* 原文：急雨没处躲，你挨进一处半檐——檐下已站了个避雨的货郎，见你年事高，默默往里让了半步。两个人，一场雨，谁也没说话。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "雨停时货郎扶了你一把。你说「这场雨躲得好」——檐下的慢也是日子，年轻时嫌费，如今才懂。道心+2".into(),
+                    evtx(520)/* 原文：雨停时货郎扶了你一把。你说「这场雨躲得好」——檐下的慢也是日子，年轻时嫌费，如今才懂。道心+2 */.into(),
                 ];
                 card.opts.push(("共檐静候".into(), e1));
                 let g = (20.0 * ss) as i64;
@@ -8742,24 +8746,24 @@ impl Game {
             228 => {
                 // mr6 常态·善缘：池边洗鞘（旧痕浮出当年一击——描一遍记一遍稳）
                 card.title = "池边洗鞘".into();
-                card.text = "池水见底。你解下剑鞘浸在池里搓洗——鞘上一道旧痕浮出来，是多年前替人挡下的一击。水纹荡开，像那年替你心惊的人还在岸上。".into();
+                card.text = evtx(521)/* 原文：池水见底。你解下剑鞘浸在池里搓洗——鞘上一道旧痕浮出来，是多年前替人挡下的一击。水纹荡开，像那年替你心惊的人还在岸上。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你没把痕洗掉，反以指尖蘸水描深一分——挡过的击就是挡过，描一遍，记一遍稳。道心+2".into(),
+                    evtx(522)/* 原文：你没把痕洗掉，反以指尖蘸水描深一分——挡过的击就是挡过，描一遍，记一遍稳。道心+2 */.into(),
                 ];
                 card.opts.push(("重描旧痕".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你把鞘洗得干干净净收好——旧痕留鞘底，日子朝前走。起身时池面风平，气也顺。气运+1".into(),
+                    evtx(523)/* 原文：你把鞘洗得干干净净收好——旧痕留鞘底，日子朝前走。起身时池面风平，气也顺。气运+1 */.into(),
                 ];
                 card.opts.push(("洗净收鞘".into(), e2));
             }
             229 => {
                 // mr3 恶缘：佃契抽成（田主侧——与 39 灵田佃户佃户侧成对分域）
                 card.title = "佃契抽成".into();
-                card.text = "灵田佃户捧着佃契上门：秋收薄了三成，佃契上的抽成一字未改——他求你减，又说「契在，减不减都依你」。灯把两张脸照得一样黄。".into();
+                card.text = evtx(524)/* 原文：灵田佃户捧着佃契上门：秋收薄了三成，佃契上的抽成一字未改——他求你减，又说「契在，减不减都依你」。灯把两张脸照得一样黄。 */.into();
                 let g = (50.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = g;
@@ -8773,7 +8777,7 @@ impl Game {
                 e2.dao = 2.0;
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你提笔把抽成削去一半——「契是死账，人是活人」。他叩头走了；来年他的田比谁家都勤。道心+2，气运+1".into(),
+                    evtx(525)/* 原文：你提笔把抽成削去一半——「契是死账，人是活人」。他叩头走了；来年他的田比谁家都勤。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("当堂让利".into(), e2));
             }
@@ -8781,35 +8785,35 @@ impl Game {
                 // 章节联动（第八章 bit7）：落款撞名——与结局回响 165-167「世界
                 // 侧写」分域，写亲历视角（落款是你的，册子不是）
                 card.title = "落款撞名".into();
-                card.text = "书成之后你翻检旧稿，一册无名书上落着你的名字——笔画分毫不差，落款那日你却在千里之外。管书吏查遍册底，查不出第二只手。".into();
+                card.text = evtx(526)/* 原文：书成之后你翻检旧稿，一册无名书上落着你的名字——笔画分毫不差，落款那日你却在千里之外。管书吏查遍册底，查不出第二只手。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
-                    "你提笔在册页角补了半行小字，算与那位同名者打了照面——书成之后，连名字都有了邻人。道心+3".into(),
+                    evtx(527)/* 原文：你提笔在册页角补了半行小字，算与那位同名者打了照面——书成之后，连名字都有了邻人。道心+3 */.into(),
                 ];
                 card.opts.push(("收册题字".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你说「名字是我的，书不是」——吏当场焚册，灰里浮出一行新字：「后会有期。」气运+2".into(),
+                    evtx(528)/* 原文：你说「名字是我的，书不是」——吏当场焚册，灰里浮出一行新字：「后会有期。」气运+2 */.into(),
                 ];
                 card.opts.push(("交吏焚册".into(), e2));
             }
             231 => {
                 // 链17 首段：星槎再访（187 星槎访客续线，mr5 零链补位；首段建链待分支）
                 card.title = "星槎再访".into();
-                card.text = "又见星槎。槎上客认出你，隔云一揖：「上次问的路，高士如今走出名了么？说来听听。」".into();
+                card.text = evtx(529)/* 原文：又见星槎。槎上客认出你，隔云一揖：「上次问的路，高士如今走出名了么？说来听听。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.special = 63; // 置链：→232 星轨留书·续
                 e1.msg = vec![
-                    "你把一路行来的地名一一说与他。他记在星轨上——「下一位问路者，就有名可寻了。」道心+1".into(),
+                    evtx(530)/* 原文：你把一路行来的地名一一说与他。他记在星轨上——「下一位问路者，就有名可寻了。」道心+1 */.into(),
                 ];
                 card.opts.push(("以路相赠".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你说「路要自己走才有名字」。他大笑，槎去云开，留下一颗星子在你袖中发亮。气运+2".into(),
+                    evtx(531)/* 原文：你说「路要自己走才有名字」。他大笑，槎去云开，留下一颗星子在你袖中发亮。气运+2 */.into(),
                 ];
                 card.opts.push(("只陪他坐一夜".into(), e2));
                 self.chain = Some((17, 0, CHAIN_TTL)); // 首段建链：待分支
@@ -8817,30 +8821,30 @@ impl Game {
             232 => {
                 // 链17 中段（仅链内）
                 card.title = "星轨留书·续".into();
-                card.text = "他引你到槎前——槎心嵌着一幅星轨图，唯独缺一笔：「上回你说的路，我记到一半，天快亮了。」".into();
+                card.text = evtx(532)/* 原文：他引你到槎前——槎心嵌着一幅星轨图，唯独缺一笔：「上回你说的路，我记到一半，天快亮了。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.special = 64; // 置链：→233 槎去留星·续
                 e1.msg = vec![
-                    "你以指为笔补上那一笔。星轨微微一颤，自行延向云海深处——那里有你没走过的路。道心+2".into(),
+                    evtx(533)/* 原文：你以指为笔补上那一笔。星轨微微一颤，自行延向云海深处——那里有你没走过的路。道心+2 */.into(),
                 ];
                 card.opts.push(("替他补全星轨".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你说「缺处是给后来人留的」。他点头收图，槎启——你袖中星子暗了一分。气运+1".into(),
+                    evtx(534)/* 原文：你说「缺处是给后来人留的」。他点头收图，槎启——你袖中星子暗了一分。气运+1 */.into(),
                 ];
                 card.opts.push(("劝他留着缺".into(), e2));
             }
             233 => {
                 // 链17 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
                 card.title = "槎去留星·续".into();
-                card.text = "临别，星客把那幅星轨图拆成两半，一半插进你的行囊：「路无名时，就回来看它——记得替后来的人添一笔。」".into();
+                card.text = evtx(535)/* 原文：临别，星客把那幅星轨图拆成两半，一半插进你的行囊：「路无名时，就回来看它——记得替后来的人添一笔。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "半幅星轨贴着行囊内壁，夜行时微微发亮——像有人在前路替你掌灯。道心+2，气运+1".into(),
+                    evtx(536)/* 原文：半幅星轨贴着行囊内壁，夜行时微微发亮——像有人在前路替你掌灯。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("收下半幅星轨".into(), e1));
                 let g = (30.0 * ss) as i64;
@@ -8855,7 +8859,7 @@ impl Game {
             234 => {
                 // 稀有：旧砚问道（w2 mr2；special66 道心检定 / 买砚小得）
                 card.title = "旧砚问道".into();
-                card.text = "荒摊角落一方旧砚，砚池无墨自润。摊主不言，只以指叩砚——砚声如叩问：「你修道，为的什么？」".into();
+                card.text = evtx(537)/* 原文：荒摊角落一方旧砚，砚池无墨自润。摊主不言，只以指叩砚——砚声如叩问：「你修道，为的什么？」 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 66;
                 e1.good = false;
@@ -8873,7 +8877,7 @@ impl Game {
             235 => {
                 // mr5 恶缘：影市黑秤（恶缘薄档补位——影市暗秤题材此前零覆盖）
                 card.title = "影市黑秤".into();
-                card.text = "影市深处，黑秤匠替你称行囊——秤成他袖手一笑：「这秤准得很，只是准的从来是我的秤。」".into();
+                card.text = evtx(538)/* 原文：影市深处，黑秤匠替你称行囊——秤成他袖手一笑：「这秤准得很，只是准的从来是我的秤。」 */.into();
                 let g = (45.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
@@ -8887,32 +8891,32 @@ impl Game {
                 e2.stones_pct = -0.05;
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你掀秤而去。影市从此对你半开门——此后买进卖出都吃了暗亏，腰杆倒是直了。灵石-5%，气运+1".into(),
+                    evtx(539)/* 原文：你掀秤而去。影市从此对你半开门——此后买进卖出都吃了暗亏，腰杆倒是直了。灵石-5%，气运+1 */.into(),
                 ];
                 card.opts.push(("掀秤而去".into(), e2));
             }
             236 => {
                 // mr7 善缘：云海拾阶（w4；守长生世纪律——不写寿元不触破境裁决）
                 card.title = "云海拾阶".into();
-                card.text = "云海退去一瞬，崖前露出一段旧石阶，阶尽处一座无名旧观，观门虚掩，蒲团犹温。".into();
+                card.text = evtx(540)/* 原文：云海退去一瞬，崖前露出一段旧石阶，阶尽处一座无名旧观，观门虚掩，蒲团犹温。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
                 e1.dao = 1.0;
                 e1.msg = vec![
-                    "观中无人。你坐了半日，行功顺遂，下山时云海已平、阶也没了。修为+10%，道心+1".into(),
+                    evtx(541)/* 原文：观中无人。你坐了半日，行功顺遂，下山时云海已平、阶也没了。修为+10%，道心+1 */.into(),
                 ];
                 card.opts.push(("拾阶叩门".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你不上去——把石阶留给下一个走得动的人。云海复涨，把旧观收了回去。气运+2".into(),
+                    evtx(542)/* 原文：你不上去——把石阶留给下一个走得动的人。云海复涨，把旧观收了回去。气运+2 */.into(),
                 ];
                 card.opts.push(("坐观云海".into(), e2));
             }
             237 => {
                 // mr7 恶缘：剑赋催帖（双臂「纳赋/以剑代赋」——fight 臂照 4 恶修劫道模板）
                 card.title = "剑赋催帖".into();
-                card.text = "剑冢岁帖贴上你的剑鞘：佩剑者岁纳剑赋，例不可免。帖角另有一行小字——「或以剑代之」。".into();
+                card.text = evtx(543)/* 原文：剑冢岁帖贴上你的剑鞘：佩剑者岁纳剑赋，例不可免。帖角另有一行小字——「或以剑代之」。 */.into();
                 let g = (55.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
@@ -8930,7 +8934,7 @@ impl Game {
             238 => {
                 // mr4 恶缘：行会追赔（与 188 灵税催帖/229 佃契抽成题材分域——商行契赔）
                 card.title = "行会追赔".into();
-                card.text = "商行会执事上门：你押运的一单出了损耗，按契由押运人分偿——契上按着你三年前的手印。".into();
+                card.text = evtx(544)/* 原文：商行会执事上门：你押运的一单出了损耗，按契由押运人分偿——契上按着你三年前的手印。 */.into();
                 let g = (50.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
@@ -8944,7 +8948,7 @@ impl Game {
                 e2.stones_pct = -0.04;
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你搬出契中另一条争了半日，偿金折去三成——人也累了。灵石-4%，道心+1".into(),
+                    evtx(545)/* 原文：你搬出契中另一条争了半日，偿金折去三成——人也累了。灵石-4%，道心+1 */.into(),
                 ];
                 card.opts.push(("据理缓偿".into(), e2));
             }
@@ -8952,18 +8956,18 @@ impl Game {
                 // 老年×有伴双门控第 3 条：共守岁灯（照 204/212 模板；不入 COMPANION
                 // 白名单——212 死模式注释，白名单成员先命中恒出「伴随」徽标）
                 card.title = "共守岁灯".into();
-                card.text = "岁暮大雪，檐下你与道侣共守一盏岁灯。灯芯爆了个灯花，两个人不约而同笑出了声。".into();
+                card.text = evtx(546)/* 原文：岁暮大雪，檐下你与道侣共守一盏岁灯。灯芯爆了个灯花，两个人不约而同笑出了声。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "灯花剔落，映亮两双眼睛。旧岁在灯影里过完，新年自灯芯上开始。道心+2，气运+1".into(),
+                    evtx(547)/* 原文：灯花剔落，映亮两双眼睛。旧岁在灯影里过完，新年自灯芯上开始。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("同剔灯芯".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你把旧年的事一件件说与灯听——说到后来，灯没睡，你们也没睡。道心+1".into(),
+                    evtx(548)/* 原文：你把旧年的事一件件说与灯听——说到后来，灯没睡，你们也没睡。道心+1 */.into(),
                 ];
                 card.opts.push(("把旧事说与灯听".into(), e2));
             }
@@ -9005,7 +9009,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.luck = 2.0;
                 e2.msg = vec![
-                    "你把赌约改成「一起等」。芽出那日两畦齐青，你们蹲在畦边看了半个时辰，谁也没说话。气运+2".into(),
+                    evtx(549)/* 原文：你把赌约改成「一起等」。芽出那日两畦齐青，你们蹲在畦边看了半个时辰，谁也没说话。气运+2 */.into(),
                 ];
                 card.opts.push(("改成一起等".into(), e2));
             }
@@ -9038,44 +9042,44 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你只题了自己初上山那年的名字。当夜行功，气机竟轻了三分——像还踩着那朵云。道心+2".into(),
+                    evtx(550)/* 原文：你只题了自己初上山那年的名字。当夜行功，气机竟轻了三分——像还踩着那朵云。道心+2 */.into(),
                 ];
                 card.opts.push(("只题旧年名".into(), e2));
             }
             242 => {
                 // mr6 恶缘第 3 条：灵渠截流（194 冒籍/214 晚钟分域——水利契账）
                 card.title = "灵渠截流".into();
-                card.text = "上游新落的灵渠按新契分水——轮到你名下这段灵脉，只分得七成。旧约压在渠主案头，他只认新契。".into();
+                card.text = evtx(551)/* 原文：上游新落的灵渠按新契分水——轮到你名下这段灵脉，只分得七成。旧约压在渠主案头，他只认新契。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.06;
                 e1.good = false;
                 e1.msg = vec![
-                    "你按新契画押。渠主拱手：「规矩是死的。」灵脉折损的这份，从洞府岁入里扣。灵石-6%".into(),
+                    evtx(552)/* 原文：你按新契画押。渠主拱手：「规矩是死的。」灵脉折损的这份，从洞府岁入里扣。灵石-6% */.into(),
                 ];
                 card.opts.push(("按新契画押".into(), e1));
                 let mut e2 = Eff::new();
                 e2.qi_pct = -0.04;
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你不开渠也不画押，以自身行气补足折损——渠水不进来，日子照过，只是行功多费一分心。修为-4%，道心+2".into(),
+                    evtx(553)/* 原文：你不开渠也不画押，以自身行气补足折损——渠水不进来，日子照过，只是行功多费一分心。修为-4%，道心+2 */.into(),
                 ];
                 card.opts.push(("行气自补".into(), e2));
             }
             243 => {
                 // mr6 善缘：村谷抢收（233/242 分域——高境助凡人，不触洞府经营门控）
                 card.title = "村谷抢收".into();
-                card.text = "山下凡人村谷雨将至，独户老人的谷子还摊在场上。你路过村口——凡人的手慢，云来得快。".into();
+                card.text = evtx(554)/* 原文：山下凡人村谷雨将至，独户老人的谷子还摊在场上。你路过村口——凡人的手慢，云来得快。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 1.0;
                 e1.msg = vec![
-                    "你袖风一卷替他把谷收进仓。老人朝云头揖了三揖——不知你名姓，只当是山里的神仙。道心+2，气运+1".into(),
+                    evtx(555)/* 原文：你袖风一卷替他把谷收进仓。老人朝云头揖了三揖——不知你名姓，只当是山里的神仙。道心+2，气运+1 */.into(),
                 ];
                 card.opts.push(("袖风收谷".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你只帮他抢了最远那半场——「日子是他自己的。」雨里两个人影都慢了半步，都笑出了声。道心+2".into(),
+                    evtx(556)/* 原文：你只帮他抢了最远那半场——「日子是他自己的。」雨里两个人影都慢了半步，都笑出了声。道心+2 */.into(),
                 ];
                 card.opts.push(("只抢远场".into(), e2));
             }
@@ -9084,7 +9088,7 @@ impl Game {
                 // 他记得的是字不是脸；跨世纪律：账与人皆跨世存续）
                 card.title = "酒账千年".into();
                 card.actor = Some(CardActor::Npc(3));
-                card.text = "酒肆里掌柜后人捧出千年前的酒账，欠主画押一个「醉」字。醉道人把葫芦一晃：「是我的字。今日连本带利，一起清了？」".into();
+                card.text = evtx(557)/* 原文：酒肆里掌柜后人捧出千年前的酒账，欠主画押一个「醉」字。醉道人把葫芦一晃：「是我的字。今日连本带利，一起清了？」 */.into();
                 let g = (40.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
@@ -9097,7 +9101,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你把账册合上推回去：「账留着，人常来——他一年也没欠过利钱。」掌柜愣住，他抚掌大笑。道心+2".into(),
+                    evtx(558)/* 原文：你把账册合上推回去：「账留着，人常来——他一年也没欠过利钱。」掌柜愣住，他抚掌大笑。道心+2 */.into(),
                 ];
                 card.opts.push(("账留着人常来".into(), e2));
             }
@@ -9105,7 +9109,7 @@ impl Game {
                 // mr4 恶缘第 6 条：滩头讹偿（与 37 渡灵舟真劫/238 行会契赔分域——
                 // 滩头讹索，假借声势）
                 card.title = "滩头讹偿".into();
-                card.text = "渡口滩头，一艘搁浅灵舟的船主拦住你，指认你过船时气浪掀翻了他的货——看热闹的人越围越多。".into();
+                card.text = evtx(559)/* 原文：渡口滩头，一艘搁浅灵舟的船主拦住你，指认你过船时气浪掀翻了他的货——看热闹的人越围越多。 */.into();
                 let g = (30.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
@@ -9119,14 +9123,14 @@ impl Game {
                 e2.qi_pct = -0.03;
                 e2.dao = 2.0;
                 e2.msg = vec![
-                    "你当滩立舟，以气机托着他的船离水三寸——「掀翻的舟，早该沉了。」围观者散，他讪讪收手。修为-3%，道心+2".into(),
+                    evtx(560)/* 原文：你当滩立舟，以气机托着他的船离水三寸——「掀翻的舟，早该沉了。」围观者散，他讪讪收手。修为-3%，道心+2 */.into(),
                 ];
                 card.opts.push(("当滩立舟".into(), e2));
             }
             246 => {
                 // 稀有：松风问琴（w2 mr3 稀有第 3 条；special69 道心检定照 234 模板）
                 card.title = "松风问琴".into();
-                card.text = "荒亭里横一张无弦古琴，松风过处琴自鸣——无弦何鸣？亭柱上刻着四个小字：「答者留琴」。".into();
+                card.text = evtx(561)/* 原文：荒亭里横一张无弦古琴，松风过处琴自鸣——无弦何鸣？亭柱上刻着四个小字：「答者留琴」。 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 69;
                 e1.good = false;
@@ -9134,7 +9138,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你不听也不答，负手出亭——亭外松涛忽然轻了一拍，像有人在身后颔首。道心+1".into(),
+                    evtx(562)/* 原文：你不听也不答，负手出亭——亭外松涛忽然轻了一拍，像有人在身后颔首。道心+1 */.into(),
                 ];
                 card.opts.push(("负手出亭".into(), e2));
             }
@@ -9142,7 +9146,7 @@ impl Game {
                 // 稀有：雾锁仙市（w2 mr5 稀有第 2 条，纯效果散件——187 星槎访客/
                 // 231 链17 分域，此为雾市一瞥无续线）
                 card.title = "雾锁仙市".into();
-                card.text = "大雾锁江三日不散，雾开一线时浮出一条街市——市中人影往来如常，摊上的货却都是旧年的样式。".into();
+                card.text = evtx(563)/* 原文：大雾锁江三日不散，雾开一线时浮出一条街市——市中人影往来如常，摊上的货却都是旧年的样式。 */.into();
                 let g = (60.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = g;
@@ -9156,7 +9160,7 @@ impl Game {
                 e2.qi_pct = 0.10;
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你不买东西，只循着人影走了半条街——影子走过的路，如今都是灵脉。修为+10%，道心+1".into(),
+                    evtx(564)/* 原文：你不买东西，只循着人影走了半条街——影子走过的路，如今都是灵脉。修为+10%，道心+1 */.into(),
                 ];
                 card.opts.push(("循影走街".into(), e2));
             }
@@ -9165,17 +9169,17 @@ impl Game {
                 // 具名与脸同源照 249/201 口径；巡山验行功是其掌外门杂役的域内事）
                 card.title = "长老巡山".into();
                 card.actor = Some(CardActor::Npc(0));
-                card.text = "山道上遇上巡山的玄诚长老。他听你行功三息便皱了眉，折下讲义半页塞给你：「此处气脉走岔半分——旁人不说，是怕你多心。」".into();
+                card.text = evtx(565)/* 原文：山道上遇上巡山的玄诚长老。他听你行功三息便皱了眉，折下讲义半页塞给你：「此处气脉走岔半分——旁人不说，是怕你多心。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
-                    "你当场照讲义改了行功，暗耗的半分应手补上。长老颔首下山，背影没入松风。道心+2".into(),
+                    evtx(566)/* 原文：你当场照讲义改了行功，暗耗的半分应手补上。长老颔首下山，背影没入松风。道心+2 */.into(),
                 ];
                 card.opts.push(("照讲义改行功".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你把讲义上的批注另抄一份留在山亭，供后来的行功人自取——长老再巡山时，亭里多了三份新抄。气运+1".into(),
+                    evtx(567)/* 原文：你把讲义上的批注另抄一份留在山亭，供后来的行功人自取——长老再巡山时，亭里多了三份新抄。气运+1 */.into(),
                 ];
                 card.opts.push(("抄批注留亭".into(), e2));
             }
@@ -9184,7 +9188,7 @@ impl Game {
                 // 与 201 坊契赖账成对分域：一赖一还）
                 card.title = "万宝旧档".into();
                 card.actor = Some(CardActor::Npc(1));
-                card.text = "万宝楼后堂，胡掌柜翻出一份旧档：「三年前你寄卖的一支旧笔早卖了——钱在柜上压了三年，你倒把这儿忘了。」".into();
+                card.text = evtx(568)/* 原文：万宝楼后堂，胡掌柜翻出一份旧档：「三年前你寄卖的一支旧笔早卖了——钱在柜上压了三年，你倒把这儿忘了。」 */.into();
                 let g = (35.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = g;
@@ -9196,7 +9200,7 @@ impl Game {
                 let mut e2 = Eff::new();
                 e2.dao = 1.0;
                 e2.msg = vec![
-                    "你把这笔钱转给柜前那个手头紧的散修。胡掌柜提笔把旧档勾了一笔：「账清了，这页翻过去。」道心+1".into(),
+                    evtx(569)/* 原文：你把这笔钱转给柜前那个手头紧的散修。胡掌柜提笔把旧档勾了一笔：「账清了，这页翻过去。」道心+1 */.into(),
                 ];
                 card.opts.push(("转赠散修".into(), e2));
             }
@@ -9204,18 +9208,18 @@ impl Game {
                 // 链18 首段：云窟归卷（mr7 零链补位；两段式省一臂——opt0 直推照
                 // 205 首段约定，opt1 断链收获；长生世纪律：不写寿元不触破境裁决）
                 card.title = "云窟归卷".into();
-                card.text = "高崖半腰藏着一窟旧籍，风蚀日晒，可救的卷册十不存三。守窟老人朝你长揖：「抄一卷是一卷——老朽等得起，纸等不起。」".into();
+                card.text = evtx(570)/* 原文：高崖半腰藏着一窟旧籍，风蚀日晒，可救的卷册十不存三。守窟老人朝你长揖：「抄一卷是一卷——老朽等得起，纸等不起。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.special = 70; // 置链：→251 补笔归卷
                 e1.msg = vec![
-                    "你应下每月来抄十卷。老人把窟门让开半边：「进来吧——纸比人娇贵，先救纸。」道心+1".into(),
+                    evtx(571)/* 原文：你应下每月来抄十卷。老人把窟门让开半边：「进来吧——纸比人娇贵，先救纸。」道心+1 */.into(),
                 ];
                 card.opts.push(("应下抄卷".into(), e1));
                 let mut e2 = Eff::new();
                 e2.luck = 1.0;
                 e2.msg = vec![
-                    "你留下一囊防潮的石灰和一句「下月再来」。身后的窟口，老人把你的名姓记在了新纸上。气运+1".into(),
+                    evtx(572)/* 原文：你留下一囊防潮的石灰和一句「下月再来」。身后的窟口，老人把你的名姓记在了新纸上。气运+1 */.into(),
                 ];
                 card.opts.push(("留石灰先下山".into(), e2));
                 self.chain = Some((18, 0, CHAIN_TTL)); // 首段建链：待分支
@@ -9223,20 +9227,176 @@ impl Game {
             251 => {
                 // 链18 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
                 card.title = "补笔归卷·续".into();
-                card.text = "抄移半月，窟中最要紧的百卷都上了新纸。老人取出一册空白：「留个名吧——救书的人，该和书一起被记着。」".into();
+                card.text = evtx(573)/* 原文：抄移半月，窟中最要紧的百卷都上了新纸。老人取出一册空白：「留个名吧——救书的人，该和书一起被记着。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.luck = 2.0;
                 e1.msg = vec![
-                    "你写下名字，只添一句「书比人长久」。老人笑而不语，把册子归位——崖中的风，从此绕着新纸走。道心+2，气运+2".into(),
+                    evtx(574)/* 原文：你写下名字，只添一句「书比人长久」。老人笑而不语，把册子归位——崖中的风，从此绕着新纸走。道心+2，气运+2 */.into(),
                 ];
                 card.opts.push(("留下名字".into(), e1));
                 let mut e2 = Eff::new();
                 e2.dao = 3.0;
                 e2.msg = vec![
-                    "你把那一页推回去：「书救下来了，署名多余。」老人愣了愣，把你的推辞也抄进了册子——连勾痕一起。道心+3".into(),
+                    evtx(575)/* 原文：你把那一页推回去：「书救下来了，署名多余。」老人愣了愣，把你的推辞也抄进了册子——连勾痕一起。道心+3 */.into(),
                 ];
                 card.opts.push(("推回那一页".into(), e2));
+            }
+            252 => {
+                // v1.16.23 扩池：宁清霜散件首卡（mr2 善，Npc(2) 照 248/249 具名
+                // +脸同源模式——正文钉名「宁清霜」；题材避 208 剑冢/219 剑穗/
+                // npc.rs 剑冢论剑，取手谈；链11 分域：不触破境裁决，只记棋理）
+                card.title = "枰边手谈".into();
+                card.actor = Some(CardActor::Npc(2));
+                card.text = evtx(576)/* 原文：演武场侧，宁清霜摆了棋枰等你——她说棋道如修行，先手未必赢，厚势方能活。终局你输了半子，她反而点头：「记得这个感觉。」 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 1.0;
+                e1.msg = vec![
+                    evtx(577)/* 原文：你把输的那半子摆回去重推了一遍。她说：「能复盘的人，输棋也算修行。」道心+1 */.into(),
+                ];
+                card.opts.push(("受教复盘".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(578)/* 原文：你说「再来一局，这回我先手」。她执白不语，把棋子推向你这边——让先。气运+1 */.into(),
+                ];
+                card.opts.push(("再战一局".into(), e2));
+            }
+            253 => {
+                // v1.16.23 扩池：玄诚长老第二卡（mr3 善，Npc(0) 同源钉名；题材
+                // 避巡山（248）/授业/守碑（链2 复用脸），取藏经阁差事——增益域
+                // 宗门任务的靠山（NPC_BRIEF[0]）
+                card.title = "经阁理简".into();
+                card.actor = Some(CardActor::Npc(0));
+                card.text = evtx(579)/* 原文：玄诚长老唤你进藏经阁，替新收的拓本理册。末了他抽出一页残卷压在你手边：「看得懂多少，是你的缘——登记完早些歇。」 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 1.0;
+                e1.msg = vec![
+                    evtx(580)/* 原文：你按年序把拓本码得整整齐齐。他翻着看了一页，难得点头：「手稳，心也稳。」道心+1 */.into(),
+                ];
+                card.opts.push(("应下差事".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(581)/* 原文：你问残卷的来处。他顿了顿：「捡来的缘。」把那页推给了你——缘要自己接着写。气运+1 */.into(),
+                ];
+                card.opts.push(("问残卷来处".into(), e2));
+            }
+            254 => {
+                // v1.16.23 扩池：mr5 恶缘 4→5 条（无脸——actor None 原版式）
+                card.title = "旧败上门".into();
+                card.text = evtx(582)/* 原文：一名多年前输给你而封剑的散修寻上门来，身后跟着几个新收的帮手——他要讨回的不是灵石，是当年当众落地的那张脸。 */.into();
+                let g = (40.0 * ss) as i64;
+                let mut e1 = Eff::new();
+                e1.fight = 1.0;
+                e1.good = false;
+                e1.msg = vec![
+                    evtx(583)/* 原文：你应下比试，三招卸了他的剑。他愣了半晌，拱手走了——仇没有了结，敬先有了。 */.into(),
+                ];
+                card.opts.push(("应战三招".into(), e1));
+                let mut e2 = Eff::new();
+                e2.stones = -g;
+                e2.good = false;
+                e2.msg = vec![format!(
+                    "你说「当年的账用酒清」。一桌席面下来，他红着眼走了——灵石-{}，恶气也散了。",
+                    fmt_int(g)
+                )];
+                card.opts.push(("赔一桌酒".into(), e2));
+            }
+            255 => {
+                // v1.16.23 扩池：mr6 善（常态最薄层 10→11 条；长生世纪律——
+                // 不写寿元将尽、不触破境裁决，只叙山河与茶）
+                card.title = "旧友茶叙".into();
+                card.text = evtx(584)/* 原文：一位百年间结识的旧友托人捎来口信，约你在旧亭喝茶。茶烟里数各自走过的山河——谁也没提岁数，只把茶续满。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 1.0;
+                e1.msg = vec![
+                    evtx(585)/* 原文：他讲北境的雪线和海上的雾，你补一句南边的泉。茶凉了三回，话没凉。道心+1 */.into(),
+                ];
+                card.opts.push(("听他讲山河".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(586)/* 原文：临别你回赠一包新茶。他掂了掂笑：「明年这亭子，茶我带。」——约定这东西，最养人。气运+1 */.into(),
+                ];
+                card.opts.push(("回赠新茶".into(), e2));
+            }
+            256 => {
+                // v1.16.23 扩池：mr7 恶 3→4 条（世纪律同上——只写冒名风波，
+                // 不触寿元与破境）
+                card.title = "冒名敛财".into();
+                card.text = evtx(587)/* 原文：有修士顶着你的名号敛财。你寻到那处庄院时，对方已闻风遁走——只留一屋子受欺的年轻人。你留下几句真话，擦了假名。 */.into();
+                let g = (30.0 * ss) as i64;
+                let mut e1 = Eff::new();
+                e1.stones = -g;
+                e1.good = false;
+                e1.msg = vec![format!(
+                    "你替那场把戏清了尾账——年轻人各自散去时朝你行礼。灵石-{}，恶气散了。",
+                    fmt_int(g)
+                )];
+                card.opts.push(("替清尾账".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 2.0;
+                e2.qi_pct = -0.03;
+                e2.msg = vec![
+                    evtx(588)/* 原文：你只留下几句真话，把门槛上的假名擦了。回程一路无话，但心里那杆秤稳稳的。修为-3%，道心+2 */.into(),
+                ];
+                card.opts.push(("留真话而去".into(), e2));
+            }
+            257 => {
+                // v1.16.23 扩池：伴随 mr4 善（185/203 后第 3 条，白名单 21→22）
+                // ——Comp 立绘反查照 210 模式；无伴不入池门控在 sim_event_weights
+                card.title = "灯市挑灯".into();
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = format!(
+                    "灯市里{}在摊前停了很久，挑中一盏走马灯举到你眼前：「你看灯影转的山水——像不像那年同去看的那条江？」",
+                    cn
+                );
+                let mut e1 = Eff::new();
+                e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
+                e1.dao = 1.0;
+                e1.msg = vec![format!(
+                    "你付了灯钱。灯影一路转到巷口，两人谁也没先说话。（好感+{}）道心+1",
+                    crate::data::COMPANION_GIFT_FAV
+                )];
+                card.opts.push(("提灯同归".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![format!(
+                    "你说「再解一盏灯谜，解开的归谁」。结果两盏都归了{}。（气运+1）",
+                    cn
+                )];
+                card.opts.push(("再解灯谜".into(), e2));
+            }
+            258 => {
+                // v1.16.23 扩池：mr1 稀有 w2（57/133 后第 3 条，纯效果散件——
+                // 无 special 勿动窗位；高风险高回报照 56 口径但不走检定臂）
+                card.title = "枯井鸣灵".into();
+                card.text = evtx(589)/* 原文：一口被符纸层层封死的枯井，入夜后井口漏出月光似的灵气。邻人说井底沉着前朝遗府的地基——下去是深渊，也是机缘。 */.into();
+                let mut e1 = Eff::new();
+                e1.fight = 1.0;
+                e1.qi_pct = 0.20;
+                e1.msg = vec![
+                    evtx(590)/* 原文：你顺索而下，井底灵物守着一方地脉图——战胜它，图归了你。修为+20% */.into(),
+                ];
+                card.opts.push(("顺索下探".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(591)/* 原文：你把符纸重新压实，添了一道新封。井又静了——机缘留给有缘人，也留给自己一分安稳。道心+1，气运+1 */.into(),
+                ];
+                card.opts.push(("封土加符".into(), e2));
             }
 
             _ => {}
@@ -9248,8 +9408,8 @@ impl Game {
         // 链5 两段分支式（79→80|81）
         let w = EVENTS
             .iter()
-            .find(|&&(eid, _, _, _)| eid == id)
-            .map(|&(_, wt, _, _)| wt)
+            .find(|&&(eid, _, _, _)| eid as usize == id) // v1.16.23 收窄读点
+            .map(|&(_, wt, _, _)| wt as i32)
             .unwrap_or(0);
         card.rare = w > 0 && w <= crate::data::RARE_W;
         card.stage = match id {
@@ -15120,6 +15280,78 @@ mod chain_event_tests {
         g
     }
 
+    // v1.16.23 防回归：44..=58 段正文/简预算钉测——堵 id45 68 字类漏网
+    //（219..=251 段已有同式钉测，本段此前无兜底）。id57 为 v1.16.7 设计内
+    // 两段加高版式（evtx(109) 含 \n），故统一按 \n 切段逐段 ≤60 断言；简 ≤18
+    // 逐条。正文经 evtx 查池+format 拼装（53..=55 带 cn=COMPANION_NAMES[0] 四字）
+    #[test]
+    fn chain_pool_text_budget_44_58() {
+        for id in 44..=58usize {
+            let mut g = sim_game(5, 100.0);
+            g.sim.as_mut().unwrap().companion = Some(COMPANION_NAMES[0].to_string());
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
+            for (si, seg) in card.text.split('\n').enumerate() {
+                let n = seg.chars().count();
+                assert!(
+                    n <= 60,
+                    "事件 {} 第 {} 段 {} 字超 ≤60 预算：{}",
+                    id,
+                    si + 1,
+                    n,
+                    seg
+                );
+            }
+            let b = EVENT_BRIEF[id];
+            assert!(
+                b.chars().count() <= 18,
+                "事件 {} 简「{}」超 ≤18 预算",
+                id,
+                b
+            );
+        }
+    }
+
+    // v1.16.23 清账②：205..=218 段同口径预算钉测（v1.16.19 批 5 处 61-65 字
+    // 贴线最近——本钉落下后超线卡须同批微剪回 ≤60）。210..=212 伴随卡 format
+    // 带 cn（COMPANION_NAMES[0] 四字）照实拼装计
+    #[test]
+    fn batch_text_budget_205_218() {
+        for id in 205..=218usize {
+            let mut g = sim_game(7, 100.0);
+            g.sim.as_mut().unwrap().companion = Some(COMPANION_NAMES[0].to_string());
+            // 老年层门卡（212 相扶看雪老年×伴）以老年态进卡不影响正文拼装
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
+            for (si, seg) in card.text.split('\n').enumerate() {
+                let n = seg.chars().count();
+                assert!(
+                    n <= 60,
+                    "事件 {} 第 {} 段 {} 字超 ≤60 预算：{}",
+                    id,
+                    si + 1,
+                    n,
+                    seg
+                );
+            }
+            let b = EVENT_BRIEF[id];
+            assert!(
+                b.chars().count() <= 18,
+                "事件 {} 简「{}」超 ≤18 预算",
+                id,
+                b
+            );
+        }
+    }
+
     // 链1 全程：首段 44 置链待分支 → 赊墨（special20）置下段 → 直取 46 →
     // 抉择（无置链臂）即链终局
     #[test]
@@ -15252,14 +15484,19 @@ mod chain_event_tests {
         // 臂（三表同长契约决定臂只随表行走），扩池免疫不再顺延
         // v1.16.22 门禁修复：表尾+7 第三次失效——扩池 252 行后 259 溢 u8 回卷成
         // 3（坊市淘宝真臂）致直取建卡假红。改用 u8::MAX=255 域顶：链 next 为 u8
-        // （chain: Option<(u8,u8,u8)>），表臂随表长顺序行走、256+ 永不可达，255
+        //（chain: Option<(u8,u8,u8)>），表臂随表长顺序行走、256+ 永不可达，255
         // 恒表外恒无臂，结构性免疫扩池不再顺延
-        let ghost = u8::MAX;
-        g.chain = Some((9, ghost, CHAIN_TTL));
+        // v1.16.23 门禁修复（第四次失效+结构性收口）：扩池 252..=258 后表长 259
+        // > u8 域——0..=255 全为真臂，「表外 next」不可构造（255=旧友茶叙真臂致
+        // 本测假红）。幽灵样本思路就此退役，改为钉 sim_event 两条弃链路径的
+        // 保险丝口：next=0（首段待分支哨兵）恒弃链不出卡；缺臂防御（build_event
+        // 白抽 → modal.is_none() 弃链）由 batch_tables_aligned 的三表同长 + 各批
+        // 卡臂良构钉测共同兜底——链段 id 永远落在已写臂段，结构性缺臂不再可达
+        g.chain = Some((9, 0, CHAIN_TTL)); // next=0：首段待分支哨兵 → 保险丝弃链
         g.modal = None;
         g.sim_event();
-        assert!(g.chain.is_none(), "缺臂链段弃链");
-        assert!(g.modal.is_none(), "白抽不出卡（opts 空守卫）");
+        assert!(g.chain.is_none(), "保险丝：next=0 弃链");
+        // 弃链后本轮照常退化抽卡（modal 出卡属正常语义，不再断言白抽）
     }
 
     // 跨世不泄：launch_sim / quit_sim_redraft 清链
@@ -15305,7 +15542,7 @@ mod chain_event_tests {
         let mut g = sim_game(5, 100.0); // 无伴
         let (ws, total) = g.sim_event_weights(100.0, 5, false, false, false);
         for &id in COMPANION_EVENTS.iter() {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
+            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
             assert_eq!(ws[i], 0.0, "无伴时事件 {} 不入池", id);
         }
         let _ = total;
@@ -15317,7 +15554,7 @@ mod chain_event_tests {
         // 全白名单成立；负臂无伴归零与 realm 无涉保持 5）
         let (ws2, _) = g.sim_event_weights(100.0, 7, false, false, true);
         for &id in COMPANION_EVENTS.iter() {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
+            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
             assert!(ws2[i] > 0.0, "有伴时事件 {} 入池", id);
         }
     }
@@ -15328,7 +15565,7 @@ mod chain_event_tests {
         let g = sim_game(5, 100.0);
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
         for id in [45, 46, 48, 49, 51, 52] {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
+            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
             assert_eq!(ws[i], 0.0, "链内段 {} 权重恒 0", id);
         }
     }
@@ -15339,7 +15576,7 @@ mod chain_event_tests {
         let g = sim_game(5, 100.0);
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
         for id in [56, 57, 58] {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
+            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
             assert!(ws[i] > 0.0, "稀有事件 {} 应入池", id);
             assert!(EVENTS[i].1 <= 2, "稀有层权重 ≤2");
         }
@@ -15550,6 +15787,14 @@ mod chain_event_tests {
             (251, false, Some((2, 2))),
             (244, false, None),
             (248, false, None),
+            // v1.16.23 扩池抽检：258 w2 入稀有区，252..=257 散件非稀有（无新链）
+            (258, true, None),
+            (252, false, None),
+            (253, false, None),
+            (254, false, None),
+            (255, false, None),
+            (256, false, None),
+            (257, false, None),
         ] {
             g.modal = None;
             g.build_event(id);
@@ -15623,17 +15868,17 @@ mod v11610_event_tests {
         for &(id, _, _, _) in EVENTS.iter() {
             let mut g = sim_game(5, 100.0);
             g.modal = None;
-            g.build_event(id);
+            g.build_event(id as usize);
             let card = g
                 .modal
                 .as_ref()
                 .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
             assert_eq!(
-                card.title, EVENT_NAMES[id],
+                card.title, EVENT_NAMES[id as usize],
                 "事件 {} 标题双源漂移: card「{}」≠ 表「{}」",
-                id, card.title, EVENT_NAMES[id]
+                id, card.title, EVENT_NAMES[id as usize]
             );
-            let b = EVENT_BRIEF[id];
+            let b = EVENT_BRIEF[id as usize];
             assert!(
                 !b.is_empty() && b.chars().count() <= 22,
                 "事件 {} 简介越一行预算: {} ({}字)",
@@ -15834,7 +16079,7 @@ mod v11610_event_tests {
     #[test]
     fn event_ids_unique_and_names_distinct() {
         for (i, row) in EVENTS.iter().enumerate() {
-            assert_eq!(row.0, i, "EVENTS[{}] 行 id={} 与下标不符（重号/错位）", i, row.0);
+            assert_eq!(row.0 as usize, i, "EVENTS[{}] 行 id={} 与下标不符（重号/错位）", i, row.0);
         }
         for (a, na) in EVENT_NAMES.iter().enumerate() {
             let ca = na.strip_suffix("·续").unwrap_or(na);
@@ -16578,7 +16823,7 @@ mod event_batch_v1169_tests {
         let g = sim_game(5, 100.0);
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
         for id in 90..=99 {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
+            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
             assert!(ws[i] > 0.0, "普通事件 {} realm5 应入池", id);
         }
     }
@@ -16741,7 +16986,7 @@ mod event_batch_v1168_tests {
         let g = sim_game(5, 100.0);
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
         for id in [77, 78, 80, 81, 86, 87] {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
+            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
             assert_eq!(ws[i], 0.0, "链内段 {} 权重恒 0", id);
         }
     }
@@ -16752,7 +16997,7 @@ mod event_batch_v1168_tests {
         let g = sim_game(5, 100.0);
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
         for id in [72, 73] {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
+            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
             assert!(ws[i] > 0.0, "稀有事件 {} 应入池", id);
             assert!(EVENTS[i].1 <= 2, "稀有层权重 ≤2");
         }
@@ -16838,7 +17083,7 @@ mod event_batch_v1168_tests {
         let g = sim_game(5, 100.0);
         let (ws, _) = g.sim_event_weights(100.0, 5, false, false, true);
         for id in 59..=72 {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
+            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
             assert!(ws[i] > 0.0, "普通事件 {} realm5 应入池", id);
         }
         // EVENTS 总数断言（v1.16.9 扩池后 100 条；v1.16.10 扩池 18 → 118 条；
@@ -16852,9 +17097,11 @@ mod event_batch_v1168_tests {
         // v1.16.21 扩池 9（链17 星槎再访 3/special66 稀有检定/mr5 恶/
         // mr7 善恶 2/mr4 恶/老年×伴 1）→ 240 条；v1.16.22 扩池 12（链18 云窟
         // 归卷 2/伴随 2/mr6 善恶 2/mr7 善 2/mr4 恶/稀有检定/具名 NPC 2）
-        // → 252 条，稀有基权合计口径见 data.rs
+        // → 252 条；v1.16.23 扩池 7（宁清霜散件 Npc(2)/玄诚长老二卡 Npc(0)/
+        // mr5 恶/mr6 善/mr7 恶/伴随 257/mr1 稀有 258）→ 259 条，
+        // 稀有基权合计口径见 data.rs
         // 各批注释——账本数字一律以重算为准）
-        assert_eq!(EVENTS.len(), 252);
+        assert_eq!(EVENTS.len(), 259);
     }
 }
 
@@ -17381,18 +17628,22 @@ mod v11615_reward_and_pool_tests {
     // 第 3 条/247 w2 mr5 第 2 条——稀有 16→18 条 29→33 权 3.81%→4.16% 拉回）/
     // 具名 NPC 2（248/249 均 w3）/链18 2（250 首段 w3+251 链内 w0 不计权），
     // 共 12 条
+    // v1.16.23 扩池批 +20：宁清霜散件 1（252 w3 Npc(2)）/玄诚长老二卡 1（253 w3
+    // Npc(0)）/mr5 恶 1（254 w3）/mr6 善 1（255 w3）/mr7 恶 1（256 w3）/伴随 1
+    // （257 w3——白名单 21→22）/稀有 1（258 w2 mr1 第 3 条——稀有 18→19 条
+    // 33→35 权 4.16%→4.30%），共 7 条
     #[test]
     fn pool_ledger_recheck() {
-        let total: i32 = EVENTS.iter().map(|&(_, w, _, _)| w).sum();
-        assert_eq!(total, 794, "总基权漂移——照 data.rs v1.16.22 扩池批注重算");
+        let total: i32 = EVENTS.iter().map(|&(_, w, _, _)| w as i32).sum();
+        assert_eq!(total, 814, "总基权漂移——照 data.rs v1.16.23 扩池批注重算");
         let rare: Vec<(usize, i32)> = EVENTS
             .iter()
-            .filter(|&&(_, w, _, _)| w > 0 && w <= crate::data::RARE_W)
-            .map(|&(id, w, _, _)| (id, w))
+            .filter(|&&(_, w, _, _)| w > 0 && w as i32 <= crate::data::RARE_W)
+            .map(|&(id, w, _, _)| (id as usize, w as i32))
             .collect();
-        assert_eq!(rare.len(), 18, "稀有条数漂移");
+        assert_eq!(rare.len(), 19, "稀有条数漂移");
         let rare_w: i32 = rare.iter().map(|&(_, w)| w).sum();
-        assert_eq!(rare_w, 33, "稀有基权漂移");
+        assert_eq!(rare_w, 35, "稀有基权漂移");
     }
 
     // 链14 全程：175 首段建链待分支 → special53 → 直取 176 → special54 → 直取
@@ -17482,7 +17733,7 @@ mod v11619_event_tests {
     fn ev_idx(id: usize) -> usize {
         EVENTS
             .iter()
-            .position(|&(e, _, _, _)| e == id)
+            .position(|&(e, _, _, _)| e == id as u16)
             .unwrap_or_else(|| panic!("事件 {} 不在 EVENTS 表", id))
     }
 
@@ -17847,36 +18098,42 @@ mod v11617_pool_tests {
     // 三表同长 + 新增段 id 连续（全局同长/唯一测试之外，钉新增段不漂移）
     #[test]
     fn batch_tables_aligned() {
-        // v1.16.22 扩池 12 条（240..=251）同批随批注口径 240→252
-        assert_eq!(EVENTS.len(), 252);
-        assert_eq!(EVENT_NAMES.len(), 252);
-        assert_eq!(EVENT_BRIEF.len(), 252);
+        // v1.16.23 扩池 7 条（252..=258）同批随批注口径 252→259
+        assert_eq!(EVENTS.len(), 259);
+        assert_eq!(EVENT_NAMES.len(), 259);
+        assert_eq!(EVENT_BRIEF.len(), 259);
         for id in 183..=204usize {
-            assert_eq!(EVENTS[id].0, id, "新增段 id 连续");
+            assert_eq!(EVENTS[id].0 as usize, id, "新增段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
             assert!(!EVENT_BRIEF[id].is_empty());
         }
         // v1.16.19 批次段同口径补钉
         for id in 205..=218usize {
-            assert_eq!(EVENTS[id].0, id, "v1.16.19 段 id 连续");
+            assert_eq!(EVENTS[id].0 as usize, id, "v1.16.19 段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
             assert!(!EVENT_BRIEF[id].is_empty());
         }
         // v1.16.20 批次段同口径补钉
         for id in 219..=230usize {
-            assert_eq!(EVENTS[id].0, id, "v1.16.20 段 id 连续");
+            assert_eq!(EVENTS[id].0 as usize, id, "v1.16.20 段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
             assert!(!EVENT_BRIEF[id].is_empty());
         }
         // v1.16.21 批次段同口径补钉
         for id in 231..=239usize {
-            assert_eq!(EVENTS[id].0, id, "v1.16.21 段 id 连续");
+            assert_eq!(EVENTS[id].0 as usize, id, "v1.16.21 段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
             assert!(!EVENT_BRIEF[id].is_empty());
         }
         // v1.16.22 批次段同口径补钉
         for id in 240..=251usize {
-            assert_eq!(EVENTS[id].0, id, "v1.16.22 段 id 连续");
+            assert_eq!(EVENTS[id].0 as usize, id, "v1.16.22 段 id 连续");
+            assert!(!EVENT_NAMES[id].is_empty());
+            assert!(!EVENT_BRIEF[id].is_empty());
+        }
+        // v1.16.23 批次段同口径补钉
+        for id in 252..=258usize {
+            assert_eq!(EVENTS[id].0 as usize, id, "v1.16.23 段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
             assert!(!EVENT_BRIEF[id].is_empty());
         }
@@ -17913,7 +18170,7 @@ mod v11617_pool_tests {
     #[test]
     fn companion_batch_gates_and_tiers() {
         for id in [183usize, 184, 185] {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
+            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
             let mut g0 = sim_game(5, 40.0);
             g0.recent_events.clear();
             let (ws0, _) = g0.sim_event_weights(40.0, 5, false, false, false);
@@ -17993,7 +18250,7 @@ mod v11617_pool_tests {
     #[test]
     fn chapter_batch_gates() {
         for (id, bit) in [(190usize, 0u32), (191usize, 3u32), (196usize, 1u32), (197usize, 4u32)] {
-            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id).unwrap();
+            let i = EVENTS.iter().position(|&(e, _, _, _)| e == id as u16).unwrap();
             let mut g0 = sim_game(5, 40.0);
             g0.recent_events.clear();
             let (ws0, _) = g0.sim_event_weights(40.0, 5, false, false, false);
@@ -18265,7 +18522,7 @@ mod v11620_pool_batch_tests {
         let g4 = sim_game(7, 40.0);
         let (ws4, _) = g4.sim_event_weights(40.0, 7, false, false, false);
         assert!(ws4[224] > 0.0, "mr7 达标 224 入池");
-        assert!(EVENTS[224].1 <= crate::data::RARE_W, "224 权重 ≤RARE_W");
+        assert!(EVENTS[224].1 as i32 <= crate::data::RARE_W, "224 权重 ≤RARE_W");
         let g5 = sim_game(6, 40.0);
         let (ws5, _) = g5.sim_event_weights(40.0, 6, false, false, false);
         assert_eq!(ws5[224], 0.0, "realm<mr 归零（224 mr7 独占）");
@@ -18808,6 +19065,48 @@ mod v11622_pool_tests {
         }
     }
 
+    // v1.16.23 立绘微补口（纯测试零资产）：201 全卡 Npc(1) 同源 + 3 双臂采样
+    // ——3 号 gen_range(0.0,1.0)<0.5：购药臂挂 Npc(1)（胡掌柜卖丹，正文钉名）、
+    // 储物袋臂无人物 None；照 16590 镜像客 400 次循环先例取 64 轮（p=0.5 下漏臂
+    // 概率 2^-64），与 248/249/244 同式纳入文脸同源回归面
+    #[test]
+    fn npc_actor_hu_201_and_market_3() {
+        // 201：坊契赖账全卡同源（正文钉名胡掌柜 ⟺ Npc(1)）
+        let mut g = sim_game(7, 40.0);
+        g.modal = None;
+        g.build_event(201);
+        let card = g.modal.as_ref().unwrap();
+        assert!(card.text.contains("胡掌柜"), "201 正文须钉名胡掌柜");
+        assert_eq!(card.actor, Some(CardActor::Npc(1)), "201 须挂 Npc(1) 脸");
+
+        // 3：坊市淘宝双臂采样
+        let mut npc_arms = 0;
+        let mut plain_arms = 0;
+        for _ in 0..64 {
+            let mut g = sim_game(7, 40.0);
+            g.modal = None;
+            g.build_event(3);
+            let card = g.modal.as_ref().unwrap();
+            match card.actor {
+                Some(CardActor::Npc(1)) => {
+                    npc_arms += 1;
+                    assert!(
+                        card.text.contains("胡掌柜"),
+                        "3 购药臂正文须钉名胡掌柜"
+                    );
+                }
+                None => plain_arms += 1,
+                _ => panic!("事件 3 actor 越界：不应挂其它 Npc/Comp"),
+            }
+        }
+        assert!(
+            npc_arms > 0 && plain_arms > 0,
+            "64 轮两臂应均现（p=0.5 漏臂≈2^-64）：npc={} plain={}",
+            npc_arms,
+            plain_arms
+        );
+    }
+
     // 副标窗位：70=推进臂『续·补笔归卷』、69=检定『受松风一问』、71/72 预留
     // 落 _ 臂「机缘」兜底（照 65 预留窗位口径）
     #[test]
@@ -18821,6 +19120,113 @@ mod v11622_pool_tests {
         assert_eq!(e.eff_desc(), "机缘");
         e.special = 72;
         assert_eq!(e.eff_desc(), "机缘");
+    }
+}
+
+// ================= v1.16.23 扩池 7 条（252..=258）：门控/立绘/账本 =================
+
+#[cfg(test)]
+mod v11623_pool_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // 卡面良构：252..=258 标题双源/正文单段 ≤60 字/简 ≤18 字/两选项/抉择
+    // apply_eff 全链不 panic（257 伴随臂以有伴进卡照 17527 先例；其余散件无门控）
+    #[test]
+    fn batch258_cards_well_formed() {
+        for id in 252..=258usize {
+            let mut g = sim_game(7, 40.0);
+            g.sim.as_mut().unwrap().companion = Some(COMPANION_NAMES[1].to_string());
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
+            assert_eq!(card.title, EVENT_NAMES[id], "事件 {} 标题双源漂移", id);
+            assert!(
+                !card.text.contains('\n'),
+                "事件 {} 正文不得加段（单段预算）",
+                id
+            );
+            let n = card.text.chars().count();
+            assert!(n <= 60, "事件 {} 正文 {} 字超 ≤60 预算：{}", id, n, card.text);
+            let b = EVENT_BRIEF[id];
+            assert!(
+                b.chars().count() <= 18,
+                "事件 {} 简「{}」超 ≤18 预算",
+                id,
+                b
+            );
+            assert!(card.opts.len() >= 2, "事件 {} 至少两选项", id);
+            assert!(card.opts.len() <= 3, "事件 {} 至多三选项", id);
+            // 本批纪律：纯效果散件 special 恒 0（新检定/新链窗未开——special73
+            // 与下一检定槽互斥，链19 本轮不做）
+            for (label, e) in &card.opts {
+                assert_eq!(e.special, 0, "事件 {} 选项「{}」special 非零", id, label);
+            }
+            g.choose_option(0);
+        }
+    }
+
+    // 具名 NPC 立绘同源回归：252 宁清霜=Npc(2)/253 玄诚长老=Npc(0)——正文钉名
+    // ⟺ actor 行（照 cameo_text_face_same_source 201/3 与 248/249/244 钉测口径）
+    #[test]
+    fn npc_actors_named_same_source_v11623() {
+        for (id, npc_idx, name) in [
+            (252usize, 2usize, "宁清霜"),
+            (253usize, 0usize, "玄诚长老"),
+        ] {
+            assert_eq!(NPC_NAMES[npc_idx], name, "Npc({}) 脸源名表口径", npc_idx);
+            let mut g = sim_game(7, 40.0);
+            g.modal = None;
+            g.build_event(id);
+            let card = g.modal.as_ref().unwrap();
+            assert!(card.text.contains(name), "事件 {} 文本须具名 {}", id, name);
+            assert_eq!(
+                card.actor,
+                Some(CardActor::Npc(npc_idx)),
+                "事件 {} 须挂 Npc({}) 脸",
+                id,
+                npc_idx
+            );
+        }
+    }
+
+    // 伴随门控：257 灯市挑灯——无伴权重归零不入池、有伴 realm≥mr4 入池且
+    // Comp 反查随 sim.companion 下标（照 18747 companion_gates_v11622 模式）
+    #[test]
+    fn companion_gate_257() {
+        let mut g0 = sim_game(5, 40.0);
+        g0.recent_events.clear();
+        let (ws0, _) = g0.sim_event_weights(40.0, 4, false, false, false);
+        let i257 = EVENTS.iter().position(|&(e, _, _, _)| e == 257).unwrap();
+        assert_eq!(ws0[i257], 0.0, "无伴：257 不入池");
+        let mut g1 = sim_game(4, 40.0);
+        g1.recent_events.clear();
+        let (ws1, _) = g1.sim_event_weights(40.0, 4, false, false, true);
+        assert!(ws1[i257] > 0.0, "有伴 realm4：257 应入池");
+        // 反查：有伴进卡 → Comp(下标) 锁定（COMPANION_NAMES[6]=第 7 人）
+        let mut g2 = sim_game(7, 40.0);
+        g2.sim.as_mut().unwrap().companion = Some(COMPANION_NAMES[6].to_string());
+        g2.modal = None;
+        g2.build_event(257);
+        let card = g2.modal.as_ref().unwrap();
+        assert!(
+            matches!(card.actor, Some(CardActor::Comp(6))),
+            "257 立绘应锁定道侣 6"
+        );
+        // 白名单 21→22 收口
+        assert_eq!(COMPANION_EVENTS.len(), 22, "伴随白名单 21→22");
     }
 }
 

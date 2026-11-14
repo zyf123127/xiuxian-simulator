@@ -200,6 +200,9 @@ async fn main() {
     }
     #[cfg(not(target_arch = "wasm32"))]
     ui::init_font();
+    // v1.16.23 减包刀②：事件臂文案资产化——boot 一次性 raw-deflate 解包
+    // （~64KB，miniz inflate <5ms，与字体同款通路）；双端同路径零分叉。
+    data::init_text();
     art::init_art();
     // v1.15.0 X5 排障：启动分段标记（st90 进入主体 / st91 空 Audio 就绪 /
     // st92 Game::new 就绪 / st93 进入主循环）。st 停在 90-93 = 启动死

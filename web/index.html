@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.16.22";</script>
+    <script>var GAME_VER = "1.16.23";</script>
     <!-- v1.16.10 字体外置：font.ttf.deflate 与 wasm 下载全并行预取（唯一能赢的时序
          ——env 导入回传方案 vs wasm 内 load_file await：后者把字体下载排到实例化
          之后串行，反而更慢）。就绪态存 __xxFont（state 0=下载中 1=就绪 -1=失败），
@@ -322,7 +322,7 @@
             } catch (e) { /* 包装失败维持原状：流式可用则用，不可用走旧分支 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.16.22"></script>
+    <script src="mq_js_bundle.js?v=1.16.23"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。

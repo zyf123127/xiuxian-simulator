@@ -157,7 +157,7 @@ pub fn prewarm_event_book(g: &Game) {
 pub fn event_badge(id: usize) -> (&'static str, Color) {
     // 越界防御：表外 id 落「遭遇」，绝不把 w=0 哨兵误判成链段（panic=abort 纪律）
     let w = match EVENTS.get(id) {
-        Some(&(_, w, _, _)) => w,
+        Some(&(_, w, _, _)) => w as i32, // v1.16.23 收窄读点：u8→RARE_W(i32) 口径零变
         None => return ("遭遇", C_DIM),
     };
     if COMPANION_EVENTS.contains(&id) {
@@ -374,7 +374,7 @@ fn draw_event_note_row(g: &Game, i: usize, y: f32) {
     let x = 160.0;
     let cnt = g.meta.ev_cnt[i]; // i 循环界内（0..EVENTS.len()），恒界内
     let seen = cnt > 0;
-    let w = EVENTS[i].1;
+    let w = EVENTS[i].1 as i32; // v1.16.23 收窄读点：u8→RARE_W(i32) 口径零变
     let rare = w > 0 && w <= crate::data::RARE_W;
     let (bg, border) = if seen {
         (
@@ -469,7 +469,7 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(8, 5, 16, 244));
     panel_card(340.0, 100.0, 600.0, 500.0);
     // 卡描边照 draw_modal_card 语言（2.5 同位覆盖）：链段青/稀有紫/普通卡不叠边
-    let w = EVENTS[id].1;
+    let w = EVENTS[id].1 as i32; // v1.16.23 收窄读点：u8→RARE_W(i32) 口径零变
     let rare = w > 0 && w <= crate::data::RARE_W;
     let (badge_t, badge_c) = event_badge(id);
     let is_chain = badge_t == "链起" || badge_t == "链段";

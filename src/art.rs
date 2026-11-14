@@ -1514,4 +1514,28 @@ mod pixel_fallback_tests {
         assert!(a.px.contains(&[232, 223, 200, 255]), "米白卷面缺失");
         assert!(a.px.contains(&[180, 148, 88, 255]), "暗金束带缺失");
     }
+
+    // v1.16.23 减包刀①验收：vendor png 0.17.16（miniz_oxide 0.8.9/0.9.1 统一 +
+    // flate2 显式 miniz 后端）后的真实解码链验收——image dev-dep 与 macroquad 内部
+    // 依赖同一实例，decode 18 张立绘（部署集恰 18，build_web.bat 同口径断言），
+    // 断言尺寸>0 且 RGBA 非全零（防「解码成功但全透明」的假绿）。
+    #[test]
+    fn portraits_png_decode_chain() {
+        let d = std::path::Path::new("assets/portraits_wasm");
+        let mut names: Vec<_> = std::fs::read_dir(d)
+            .expect("portraits_wasm dir missing")
+            .filter_map(|e| e.ok().map(|e| e.file_name()))
+            .filter(|n| n.to_string_lossy().ends_with(".png"))
+            .collect();
+        names.sort();
+        assert_eq!(names.len(), 18, "portraits_wasm must be exactly 18 pngs");
+        for n in &names {
+            let bytes = std::fs::read(d.join(n)).expect("read png");
+            let img = image::load_from_memory(&bytes)
+                .unwrap_or_else(|e| panic!("png decode failed {}: {}", n.to_string_lossy(), e));
+            assert!(img.width() > 0 && img.height() > 0, "{} empty dims", n.to_string_lossy());
+            let opaque = img.to_rgba8().pixels().filter(|p| p[3] > 0).count();
+            assert!(opaque > 0, "{} fully transparent", n.to_string_lossy());
+        }
+    }
 }

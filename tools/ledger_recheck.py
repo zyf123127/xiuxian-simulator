@@ -3,7 +3,8 @@
 import re
 
 src = open('src/data.rs', encoding='utf-8').read()
-m = re.search(r'pub const EVENTS: \[\(usize, i32, usize, bool\); (\d+)\] = \[(.*?)\n\];', src, re.S)
+# v1.16.23 减包刀③：EVENTS 元组收窄 (usize,i32,..)→(u16,u8,..)，正则放宽兼容两代口径
+m = re.search(r'pub const EVENTS: \[\((?:usize|u16), (?:i32|u8), (?:usize|u8), bool\); (\d+)\] = \[(.*?)\n\];', src, re.S)
 decl_n = int(m.group(1))
 body = m.group(2)
 rows = re.findall(r'\((\d+), (-?\d+), (\d+), (true|false)\)', body)
@@ -43,8 +44,9 @@ mr0_nocomp = [(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 an
 # 账本口径对不上）
 # v1.16.22 伴随 +2：240 药圃赌芽（mr3 第 2 条）/241 踏云题字（mr7 有伴首条）
 # ——白名单 19→21，与 game.rs COMPANION_EVENTS 同批同步（漏一处账本口径对不上）
+# v1.16.23 伴随 +1：257 灯市挑灯（mr4 第 3 条）——白名单 21→22，与 game.rs 同批同步
 COMPANION = {53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185, 203,
-             210, 211, 212, 225, 226, 240, 241}
+             210, 211, 212, 225, 226, 240, 241, 257}
 mr0_nocomp = sorted([(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 and i not in COMPANION], key=lambda t: -t[1])
 top4_nc = sum(w for _, w in mr0_nocomp[:4])
 tot_nc = sum(w for _, w in mr0_nocomp)

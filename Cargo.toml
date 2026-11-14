@@ -1,6 +1,6 @@
 [package]
 name = "xiuxian"
-version = "1.16.22"
+version = "1.16.23"
 edition = "2021"
 
 [dependencies]
@@ -11,7 +11,25 @@ macroquad = { version = "0.4", features = ["audio"] }
 # v1.16.10 字体外置：wasm 端字节经 index.html xx_font env 插件回传（与 wasm 下载
 # 全并行预取），include_bytes 副本仅桌面保留（ui.rs cfg(not wasm32) 包住表本体）；
 # wasm 数据段减去整个字体 deflate（~378KB，≈旧 wasm 31%），桌面构建产物零变化。
-miniz_oxide = "0.8"
+miniz_oxide = { version = "0.9", default-features = false, features = [
+    "with-alloc",
+] }
+
+# v1.16.23 减包验收测试专用（不进 wasm release 产物）；版本与 macroquad 内部
+# 依赖一致，Cargo 解析为同一实例——测试即验证 vendor patch 后的 png→flate2→
+# miniz_oxide 0.9.1 解码链。
+[dev-dependencies]
+image = { version = "0.24", default-features = false, features = ["png"] }
+
+# v1.16.23 减包刀①：vendor png 0.17.16（vendor patch 先例 macroquad/miniquad）。
+# 上游 pin miniz_oxide "0.8"+simd；实际勘察修正：png 0.17.16 源码仅 doc comment
+# 提及 miniz_oxide（fdeflate 已接管解码主路），0.8.9 份本就被 LTO GC 掉，zlib-rs
+# 更是从未在构建图内（Cargo.lock 残留 weak-dep 记录）——本刀收益实为卫生收敛：
+# 全树只编一份 miniz_oxide 0.9.1（主程序 0.8→0.9，inflate::decompress_to_vec 在
+# 0.9.1 仍存在，ui.rs:23 字体回环不变），实测 wasm 净省 ~1KB。flate2 显式
+# miniz_oxide 后端防未来 default 翻转把 C-zlib 路径带进 wasm。
+# [dev-dependencies] image 仅测试用（18 png 解码验收，见 art.rs tests），
+# 不进 wasm release 产物。
 
 # v1.6.0 B 清晰度：wasm 也开 high_dpi 后，dpr>1 设备上默认 4096 图集不够用
 # （字形按物理像素栅格）。vendor/macroquad 0.4.16 与依赖同版本，含图集封顶
@@ -20,6 +38,7 @@ miniz_oxide = "0.8"
 # path 依赖仍生效（features 合并规则不变）。
 [patch.crates-io]
 macroquad = { path = "vendor/macroquad" }
+png = { path = "vendor/png" }
 
 # v1.15.1 防 trap 毒化：wasm 下 JS 捕获 trap 后线性内存存续，miniquad
 # native/wasm.rs 的 tl_event_handler/REQUESTS RefCell 借用标志永久残留 →
