@@ -21,7 +21,7 @@ static FONT_DEFLATE: &[u8] = include_bytes!("../assets/font.ttf.deflate");
 /// xx_font 回传字节——解压口径逐字节一致，字体内容零变化）。
 pub fn init_font_from_bytes(deflated: &[u8]) {
     let bytes = miniz_oxide::inflate::decompress_to_vec(deflated)
-        .expect("字体解压失败（deflate 流损坏）");
+        .expect(crate::data::evtx(1824)/* 原文：字体解压失败（deflate 流损坏） */);
     let f = load_ttf_font_from_bytes(&bytes).expect("字体加载失败");
     let _ = FONT.set(f);
 }

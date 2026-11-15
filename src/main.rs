@@ -537,10 +537,15 @@ async fn main() {
                         Color::new(0.0, 0.0, 0.0, 0.62),
                     );
                     draw_text(
-                        &format!(
-                            "自检 触达:{} 已收:{} 帧:{} 时钟:{}ms 场景:{}",
-                            tch, xx_clicks, frame, fr, g.scene_xx_name(),
-                        ),
+                        // wasm 独立分支：evf 全限定（本文件无 data use）；异型实参逐位
+                        // 显式 unsize（&[&dyn Display] 元素型一统，不吃推断顺序运气）
+                        &crate::data::evf(1581, &[
+                            &(tch) as &dyn core::fmt::Display,
+                            &(xx_clicks) as &dyn core::fmt::Display,
+                            &(frame) as &dyn core::fmt::Display,
+                            &(fr) as &dyn core::fmt::Display,
+                            &(g.scene_xx_name()) as &dyn core::fmt::Display,
+                        ])/* 原文：自检 触达:{} 已收:{} 帧:{} 时钟:{}ms 场景:{} */,
                         662.0,
                         118.0,
                         20.0,
@@ -549,10 +554,10 @@ async fn main() {
                     let cd = if bridge_dead {
                         format!("{} 秒后自动进入", xx_auto.max(0.0) as i32)
                     } else {
-                        "等待点击（输入正常，不催促）".to_string()
+                        crate::data::evtx(1802)/* 原文：等待点击（输入正常，不催促） */.to_string()
                     };
                     draw_text(
-                        &format!("{} · 点「开始新的人生」立即开始", cd),
+                        &crate::data::evf(1582, &[&(cd)])/* 原文：{} · 点「开始新的人生」立即开始 */,
                         662.0,
                         152.0,
                         20.0,
@@ -957,7 +962,7 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
                     scene: None,
                     brk: false,
                     title: "仙人问道".into(),
-                    text: "云端降下一位白须仙人，含笑看你：「小子，老夫可指你一条路，要哪般？」"
+                    text: crate::data::evtx(36)/* 原文：云端降下一位白须仙人，含笑看你：「小子，老夫可指你一条路，要哪般？」 */
                         .into(),
                     opts: Vec::new(),
                 };
@@ -980,7 +985,7 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
             // 末窗强制落幕：保证继承画面被 shot_051 捕获（弹层开着也会被一并清掉；
             // 继承画面此后被 Inherit 分支冻结，稳定撑到截图帧）
             if *shots == 51 && frame % 120 == 0 && g.sim.is_some() {
-                g.sim_die("冒烟验证：一世至此落幕，镜中造化待你选取。");
+                g.sim_die(crate::data::evtx(1803)/* 原文：冒烟验证：一世至此落幕，镜中造化待你选取。 */);
             }
         }
         Scene::Inherit => {

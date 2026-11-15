@@ -103,7 +103,7 @@ pub fn travel(g: &mut Game, to: usize) {
         g.toast("已在此地", C_DIM);
         return;
     }
-    if !spend_year(g, "你于赶路途中旧伤复发，倒毙荒野。") {
+    if !spend_year(g, evtx(1812)/* 原文：你于赶路途中旧伤复发，倒毙荒野。 */) {
         return;
     }
     let name = LOCATIONS[to].name;
@@ -111,7 +111,7 @@ pub fn travel(g: &mut Game, to: usize) {
         let l = g.life.as_mut().unwrap();
         l.loc = to;
     }
-    g.log(format!("你收拾行装赶路，此番抵达{}。", name), C_TEXT);
+    g.log(evf(1588, &[&(name)])/* 原文：你收拾行装赶路，此番抵达{}。 */, C_TEXT);
     // v1.16.11 洞府经营初见闩（sy= bit5）：旅行抵达洞府口（单口自带 loc 守卫与位闩，
     // 非洞府抵达为幂等空转；覆盖离府再归路径——出生即洞府路径由 open_world 口覆盖）
     g.sys_hint_dongfu();
@@ -134,7 +134,7 @@ pub fn sect_join(g: &mut Game) {
         g.toast("根基尚浅，先修至沁墨境再来", C_RED);
         return;
     }
-    if !spend_year(g, "你于拜山途中遭劫，殒身林莽。") {
+    if !spend_year(g, evtx(1813)/* 原文：你于拜山途中遭劫，殒身林莽。 */) {
         return;
     }
     {
@@ -142,7 +142,7 @@ pub fn sect_join(g: &mut Game) {
         l.sect = true;
     }
     g.log(
-        "你拜入青云宗，得授入门功法——环境加成×1.3，从此修炼事半功倍。",
+        evtx(1814)/* 原文：你拜入青云宗，得授入门功法——环境加成×1.3，从此修炼事半功倍。 */,
         C_GREEN,
     );
     g.play(crate::sounds::Which::Ding);
@@ -186,11 +186,7 @@ pub fn sect_quest(g: &mut Game) {
     // v1.6.0 D：为长老办差，积攒交情
     crate::npc::add_fav(g, crate::npc::NPC_ELDER, ELDER_QUEST_FAV);
     g.log(
-        format!(
-            "宗门任务完成：贡献+{}，灵石+{}。",
-            contrib,
-            fmt_int(stones)
-        ),
+        evf(1589, &[&(contrib), &(fmt_int(stones))])/* 原文：宗门任务完成：贡献+{}，灵石+{}。 */,
         C_GOLD,
     );
     let lucky = {
@@ -206,7 +202,7 @@ pub fn sect_quest(g: &mut Game) {
             let l = g.life.as_mut().unwrap();
             gain_qi(l, gain);
         }
-        g.log("任务途中偶得灵机，修为大涨！", C_CYAN);
+        g.log(evtx(1815)/* 原文：任务途中偶得灵机，修为大涨！ */, C_CYAN);
     }
     g.play(crate::sounds::Which::Coin);
     g.sync_save();
@@ -257,7 +253,7 @@ pub fn sect_buy(g: &mut Game, i: usize) {
             }
             SectGoodKind::Relic(r) => {
                 l.relics.push(*r);
-                format!("请得镇派法宝【{}】", RELICS[*r].name)
+                evf(1590, &[&(RELICS[*r].name)])/* 原文：请得镇派法宝【{}】 */
             }
             SectGoodKind::Tech(t) => {
                 l.tech = *t;
@@ -279,7 +275,7 @@ pub fn exp_start(g: &mut Game) {
         g.toast("需亲临落霞秘境", C_RED);
         return;
     }
-    if !spend_year(g, "你殒落于落霞秘境深处，无人收殓。") {
+    if !spend_year(g, evtx(1816)/* 原文：你殒落于落霞秘境深处，无人收殓。 */) {
         return;
     }
     let len = EXPED_LEN_BASE + gen_range(0usize, 3usize);
@@ -295,7 +291,7 @@ pub fn exp_start(g: &mut Game) {
         loot: Vec::new(),
     });
     g.exp_p_cache = None; // v1.16.21 P8 胜率副标缓存随新远征清（步号可重复防串）
-    g.log("你踏入落霞秘境，霞光在身后合拢——远征开始了。", C_CYAN);
+    g.log(evtx(1817)/* 原文：你踏入落霞秘境，霞光在身后合拢——远征开始了。 */, C_CYAN);
     g.play(crate::sounds::Which::Page);
     g.sync_save();
 }
@@ -340,7 +336,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
     };
     let kind = EXPED_STEPS[step_idx].kind as usize;
     // 先耗时后判定（途中寿尽则已入结算）
-    if !spend_year(g, "你殒落于落霞秘境深处，无人收殓。") {
+    if !spend_year(g, evtx(1816)/* 原文：你殒落于落霞秘境深处，无人收殓。 */) {
         return;
     }
     let (padj, mult) = if i == 0 {
@@ -375,7 +371,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
             l.injured = l.injured.saturating_add(gen_range(2i32, 5i32) as u16);
         }
         g.log(
-            format!("远征第{}步受挫，仓皇而退，身受重伤！", cur + 1),
+            evf(1591, &[&(cur + 1)])/* 原文：远征第{}步受挫，仓皇而退，身受重伤！ */,
             C_RED,
         );
         g.play(crate::sounds::Which::BreakFail);
@@ -389,7 +385,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
                     let l = g.life.as_mut().unwrap();
                     l.stones += s;
                 }
-                let mut msg = format!("击退强敌，缴获灵石 {}", fmt_int(s));
+                let mut msg = evf(1592, &[&(fmt_int(s))])/* 原文：击退强敌，缴获灵石 {} */;
                 if gen_range(0.0, 1.0f32) < 0.25 {
                     let r = gen_range(0usize, 3usize);
                     let (has, conv) = {
@@ -401,13 +397,13 @@ pub fn exp_choose(g: &mut Game, i: usize) {
                             let l = g.life.as_mut().unwrap();
                             l.relics.push(r);
                         }
-                        msg += &format!("，并寻得法宝【{}】", RELICS[r].name);
+                        msg += &evf(1593, &[&(RELICS[r].name)])/* 原文：，并寻得法宝【{}】 */;
                     } else {
                         {
                             let l = g.life.as_mut().unwrap();
                             l.stones += conv;
                         }
-                        msg += &format!("，余宝折算灵石 {}", fmt_int(conv));
+                        msg += &evf(1594, &[&(fmt_int(conv))])/* 原文：，余宝折算灵石 {} */;
                     }
                 }
                 push_loot(g, msg);
@@ -425,7 +421,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
                     l.pills[3] += 1;
                     gain_qi(l, gain);
                 }
-                push_loot(g, format!("采得灵药：聚气丹+1、培元丹+1，修为+{}", fmt_num(gain)));
+                push_loot(g, evf(1595, &[&(fmt_num(gain))])/* 原文：采得灵药：聚气丹+1、培元丹+1，修为+{} */);
                 g.play(crate::sounds::Which::Gain);
             }
             2 => {
@@ -437,11 +433,11 @@ pub fn exp_choose(g: &mut Game, i: usize) {
                         let l = g.life.as_mut().unwrap();
                         l.stones += s;
                     }
-                    push_loot(g, format!("破禁得宝，折算灵石 {}", fmt_int(s)));
+                    push_loot(g, evf(1596, &[&(fmt_int(s))])/* 原文：破禁得宝，折算灵石 {} */);
                 } else {
                     let c = (EXPED_CONTRIB as f32 * mult * rm.exped_mult as f32) as u32;
                     g.meta.sect_contrib += c;
-                    push_loot(g, format!("得宗门信物，贡献+{}", c));
+                    push_loot(g, evf(1597, &[&(c)])/* 原文：得宗门信物，贡献+{} */);
                 }
                 g.play(crate::sounds::Which::Coin);
             }
@@ -455,7 +451,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
                     let l = g.life.as_mut().unwrap();
                     gain_qi(l, gain);
                 }
-                push_loot(g, format!("静悟道韵，修为+{}", fmt_num(gain)));
+                push_loot(g, evf(1598, &[&(fmt_num(gain))])/* 原文：静悟道韵，修为+{} */);
                 g.play(crate::sounds::Which::Gain);
             }
         }
@@ -466,7 +462,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
         e.cur += 1;
     }
     g.log(
-        format!("秘境远征·第{}步：{}", cur + 1, EXPED_STEPS[step_idx].text),
+        evf(1599, &[&(cur + 1), &(EXPED_STEPS[step_idx].text)])/* 原文：秘境远征·第{}步：{} */,
         C_TEXT,
     );
     g.sync_save();
@@ -499,13 +495,7 @@ pub fn dongfu_up(g: &mut Game, i: usize) {
     g.meta.sect_contrib -= contrib;
     g.meta.dongfu[i] = lv + 1;
     g.log(
-        format!(
-            "洞府{}扩建至{}级。（灵石-{}，贡献-{}）",
-            DONGFU_FACS[i],
-            lv + 1,
-            fmt_int(stones),
-            contrib
-        ),
+        evf(1600, &[&(DONGFU_FACS[i]), &(lv + 1), &(fmt_int(stones)), &(contrib)])/* 原文：洞府{}扩建至{}级。（灵石-{}，贡献-{}） */,
         C_GOLD,
     );
     g.play(crate::sounds::Which::Ascend);
@@ -522,7 +512,7 @@ pub fn exp_quit(g: &mut Game) {
         .unwrap_or_default();
     if loot.is_empty() {
         // v1.16.24 成金：出秘境句与 298 行入场句「霞光在身后合拢」对仗收口（等长字节中性）
-        g.log("你收手出秘境，霞光重新合拢。", C_DIM);
+        g.log(evtx(1818)/* 原文：你收手出秘境，霞光重新合拢。 */, C_DIM);
     } else {
         // v1.16.24 成金：「点算行囊」呼应全书对账主题（等长字节中性）
         g.log("远征归来，点算行囊：", C_GOLD);
@@ -826,7 +816,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
         // v1.8.0 A8：13→14 字号下限
         txt("尚未抵达", 140.0, 564.0, 14, C_RED);
     }
-    wrap_draw(nd.desc, 36.0, 592.0, 14, 560.0, 24.0, C_DIM); // v1.6.0：行距 20→24（desc 3 行预算内）
+    wrap_draw(nd.desc(), 36.0, 592.0, 14, 560.0, 24.0, C_DIM); // v1.6.0：行距 20→24（desc 3 行预算内）
     txt("可做", 36.0, 664.0, 14, C_DIM);
     // 动作区（P5 门②：覆盖层打开时不渲染；v1.6.0 B：异地「赶路」收进山河弹层——
     // 点节点即弹 Sub::MapGo 确认，主卡只保留原地动作）
@@ -973,7 +963,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                         g.act_break();
                     }
                     txt(
-                        "※ 问笔台：冲击大境界时每重雷劫存活+2%",
+                        evtx(1819)/* 原文：※ 问笔台：冲击大境界时每重雷劫存活+2% */,
                         340.0,
                         664.0,
                         14, // v1.8.0 A8：13→14 字号下限
@@ -999,10 +989,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     } else if g.world.exp.is_some() {
         // v1.5.0（建议②）：仅远征中提示误文案；洞府经营覆盖层打开时此处静默
         txt(
-            &format!(
-                "可做：{}——远征进行中，暂不可操作。",
-                nd.acts.join("／")
-            ),
+            &evf(1601, &[&(nd.acts.join("／"))])/* 原文：可做：{}——远征进行中，暂不可操作。 */,
             100.0,
             664.0,
             14,
@@ -1031,9 +1018,9 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     }
     // v1.8.0 C3+A8：提示两行合并单行 y=666（否则被图鉴钮矩形下缘叠压），字号 13→14
     if g.world.exp.is_some() {
-        txt("远征未竟，完成或收手后方可归返。", 952.0, 666.0, 14, C_RED);
+        txt(evtx(1820)/* 原文：远征未竟，完成或收手后方可归返。 */, 952.0, 666.0, 14, C_RED);
     } else {
-        txt("Esc 归返 · M 再临 · 点节点选定目的地。", 952.0, 666.0, 14, C_DIM);
+        txt(evtx(1821)/* 原文：Esc 归返 · M 再临 · 点节点选定目的地。 */, 952.0, 666.0, 14, C_DIM);
     }
     // ---------- 商店覆盖层 ----------
     if g.world.shop {
@@ -1115,7 +1102,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
         }
         draw_rectangle(260.0, 152.0, 760.0, 1.5, Color::from_rgba(96, 76, 130, 160));
         txt(
-            "四时流转，气象各异——设施升级需灵石与宗门贡献。",
+            evtx(1822)/* 原文：四时流转，气象各异——设施升级需灵石与宗门贡献。 */,
             270.0,
             166.0, 14,
             C_DIM,
@@ -1135,7 +1122,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             txt(DONGFU_FAC_DESC[i], 300.0, y + 34.0, 14, C_DIM);
             let eff = match i {
                 0 => format!("当前：修炼效率 ×{:.2}", JUELING_MULT[lv]),
-                1 => format!("当前：每载产灵石 {}", LINGTIAN_YIELD[lv]),
+                1 => evf(1602, &[&(LINGTIAN_YIELD[lv])])/* 原文：当前：每载产灵石 {} */,
                 _ => format!("当前：坊市丹价 ×{:.2}", DANFANG_DISC[lv]),
             };
             txt(&eff, 300.0, y + 58.0, 14, C_CYAN);
@@ -1143,12 +1130,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                     let (cs, cc) = (DONGFU_UP_STONES[lv], DONGFU_UP_CONTRIB[lv]);
                     let ok = l_stones >= cs && g.meta.sect_contrib >= cc;
                     txt(
-                        &format!(
-                            "升{}级：{} 灵石 + {} 贡献",
-                            lv + 1,
-                            fmt_int(cs),
-                            cc
-                        ),
+                        &evf(1603, &[&(lv + 1), &(fmt_int(cs)), &(cc)])/* 原文：升{}级：{} 灵石 + {} 贡献 */,
                         540.0,
                         y + 58.0, 14,
                         if ok { C_TEXT } else { C_RED },

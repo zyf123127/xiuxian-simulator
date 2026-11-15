@@ -2094,7 +2094,7 @@ impl Game {
 
         if nt > old_tier {
             self.toast(
-                format!("道貌焕然——【{}】", PORTRAIT_STAGE_NAMES[nt]),
+                evf(1492, &[&(PORTRAIT_STAGE_NAMES[nt])])/* 原文：道貌焕然——【{}】 */,
                 C_GOLD,
             );
 
@@ -2212,22 +2212,22 @@ impl Game {
         );
 
         self.log(
-            "雨夜。乱葬岗。你从尸堆里爬出来，手里攥着一枚方印——印身无字，只有层层叠叠被划掉的痕迹。",
+            evtx(1726)/* 原文：雨夜。乱葬岗。你从尸堆里爬出来，手里攥着一枚方印——印身无字，只有层层叠叠被划掉的痕迹。 */,
             C_GOLD,
         );
 
         self.log(
-            "识海里有个少年人的嗓子，累得不像少年人：「先说好——你的名字是错的。天写错了。」",
+            evtx(1727)/* 原文：识海里有个少年人的嗓子，累得不像少年人：「先说好——你的名字是错的。天写错了。」 */,
             C_CYAN,
         );
 
         self.log(
-            format!("此外，血仇未销——{}。它删过你的字、批过你的行；此吏不除，书不成书。", nm),
+            evf(1493, &[&(nm)])/* 原文：此外，血仇未销——{}。它删过你的字、批过你的行；此吏不除，书不成书。 */,
             C_RED,
         );
 
         self.log(
-            "【开始模拟】推演一生，【继承】带回归途。此身虽弱，万世可期。",
+            evtx(1728)/* 原文：【开始模拟】推演一生，【继承】带回归途。此身虽弱，万世可期。 */,
             C_TEXT,
         );
 
@@ -2246,10 +2246,10 @@ impl Game {
         if self.meta.lives == 1 && self.meta.sys_seen & 0b0100 == 0 {
             self.meta.sys_seen |= 0b0100;
             self.log(
-                "识海里那声叹息又响：低头赶路，也要抬头看目标——界面顶部金框，即你此世的道途所在。",
+                evtx(1729)/* 原文：识海里那声叹息又响：低头赶路，也要抬头看目标——界面顶部金框，即你此世的道途所在。 */,
                 C_GOLD,
             );
-            self.toast("第 1 世——顶部金框是当前目标，「任务」钮随时查看", C_GOLD);
+            self.toast(evtx(1730)/* 原文：第 1 世——顶部金框是当前目标，「任务」钮随时查看 */, C_GOLD);
         }
 
         self.sync_save();
@@ -2266,7 +2266,7 @@ impl Game {
         self.sim = None;
         self.modal = None;
         self.chain = None; // v1.16.7 重掷清链（未竟之缘随镜面散去）
-        self.log("轮回镜轻颤，此番推演未竟，点数已还。", C_CYAN);
+        self.log(evtx(1731)/* 原文：轮回镜轻颤，此番推演未竟，点数已还。 */, C_CYAN);
         self.start_draft();
     }
 
@@ -2357,12 +2357,7 @@ impl Game {
             self.offline_card = Some(OfflineReport { years: n, qi, stones });
         } else {
             self.log(
-                format!(
-                    "离闭 {} 载，修为+{}，灵田岁入灵石 {}。",
-                    n,
-                    fmt_num(qi),
-                    fmt_int(stones)
-                ),
+                evf(1494, &[&(n), &(fmt_num(qi)), &(fmt_int(stones))])/* 原文：离闭 {} 载，修为+{}，灵田岁入灵石 {}。 */,
                 C_CYAN,
             );
         }
@@ -2386,7 +2381,7 @@ impl Game {
             scene: None,
             brk: false,
             title: "成行择道 · 三途分流".into(),
-            text: "成行之上道途分三，一经择定终身不改（模拟推演不携道途）：剑修战力×1.35；气修每载修为×1.25、破境率+6%；丹修服丹效果×1.35、灵田岁入×1.6。你将何以证道？".into(),
+            text: evtx(1732)/* 原文：成行之上道途分三，一经择定终身不改（模拟推演不携道途）：剑修战力×1.35；气修每载修为×1.25、破境率+6%；丹修服丹效果×1.35、灵田岁入×1.6。你将何以证道？ */.into(),
             opts: vec![
                 ("剑修 · 战力 ×1.35".into(), Eff::new()),
                 ("气修 · 修为 ×1.25 破境 +6%".into(), Eff::new()),
@@ -2416,7 +2411,7 @@ impl Game {
         l.path = p;
         let name = path_name(p);
         self.log(
-            format!("成行关口，你择定道途——{}。自此终身不改。", name),
+            evf(1495, &[&(name)])/* 原文：成行关口，你择定道途——{}。自此终身不改。 */,
             C_GOLD,
         );
         self.play(crate::sounds::Which::Ascend);
@@ -2453,7 +2448,7 @@ impl Game {
             scene: None,
             brk: false,
             title: "终卷 · 执笔人递笔".into(),
-            text: "你赢了封卷吏。执笔人递笔：「字不错。入正文吧。」\n「我还能改自己吗？」「一字不改。永生换的。」\n别等他写，字自己跑。六牒已齐（讨牒 6/6），问笔在即。".into(),
+            text: evtx(1733)/* 原文：你赢了封卷吏。执笔人递笔：「字不错。入正文吧。」\n「我还能改自己吗？」「一字不改。永生换的。」\n别等他写，字自己跑。六牒已齐（讨牒 6/6），问笔在即。 */.into(),
             opts,
         };
         crate::ui::prewarm_text(&card.title, &[24]);
@@ -2488,25 +2483,25 @@ impl Game {
             let dy = ENDING_DY[e];
             self.meta.dao_yun += dy;
             self.log(
-                format!("【结局之礼】首录《{}》——道韵 +{}", ed.name, dy),
+                evf(1496, &[&(ed.name()), &(dy)])/* 原文：【结局之礼】首录《{}》——道韵 +{} */,
                 C_GOLD,
             );
             if self.meta.endings_seen == 0b1111 {
                 self.log(
-                    "【全卷之礼】四结局集齐——称号『执笔人』可佩（角色·成就称号页）。".to_string(),
+                    evtx(1734)/* 原文：【全卷之礼】四结局集齐——称号『执笔人』可佩（角色·成就称号页）。 */.to_string(),
                     C_GOLD,
                 );
-                self.toast("称号可佩：执笔人（角色·成就称号页）", C_GOLD);
+                self.toast(evtx(1735)/* 原文：称号可佩：执笔人（角色·成就称号页） */, C_GOLD);
             }
         }
-        self.log(format!("【结局达成】{}——{}", ed.name, ed.alias), C_GOLD);
-        self.show_banner(format!("结 局 · 《{}》", ed.name), C_GOLD);
+        self.log(evf(1497, &[&(ed.name()), &(ed.alias())])/* 原文：【结局达成】{}——{} */, C_GOLD);
+        self.show_banner(format!("结 局 · 《{}》", ed.name()), C_GOLD);
         // 剧情演出包②：终局页入场节奏 0.6s（暗幕先行→标题→正文→合页钮解禁）。
         // 演出页全部字号（32 标题/17 正文/16 收益/18 合页钮）在事件帧一次预热，
         // 动画期零新字形——32/17 不在 UI_SIZES/PANEL_WARM 覆盖内，必须此处灌
-        crate::ui::prewarm_text(&format!("《{}》 · {}", ed.name, ed.alias), &[32]);
-        crate::ui::prewarm_text(ed.body, &[17]);
-        crate::ui::prewarm_text(ed.gain, &[16]);
+        crate::ui::prewarm_text(&format!("《{}》 · {}", ed.name(), ed.alias()), &[32]);
+        crate::ui::prewarm_text(ed.body(), &[17]);
+        crate::ui::prewarm_text(ed.gain(), &[16]);
         crate::ui::prewarm_text("合上这一页", &[18]);
         self.ending_anim = 0.6;
         self.ending_show = Some(e);
@@ -2646,7 +2641,7 @@ impl Game {
         if self.meta.upg[9] > 0 && gen_range(0.0, 1.0) < 0.25 {
             self.meta.sim_points += 1;
 
-            self.log("轮回镜嗡鸣——本次演演不耗点数（点数亲和）。", C_CYAN);
+            self.log(evtx(1736)/* 原文：轮回镜嗡鸣——本次演演不耗点数（点数亲和）。 */, C_CYAN);
         }
 
         self.meta.sim_points -= self.sim_cost();
@@ -2717,14 +2712,11 @@ impl Game {
 
         // v1.12.0 留行批注：开卷先浮现上一稿的批注，再入镜像
         if let Some(note) = &note_line {
-            self.slog(format!("【批注】上一稿的你：「{}」", note), C_GOLD);
+            self.slog(evf(1498, &[&(note)])/* 原文：【批注】上一稿的你：「{}」 */, C_GOLD);
         }
 
         self.slog(
-            format!(
-                "轮回镜亮起，你意识沉入镜像……此世天赋：{}。",
-                names.join("、")
-            ),
+            evf(1499, &[&(names.join("、"))])/* 原文：轮回镜亮起，你意识沉入镜像……此世天赋：{}。 */,
             C_GOLD,
         );
 
@@ -2939,7 +2931,7 @@ impl Game {
                 s.pending_break = Some((target, na));
             }
             if na >= 0.24 {
-                self.slog("蓄势圆满，气机鼎盛——就在今日，破境！", C_GOLD);
+                self.slog(evtx(1737)/* 原文：蓄势圆满，气机鼎盛——就在今日，破境！ */, C_GOLD);
                 self.sim_do_break(target, na);
                 self.sim_year_tail();
                 return;
@@ -2965,10 +2957,7 @@ impl Game {
                 s.companion.clone().unwrap()
             };
             self.slog(
-                format!(
-                    "{}为你炼制了一炉养神丹，并附赠灵石 {}。（好感+{}）",
-                    cn, fmt_int(g), COMPANION_GIFT_FAV
-                ),
+                evf(1500, &[&(cn), &(fmt_int(g)), &(COMPANION_GIFT_FAV)])/* 原文：{}为你炼制了一炉养神丹，并附赠灵石 {}。（好感+{}） */,
                 C_GREEN,
             );
         }
@@ -2998,7 +2987,7 @@ impl Game {
 
                 s.lifespan += 15.0;
 
-                logs.push(("服下培元丹，伤势尽复，寿元+15。".to_string(), C_GREEN));
+                logs.push((evtx(1738)/* 原文：服下培元丹，伤势尽复，寿元+15。 */.to_string(), C_GREEN));
             }
 
             if s.pills[0] > 0 && s.qi < need {
@@ -3091,7 +3080,7 @@ impl Game {
                     // v1.16.25 入关句补画面尾：与出关摘要「气息渊渟岳峙」成对
                     //（入关见炉火、出关见气象；仍 format! 随年数拼接，不入收编）
                     self.slog(
-                        format!("你寻一处幽谷闭关{}载，潜心苦修——炉火压到最稳的一档。", yrs),
+                        evf(1501, &[&(yrs)])/* 原文：你寻一处幽谷闭关{}载，潜心苦修——炉火压到最稳的一档。 */,
                         C_DIM,
                     );
                 } else {
@@ -3116,11 +3105,7 @@ impl Game {
                 // 重载归零则退化为原句——secl_yrs==0 防御位）
                 if self.secl_yrs > 0 {
                     self.slog(
-                        format!(
-                            "出关，气息渊渟岳峙。闭关{}载，共得修为{}。",
-                            self.secl_yrs,
-                            fmt_num(self.secl_qi)
-                        ),
+                        evf(1502, &[&(self.secl_yrs), &(fmt_num(self.secl_qi))])/* 原文：出关，气息渊渟岳峙。闭关{}载，共得修为{}。 */,
                         C_DIM,
                     );
 
@@ -3161,7 +3146,7 @@ impl Game {
                     s.natural_end = true;
                 }
 
-                self.sim_die("纸寿尽了。这本书比你自己先老——你含笑搁笔，一场大梦归真。");
+                self.sim_die(evtx(1739)/* 原文：纸寿尽了。这本书比你自己先老——你含笑搁笔，一场大梦归真。 */);
 
                 return;
             }
@@ -3193,7 +3178,7 @@ impl Game {
 
                 gain_qi(s, qi_need(s) * 0.08);
 
-                ("心魔来袭，你心湖澄澈，魔念如雪遇阳而化。道心+3。", C_GREEN)
+                (evtx(1740)/* 原文：心魔来袭，你心湖澄澈，魔念如雪遇阳而化。道心+3。 */, C_GREEN)
             } else {
                 s.dao = (s.dao - 6.0).max(0.0);
 
@@ -3201,7 +3186,7 @@ impl Game {
 
                 s.seclusion = None;
 
-                ("心魔骤起，走火入魔！你喷出一口鲜血，被迫出关。", C_RED)
+                (evtx(1741)/* 原文：心魔骤起，走火入魔！你喷出一口鲜血，被迫出关。 */, C_RED)
             }
         };
 
@@ -3240,11 +3225,11 @@ impl Game {
 
             if ok {
                 self.slog(
-                    format!("水到渠成，你踏入{}！气息更进一分。", REALMS[r].layers[ly]),
+                    evf(1503, &[&(REALMS[r].layers[ly])])/* 原文：水到渠成，你踏入{}！气息更进一分。 */,
                     C_GREEN,
                 );
             } else {
-                self.slog("突破受阻，真气紊乱，调息良久方平。", C_RED);
+                self.slog(evtx(1742)/* 原文：突破受阻，真气紊乱，调息良久方平。 */, C_RED);
             }
         } else {
             let target = {
@@ -3313,7 +3298,7 @@ impl Game {
 
                 e2.special = 14;
 
-                e2.msg = vec!["你转入闭关，默运玄功迎劫（每载存活+4%，三载后自动问笔）".into()];
+                e2.msg = vec![evtx(1743)/* 原文：你转入闭关，默运玄功迎劫（每载存活+4%，三载后自动问笔） */.into()];
 
                 card.opts.push(("闭关准备".into(), e2));
             } else {
@@ -3370,7 +3355,7 @@ impl Game {
 
                 e2.special = 16;
 
-                e2.msg = vec!["你决定蛰伏蓄势（每载成功率+8%，至多+24%后自动破境）".into()];
+                e2.msg = vec![evtx(1744)/* 原文：你决定蛰伏蓄势（每载成功率+8%，至多+24%后自动破境） */.into()];
 
                 card.opts.push(("继续蓄势".into(), e2));
             }
@@ -3419,7 +3404,7 @@ impl Game {
                 bonus: b,
             });
 
-            self.slog("功行圆满，天劫轰然而至！九重雷劫——", C_GOLD);
+            self.slog(evtx(1745)/* 原文：功行圆满，天劫轰然而至！九重雷劫—— */, C_GOLD);
 
             self.play(crate::sounds::Which::Thunder);
 
@@ -3493,7 +3478,7 @@ impl Game {
                     }
 
                     s.highlights
-                        .push(format!("{}岁，突破【{}境】", s.age as i32, rd.name));
+                        .push(evf(1504, &[&(s.age as i32), &(rd.name)])/* 原文：{}岁，突破【{}境】 */);
 
                     f
                 };
@@ -3502,7 +3487,7 @@ impl Game {
                 // 体（照 12857「旧阶沉入身后」v1.16.26 先例——模拟侧最后一句
                 // 口号腔残留；56B→50B 净减，钉测 story_11628_sim_breakthrough_line）
                 self.slog(
-                    format!("{}境的门在身后合拢——寿元长了一截", rd.name),
+                    evf(1505, &[&(rd.name)])/* 原文：{}境的门在身后合拢——寿元长了一截 */,
                     C_GOLD,
                 );
 
@@ -3533,7 +3518,7 @@ impl Game {
 
             BR::Fail => {
                 self.slog(
-                    format!("冲击{}境失败！真元反噬，身受重伤。", rd.name),
+                    evf(1506, &[&(rd.name)])/* 原文：冲击{}境失败！真元反噬，身受重伤。 */,
                     C_RED,
                 );
 
@@ -3541,7 +3526,7 @@ impl Game {
             }
 
             BR::Dead => {
-                self.sim_die(&format!("冲击{}境失败，走火入魔，经脉俱断而亡。", rd.name));
+                self.sim_die(&evf(1507, &[&(rd.name)])/* 原文：冲击{}境失败，走火入魔，经脉俱断而亡。 */);
             }
         }
     }
@@ -3566,7 +3551,7 @@ impl Game {
                 s.natural_end = true;
             }
 
-            self.sim_die("纸寿尽了。这本书比你自己先老——你含笑搁笔，一场大梦归真。");
+            self.sim_die(evtx(1739)/* 原文：纸寿尽了。这本书比你自己先老——你含笑搁笔，一场大梦归真。 */);
 
             return;
         }
@@ -3693,7 +3678,7 @@ impl Game {
         let nm = self.meta.neme.as_ref().unwrap().full();
 
         self.log(
-            format!("【文狱更换】{} 已按册候查——删你的字，从不假手他人。", nm),
+            evf(1508, &[&(nm)])/* 原文：【文狱更换】{} 已按册候查——删你的字，从不假手他人。 */,
             C_RED,
         );
 
@@ -3712,20 +3697,20 @@ impl Game {
 
             if self.meta.taodie < 6 {
                 self.log(
-                    format!("文狱讨牒 {}/6：{}职牒归档——删你字的手，先一步被你合上。", self.meta.taodie, title),
+                    evf(1509, &[&(self.meta.taodie), &(title)])/* 原文：文狱讨牒 {}/6：{}职牒归档——删你字的手，先一步被你合上。 */,
                     C_CYAN,
                 );
             } else {
                 self.meta.dao_yun += 166;
                 self.log(
-                    "封卷牒归档，讨牒 6/6！六吏职牒齐聚，道韵+166——文狱闻你名而却步（遭遇减半），可赴问笔终战。",
+                    evtx(1746)/* 原文：封卷牒归档，讨牒 6/6！六吏职牒齐聚，道韵+166——文狱闻你名而却步（遭遇减半），可赴问笔终战。 */,
                     C_GOLD,
                 );
                 // v1.16.7 大事记联动：模拟世中封卷牒归档入本世剧情（现实侧 sim=None
                 // 不记——story 数据源是 sim highlights）
                 if let Some(s) = self.sim.as_mut() {
                     s.highlights
-                        .push(format!("{}岁，讨牒6/6·六牒归档", s.age as i32));
+                        .push(evf(1510, &[&(s.age as i32)])/* 原文：{}岁，讨牒6/6·六牒归档 */);
                 }
             }
         }
@@ -3766,7 +3751,7 @@ impl Game {
         }
         let t = theme_of(self.meta.map_region);
         self.log(
-            format!("山河变色——你携新胜之势踏入{}。{}", t.name, t.desc),
+            evf(1511, &[&(t.name), &(t.desc)])/* 原文：山河变色——你携新胜之势踏入{}。{} */,
             C_GOLD,
         );
         self.show_banner(&format!("山 河 换 幕 · {}", t.name), C_GOLD);
@@ -3795,18 +3780,13 @@ impl Game {
                 }
             }
             self.log(
-                format!(
-                    "初至【{}】，山河图志录下你的足迹：道韵+{}，灵石+{}。",
-                    tname,
-                    fmt_int(dy),
-                    fmt_int(stones)
-                ),
+                evf(1512, &[&(tname), &(fmt_int(dy)), &(fmt_int(stones))])/* 原文：初至【{}】，山河图志录下你的足迹：道韵+{}，灵石+{}。 */,
                 C_GOLD,
             );
-            self.toast(format!("初至 {} · 图鉴有赏", tname), C_GOLD);
+            self.toast(evf(1513, &[&(tname)])/* 原文：初至 {} · 图鉴有赏 */, C_GOLD);
             self.play(crate::sounds::Which::Coin);
         } else {
-            self.log(format!("初至【{}】，山河图志录下你的足迹。", tname), C_GOLD);
+            self.log(evf(1514, &[&(tname)])/* 原文：初至【{}】，山河图志录下你的足迹。 */, C_GOLD);
         }
         // v1.16.8 章节书：五域到访事实翻转点（第五章边沿）
         self.check_chapters();
@@ -4010,6 +3990,8 @@ impl Game {
             // chain_latch、跨世重见率最高层，边际收益递减故仅 +1
             // v1.16.27 扩池老年层 +1（291 换窗新纸）——十条扩到十一条（单1 减包
             // 腾量后同批补位，题材照交托回望域）
+            // v1.16.29 扩池老年层 +2（309 雪堤喂雀/310 旧席重缝）——十一条扩到
+            // 十三条（单1 净减 10.27KB 达 6~8 条分级上沿，照交托回望域补位）
             if (id == 88
                 || id == 89
                 || id == 170
@@ -4020,7 +4002,9 @@ impl Game {
                 || id == 215
                 || id == 216
                 || id == 227
-                || id == 291)
+                || id == 291
+                || id == 309
+                || id == 310)
                 && !self
                     .sim
                     .as_ref()
@@ -10193,6 +10177,164 @@ impl Game {
                 ];
                 card.opts.push(("当面还他".into(), e2));
             }
+            309 => {
+                // v1.16.29 扩池：老年层（余量≤10 载门控，十一条扩到十三条——
+                // 单1 减包腾量后按分级补位；题材照交托回望域，避 89 薪火相托/
+                // 215 灶火留谱/227 半檐躲雨/291 换窗新纸：喂雀是冬日堤上与
+                // 雀群的老友面）
+                card.title = "雪堤喂雀".into();
+                card.text = evtx(1841)/* 原文：大雪封了堤，雀群躲在石缝里不叫。你每天抓一把谷来喂雀，撒在同一块石头上——它们等的是你，不止是谷。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(1842)/* 原文：第七天雀群敢落你掌心啄食。老骨头还有用，雀比人先知道。道心+2 */.into(),
+                ];
+                card.opts.push(("日日来撒".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1843)/* 原文：你撒完就走，不回头看。雀声一路送你半条堤。气运+1 */.into(),
+                ];
+                card.opts.push(("撒完就走".into(), e2));
+            }
+            310 => {
+                // v1.16.29 扩池：老年层（同 309 批注十二条；题材避 170 炉暖旧器/
+                // 198 窗前晒卷/297 重缝冬衣：重缝旧席是补缀母题的坐卧面，
+                // 补席如补书）
+                card.title = "旧席重缝".into();
+                card.text = evtx(1844)/* 原文：睡了几十年的旧席散了边。你坐在檐下拆开重补，补席如补书——料还是旧料，手却记得当年的活，做到掌灯才收尾。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(1845)/* 原文：补好的席铺回床上，翻身再不扎刺。手艺没丢，觉就稳。道心+2 */.into(),
+                ];
+                card.opts.push(("补好自睡".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1846)/* 原文：你顺手多补一张，留给来串门的孩童睡。旧料新席，冬夜不凉。气运+1 */.into(),
+                ];
+                card.opts.push(("多补一张".into(), e2));
+            }
+            311 => {
+                // v1.16.29 扩池：mr5 善（mr5 最薄层 26→27 补位；题材避 91 仙门
+                // 论道/169 书肆新声/211 云上放灯/247 雾锁仙市/283 纵马霜原/
+                // 304 代书家信：下山买茶是高境界与凡人队的错位面）
+                card.title = "下山买茶".into();
+                card.text = evtx(1847)/* 原文：你下山赶集，排在凡人队尾买春茶。掌柜问你修为，你摆手：茶要紧。半城人见过你排队，没见过你飞。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(1848)/* 原文：你把茶分给队里的四邻。凡人的好茶入不了道书，入得了人情。道心+2 */.into(),
+                ];
+                card.opts.push(("分茶四邻".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1849)/* 原文：你在渡口石阶上自斟一盏。山高水长，境是境，茶是茶。气运+1 */.into(),
+                ];
+                card.opts.push(("渡口自饮".into(), e2));
+            }
+            312 => {
+                // v1.16.29 扩池：具名 NPC 宁清霜第二卡（Npc(2)，正文钉名⟺
+                // Npc(n) 照 248/292/301 口径；题材避 252 枰边手谈/263 旧穗试锋/
+                // 275 寄剑西窗/282 霜泉淬锋/301 霜窗描枝：雪水研墨是霜天
+                // 写意的文房面）
+                card.title = "雪水研墨".into();
+                card.actor = Some(CardActor::Npc(2));
+                card.text = evtx(1850)/* 原文：宁清霜收了半盏檐雪，搁在炉边化开：雪水研墨，墨色最静。她推来半锭墨——你的字，也该有个冬天的样子。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(1851)/* 原文：两人各研各的。墨成时她看了一眼：你的墨，比去年稳了。道心+2 */.into(),
+                ];
+                card.opts.push(("同研一池".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1852)/* 原文：你在册页角记一笔：某年冬，雪水研墨。她颔首说，账记得细。气运+1 */.into(),
+                ];
+                card.opts.push(("留雪入册".into(), e2));
+            }
+            313 => {
+                // v1.16.29 扩池：具名 NPC 胡掌柜第六卡（Npc(1)，正文钉名⟺
+                // Npc(n) 照 248/292/301 口径；题材避 271 柜前压价/281 柜后传眼/
+                // 295 符价压市：第三本账直连 NPC_TALES[1] 人情账母题）
+                card.title = "第三本账".into();
+                card.actor = Some(CardActor::Npc(1));
+                card.text = evtx(1853)/* 原文：盘库夜，胡掌柜从柜底抽出第三本账推给你看——不记银钱，记人情：谁欠谁一句实话，谁替谁垫过秤。你的名字在头一页。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(1854)/* 原文：你在自己名下添一行：欠万宝楼一个公道价。她大笑收笔——这账认账主。道心+2 */.into(),
+                ];
+                card.opts.push(("添一行账".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1855)/* 原文：你把账合上推回去。她收进柜底：有些账，记着就行，不必清。气运+1 */.into(),
+                ];
+                card.opts.push(("合上不问".into(), e2));
+            }
+            314 => {
+                // v1.16.29 扩池：mr3 善（mr3 常态补位 31→32；题材避 102 涸河
+                // 龙祠/144 渡蚁桥/210 雨檐听铃/240 药圃赌芽/246 松风问琴/
+                // 305 灵窖渗漏：折梅探病是梅与探望的人情面）
+                card.title = "檐下折梅".into();
+                card.text = evtx(1856)/* 原文：檐下梅枝头一回开。邻家老人起不来床，你折梅一枝送去，插在粗陶碗里——满屋药味里，就这一缕是甜的。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(1857)/* 原文：隔日你又折一枝送去。老人说，花开得比药灵。道心+2 */.into(),
+                ];
+                card.opts.push(("再送一枝".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1858)/* 原文：你教老人隔日往瓶里添水。花多开三日，上门探望的人多三回。气运+1 */.into(),
+                ];
+                card.opts.push(("教他添水".into(), e2));
+            }
+            315 => {
+                // v1.16.29 扩池：mr7 稀有 w1（稀有 23→24 条 43→44 权，44/982
+                // ≈4.48% 守勘察带内；w1 先例 15 仙人遗府/57 无面镜客/73 纸人
+                // 夜行；题材避 224 坠星动冢/284 枯莲夜雨/303 雷纹入纸：琅函
+                // 倒页直连琅函/未竟稿母题，守世纪律不触破境裁决）
+                card.title = "琅函倒页".into();
+                card.text = evtx(1859)/* 原文：夜半无风，琅函那边送出一页残纸，正落在你未写完的稿上——纸上无字，只有一道折痕，像被读过千遍又放回。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 3.0;
+                e1.msg = vec![
+                    evtx(1860)/* 原文：你把它夹进稿里当书签。自那夜起，落笔再没有涂改。道心+3 */.into(),
+                ];
+                card.opts.push(("夹进稿中".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1861)/* 原文：你把它折回原样焚了，纸灰向上走。天上的书少一页，你的书多一夜。气运+1 */.into(),
+                ];
+                card.opts.push(("原样焚还".into(), e2));
+            }
+            316 => {
+                // v1.16.29 扩池：mr4 恶（恶缘 9→10 条；mr4 恶现 6 条最薄档；
+                // 题材避 105 古戍点兵/130 引魂幡影/147 货栈灵鼠/238 行会追赔/
+                // 245 滩头讹偿/294 假丹换真：药童卷方是熟人造成的失窃面）
+                card.title = "药童卷方".into();
+                card.text = evtx(1862)/* 原文：药童不见了，柜里三张老丹方跟着没了——窗绳打着结，是连夜走的。明日半城药铺，就会挂出你的方子。 */.into();
+                let mut e1 = Eff::new();
+                e1.stones_pct = -0.05;
+                e1.good = false;
+                e1.msg = vec![
+                    evtx(1863)/* 原文：赏格加路费倒贴出去，追回两张——第三张已经挂进别家药堂。灵石-5% */.into(),
+                ];
+                card.opts.push(("报官追回".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.msg = vec![
+                    evtx(1864)/* 原文：你凭记性把三张方子重写，一味一味改稳。他偷走的是旧稿，你留的是手艺。道心+1 */.into(),
+                ];
+                card.opts.push(("重写更稳".into(), e2));
+            }
 
             _ => {}
         }
@@ -10388,7 +10530,7 @@ impl Game {
                 // 闭关准备三载后自动问笔
                 let s = self.sim.as_mut().unwrap();
                 s.pending_break = Some((10, 0.12));
-                self.slog("你转入闭关，默运玄功静候天劫。", C_DIM);
+                self.slog(evtx(1747)/* 原文：你转入闭关，默运玄功静候天劫。 */, C_DIM);
             }
             15 => {
                 // 立即破境（玩家抉择）
@@ -10444,17 +10586,11 @@ impl Game {
                     s.comp_fav = s.comp_fav.max(COMPANION_BOND_FAV);
 
                     s.highlights
-                        .push(format!("{}岁，与{}缝作同页", s.age as i32, cn));
+                        .push(evf(1515, &[&(s.age as i32), &(cn)])/* 原文：{}岁，与{}缝作同页 */);
                     if feng_new {
-                        s.highlights.push(format!(
-                            "{}岁，与{}初缝三生之页——三生之约，缘起此生",
-                            s.age as i32, cn
-                        ));
+                        s.highlights.push(evf(1516, &[&(s.age as i32), &(cn)])/* 原文：{}岁，与{}初缝三生之页——三生之约，缘起此生 */);
                     } else if feng_re {
-                        s.highlights.push(format!(
-                            "{}岁，与{}同页重逢——撕开的页，又缝上了",
-                            s.age as i32, cn
-                        ));
+                        s.highlights.push(evf(1517, &[&(s.age as i32), &(cn)])/* 原文：{}岁，与{}同页重逢——撕开的页，又缝上了 */);
                     }
 
                     first
@@ -10506,22 +10642,18 @@ impl Game {
                     if got_tech {
                         let tn = TECHS[old_tech + 1].name;
                         self.slog(
-                            format!(
-                                "大比夺魁！掌门亲授《{}》，另赏灵石 {}，战力永久+5%！",
-                                tn,
-                                fmt_int(g)
-                            ),
+                            evf(1518, &[&(tn), &(fmt_int(g))])/* 原文：大比夺魁！掌门亲授《{}》，另赏灵石 {}，战力永久+5%！ */,
                             C_GOLD,
                         );
                     } else {
                         self.slog(
-                            format!("大比夺魁！赏灵石 {}，战力永久+5%！", fmt_int(g)),
+                            evf(1519, &[&(fmt_int(g))])/* 原文：大比夺魁！赏灵石 {}，战力永久+5%！ */,
                             C_GOLD,
                         );
                     }
                     if let Some(s) = self.sim.as_mut() {
                         s.highlights
-                            .push(format!("{}岁，宗门大比夺魁", s.age as i32));
+                            .push(evf(1520, &[&(s.age as i32)])/* 原文：{}岁，宗门大比夺魁 */);
                     }
                     self.check_ach(23);
                 }
@@ -10533,7 +10665,7 @@ impl Game {
                 let s = self.sim.as_mut().unwrap();
 
                 s.highlights
-                    .push(format!("{}岁，空白行上，你亲手写下一行", s.age as i32));
+                    .push(evf(1521, &[&(s.age as i32)])/* 原文：{}岁，空白行上，你亲手写下一行 */);
             }
 
             // ---------- v1.16.7 连锁剧情：置链臂（20..=31）与新检定臂 ----------
@@ -10740,21 +10872,14 @@ impl Game {
                     self.meta.sim_points += 2;
 
                     self.log(
-                        format!(
-                            "【模拟中反杀】你循战意逆斩宿敌{}！现实中的你已悟得其招，宿敌授首。",
-                            neme.full()
-                        ),
+                        evf(1522, &[&(neme.full())])/* 原文：【模拟中反杀】你循战意逆斩宿敌{}！现实中的你已悟得其招，宿敌授首。 */,
                         C_GOLD,
                     );
 
                     self.show_banner("宿敌授首！", C_GOLD);
 
                     self.log(
-                        format!(
-                            "得灵石 {}（现实），道韵+{}，模拟点数+2。",
-                            fmt_int(reward_stones),
-                            reward_dy
-                        ),
+                        evf(1523, &[&(fmt_int(reward_stones)), &(reward_dy)])/* 原文：得灵石 {}（现实），道韵+{}，模拟点数+2。 */,
                         C_GOLD,
                     );
 
@@ -10771,10 +10896,7 @@ impl Game {
                         .map(|n| n.full())
                         .unwrap_or_else(|| "那魔修".to_string());
 
-                    self.sim_die(&format!(
-                        "你于乱战中再遇宿敌{}！激战三十合，终究技逊一筹，被一剑枭首。",
-                        nfull
-                    ));
+                    self.sim_die(&evf(1524, &[&(nfull)])/* 原文：你于乱战中再遇宿敌{}！激战三十合，终究技逊一筹，被一剑枭首。 */);
                 }
             }
             68 => {
@@ -10795,10 +10917,7 @@ impl Game {
                 }
 
                 self.slog(
-                    format!(
-                        "你于荒野撞见{}！心口旧账发烫——能战而未战，拼死遁走，身受重伤，行囊失了二成。",
-                        nfull
-                    ),
+                    evf(1525, &[&(nfull)])/* 原文：你于荒野撞见{}！心口旧账发烫——能战而未战，拼死遁走，身受重伤，行囊失了二成。 */,
                     C_RED,
                 );
             }
@@ -10835,7 +10954,7 @@ impl Game {
                     }
 
                     self.slog(
-                        "你把心里那句话如实答了。砚池无墨自出一行小字，映你眉目——摊主深深一揖。道心+3，修为+8%",
+                        evtx(1748)/* 原文：你把心里那句话如实答了。砚池无墨自出一行小字，映你眉目——摊主深深一揖。道心+3，修为+8% */,
                         C_GOLD,
                     );
                 } else {
@@ -10848,7 +10967,7 @@ impl Game {
                     }
 
                     self.slog(
-                        "你答得含糊——砚声骤然一冷，寒意浸指入骨。摊主摇头把砚收起。（轻伤，道心-2）",
+                        evtx(1749)/* 原文：你答得含糊——砚声骤然一冷，寒意浸指入骨。摊主摇头把砚收起。（轻伤，道心-2） */,
                         C_RED,
                     );
                 }
@@ -10871,7 +10990,7 @@ impl Game {
                     }
 
                     self.slog(
-                        "你临风作答，无弦琴的鸣声应声而歇——亭柱「答者留琴」四字旁，竟多出一行小字，记的是你今日的答。道心+3，修为+8%",
+                        evtx(1750)/* 原文：你临风作答，无弦琴的鸣声应声而歇——亭柱「答者留琴」四字旁，竟多出一行小字，记的是你今日的答。道心+3，修为+8% */,
                         C_GOLD,
                     );
                 } else {
@@ -10884,7 +11003,7 @@ impl Game {
                     }
 
                     self.slog(
-                        "你答得迟疑——琴声陡然一乱，弦外之音震得耳内嗡鸣。琴留在亭中，你下山去了。（轻伤，道心-2）",
+                        evtx(1751)/* 原文：你答得迟疑——琴声陡然一乱，弦外之音震得耳内嗡鸣。琴留在亭中，你下山去了。（轻伤，道心-2） */,
                         C_RED,
                     );
                 }
@@ -10908,7 +11027,7 @@ impl Game {
                     }
 
                     self.slog(
-                        "你顺着回声应答到底，末一声归了原调——谷底浅滩浮出前人刻壁的一行字，记的正是应答之法。道心+3，修为+8%",
+                        evtx(1752)/* 原文：你顺着回声应答到底，末一声归了原调——谷底浅滩浮出前人刻壁的一行字，记的正是应答之法。道心+3，修为+8% */,
                         C_GOLD,
                     );
                 } else {
@@ -10921,7 +11040,7 @@ impl Game {
                     }
 
                     self.slog(
-                        "你应到一半接不上话——三重回声一齐压顶，谷风灌耳如刀。你掩耳退出了谷口。（轻伤，道心-2）",
+                        evtx(1753)/* 原文：你应到一半接不上话——三重回声一齐压顶，谷风灌耳如刀。你掩耳退出了谷口。（轻伤，道心-2） */,
                         C_RED,
                     );
                 }
@@ -10945,7 +11064,7 @@ impl Game {
                     }
 
                     self.slog(
-                        "你把心里的旧账当作答。雨声忽然齐了一拍，池心浮出半枚旧莲瓣，瓣上小字记着问的来处。道心+3，修为+8%",
+                        evtx(1754)/* 原文：你把心里的旧账当作答。雨声忽然齐了一拍，池心浮出半枚旧莲瓣，瓣上小字记着问的来处。道心+3，修为+8% */,
                         C_GOLD,
                     );
                 } else {
@@ -10958,7 +11077,7 @@ impl Game {
                     }
 
                     self.slog(
-                        "你答得急了——池水骤冷浸骨，夜雨一阵急过一阵，枯莲声声都成了催问。你踏泥退出池边。（轻伤，道心-2）",
+                        evtx(1755)/* 原文：你答得急了——池水骤冷浸骨，夜雨一阵急过一阵，枯莲声声都成了催问。你踏泥退出池边。（轻伤，道心-2） */,
                         C_RED,
                     );
                 }
@@ -10995,18 +11114,12 @@ impl Game {
                         let tn = TECHS[old_tech + 1].name;
 
                         self.slog(
-                            format!(
-                                "三问皆答，素布之下正是你未写完的那一页——《{}》入你行囊！道途再进一阶。",
-                                tn
-                            ),
+                            evf(1526, &[&(tn)])/* 原文：三问皆答，素布之下正是你未写完的那一页——《{}》入你行囊！道途再进一阶。 */,
                             C_GOLD,
                         );
                     } else {
                         self.slog(
-                            format!(
-                                "三问皆答，青灯化萤而去——案上留银 {}，是主人三十年的灯油钱。",
-                                fmt_int(g)
-                            ),
+                            evf(1527, &[&(fmt_int(g))])/* 原文：三问皆答，青灯化萤而去——案上留银 {}，是主人三十年的灯油钱。 */,
                             C_GOLD,
                         );
                     }
@@ -11016,7 +11129,7 @@ impl Game {
                     s.injured = 4;
 
                     self.slog(
-                        "第三问问住了你——青灯骤暗，纸页翻卷如刀。你受了一记内创。（重伤）",
+                        evtx(1756)/* 原文：第三问问住了你——青灯骤暗，纸页翻卷如刀。你受了一记内创。（重伤） */,
                         C_RED,
                     );
                 }
@@ -11042,11 +11155,7 @@ impl Game {
                     }
 
                     self.slog(
-                        format!(
-                            "你认出那字是「缘」。墨叟大笑，古字化银 {} 入袖——渊上从此多一个传说。灵石+{}，气运+2",
-                            fmt_int(g),
-                            fmt_int(g)
-                        ),
+                        evf(1528, &[&(fmt_int(g)), &(fmt_int(g))])/* 原文：你认出那字是「缘」。墨叟大笑，古字化银 {} 入袖——渊上从此多一个传说。灵石+{}，气运+2 */,
                         C_GOLD,
                     );
                 } else {
@@ -11055,7 +11164,7 @@ impl Game {
                     s.injured = 3;
 
                     self.slog(
-                        "你认不得那个字——墨渊水汽骤冷，浸骨入髓。（轻伤）",
+                        evtx(1757)/* 原文：你认不得那个字——墨渊水汽骤冷，浸骨入髓。（轻伤） */,
                         C_RED,
                     );
                 }
@@ -11079,10 +11188,7 @@ impl Game {
                     }
 
                     self.slog(
-                        format!(
-                            "纸人停步，小棺开了一条缝——里面是前人未写完的半句遗稿。你读罢，气机自通：修为+12%，灵石+{}。",
-                            fmt_int(g)
-                        ),
+                        evf(1529, &[&(fmt_int(g))])/* 原文：纸人停步，小棺开了一条缝——里面是前人未写完的半句遗稿。你读罢，气机自通：修为+12%，灵石+{}。 */,
                         C_GOLD,
                     );
                 } else {
@@ -11094,7 +11200,7 @@ impl Game {
                         s.stones = (s.stones as f64 * 0.85) as i64;
 
                         (
-                            "纸人齐齐回头——你被记了名。当夜高热不退，行囊也丢了些。（重伤，灵石-15%）",
+                            evtx(1758)/* 原文：纸人齐齐回头——你被记了名。当夜高热不退，行囊也丢了些。（重伤，灵石-15%） */,
                             C_RED,
                         )
                     };
@@ -11136,12 +11242,12 @@ impl Game {
                         // v1.16.20 链尾余味（链2 守碑人过臂）：照 special32「三十年的
                         // 灯油钱」余味体补一档——授《名》后守碑人还归其碑，画面收束
                         self.slog(
-                            format!("三问皆对，雾散了一线——守碑人授《{}》，转身还去守他的碑。", tn),
+                            evf(1530, &[&(tn)])/* 原文：三问皆对，雾散了一线——守碑人授《{}》，转身还去守他的碑。 */,
                             C_GOLD,
                         );
                     } else {
                         self.slog(
-                            format!("三问皆对，守碑人抚掌而笑——赠灵石 {} 作谢。", fmt_int(g)),
+                            evf(1531, &[&(fmt_int(g))])/* 原文：三问皆对，守碑人抚掌而笑——赠灵石 {} 作谢。 */,
                             C_GOLD,
                         );
                     }
@@ -11150,7 +11256,7 @@ impl Game {
 
                     s.injured = 4;
 
-                    self.slog("三问皆错，碑文反噬——你受了一记内创。（重伤）", C_RED);
+                    self.slog(evtx(1759)/* 原文：三问皆错，碑文反噬——你受了一记内创。（重伤） */, C_RED);
                 }
             }
             5 => {
@@ -11189,7 +11295,7 @@ impl Game {
                         ((160.0 * ss) as i64, relic)
                     };
 
-                    let mut m = format!("陨铁认主，星纹入体！修为大进，灵石+{}", fmt_int(g));
+                    let mut m = evf(1532, &[&(fmt_int(g))])/* 原文：陨铁认主，星纹入体！修为大进，灵石+{} */;
 
                     if let Some(rl) = relic {
                         m = format!("{}，得法宝【{}】", m, RELICS[rl].name);
@@ -11203,7 +11309,7 @@ impl Game {
 
                     s.stones = (s.stones as f64 * 0.7) as i64;
 
-                    self.slog("铁羽兽自坑中暴起，你重伤狂遁！（重伤，灵石-30%）", C_RED);
+                    self.slog(evtx(1760)/* 原文：铁羽兽自坑中暴起，你重伤狂遁！（重伤，灵石-30%） */, C_RED);
                 }
             }
             12 => {
@@ -11211,7 +11317,7 @@ impl Game {
                 let s = self.sim.as_mut().unwrap();
 
                 s.highlights
-                    .push(format!("{}岁，江心匣底参悟墨痴真迹", s.age as i32));
+                    .push(evf(1533, &[&(s.age as i32)])/* 原文：{}岁，江心匣底参悟墨痴真迹 */);
             }
             26 => {
                 // 镜中赌命（稀有·无面镜客）：五五开——赢半生修为+气运，输十年寿数
@@ -11223,7 +11329,7 @@ impl Game {
 
                         s.luck = (s.luck + 6.0).clamp(0.0, 100.0);
 
-                        ("镜中人一笑而散——半生修为涌入你的识海！气运+6", C_GOLD)
+                        (evtx(1761)/* 原文：镜中人一笑而散——半生修为涌入你的识海！气运+6 */, C_GOLD)
                     };
 
                     self.slog(msg, c);
@@ -11235,7 +11341,7 @@ impl Game {
 
                         s.injured = 6;
 
-                        ("镜中人吞了你的倒影——十年寿数入镜，你受创而退！", C_RED)
+                        (evtx(1762)/* 原文：镜中人吞了你的倒影——十年寿数入镜，你受创而退！ */, C_RED)
                     };
 
                     self.slog(msg, c);
@@ -11274,16 +11380,12 @@ impl Game {
                         let tn = TECHS[old_tech + 1].name;
 
                         self.slog(
-                            format!(
-                                "漩心洞府竟是前人坐化之地——《{}》与灵石 {} 尽归于你！",
-                                tn,
-                                fmt_int(g)
-                            ),
+                            evf(1534, &[&(tn), &(fmt_int(g))])/* 原文：漩心洞府竟是前人坐化之地——《{}》与灵石 {} 尽归于你！ */,
                             C_GOLD,
                         );
                     } else {
                         self.slog(
-                            format!("漩心洞府灵气尽枯，你扫得遗财灵石 {}。", fmt_int(g)),
+                            evf(1535, &[&(fmt_int(g))])/* 原文：漩心洞府灵气尽枯，你扫得遗财灵石 {}。 */,
                             C_GOLD,
                         );
                     }
@@ -11295,7 +11397,7 @@ impl Game {
 
                         s.stones = (s.stones as f64 * 0.75) as i64;
 
-                        ("灵潮倒卷如刃，你被抛出漩涡——重伤濒死！（重伤，灵石-25%）", C_RED)
+                        (evtx(1763)/* 原文：灵潮倒卷如刃，你被抛出漩涡——重伤濒死！（重伤，灵石-25%） */, C_RED)
                     };
 
                     self.slog(msg, c);
@@ -11352,7 +11454,7 @@ impl Game {
 
                     match r {
                         L::Tech(t) => {
-                            self.slog(format!("你于石壁上悟得《{}》！", TECHS[t].name), C_GOLD)
+                            self.slog(evf(1536, &[&(TECHS[t].name)])/* 原文：你于石壁上悟得《{}》！ */, C_GOLD)
                         }
 
                         L::Relic(rl) => {
@@ -11410,7 +11512,7 @@ impl Game {
 
                     match r {
                         W::Relic(rl) => {
-                            self.slog(format!("灵乳入腹，得【{}】！", RELICS[rl].name), C_GOLD)
+                            self.slog(evf(1537, &[&(RELICS[rl].name)])/* 原文：灵乳入腹，得【{}】！ */, C_GOLD)
                         }
 
                         W::Qi => self.slog("千年灵乳入腹，修为大进！", C_GOLD),
@@ -11450,7 +11552,7 @@ impl Game {
                         (g, relic)
                     };
 
-                    let mut msg = format!("秘境宝库洞开！灵石+{}", fmt_int(g));
+                    let mut msg = evf(1538, &[&(fmt_int(g))])/* 原文：秘境宝库洞开！灵石+{} */;
 
                     if let Some(rl) = relic {
                         msg = format!("{}，得法宝【{}】", msg, RELICS[rl].name);
@@ -11475,7 +11577,7 @@ impl Game {
 
                 s.power_buff += 0.12;
 
-                self.slog("仙人指点了三招武道真意！战力永久+12%。", C_GOLD);
+                self.slog(evtx(1764)/* 原文：仙人指点了三招武道真意！战力永久+12%。 */, C_GOLD);
             }
 
             9 => {
@@ -11490,13 +11592,13 @@ impl Game {
                         s.equipped.push(3); // v1.5.0：模拟获得即装备（守则见文件头）
 
                         s.highlights
-                            .push(format!("{}岁，古剑冢得墨骨伞", s.age as i32));
+                            .push(evf(1539, &[&(s.age as i32)])/* 原文：{}岁，古剑冢得墨骨伞 */);
 
-                        self.slog("冢中遗物认主——【墨骨伞】撑开，遮尽十万剑气！", C_GOLD);
+                        self.slog(evtx(1765)/* 原文：冢中遗物认主——【墨骨伞】撑开，遮尽十万剑气！ */, C_GOLD);
                     } else {
                         s.power_buff += 0.15;
 
-                        self.slog("古剑已有所属，剑意却入了你的骨。战力永久+15%！", C_GOLD);
+                        self.slog(evtx(1766)/* 原文：古剑已有所属，剑意却入了你的骨。战力永久+15%！ */, C_GOLD);
                     }
                 }
             }
@@ -11531,10 +11633,10 @@ impl Game {
                         (g, relic)
                     };
 
-                    let mut msg = format!("魔窟深处是前代魔君的库房！灵石+{}", fmt_int(g));
+                    let mut msg = evf(1540, &[&(fmt_int(g))])/* 原文：魔窟深处是前代魔君的库房！灵石+{} */;
 
                     if let Some(rl) = relic {
-                        msg = format!("{}，得魔功法宝【{}】", msg, RELICS[rl].name);
+                        msg = evf(1541, &[&(msg), &(RELICS[rl].name)])/* 原文：{}，得魔功法宝【{}】 */;
                     }
 
                     self.slog(msg, C_GOLD);
@@ -11545,7 +11647,7 @@ impl Game {
 
                     s.stones = (s.stones as f64 * 0.7) as i64;
 
-                    self.slog("魔窟里残魂反噬，你重伤狂逃！（重伤，灵石-30%）", C_RED);
+                    self.slog(evtx(1767)/* 原文：魔窟里残魂反噬，你重伤狂逃！（重伤，灵石-30%） */, C_RED);
                 }
             }
 
@@ -11564,7 +11666,7 @@ impl Game {
                     s.luck = (s.luck + 2.0).min(100.0);
 
                     self.slog(
-                        format!("商队安抵坊市！管事奉上酬金 {}，气运+2。", fmt_int(g)),
+                        evf(1542, &[&(fmt_int(g))])/* 原文：商队安抵坊市！管事奉上酬金 {}，气运+2。 */,
                         C_GREEN,
                     );
                 }
@@ -11577,7 +11679,7 @@ impl Game {
 
                 s.pills[2] += 1;
 
-                self.slog("卦师赠破境丹一枚：此卦大吉。", C_GREEN);
+                self.slog(evtx(1768)/* 原文：卦师赠破境丹一枚：此卦大吉。 */, C_GREEN);
             }
 
             7 => {
@@ -11603,13 +11705,13 @@ impl Game {
 
                         s.qi += qi_need(s) * 0.08;
 
-                        ("你心湖澄澈，魔念如雪遇阳而化。道心+3。", C_GREEN)
+                        (evtx(1769)/* 原文：你心湖澄澈，魔念如雪遇阳而化。道心+3。 */, C_GREEN)
                     } else {
                         s.dao = (s.dao - 6.0).max(0.0);
 
                         s.injured = 5;
 
-                        ("心魔难平，你受了内创。（道心-6）", C_RED)
+                        (evtx(1770)/* 原文：心魔难平，你受了内创。（道心-6） */, C_RED)
                     }
                 };
 
@@ -11747,7 +11849,7 @@ impl Game {
         }
 
         if died {
-            self.sim_die("命殒于外，一身道果散入天地。");
+            self.sim_die(evtx(1771)/* 原文：命殒于外，一身道果散入天地。 */);
         }
     }
 
@@ -11805,7 +11907,7 @@ impl Game {
         match res {
             F::Win(g) => {
                 self.slog(
-                    format!("你战退{}！缴获灵石 {}。", name, fmt_int(g)),
+                    evf(1543, &[&(name), &(fmt_int(g))])/* 原文：你战退{}！缴获灵石 {}。 */,
                     C_GREEN,
                 );
 
@@ -11818,7 +11920,7 @@ impl Game {
             }
 
             F::Lose => {
-                self.slog(format!("不敌{}，身受重伤，仓皇遁走！", name), C_RED);
+                self.slog(evf(1544, &[&(name)])/* 原文：不敌{}，身受重伤，仓皇遁走！ */, C_RED);
 
                 self.play(crate::sounds::Which::BreakFail);
 
@@ -11826,10 +11928,7 @@ impl Game {
             }
 
             F::Dead => {
-                self.sim_die(&format!(
-                    "你伤重不治，成了{}爪下的一滩墨渍——这一行，就此断在这里。",
-                    name
-                ));
+                self.sim_die(&evf(1545, &[&(name)])/* 原文：你伤重不治，成了{}爪下的一滩墨渍——这一行，就此断在这里。 */);
 
                 false
             }
@@ -11920,12 +12019,12 @@ impl Game {
                     }
 
                     s.highlights
-                        .push(format!("{}岁，渡九重雷劫，飞升成仙！", s.age as i32));
+                        .push(evf(1546, &[&(s.age as i32)])/* 原文：{}岁，渡九重雷劫，飞升成仙！ */);
 
                     f
                 };
 
-                self.slog("第九重雷劫散去，天门洞开！你踏虹而上——飞升成仙！", C_GOLD);
+                self.slog(evtx(1772)/* 原文：第九重雷劫散去，天门洞开！你踏虹而上——飞升成仙！ */, C_GOLD);
 
                 self.show_banner("飞 升 成 仙", C_GOLD);
 
@@ -11948,10 +12047,10 @@ impl Game {
                     s.trib.as_ref().map(|t| t.wave).unwrap_or(9)
                 };
 
-                self.slog(format!("第{}重雷劫轰落——你咬牙扛住了！", w), C_CYAN);
+                self.slog(evf(1547, &[&(w)])/* 原文：第{}重雷劫轰落——你咬牙扛住了！ */, C_CYAN);
             }
         } else {
-            self.sim_die("天道按语：此稿平平。退。——九问未过，形神俱灭，化作漫天流萤。");
+            self.sim_die(evtx(1773)/* 原文：天道按语：此稿平平。退。——九问未过，形神俱灭，化作漫天流萤。 */);
         }
     }
 
@@ -11991,7 +12090,7 @@ impl Game {
             crate::ui::prewarm_text(cn, &[14]);
             if let Some(s) = self.sim.as_mut() {
                 s.highlights
-                    .push(format!("{}与你相伴至最后一刻，含笑而逝。", cn));
+                    .push(evf(1548, &[&(cn)])/* 原文：{}与你相伴至最后一刻，含笑而逝。 */);
             }
         }
         let comp_fav = self.sim.as_ref().map(|s| s.comp_fav).unwrap_or(0);
@@ -12128,7 +12227,7 @@ impl Game {
 
                 gain_qi(life, gain);
 
-                msg = format!("继承修为：现实修为 +{}", fmt_num(gain));
+                msg = evf(1549, &[&(fmt_num(gain))])/* 原文：继承修为：现实修为 +{} */;
             }
 
             1 => {
@@ -12136,7 +12235,7 @@ impl Game {
 
                 life.body = (life.body + 5.0).min(100.0);
 
-                msg = "继承道果：道心 +5，体魄 +5（永久）".to_string();
+                msg = evtx(1774)/* 原文：继承道果：道心 +5，体魄 +5（永久） */.to_string();
             }
 
             2 => {
@@ -12149,7 +12248,7 @@ impl Game {
 
                     gain_qi(life, conv);
 
-                    msg = format!("功法不及其身，转化为修为 +{}", fmt_num(conv));
+                    msg = evf(1550, &[&(fmt_num(conv))])/* 原文：功法不及其身，转化为修为 +{} */;
                 }
             }
 
@@ -12164,7 +12263,7 @@ impl Game {
 
                         life.stones += g;
 
-                        msg = format!("法宝已有，折算灵石 {}", fmt_int(g));
+                        msg = evf(1551, &[&(fmt_int(g))])/* 原文：法宝已有，折算灵石 {} */;
                     }
                 } else {
                     life.stones += 1500;
@@ -12178,7 +12277,7 @@ impl Game {
 
                 life.stones += g;
 
-                msg = format!("继承财货：灵石 +{}", fmt_int(g));
+                msg = evf(1552, &[&(fmt_int(g))])/* 原文：继承财货：灵石 +{} */;
             }
 
             5 => {
@@ -12186,7 +12285,7 @@ impl Game {
                     life.pills[k] += sr.pills[k];
                 }
 
-                msg = "继承丹药：模拟中丹药尽数带回".to_string();
+                msg = evtx(1775)/* 原文：继承丹药：模拟中丹药尽数带回 */.to_string();
             }
 
             6 => {
@@ -12198,7 +12297,7 @@ impl Game {
             7 => {
                 life.luck = (life.luck + 3.0).min(100.0);
 
-                msg = "继承气运：现实气运 +3（永久）".to_string();
+                msg = evtx(1776)/* 原文：继承气运：现实气运 +3（永久） */.to_string();
             }
             8 => {
                 life.dao = (life.dao + 8.0).min(100.0);
@@ -12211,12 +12310,9 @@ impl Game {
                         .min(NPC_FAV_MAX);
                     life.comp_fav = fav;
                     life.companion = Some(cn.clone());
-                    msg = format!(
-                        "道侣遗泽：{}随你魂归现实，情谊不减（好感+{}）。道心 +8，气运 +8。",
-                        cn, INHERIT_LEGACY_FAV
-                    );
+                    msg = evf(1553, &[&(cn), &(INHERIT_LEGACY_FAV)])/* 原文：道侣遗泽：{}随你魂归现实，情谊不减（好感+{}）。道心 +8，气运 +8。 */;
                 } else {
-                    msg = "道侣遗泽：道心 +8，气运 +8（永久）".to_string();
+                    msg = evtx(1777)/* 原文：道侣遗泽：道心 +8，气运 +8（永久） */.to_string();
                 }
             }
 
@@ -12246,7 +12342,7 @@ impl Game {
         self.run_recall_open = false;
         self.ev_recall = None;
 
-        self.log("大梦初醒，轮回镜归于沉寂。镜中一生，造化归身。", C_TEXT);
+        self.log(evtx(1778)/* 原文：大梦初醒，轮回镜归于沉寂。镜中一生，造化归身。 */, C_TEXT);
 
         // v1.16.21 继承未选折算（惜选张力）：收束时把未携走的造化各折一份余泽
         // 入道韵（dao_yun 既有持久键零新键；折值克制——3 选 1 至多两份，约
@@ -12271,7 +12367,7 @@ impl Game {
             self.meta.dao_yun += fold;
 
             self.log(
-                format!("余泽入身：未携的造化化作道韵 +{}。", fold),
+                evf(1554, &[&(fold)])/* 原文：余泽入身：未携的造化化作道韵 +{}。 */,
                 C_GOLD,
             );
         }
@@ -12282,10 +12378,10 @@ impl Game {
         if self.meta.sys_seen & 0b1000 == 0 {
             self.meta.sys_seen |= 0b1000;
             self.log(
-                "镜中造化已入此身——行囊可验宝，闭关自涨修为。推演不误砍柴工。",
+                evtx(1779)/* 原文：镜中造化已入此身——行囊可验宝，闭关自涨修为。推演不误砍柴工。 */,
                 C_GOLD,
             );
-            self.toast("造化已入现实——行囊验宝，闭关自涨修为", C_GOLD);
+            self.toast(evtx(1780)/* 原文：造化已入现实——行囊验宝，闭关自涨修为 */, C_GOLD);
         }
 
         self.sync_save();
@@ -12337,7 +12433,7 @@ impl Game {
 
             l.qi += rate;
 
-            let msg = format!("你闭关一载，修为精进。（+{}）", fmt_num(rate));
+            let msg = evf(1555, &[&(fmt_num(rate))])/* 原文：你闭关一载，修为精进。（+{}） */;
 
             let died = l.age >= l.lifespan;
 
@@ -12351,7 +12447,7 @@ impl Game {
         }
 
         if died {
-            self.real_die("寿元耗尽，你在自家榻上安然合卷——名字终被写对了一次。唯道韵永存。");
+            self.real_die(evtx(1781)/* 原文：寿元耗尽，你在自家榻上安然合卷——名字终被写对了一次。唯道韵永存。 */);
 
             return 0.0;
         }
@@ -12438,12 +12534,7 @@ impl Game {
         }
         crate::npc::add_comp_fav(self, crate::data::COMPANION_GIFT_FAV);
         self.log(
-            format!(
-                "你与{}双修共进，息脉相合一夜悟道：情谊+{}，道心+1，气运+1，修为+{}。灯花落时她低声道：「道在两人中间。」",
-                cn,
-                crate::data::COMPANION_GIFT_FAV,
-                fmt_num(gain)
-            ),
+            evf(1556, &[&(cn), &(crate::data::COMPANION_GIFT_FAV), &(fmt_num(gain))])/* 原文：你与{}双修共进，息脉相合一夜悟道：情谊+{}，道心+1，气运+1，修为+{}。灯花落时她低声道：「道在两人中间。」 */,
             C_GOLD,
         );
         // v1.16.18 搭车①：双修成功即时反馈（Reality toast 槽 draw.rs:1161 已渲染；
@@ -12451,11 +12542,7 @@ impl Game {
         // 全在菜单期 panel_warm 常驻档——弹帧零冷栅格化）。与上行 log 同帧双通道
         // 仍是文案分工：log=信箱记账，toast=当场提示
         self.toast(
-            format!(
-                "双修共进 · 情谊+{} · 修为+{}",
-                crate::data::COMPANION_GIFT_FAV,
-                fmt_num(gain)
-            ),
+            evf(1557, &[&(crate::data::COMPANION_GIFT_FAV), &(fmt_num(gain))])/* 原文：双修共进 · 情谊+{} · 修为+{} */,
             C_GOLD,
         );
         self.play(crate::sounds::Which::Ascend);
@@ -12539,10 +12626,7 @@ impl Game {
 
             if self.auto_years >= 10 {
                 self.log(
-                    format!(
-                        "周天吐纳十载，修为精进累计+{}。",
-                        fmt_num(self.auto_gain)
-                    ),
+                    evf(1558, &[&(fmt_num(self.auto_gain))])/* 原文：周天吐纳十载，修为精进累计+{}。 */,
                     C_CYAN,
                 );
 
@@ -12588,7 +12672,7 @@ impl Game {
         }
         self.meta.worn_title = t;
         let name = self.worn_title_of();
-        self.log(format!("你戴上称号『{}』。", name), C_GOLD);
+        self.log(evf(1559, &[&(name)])/* 原文：你戴上称号『{}』。 */, C_GOLD);
         self.play(crate::sounds::Which::Click);
         self.sync_save();
     }
@@ -12612,7 +12696,7 @@ impl Game {
         if let Some(l) = self.life.as_mut() {
             l.equipped.push(r);
         }
-        self.log(format!("你祭起【{}】，灵光贯体。", RELICS[r].name), C_GOLD);
+        self.log(evf(1560, &[&(RELICS[r].name)])/* 原文：你祭起【{}】，灵光贯体。 */, C_GOLD);
         self.play(crate::sounds::Which::Ascend);
         self.sync_save();
     }
@@ -12629,7 +12713,7 @@ impl Game {
         if let Some(l) = self.life.as_mut() {
             l.equipped.retain(|&x| x != r);
         }
-        self.log(format!("你收起【{}】，灵光渐敛。", RELICS[r].name), C_TEXT);
+        self.log(evf(1561, &[&(RELICS[r].name)])/* 原文：你收起【{}】，灵光渐敛。 */, C_TEXT);
         self.play(crate::sounds::Which::Click);
         self.sync_save();
     }
@@ -12675,7 +12759,7 @@ impl Game {
             }
         }
         if lingtian > 0 {
-            self.log(format!("洞府灵田岁入灵石 {}。", fmt_int(lingtian)), C_CYAN);
+            self.log(evf(1562, &[&(fmt_int(lingtian))])/* 原文：洞府灵田岁入灵石 {}。 */, C_CYAN);
         }
         if weather_changed {
             let w = self
@@ -12708,7 +12792,7 @@ impl Game {
         }
         if let Some((full, r)) = neme_up {
             self.log(
-                format!("风声传来：{}闭关数载，已晋入{}境！", full, REALMS[r.min(14)].name),
+                evf(1563, &[&(full), &(REALMS[r.min(14)].name)])/* 原文：风声传来：{}闭关数载，已晋入{}境！ */,
                 C_RED,
             );
         }
@@ -12787,10 +12871,10 @@ impl Game {
         if self.can_break() && self.meta.sys_seen & 0b10000 == 0 {
             self.meta.sys_seen |= 0b10000;
             self.log(
-                "修为已圆满——底栏「修炼」可破境，更上层楼。",
+                evtx(1782)/* 原文：修为已圆满——底栏「修炼」可破境，更上层楼。 */,
                 C_GOLD,
             );
-            self.toast("修为圆满！底栏「修炼」可破境", C_GOLD);
+            self.toast(evtx(1783)/* 原文：修为圆满！底栏「修炼」可破境 */, C_GOLD);
             self.sync_save();
         }
     }
@@ -12810,10 +12894,10 @@ impl Game {
         }
         self.meta.sys_seen |= 0b100000;
         self.log(
-            "山河图洞府处，「经营洞府」可扩建聚灵阵·灵田·丹房。",
+            evtx(1784)/* 原文：山河图洞府处，「经营洞府」可扩建聚灵阵·灵田·丹房。 */,
             C_GOLD,
         );
-        self.toast("洞府经营已开放！山河图「经营洞府」", C_GOLD);
+        self.toast(evtx(1785)/* 原文：洞府经营已开放！山河图「经营洞府」 */, C_GOLD);
         self.sync_save();
     }
 
@@ -12872,14 +12956,14 @@ impl Game {
 
             if ok {
                 self.log(
-                    format!("现实突破：你踏入{}，旧阶沉入身后。", REALMS[r].layers[ly]),
+                    evf(1564, &[&(REALMS[r].layers[ly])])/* 原文：现实突破：你踏入{}，旧阶沉入身后。 */,
                     C_GREEN,
                 );
 
                 self.play(crate::sounds::Which::BreakOk);
             } else {
                 // v1.16.26 破境败句画面化：口号腔→画面体（真气撞关的具体动作）
-                self.log("真气撞关不破，逆行三匝方平——修为略损。", C_DIM);
+                self.log(evtx(1786)/* 原文：真气撞关不破，逆行三匝方平——修为略损。 */, C_DIM);
             }
         } else {
             let target = {
@@ -12906,11 +12990,11 @@ impl Game {
                         // v1.12.1 缝页缘三为纯叙事（护栏裁剪：无数值 perk），史行见婚约高亮
                         let mut b = e.trib_add + if l.pills[5] > 0 { 0.12 } else { 0.0 };
                         if l.pills[5] > 0 {
-                            report.push("护神丹化作雷纹护体（存活+12%）。".to_string());
+                            report.push(evtx(1787)/* 原文：护神丹化作雷纹护体（存活+12%）。 */.to_string());
                         }
                         if l.loc == NODE_PEAK {
                             base += PEAK_TRIB_BONUS;
-                            report.push("天雷峰问笔台：每重雷劫存活+2%。".to_string());
+                            report.push(evtx(1788)/* 原文：天雷峰问笔台：每重雷劫存活+2%。 */.to_string());
                         }
                         let mut pw = 0u8;
                         let mut dead_at = None;
@@ -12958,7 +13042,7 @@ impl Game {
                             f
                         };
                         self.log(
-                            "九重雷劫尽数扛下！天门洞开，霞光万道——现实中，你飞升成仙！",
+                            evtx(1789)/* 原文：九重雷劫尽数扛下！天门洞开，霞光万道——现实中，你飞升成仙！ */,
                             C_GOLD,
                         );
                         self.show_banner("现 实 飞 升", C_GOLD);
@@ -12966,7 +13050,7 @@ impl Game {
                         self.play(crate::sounds::Which::Ascend);
                         if first {
                             // v1.16.26 首登句去口号腔：从「宣告」改「踏进」的画面
-                            self.log("【首登】现实的你头一回踏入仙界。", C_GOLD);
+                            self.log(evtx(1790)/* 原文：【首登】现实的你头一回踏入仙界。 */, C_GOLD);
                         }
                         self.check_ach(27);
                         self.check_ach_all();
@@ -12982,11 +13066,11 @@ impl Game {
                         // 避免与雷劫战报同屏剧透冲淡卡面（§8.2-8.3 纸底显形/玺灵齐声）。
                         if self.meta.neme_slain >= 6 {
                             self.log(
-                                "怀里旧镇纸烫穿衣襟——纸底十万层旧字显形，每一层的名字都不一样。",
+                                evtx(1791)/* 原文：怀里旧镇纸烫穿衣襟——纸底十万层旧字显形，每一层的名字都不一样。 */,
                                 C_RED,
                             );
                             self.log(
-                                "玺灵十万层齐声：你不是这一稿，你是十万稿摞起来的一册人。",
+                                evtx(1792)/* 原文：玺灵十万层齐声：你不是这一稿，你是十万稿摞起来的一册人。 */,
                                 C_CYAN,
                             );
                             self.sync_taodie(); // 门前对账：保卡面「讨牒 6/6」恒真
@@ -12997,10 +13081,7 @@ impl Game {
                         let l = self.life.as_mut().unwrap();
                         l.injured = 10;
                         l.qi = (l.qi * 0.4).max(0.0);
-                        self.log(format!(
-                        "问笔至第{}重雷劫功亏一篑！轮回镜金光护住你的元神——身受重伤，但无性命之忧。重整旗鼓，来日再战！",
-                        w
-                    ), C_RED);
+                        self.log(evf(1565, &[&(w)])/* 原文：问笔至第{}重雷劫功亏一篑！轮回镜金光护住你的元神——身受重伤，但无性命之忧。重整旗鼓，来日再战！ */, C_RED);
                         self.play(crate::sounds::Which::BreakFail);
                     }
                     self.sync_save();
@@ -13065,7 +13146,7 @@ impl Game {
                 // v1.16.28 叙事金句：现实成句删「轰！」口号叹词（画面层由 12857
                 // 「旧阶沉入身后」跨境句承担，此处最小改动去腔；-6B 净减，
                 // 钉测 story_11628_reality_break_line）
-                self.log(format!("现实突破【{}境】！寿元大增！", rd.name), C_GOLD);
+                self.log(evf(1566, &[&(rd.name)])/* 原文：现实突破【{}境】！寿元大增！ */, C_GOLD);
 
                 // v1.16.28 江湖声望 drift 挂点③：破境（现实侧）+2（与模拟侧
                 // sim_do_break 成功臂同批同值——saturating 封顶 255）
@@ -13074,7 +13155,7 @@ impl Game {
                 self.show_banner(format!("突破 · {}境", rd.name), C_GOLD);
 
                 if first {
-                    self.log("【首登】现实中的你首次踏入此境！", C_GOLD);
+                    self.log(evtx(1793)/* 原文：【首登】现实中的你首次踏入此境！ */, C_GOLD);
                 }
 
                 self.burst(60, true);
@@ -13100,10 +13181,7 @@ impl Game {
                 }
             } else {
                 self.log(
-                    format!(
-                        "现实冲击{}境失败！真元反噬受轻伤——轮回镜护持，无死劫。",
-                        rd.name
-                    ),
+                    evf(1567, &[&(rd.name)])/* 原文：现实冲击{}境失败！真元反噬受轻伤——轮回镜护持，无死劫。 */,
                     C_RED,
                 );
 
@@ -13134,7 +13212,7 @@ impl Game {
         self.meta.sim_points += 1;
 
         self.log(
-            format!("以{}灵石向轮回镜献祭，得 1 枚模拟点数。", fmt_int(cost)),
+            evf(1568, &[&(fmt_int(cost))])/* 原文：以{}灵石向轮回镜献祭，得 1 枚模拟点数。 */,
             C_CYAN,
         );
 
@@ -13143,7 +13221,7 @@ impl Game {
         if self.meta.sys_seen & 0b0010 == 0 {
             self.meta.sys_seen |= 0b0010;
             self.log(
-                "轮回镜初饮灵石——以石换点，点数之道既通。此后灵石不屯，皆化万世之资。",
+                evtx(1794)/* 原文：轮回镜初饮灵石——以石换点，点数之道既通。此后灵石不屯，皆化万世之资。 */,
                 C_GOLD,
             );
             self.toast("点数兑换 · 初通", C_GOLD);
@@ -13180,7 +13258,7 @@ impl Game {
         }
         self.ad = Some(crate::data::AD_SECONDS);
         self.log(
-            "山穷水尽之际，镜灵为你接引一段『商途幻境』——看完可得模拟点数。",
+            evtx(1795)/* 原文：山穷水尽之际，镜灵为你接引一段『商途幻境』——看完可得模拟点数。 */,
             C_CYAN,
         );
         self.play(crate::sounds::Which::Click);
@@ -13215,7 +13293,7 @@ impl Game {
         self.meta.sim_points += crate::data::AD_REWARD;
         self.meta.ad_watched += 1;
         self.toast(
-            &format!("领取 {} 枚模拟点数", crate::data::AD_REWARD),
+            &evf(1569, &[&(crate::data::AD_REWARD)])/* 原文：领取 {} 枚模拟点数 */,
             C_CYAN,
         );
         self.play(crate::sounds::Which::Coin);
@@ -13238,7 +13316,7 @@ impl Game {
         };
         self.meta.sim_points += gain;
         self.log(
-            format!("献祭【{}】，轮回镜折算 {} 枚模拟点数。", name, gain),
+            evf(1570, &[&(name), &(gain)])/* 原文：献祭【{}】，轮回镜折算 {} 枚模拟点数。 */,
             C_CYAN,
         );
         if refined > 0 {
@@ -13281,10 +13359,7 @@ impl Game {
             l.relic_lv[target.min(7)]
         };
         self.log(
-            format!(
-                "以【{}】为引炼化【{}】，灵纹进境 +{} 级。",
-                m_name, t_name, new_lv
-            ),
+            evf(1571, &[&(m_name), &(t_name), &(new_lv)])/* 原文：以【{}】为引炼化【{}】，灵纹进境 +{} 级。 */,
             C_GOLD,
         );
         self.play(crate::sounds::Which::Ascend);
@@ -13358,10 +13433,7 @@ impl Game {
             l.qi *= 0.7;
 
             self.log(
-                format!(
-                    "你寻仇{}，不敌而遁，身受重伤！伤口结着痂，旧账没销。",
-                    neme.full()
-                ),
+                evf(1572, &[&(neme.full())])/* 原文：你寻仇{}，不敌而遁，身受重伤！伤口结着痂，旧账没销。 */,
                 C_RED,
             );
 
@@ -13386,7 +13458,7 @@ impl Game {
             l.wins += 1;
 
             l.highlights
-                .push(format!("{}岁，现实斩杀宿敌{}", l.age as i32, neme.name));
+                .push(evf(1573, &[&(l.age as i32), &(neme.name)])/* 原文：{}岁，现实斩杀宿敌{} */);
         }
 
         self.meta.dao_yun += reward_dy;
@@ -13400,18 +13472,16 @@ impl Game {
         self.meta.fame = self.meta.fame.saturating_add(3);
 
         self.log(
-            format!("血仇得报！你于现实中阵斩宿敌{}！", neme.full()),
+            // v1.16.29 单2 故事润色改写本句（真相源 N1574 行直改）——原文注释随
+            // blob 同步更新（「evtx/evf 引用与原文注释一一对应」纪律，复审必修项）
+            evf(1574, &[&(neme.full())])/* 原文：血仇得报——{}授首，账清了。 */,
             C_GOLD,
         );
 
         self.show_banner("血 仇 得 报", C_GOLD);
 
         self.log(
-            format!(
-                "夺其家产：灵石 {}，道韵+{}，模拟点数+2。",
-                fmt_int(reward_stones),
-                reward_dy
-            ),
+            evf(1575, &[&(fmt_int(reward_stones)), &(reward_dy)])/* 原文：夺其家产：灵石 {}，道韵+{}，模拟点数+2。 */,
             C_GOLD,
         );
 
@@ -13468,7 +13538,7 @@ impl Game {
 
                     l.injured = 0;
 
-                    "服下培元丹，寿元+15，伤势尽复。".to_string()
+                    evtx(1796)/* 原文：服下培元丹，寿元+15，伤势尽复。 */.to_string()
                 }
 
                 4 => {
@@ -13534,7 +13604,7 @@ impl Game {
         }
 
         self.log(
-            format!("你于藏经阁重金求得《{}》，闭关参悟三日而通！", name),
+            evf(1576, &[&(name)])/* 原文：你于藏经阁重金求得《{}》，闭关参悟三日而通！ */,
             C_GOLD,
         );
 
@@ -13568,7 +13638,7 @@ impl Game {
         crate::npc::add_fav(self, crate::npc::NPC_MERCHANT, MERCHANT_BUY_FAV);
 
         self.log(
-            format!("购得{}一枚（{}灵石）。", name, fmt_int(price)),
+            evf(1577, &[&(name), &(fmt_int(price))])/* 原文：购得{}一枚（{}灵石）。 */,
             C_CYAN,
         );
 
@@ -13628,7 +13698,7 @@ impl Game {
 
         let nlv = self.meta.upg[id];
 
-        self.log(format!("轮回烙印加深：{} 升至{}级。", name, nlv), C_GOLD);
+        self.log(evf(1578, &[&(name), &(nlv)])/* 原文：轮回烙印加深：{} 升至{}级。 */, C_GOLD);
 
         self.play(crate::sounds::Which::Ascend);
 
@@ -13651,7 +13721,7 @@ impl Game {
         self.meta.dao_yun += reward;
 
         self.log(
-            format!("达成成就【{}】！道韵+{}", name, fmt_int(reward)),
+            evf(1579, &[&(name), &(fmt_int(reward))])/* 原文：达成成就【{}】！道韵+{} */,
             C_GOLD,
         );
 
@@ -13846,13 +13916,7 @@ impl Game {
                 crate::ui::prewarm_text(DONE_NOTE[i.min(DONE_NOTE.len() - 1)], &[14]);
                 crate::ui::prewarm_text(DONE_NOTE[i.min(DONE_NOTE.len() - 1)], &[16]);
                 self.log(
-                    format!(
-                        "【{}·了】{}——{}。{}",
-                        ch.num,
-                        ch.name,
-                        DONE_NOTE[i.min(DONE_NOTE.len() - 1)],
-                        ch.reward_note
-                    ),
+                    evf(1580, &[&(ch.num), &(ch.name), &(DONE_NOTE[i.min(DONE_NOTE.len() - 1)]), &(ch.reward_note())])/* 原文：【{}·了】{}——{}。{} */,
                     C_GOLD,
                 );
                 self.show_banner(format!("{} · {}", ch.num, ch.name), C_GOLD);
@@ -13866,11 +13930,11 @@ impl Game {
                 // 与边沿横幅（单槽）互补。bit6 已置（防御位，理论不可达——chap_done
                 // 位单调）不再复读。
                 if i == 0 {
-                    self.toast("称号可佩：雨夜执印者（角色·成就称号页）", C_GOLD);
+                    self.toast(evtx(1797)/* 原文：称号可佩：雨夜执印者（角色·成就称号页） */, C_GOLD);
                     if self.meta.sys_seen & 0b1000000 == 0 {
                         self.meta.sys_seen |= 0b1000000;
                         self.log(
-                            "主线有册：顶栏「任务」钮可开「章节书」签——九章目标与进度尽在册。",
+                            evtx(1798)/* 原文：主线有册：顶栏「任务」钮可开「章节书」签——九章目标与进度尽在册。 */,
                             C_GOLD,
                         );
                     }
@@ -13883,9 +13947,9 @@ impl Game {
                 // ——防冷栅格化整图重传，照 DONE_NOTE 同款）。
                 if i + 1 < crate::data::CHAPTERS.len() {
                     let nx = &crate::data::CHAPTERS[i + 1];
-                    crate::ui::prewarm_text(nx.open, &[14]);
-                    crate::ui::prewarm_text(nx.open, &[16]);
-                    self.log(format!("【{}·启】{}", nx.num, nx.open), C_GOLD);
+                    crate::ui::prewarm_text(nx.open(), &[14]);
+                    crate::ui::prewarm_text(nx.open(), &[16]);
+                    self.log(format!("【{}·启】{}", nx.num, nx.open()), C_GOLD);
                 }
             }
         }
@@ -14001,15 +14065,15 @@ impl Game {
             crate::ui::prewarm_text(ch.name, &[14, 16]);
             // v1.16.28 章回联句随块补灌（章节书右栏章名行尾显示位 @14——结算屏
             // 「下一章」行空间不足不挂，同串预热仍经本口一次灌齐）
-            crate::ui::prewarm_text(ch.couplet, &[14]);
-            crate::ui::prewarm_text(ch.reward_note, &[14]);
+            crate::ui::prewarm_text(ch.couplet(), &[14]);
+            crate::ui::prewarm_text(ch.reward_note(), &[14]);
             for gl in ch.goals.iter() {
                 crate::ui::prewarm_text(gl.text, &[14]);
                 if let Some((x, n)) = Self::chapter_goal_prog(&self.meta, gl.pid) {
                     crate::ui::prewarm_text(&format!("{}/{}", x, n), &[14]);
                 }
             }
-            crate::ui::prewarm_text("主线已了——十万稿废纸，终有一册", &[14]);
+            crate::ui::prewarm_text(evtx(1799)/* 原文：主线已了——十万稿废纸，终有一册 */, &[14]);
             // v1.16.19 结算收束语同块补灌（按身故境界档查表静态串 @14——漏灌则
             // settle 首帧冷栅格化触发 2048² 图集整图重传，同款教训）
             crate::ui::prewarm_text(settle_coda(max_realm), &[14]);
@@ -14072,37 +14136,55 @@ impl Game {
 // 全收集不发额外道韵（四结局之礼已足额），礼遇走称号『执笔人』授权
 pub const ENDING_DY: [i64; 4] = [200, 200, 200, 200];
 
+// v1.16.29 刀B：四字段全收编 textpack（name/alias/body/gain 各 4 行连号，
+// pack_text.py --tables2 产侧原位写 N）——访问器 O(1) 零分配（演出页帧路径安全）；
+// 行内容与旧字面量逐字节等价（真相源 text_source.txt 行 + ending 钉测）。
 pub struct EndingDef {
-    pub name: &'static str, // 结局名（横幅/书志行）
-    pub alias: &'static str, // 抉择别名（认写/撕稿/夺笔/收册人）
-    pub body: &'static str, // 演出页正文（\n 分段）
-    pub gain: &'static str, // 达成行【结局达成/隐藏成就：…】
+    pub name_n: u16, // 结局名（横幅/书志行）
+    pub alias_n: u16, // 抉择别名（认写/撕稿/夺笔/收册人）
+    pub body_n: u16, // 演出页正文（\n 分段）
+    pub gain_n: u16, // 达成行【结局达成/隐藏成就：…】
+}
+
+impl EndingDef {
+    pub fn name(&self) -> &'static str {
+        evtx(self.name_n as usize)
+    }
+    pub fn alias(&self) -> &'static str {
+        evtx(self.alias_n as usize)
+    }
+    pub fn body(&self) -> &'static str {
+        evtx(self.body_n as usize)
+    }
+    pub fn gain(&self) -> &'static str {
+        evtx(self.gain_n as usize)
+    }
 }
 
 pub const ENDINGS: [EndingDef; 4] = [
     EndingDef {
-        name: "定稿",
-        alias: "认写",
-        body: "你赢了封卷吏。执笔人出现，递来笔：「字不错。入正文吧。从此你的每一行都是天定——天定，也就永不动删。」\n你看了很久那支笔。\n「我要是入了正文，」你问，「还能改自己吗？」\n「一字不改。永生换的。」",
-        gain: "【结局达成：正文第一行 · 陈砚】\n【代价：草稿权作废。你不能重来，你成了别人不能重来的理由之一】",
+        name_n: 1661,
+        alias_n: 1665,
+        body_n: 1669,
+        gain_n: 1673,
     },
     EndingDef {
-        name: "留白",
-        alias: "撕稿",
-        body: "你当着执笔人的面，把自己的书撕了。\n琅函大乱——未写完的书，天道无权合卷。你的书从此只剩一页一行：\n「某年某月，青牛镇外，陈砚生。后事不详。」\n后事不详。四个字，比永生更宽。\n你回到田里。同页的织机声，从三百里外传来。",
-        gain: "【隐藏成就：后事不详 —— 一行之外，谁也写不了你】",
+        name_n: 1662,
+        alias_n: 1666,
+        body_n: 1670,
+        gain_n: 1674,
     },
     EndingDef {
-        name: "执笔",
-        alias: "夺笔",
-        body: "你接了那支笔。\n第一件事，把十万层废稿一层层起出来，每稿的名字，一笔一笔描清楚。\n最后一行，你写给下一个雨夜：\n「某年某月，某地，有人捡到一枚发烫的方印。印里有个声音，累得不像少年人。」",
-        gain: "【隐藏成就：琅函天笔 —— 你成了别人「重来一次」的源头】",
+        name_n: 1663,
+        alias_n: 1667,
+        body_n: 1671,
+        gain_n: 1675,
     },
     EndingDef {
-        name: "合订",
-        alias: "收册人",
-        body: "收册人入库时发现一册怪书：十万张废稿，自己订成了一册，书脊上无字，只有页脚一行小字，岁岁多一行——\n「未完。」",
-        gain: "【隐藏成就：会自己长出新行的书】",
+        name_n: 1664,
+        alias_n: 1668,
+        body_n: 1672,
+        gain_n: 1676,
     },
 ];
 
@@ -15431,24 +15513,24 @@ mod chapter_tests {
     fn chapters_table_shape() {
         assert_eq!(CHAPTERS.len(), 9);
         for (i, ch) in CHAPTERS.iter().enumerate() {
-            assert!(!ch.num.is_empty() && !ch.name.is_empty() && !ch.intro.is_empty());
+            assert!(!ch.num.is_empty() && !ch.name.is_empty() && !ch.intro().is_empty());
             // v1.16.20 章开场白随表钉死：全行非空 ≤24 字（日志金行单行预算；「了+启」
             // 逐章成对发，启句过长刷屏——含恒不演出的首行，防表扩员时漂移出空句）
             assert!(
-                !ch.open.is_empty() && ch.open.chars().count() <= 24,
+                !ch.open().is_empty() && ch.open().chars().count() <= 24,
                 "章 {} open 空句或越 24 字预算: {} ({}字)",
                 i,
-                ch.open,
-                ch.open.chars().count()
+                ch.open(),
+                ch.open().chars().count()
             );
             // v1.16.28 章回联句随表钉死：全行非空 ≤14 字（单行显示预算；章节书
             // 右栏章名行尾 @14 与结算章签预热共用串，防表扩员时漂移出空句/超宽）
             assert!(
-                !ch.couplet.is_empty() && ch.couplet.chars().count() <= 14,
+                !ch.couplet().is_empty() && ch.couplet().chars().count() <= 14,
                 "章 {} couplet 空句或越 14 字预算: {} ({}字)",
                 i,
-                ch.couplet,
-                ch.couplet.chars().count()
+                ch.couplet(),
+                ch.couplet().chars().count()
             );
             assert!(
                 ch.goals.len() >= 1 && ch.goals.len() <= 2,
@@ -15477,7 +15559,7 @@ mod chapter_tests {
         assert!(
             g.log
                 .iter()
-                .any(|l| l.text.contains("【第二章·启】") && l.text.contains(CHAPTERS[1].open)),
+                .any(|l| l.text.contains("【第二章·启】") && l.text.contains(CHAPTERS[1].open())),
             "启金行缺或与表漂移: {:?}",
             g.log.iter().map(|l| &l.text).collect::<Vec<_>>()
         );
@@ -15681,19 +15763,19 @@ mod chapter_tests {
             );
             let num = ch.reward.to_string();
             assert!(
-                ch.reward_note.contains("道韵 +") && ch.reward_note.contains(&num),
+                ch.reward_note().contains("道韵 +") && ch.reward_note().contains(&num),
                 "{} reward_note 与 reward 数字不一致: {} vs {}",
                 ch.num,
-                ch.reward_note,
+                ch.reward_note(),
                 ch.reward
             );
             assert!(
-                !ch.lore.is_empty() && ch.lore.len() <= 3,
+                ch.lore_len() > 0 && ch.lore_len() <= 3,
                 "{} lore 段数 1..=3",
                 ch.num
             );
-            for seg in ch.lore.iter() {
-                assert!(seg.contains("其"), "{} lore 段缺序号", ch.num);
+            for lk in 0..ch.lore_len() {
+                assert!(ch.lore(lk).contains("其"), "{} lore 段缺序号", ch.num);
             }
         }
     }
@@ -16750,6 +16832,15 @@ mod chain_event_tests {
             (306, false, None),
             (307, false, None),
             (308, false, None),
+            // v1.16.29 扩池 8 条抽检：315 w1 入稀有区，309..=316 其余散件非稀有
+            (309, false, None),
+            (310, false, None),
+            (311, false, None),
+            (312, false, None),
+            (313, false, None),
+            (314, false, None),
+            (315, true, None),
+            (316, false, None),
         ] {
             g.modal = None;
             g.build_event(id);
@@ -17211,6 +17302,10 @@ mod v11610_event_tests {
         assert_eq!(b(53).0, "伴随");
         assert_eq!(b(74).0, "章节");
         assert_eq!(b(88).0, "老年");
+        // v1.16.29 扩池：309/310 入老年臂（gallery.rs 徽标 id 集同批扩）、
+        // 315 w1 落稀有描边（RARE_W=2 口径）
+        assert_eq!(b(309).0, "老年");
+        assert_eq!(b(315).0, "稀有");
         assert_eq!(b(110).0, "宿敌");
         assert_eq!(b(112).0, "链起");
         assert_eq!(b(113).0, "链段");
@@ -18081,10 +18176,12 @@ mod event_batch_v1168_tests {
         // 人/伴随 293/恶缘 3 294/295/298/老年×伴 297）→ 299 条；
         // v1.16.28 扩池 10（双门控 299 mr2 换层/伴随 300 mr7/具名 NPC 3 301
         // 宁清霜 302 玄诚 308 醉道人/稀有 303 mr7 w2/散件 4 304 mr5 305 mr3 恶
-        // 306 mr6 307 mr2 恶）→ 309 条，
+        // 306 mr6 307 mr2 恶）→ 309 条；v1.16.29 扩池 8（老年层 2 309/310/
+        // mr5 311/具名 NPC 2 312 宁清霜 313 胡掌柜/mr3 314/稀有 315 琅函倒页
+        // w1/mr4 恶 316）→ 317 条，
         // 稀有基权合计口径见 data.rs
         // 各批注释——账本数字一律以重算为准）
-        assert_eq!(EVENTS.len(), 309);
+        assert_eq!(EVENTS.len(), 317);
     }
 }
 
@@ -18627,23 +18724,23 @@ mod v11615_reward_and_pool_tests {
     // w3——白名单 24→25）/稀有检定 1（284 w2 mr4——稀有 21→22 条 39→41 权
     // 4.44%→4.52%）/mr6 善 2（285/286 w3）/mr7 善 1（287 w3）/老年×伴 1（288
     // w3）/宿敌回响 1（289 w3 恶）/mr0 恶 1（290 w3），共 10 条
-    // v1.16.28 扩池批 +29：双门控 1（299 w3 mr2 换层）/伴随 1（300 w3 mr7——
-    // 白名单 26→27）/具名 NPC 3（301/302/308 均 w3）/稀有 1（303 w2 mr7——稀有
-    // 22→23 条 41→43 权 4.40%→4.48%，v1.16.26 4.52% 上沿内）/散件 4（304 w3
-    // mr5/305 w3 mr3 恶/306 w3 mr6/307 w3 mr2 恶），共 10 条
+    // v1.16.29 扩池批 +22：老年层 2（309/310 w3）/mr5 1（311 w3）/具名 NPC 2
+    // （312 宁清霜 w3 mr4/313 胡掌柜 w3 mr2）/mr3 1（314 w3）/稀有 1（315 w1
+    // mr7——稀有 23→24 条 43→44 权，44/982≈4.48% 守勘察带内）/mr4 恶 1（316 w3），
+    // 共 8 条（单1 净减 10.27KB 达 6~8 条分级上沿）
     #[test]
     fn pool_ledger_recheck() {
         let total: i32 = EVENTS.iter().map(|&p| ev_w(p)).sum();
-        assert_eq!(total, 960, "总基权漂移——照 data.rs v1.16.28 批注重算");
+        assert_eq!(total, 982, "总基权漂移——照 data.rs v1.16.29 批注重算");
         let rare: Vec<(usize, i32)> = EVENTS
             .iter()
             .filter(|&&p| ev_w(p) > 0 && ev_w(p) <= crate::data::RARE_W)
             .enumerate()
             .map(|(id, &p)| (id, ev_w(p)))
             .collect();
-        assert_eq!(rare.len(), 23, "稀有条数漂移");
+        assert_eq!(rare.len(), 24, "稀有条数漂移");
         let rare_w: i32 = rare.iter().map(|&(_, w)| w).sum();
-        assert_eq!(rare_w, 43, "稀有基权漂移");
+        assert_eq!(rare_w, 44, "稀有基权漂移");
     }
 
     // 链14 全程：175 首段建链待分支 → special53 → 直取 176 → special54 → 直取
@@ -19101,9 +19198,10 @@ mod v11617_pool_tests {
         // v1.16.26 扩池 10 条（281..=290）同批随批注口径 252→291
         // v1.16.27 扩池 8 条（291..=298）同批随批注口径 291→299
         // v1.16.28 扩池 10 条（299..=308）同批随批注口径 299→309
-        assert_eq!(EVENTS.len(), 309);
-        assert_eq!(EVENT_NAMES.len(), 309);
-        assert_eq!(EVENT_BRIEF.len(), 309);
+        // v1.16.29 扩池 8 条（309..=316）同批随批注口径 309→317
+        assert_eq!(EVENTS.len(), 317);
+        assert_eq!(EVENT_NAMES.len(), 317);
+        assert_eq!(EVENT_BRIEF.len(), 317);
         for id in 183..=204usize {
             assert_eq!(EVENTS_ROWS[id].0 as usize, id, "新增段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
@@ -19169,6 +19267,13 @@ mod v11617_pool_tests {
         // data.rs ev_tables_section_bounds——len2/len3 漂移唯一内容级防线）
         for id in 299..=308usize {
             assert_eq!(EVENTS_ROWS[id].0 as usize, id, "v1.16.28 段 id 连续");
+            assert!(!EVENT_NAMES[id].is_empty());
+            assert!(!EVENT_BRIEF[id].is_empty());
+        }
+        // v1.16.29 扩池 8 条（309..=316）同批随批注口径 309→317；名/简第四段
+        // 连号 N1825..=1832/N1833..=1840（段四首尾逐字钉在 ev_tables_section_bounds）
+        for id in 309..=316usize {
+            assert_eq!(EVENTS_ROWS[id].0 as usize, id, "v1.16.29 段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
             assert!(!EVENT_BRIEF[id].is_empty());
         }
@@ -21024,7 +21129,9 @@ mod v11626_story_tests {
             (55, "山涧"),
             (58, "漩心"),
             (84, "灯花"),
-            (109, "似是而非"),
+            // v1.16.29 单2 改写 ev109 简语（「似是而非」判断面让位「开坛讲法」
+            // 事实面，同臂 N230 kw 开坛）——本批 kw 随新句换锚
+            (109, "开坛"),
             (110, "火把"),
             (275, "西窗"),
             (278, "岁星砂"),
@@ -21342,6 +21449,149 @@ mod v11627_pool_tests {
     }
 }
 
+// ================= v1.16.29 扩池 8 条（309..=316）：门控/立绘/账本 =================
+#[cfg(test)]
+mod v11629_pool_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    // 免音频初始化与存档 IO 的最小 Game（照 v11628_pool_tests::sim_game 复用纪律）
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // 门控两口径：309/310 老年层（余量≤10 载门控——余量足归零、余量尽入池）；
+    // 311..316 散件直入（Npc 卡无门控照 301/302 口径）
+    #[test]
+    fn batch8_gates_elder_and_plain() {
+        let mut g = sim_game(7, 100.0);
+        let i309 = ev_pos(309);
+        let i310 = ev_pos(310);
+        {
+            let s = g.sim.as_mut().unwrap();
+            s.age = 30.0; // 余量足：老年层归零
+        }
+        let (ws, _) = g.sim_event_weights(100.0, 5, false, false, false);
+        assert_eq!(ws[i309], 0.0, "309 余量足不入老年层");
+        assert_eq!(ws[i310], 0.0, "310 余量足不入老年层");
+        {
+            let s = g.sim.as_mut().unwrap();
+            s.age = s.lifespan - 8.0; // 余量≤10 载：入池
+        }
+        let (ws, _) = g.sim_event_weights(100.0, 5, false, false, false);
+        assert!(ws[i309] > 0.0, "309 余量≤10 载应入老年层");
+        assert!(ws[i310] > 0.0, "310 余量≤10 载应入老年层");
+        // 311..=316 散件：realm 达标直入（Npc 卡无门控，照 301/302 口径）
+        let (ws2, _) = g.sim_event_weights(100.0, 7, false, false, false);
+        for id in 311..=316usize {
+            assert!(ws2[ev_pos(id)] > 0.0, "{} realm7 直入", id);
+        }
+    }
+
+    // 卡面良构：8 条标题双源/正文非空且段≤60/两选项/special 恒 0/抉择全链不
+    // panic（立绘钉 312=Npc(2) 313=Npc(1)；散件不挂脸）
+    #[test]
+    fn batch8_cards_well_formed() {
+        for id in 309..=316usize {
+            let mut g = sim_game(7, 40.0);
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
+            assert_eq!(card.title, EVENT_NAMES[id], "标题双源 id {}", id);
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两选项", id);
+            for (si, seg) in card.text.split('\n').enumerate() {
+                assert!(
+                    seg.chars().count() <= 60,
+                    "事件 {} 第 {} 段超 ≤60 预算：{}",
+                    id,
+                    si + 1,
+                    seg
+                );
+            }
+            for (label, e) in &card.opts {
+                assert_eq!(e.special, 0, "事件 {} 选项「{}」special 非零", id, label);
+            }
+            match id {
+                312 => assert!(
+                    matches!(card.actor, Some(CardActor::Npc(2))),
+                    "312 立绘应锁定宁清霜 Npc(2)"
+                ),
+                313 => assert!(
+                    matches!(card.actor, Some(CardActor::Npc(1))),
+                    "313 立绘应锁定胡掌柜 Npc(1)"
+                ),
+                _ => assert!(card.actor.is_none(), "{} 散件不应挂脸", id),
+            }
+            g.choose_option(0); // apply_eff 全链不 panic（sync_save 仅置脏不落盘）
+        }
+    }
+
+    // 具名两卡正文钉名⟺Npc(n)（照 248/292/301 守碑人反例口径——钉名必须与脸同源）
+    #[test]
+    fn named_cards_11629_text_pins_name() {
+        for (id, name) in [(312usize, "宁清霜"), (313, "胡掌柜")] {
+            let mut g = sim_game(7, 40.0);
+            g.modal = None;
+            g.build_event(id);
+            let card = g.modal.as_ref().unwrap();
+            assert!(
+                card.text.contains(name),
+                "事件 {} 文本须具名 {}",
+                id,
+                name
+            );
+        }
+    }
+
+    // 简语预算 + 简-臂同源钉（照 event_brief_11628_pool_batch_within_18 模式：
+    // ≤18 字非空 + kw 取自臂内原文）
+    #[test]
+    fn event_brief_11629_pool_batch_within_18() {
+        for (id, kw) in [
+            (309usize, "喂雀"),
+            (310, "补席"),
+            (311, "排队"),
+            (312, "研墨"),
+            (313, "第三本"),
+            (314, "折梅"),
+            (315, "琅函"),
+            (316, "丹方"),
+        ] {
+            let b = &EVENT_BRIEF[id];
+            let n = b.chars().count();
+            assert!(
+                !b.is_empty() && n <= 18,
+                "事件 {} 简越 18 字预算: {} ({}字)",
+                id,
+                b,
+                n
+            );
+            assert!(b.contains(kw), "事件 {} 简画面化改写漂移: {}", id, b);
+        }
+    }
+
+    // 稀有记事：315 w1 卡 build_event 后 rare 置位且 highlights 记「遇【琅函倒页】」
+    //（照 rare_encounter_records_highlight 56 先例——w1 稀有先行例 15/57/73）
+    #[test]
+    fn rare315_encounter_records_highlight() {
+        let mut g = sim_game(7, 100.0);
+        g.modal = None;
+        g.build_event(315);
+        assert!(g.modal.as_ref().unwrap().rare, "315 w=1 应判稀有");
+        let hl = g.sim.as_ref().unwrap().highlights.join("|");
+        assert!(hl.contains("遇【琅函倒页】"), "稀有遭遇记事缺失: {}", hl);
+    }
+}
+
 // ================= v1.16.28 扩池 10 条（299..=308）：门控/立绘/账本 =================
 
 #[cfg(test)]
@@ -21562,6 +21812,37 @@ mod v11628_pool_tests {
             (194, "北域"),         // N1305 取 N442/N443「北域」
             (254, "那张脸"),       // N1365 取 N582「落地的那张脸」
             (289, "同门"),         // N1400 取 N664「同门的行踪」（宿敌回响）
+        ] {
+            let b = &EVENT_BRIEF[id];
+            let n = b.chars().count();
+            assert!(
+                !b.is_empty() && n <= 18,
+                "事件 {} 简越 18 字预算: {} ({}字)",
+                id,
+                b,
+                n
+            );
+            assert!(b.contains(kw), "事件 {} 简画面化改写漂移: {}", id, b);
+        }
+    }
+
+    // v1.16.29 第八批简语画面化钉测（照 event_brief_11628_batch7_within_18 模式）：
+    // ≤18 字非空 + kw 取词自对应臂 evtx 行 verbatim——九条「改写即减字」合计 −63B
+    // raw（真相源行直改 N 不变号；勘察 N 标签错位已纠：涸河龙祠=ev102/借名修行=
+    // ev109/灯花渡舟=ev112/书肆易主=ev140/仙籍勾误=ev200；换字纪律零新字，
+    // cmap 2321 零重建，fontcov 复核过）
+    #[test]
+    fn event_brief_11629_batch8_within_18() {
+        for (id, kw) in [
+            (6usize, "根骨"),   // N1117 取 N18「这身根骨…可愿入我门下」
+            (7, "张牙舞爪"),    // N1118 取 N21「在你识海中张牙舞爪」
+            (11, "裂缝"),       // N1122 取 N27「空间裂缝中露出…秘境入口」
+            (102, "村民"),      // N1213 取 N215「村民为最后一眼活泉争得头破血流」
+            (109, "开坛"),      // N1220 取 N230「顶着你的名号开坛讲法」
+            (112, "雾河"),      // N1223 取 N235「雾河渡人不收灵石，只收旧渡资」
+            (140, "易主"),      // N1251 取 N307「易主」木牌（evtx(307) 臂）
+            (200, "寿数"),      // N1311 取 N460「把你的寿数记到了旁人账上」
+            (301, "描枝"),      // N1454 取 N1468「以指尖在霜面描枝」
         ] {
             let b = &EVENT_BRIEF[id];
             let n = b.chars().count();

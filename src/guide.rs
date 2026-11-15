@@ -65,10 +65,19 @@ pub enum GuideAct {
              // prewarm_corpus 单口预热，与 exec_panel_act Tab(4) 同口）
 }
 
+// v1.16.29 刀B：text 收编 textpack（TXT_HINT_BASE 起 14 行连号，pack_text.py
+// --tables2 产侧原位写 N）；btn 短串留原地。访问器 O(1) 零分配（指引横带帧路径
+// 安全）；行内容与旧字面量逐字节等价（真相源 text_source.txt 行 + hints 钉测）。
 pub struct GuideHint {
-    pub text: &'static str,
+    pub text_n: u16,
     pub btn: Option<&'static str>,
     pub act: GuideAct,
+}
+
+impl GuideHint {
+    pub fn text(&self) -> &'static str {
+        crate::data::evtx(self.text_n as usize)
+    }
 }
 
 /// 14 叶提示表（下标即优先级；全字面量禁插值）。v1.16.8 链首插叶 1 里程碑叶
@@ -78,74 +87,74 @@ pub struct GuideHint {
 /// 主线指路），原叶语义逐叶保留于 3..4 与 6..13。
 pub const HINTS: [GuideHint; 14] = [
     GuideHint {
-        text: "山穷水尽：观看幻境广告，得 2 枚模拟点",
+        text_n: 1683,
         btn: Some("看广告"),
         act: GuideAct::Draft,
     },
     GuideHint {
-        text: "主线第一章：开卷首模拟，推演你的一生",
+        text_n: 1684,
         btn: Some("开模拟"),
         act: GuideAct::Draft,
     },
     GuideHint {
-        text: "已登仙界：讨牒 6/6 方见终战卡，落款四结局（书志页灰行指路）",
+        text_n: 1685,
         btn: Some("去书志"),
         act: GuideAct::Book,
     },
     GuideHint {
-        text: "修为圆满：可冲击下一层/境",
+        text_n: 1686,
         btn: Some("去闭关"),
         act: GuideAct::Cult,
     },
     GuideHint {
-        text: "宿敌可寻仇：一战定赏（底栏「寻仇」）",
+        text_n: 1687,
         btn: None,
         act: GuideAct::None,
     },
     GuideHint {
         // v1.16.16 讨牒叶：第四章·文狱讨牒进行期（详见 guide_index 叶 5 注）
-        text: "主线·文狱讨牒：寻仇斩敌取牒，六牒归档见终战",
+        text_n: 1688,
         btn: None,
         act: GuideAct::None,
     },
     GuideHint {
-        text: "故人心事待叙：好感已达，人物·图鉴页抉择专属事件",
+        text_n: 1689,
         btn: Some("去图鉴"),
         act: GuideAct::Gallery,
     },
     GuideHint {
         // v1.16.16 到域叶：第五章·山河万象进行期（详见 guide_index 叶 7 注）
-        text: "主线·山河万象：走访新域，五域各有机缘",
+        text_n: 1690,
         btn: Some("去山河"),
         act: GuideAct::World,
     },
     GuideHint {
-        text: "修为将满：闭关苦修，静候破境",
+        text_n: 1691,
         btn: Some("去闭关"),
         act: GuideAct::Cult,
     },
     GuideHint {
-        text: "洞府设施可扩建（山河图·洞府经营）",
+        text_n: 1692,
         btn: Some("去山河"),
         act: GuideAct::World,
     },
     GuideHint {
-        text: "周天吐纳未开：底栏「周天」一键自动闭关",
+        text_n: 1693,
         btn: None,
         act: GuideAct::None,
     },
     GuideHint {
-        text: "可献祭法宝折算模拟点（行囊·法宝页）",
+        text_n: 1694,
         btn: Some("去行囊"),
         act: GuideAct::Bag,
     },
     GuideHint {
-        text: "模拟点已足：开卷推演新一生",
+        text_n: 1695,
         btn: Some("开模拟"),
         act: GuideAct::Draft,
     },
     GuideHint {
-        text: "灵石充裕：坊市可兑模拟点",
+        text_n: 1696,
         btn: Some("去坊市"),
         act: GuideAct::Shop,
     },

@@ -5,3 +5,6 @@ xiuxian_save.txt
 *.pdb
 /tools/binaryen
 
+
+__pycache__/
+*.pyc

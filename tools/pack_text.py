@@ -8,7 +8,7 @@ data::evtx，避让 ui.rs::txt 绘制函数重名），并产出：
   - assets/textpack.bin    raw-deflate(wbits=-15, level 9) 的串接 blob
   - src/text_offsets.inc   pub static TXT_ANCH: [u32; A]（每 K32=32 条一个绝对锚）
                            + TXT_DELTA: [u16; N]（组内 delta，v1.16.28 刀C 两级表）
-                           + 双表三段基址六常量（data.rs include!）
+                           + 双表四段基址八常量（data.rs include!）
 运行期 data.rs::init_text() boot 一次 miniz_oxide::inflate::decompress_to_vec
 （与 ui.rs 字体同款通路），txt(i) O(1) 切片零分配。
 
@@ -71,9 +71,47 @@ BRIEF2_BASE_MANIFEST = 1410
 # 简 1452..=1461，真相源手写连号段先于正文；与 data.rs EV_SEG2=299 同批登记）
 NAME3_BASE_MANIFEST = 1442
 BRIEF3_BASE_MANIFEST = 1452
+# v1.16.29 扩池起：段三（10 条）满员后新批连号追加为段四（8 条：名 1825..=1832/
+# 简 1833..=1840，真相源手写连号段先于正文；单1/单2 已用 N1492..1824，段四基址
+# 顺延——与 data.rs EV_SEG3=309 同批登记）
+NAME4_BASE_MANIFEST = 1825
+BRIEF4_BASE_MANIFEST = 1833
 
 dry = '--dry-run' in sys.argv
 collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测用；表收编后自动幂等）
+# v1.16.29 单1（wasm 源级减包）三刀开关——均 append-only 旧 N 不变号，逐刀可量测：
+do_block_tmpl = '--block-tmpl' in sys.argv  # 刀A：块外（build_event 之外）format! 纯{}模板收编 evf
+do_block_lit = '--block-lit' in sys.argv    # 刀C：块外 ≥40B 散件字面量 evtx 化（24-39B 档勘察实测净负，不做）
+do_tables2 = '--tables2' in sys.argv        # 刀B：表通道扩容（结构体表字段级 `_n` + 整表连号基址）
+
+# 块外扫描域：帧路径 draw.rs/charpanel.rs 延后第二批（勘察纪律——evf 分配与
+# format! 等价，但每帧重画站点先缓存化或延后，守帧路径纪律）
+BLOCK_SCAN_FILES = ['game.rs', 'data.rs', 'guide.rs', 'main.rs', 'menu.rs',
+                    'npc.rs', 'world.rs', 'gallery.rs', 'ui.rs', 'art.rs',
+                    'cam.rs', 'pixel.rs', 'save.rs', 'sounds.rs']
+SRC_DIR = ROOT / 'src'
+
+# v1.16.29 刀B 表通道扩容清单。
+# ARR_TABLES：整表连号（行主序 alloc_fresh，基址 emit 进 text_offsets.inc；表本体
+# 随后由施工方换查表 fn——重跑时表已不在源码，走 .inc 基址回读，绝不二次收编）。
+#   (表名, 文件, 基址键, 期望条数)
+ARR_TABLES = [
+    ('NPC_TALES', 'data.rs', 'TXT_TALES_BASE', 12),   # [[&str;3];4] 行主序 npc*3+seg
+    ('HELP_LINES', 'draw.rs', 'TXT_HELP_BASE', 17),   # [&str;17]
+]
+# STRUCT_TABLES：结构体表字段级——表体内 `field: "raw"` 原位换 `field_n: N`
+#（alloc_fresh 行主序，同字段各行连号）；`lore: &[...]` 类对子字段换
+# `lore_ns: S, lore_len: L`（段内连号）。字段声明与 impl 访问器由施工方手改
+#（脚本只动表体与真相源，与刀②/③分工同款）；期望条数按行数钉死防半收编。
+#   (表名, 文件, 单值字段列表, 对子字段列表, 行数)
+STRUCT_TABLES = [
+    ('CHAPTERS', 'data.rs', ['intro', 'open', 'reward_note', 'couplet'], ['lore'], 9),
+    ('ENDINGS', 'game.rs', ['name', 'alias', 'body', 'gain'], [], 4),
+    ('LOCATIONS', 'data.rs', ['desc'], [], 6),
+    ('HINTS', 'guide.rs', ['text'], [], 14),
+]
+# HINTS text 单值连号 → 附发基址（static_measure.py 指引叶宽度口径改走真相源）
+BASE_KEYS_TABLES2 = ('TXT_TALES_BASE', 'TXT_HELP_BASE', 'TXT_HINT_BASE')
 
 src = GAME.read_text(encoding='utf-8')
 data_src = DATA.read_text(encoding='utf-8')
@@ -388,7 +426,7 @@ for m2 in LIT.finditer(block):
 all_edits = (
     [(p - 1, p + len(r) + 1, 'evtx(%d)/* 原文：%s */' % (n, r)) for p, r, _vb, n in lit_items]
     + [(ms, cl + 1, 'evf(%d, &[%s])/* 原文：%s */'
-       % (n, ', '.join('&(%s)' % a for a in args), r))
+       % (n, ', '.join('&(%s) as &dyn core::fmt::Display' % a for a in args), r))
        for ms, cl, r, _vb, n, args in tmpl_items]
 )
 kept = []
@@ -399,6 +437,247 @@ for e in all_edits:
         print('drop outer edit @%d (contains another replacement; left in place)' % s)
         continue
     kept.append(e)
+
+# ================= v1.16.29 单1：块外第二扫描域（勘察刀A/刀C） =================
+# 纪律：循环变量一律带后缀（p4/k7/m4…），绝不裸用 i/j——模块级 i 是 build_event
+# 定位索引、j 是其括号扫描游标（:83-96），泄漏覆盖会把尾部拼接 src[:i] 截到文件头
+#（v1.16.28 施工事故，见 :496 注）。
+
+def cfg_test_ranges(text):
+    """#[cfg(test)] mod 块区间（brace matching）——测试串永不收编（blob 是 wasm
+    体量，测试文案入池即白装）。"""
+    out = []
+    for am in re.finditer(r'#\[cfg\(test\)\]', text):
+        mm = re.search(r'mod\s+\w+', text[am.end():am.end() + 120])
+        if not mm:
+            continue
+        try:
+            bi2 = text.index('{', am.end() + mm.end())
+        except ValueError:
+            continue
+        depth = 0
+        for j2 in range(bi2, len(text)):
+            c = text[j2]
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    out.append((am.start(), j2 + 1))
+                    break
+    return out
+
+def comment_ranges(text):
+    """行/块注释区间——块外 LIT 扫描严禁命中注释内引号文本（含「原文」回填注释）。"""
+    out = []
+    k4 = 0
+    n4 = len(text)
+    while k4 < n4:
+        c = text[k4]
+        if c == '"':
+            k4 = skip_str(text, k4, '"')
+            continue
+        if c == "'":
+            mm4 = CHAR_LIT.match(text, k4)
+            if mm4:
+                k4 = mm4.end()
+                continue
+        if c == '/' and text[k4:k4 + 2] == '//':
+            e4 = text.find('\n', k4)
+            e4 = n4 if e4 == -1 else e4
+            out.append((k4, e4))
+            k4 = e4
+            continue
+        if c == '/' and text[k4:k4 + 2] == '/*':
+            e4 = text.find('*/', k4 + 2)
+            e4 = n4 if e4 == -1 else e4 + 2
+            out.append((k4, e4))
+            k4 = e4
+            continue
+        k4 += 1
+    return out
+
+def const_item_ranges(text):
+    """模块级 const/static 项区间（列 0 起）——初始化是 const 语境，evtx/evf
+    调用不可入内（刀C 排除面；表体字面量归刀B 通道）。"""
+    out = []
+    # 任意缩进（impl 块内 pub const / fn 内局部 const 同为 const 语境，一并排除）
+    for m4 in re.finditer(r'(?m)^[\t ]*(pub(\([^)]*\))?(\s+in\s+\([^)]*\))?\s+)?(const|static)\s', text):
+        depth = 0
+        k5 = m4.end()
+        n5 = len(text)
+        while k5 < n5:
+            c = text[k5]
+            if c == '"':
+                k5 = skip_str(text, k5, '"')
+                continue
+            if c == "'":
+                mm5 = CHAR_LIT.match(text, k5)
+                if mm5:
+                    k5 = mm5.end()
+                    continue
+            if c in '([{':
+                depth += 1
+            elif c in ')]}':
+                depth -= 1
+            elif c == ';' and depth == 0:
+                out.append((m4.start(), k5 + 1))
+                break
+            k5 += 1
+    return out
+
+def in_ranges(pos, ranges):
+    for a2, b2 in ranges:
+        if a2 <= pos < b2:
+            return True
+    return False
+
+def prev_code_pos(text, pos):
+    """pos-2 起回扫（pos-1 视作开引号跳过）第一个非空白位。"""
+    k6 = pos - 2
+    while k6 >= 0 and text[k6] in ' \t\r\n':
+        k6 -= 1
+    return k6
+
+def after_fat_arrow(text, pos):
+    """回扫紧邻 `=>` 或 `=> {`——match 臂体位（与块内通道同纪律，留原地）。"""
+    k7 = prev_code_pos(text, pos)
+    if k7 < 1:
+        return False
+    if text[k7] == '{':
+        k7 = prev_code_pos(text, k7 + 1)
+    return k7 >= 1 and text[k7] == '>' and text[k7 - 1] == '='
+
+def before_fat_arrow(text, pos_end):
+    """前扫紧邻 `=>`——match 模式位（字符串模式是 const 语境，evtx 不可入）。"""
+    k8 = pos_end
+    n8 = len(text)
+    while k8 < n8 and text[k8] in ' \t\r\n':
+        k8 += 1
+    return text[k8:k8 + 2] == '=>'
+
+def find_table_region(text, tname):
+    """`pub const T: … = [` 起括号配平（字符串感知），返回 (起, 止) 或 None。"""
+    mm6 = re.search(r'pub const ' + tname + r'\b.*?=\s*\[', text, re.S)
+    if not mm6:
+        return None
+    bi3 = mm6.end() - 1
+    depth = 0
+    k9 = bi3
+    n9 = len(text)
+    while k9 < n9:
+        c = text[k9]
+        if c == '"':
+            k9 = skip_str(text, k9, '"')
+            continue
+        if c in '[{':
+            depth += 1
+        elif c in ']}':
+            depth -= 1
+            if depth == 0:
+                return (bi3, k9 + 1)
+        k9 += 1
+    return None
+
+def resolve_contained(edits):
+    """同一文件内嵌套消解：被外层替换 span 包住的内层保留、外层留原地
+    （与块内 all_edits 同款判定，块外嵌套 format! 同理）。"""
+    kept2 = []
+    for e7 in edits:
+        s2, e2, _r = e7
+        contained = any(o[0] <= s2 and e2 <= o[1] and (o[0], o[1]) != (s2, e2)
+                        for o in edits)
+        if contained:
+            print('drop outer edit @%s:%d (contains another replacement; left in place)'
+                  % (e7[3], s2) if len(e7) > 3 else
+                  'drop outer edit @%d (contains another replacement; left in place)' % s2)
+            continue
+        kept2.append(e7)
+    return kept2
+
+def apply_edits(text, edits):
+    """从后往前应用替换（位置不失效）。"""
+    new_text = text
+    for s3, e3, repl in sorted(edits, key=lambda t: -t[0]):
+        new_text = new_text[:s3] + repl + new_text[e3:]
+    return new_text
+
+out_edits = {}    # fname -> [(s, e, repl)]（全文件坐标；game.rs 块内账稍后并入）
+FTXT = {'game.rs': src}
+out_tmpl_cnt = out_lit_cnt = out_tmpl_b = out_lit_b = 0
+if do_block_tmpl or do_block_lit:
+    for fname2 in BLOCK_SCAN_FILES:
+        if fname2 not in FTXT:
+            FTXT[fname2] = (SRC_DIR / fname2).read_text(encoding='utf-8')
+        ftext = FTXT[fname2]
+        excl = cfg_test_ranges(ftext) + comment_ranges(ftext)
+        if fname2 == 'game.rs':
+            excl.append((i, end))       # build_event 块内走既有通道（上方扫描）
+        if do_block_lit:
+            excl += const_item_ranges(ftext)
+        edits_f = []
+        for m7 in LIT.finditer(ftext):
+            p7 = m7.start(1)
+            if in_ranges(p7, excl):
+                continue
+            raw7 = m7.group(1)
+            if not any(ord(c) > 127 for c in raw7):
+                continue
+            b7 = len(raw7.encode('utf-8'))
+            name7, ms7, po7 = macro_before(ftext, p7)
+            if name7 == 'format!':
+                if not do_block_tmpl or b7 < MIN_B:
+                    continue
+                ph7 = raw7.count('{}')
+                res7 = raw7.replace('{}', '')
+                if ph7 < 1 or '{' in res7 or '}' in res7:
+                    continue
+                val7 = decode_raw(raw7)
+                if (val7 is None or encode_val(val7) != raw7
+                        or '*/' in raw7 or '/*' in raw7):
+                    continue
+                if after_fat_arrow(ftext, p7):
+                    continue
+                cl7 = scan_call_end(ftext, po7)
+                if cl7 == -1:
+                    continue
+                args7, nargs7 = split_args(ftext, po7, cl7)
+                if nargs7 == -1 or nargs7 != ph7:
+                    continue
+                n7 = alloc(raw7)
+                # 实参逐位显式 unsize：&[&dyn Display] 元素型一统，不吃推断顺序运气
+                #（v1.16.29 main.rs 自检行 i32/u32 混排实证：隐式依赖首元素定型，
+                #  异型即 E0308——新收编站一律显式，codegen 等价零字节差）
+                edits_f.append((ms7, cl7 + 1,
+                                'evf(%d, &[%s])/* 原文：%s */'
+                                % (n7, ', '.join('&(%s) as &dyn core::fmt::Display' % a
+                                                 for a in args7), raw7),
+                                fname2))
+                out_tmpl_cnt += 1
+                out_tmpl_b += b7
+                continue
+            if name7 is not None and name7.endswith('!'):
+                continue
+            if not do_block_lit or b7 < 40:
+                continue
+            if '{' in raw7 or '}' in raw7:
+                continue
+            val7 = decode_raw(raw7)
+            if (val7 is None or encode_val(val7) != raw7
+                    or '*/' in raw7 or '/*' in raw7):
+                continue
+            if after_fat_arrow(ftext, p7) or before_fat_arrow(ftext, m7.end(1)):
+                continue
+            n7 = alloc(raw7)
+            edits_f.append((p7 - 1, m7.end(1) + 1,
+                            'evtx(%d)/* 原文：%s */' % (n7, raw7), fname2))
+            out_lit_cnt += 1
+            out_lit_b += b7
+        for ed7 in edits_f:
+            out_edits.setdefault(ed7[3], []).append((ed7[0], ed7[1], ed7[2]))
+if do_block_tmpl or do_block_lit:
+    print('block-out scan: %d evf templates (%d B) + %d evtx lits >=40B (%d B)'
+          % (out_tmpl_cnt, out_tmpl_b, out_lit_cnt, out_lit_b))
 
 # ---- data.rs 双表收编（刀②/③）----
 PAT_TABLE = r'pub const %s: \[&str; (\d+)\] = \[(.*?)\n\];'
@@ -418,8 +697,10 @@ def table_bases_from_inc():
     out = {}
     if OFFS.exists():
         txt = OFFS.read_text(encoding='utf-8')
-        for key in ('TXT_NAME_BASE', 'TXT_BRIEF_BASE', 'TXT_NAME2_BASE',
-                    'TXT_BRIEF2_BASE', 'TXT_NAME3_BASE', 'TXT_BRIEF3_BASE'):
+        for key in (('TXT_NAME_BASE', 'TXT_BRIEF_BASE', 'TXT_NAME2_BASE',
+                     'TXT_BRIEF2_BASE', 'TXT_NAME3_BASE', 'TXT_BRIEF3_BASE',
+                     'TXT_NAME4_BASE', 'TXT_BRIEF4_BASE')
+                    + BASE_KEYS_TABLES2):
             mm = re.search(r'pub static %s: u32 = (\d+);' % key, txt)
             if mm:
                 out[key] = int(mm.group(1))
@@ -468,6 +749,130 @@ elif 'TXT_BRIEF_BASE' in inc_bases:
 if name_base is not None and brief_base is not None:
     assert name_base != brief_base, '双表基址重合'
 
+# ================= v1.16.29 单1刀B：表通道扩容（--tables2） =================
+# 结构体表字段级原位改写（field: "raw" → field_n: N）+ 整表连号基址 emit；
+# 通道纪律与刀②/③同款：脚本只管行与基址，字段声明/impl 访问器/查表 fn 由施工方
+# 手改；重跑幂等（表体已换 → 无命中跳过；基址走 .inc 回读，绝不二次 alloc_fresh）。
+new_base_emits = {}
+tables2_report = []
+if do_tables2:
+    for (tname2, fkey2, sfields2, pfields2, nrows2) in STRUCT_TABLES:
+        if fkey2 not in FTXT:
+            FTXT[fkey2] = (SRC_DIR / fkey2).read_text(encoding='utf-8')
+        ftext2 = FTXT[fkey2]
+        reg2 = find_table_region(ftext2, tname2)
+        if reg2 is None:
+            tables2_report.append('%s: 表体未找到（应已换访问器，幂等跳过）' % tname2)
+            continue
+        region2 = ftext2[reg2[0]:reg2[1]]
+        edits2 = []
+        for fld2 in sfields2:
+            pat2 = re.compile(r'\b' + fld2 + r'\s*:\s*"((?:[^"\\]|\\.)*)"')
+            hits2 = list(pat2.finditer(region2))
+            if not hits2:
+                tables2_report.append('%s.%s: 无命中（应已收编，幂等跳过）' % (tname2, fld2))
+                continue
+            assert len(hits2) == nrows2, ('%s.%s 命中 %d != 期望 %d（防半收编）'
+                                          % (tname2, fld2, len(hits2), nrows2))
+            first_n2 = None
+            for h2 in hits2:
+                raw2 = h2.group(1)
+                val2 = decode_raw(raw2)
+                assert val2 is not None and encode_val(val2) == raw2, \
+                    '%s.%s 往返失败: %r' % (tname2, fld2, raw2[:20])
+                assert '*/' not in raw2 and '/*' not in raw2, '%s.%s 含注释界' % (tname2, fld2)
+                n2 = alloc_fresh(raw2)
+                if first_n2 is None:
+                    first_n2 = n2
+                edits2.append((reg2[0] + h2.start(), reg2[0] + h2.end(),
+                               '%s_n: %d' % (fld2, n2)))
+            if tname2 == 'HINTS' and fld2 == 'text':
+                new_base_emits['TXT_HINT_BASE'] = first_n2
+            tables2_report.append('%s.%s: %d 行 → field_n 连号（首 N=%d）'
+                                  % (tname2, fld2, nrows2, first_n2))
+        for fld3 in pfields2:
+            pat3 = re.compile(r'\b' + fld3 + r'\s*:\s*&\[')
+            hits3 = list(pat3.finditer(region2))
+            if not hits3:
+                tables2_report.append('%s.%s: 无命中（应已收编，幂等跳过）' % (tname2, fld3))
+                continue
+            assert len(hits3) == nrows2, ('%s.%s 命中 %d != 期望 %d（防半收编）'
+                                          % (tname2, fld3, len(hits3), nrows2))
+            for h3 in hits3:
+                d3 = 1
+                k3 = h3.end()          # region 局部，指向 '[' 后一位
+                nreg = len(region2)
+                while d3 > 0 and k3 < nreg:
+                    c3 = region2[k3]
+                    if c3 == '"':
+                        k3 = skip_str(region2, k3, '"')
+                        continue
+                    if c3 == '[':
+                        d3 += 1
+                    elif c3 == ']':
+                        d3 -= 1
+                        if d3 == 0:
+                            break
+                    k3 += 1
+                assert d3 == 0, '%s.%s 段括号配平失败' % (tname2, fld3)
+                inner3 = region2[h3.end():k3]
+                lits3 = LIT.findall(inner3)
+                assert 1 <= len(lits3) <= 3, '%s.%s 段内 %d 条越预算(1..=3)' \
+                    % (tname2, fld3, len(lits3))
+                start3 = None
+                for raw3 in lits3:
+                    val3 = decode_raw(raw3)
+                    assert val3 is not None and encode_val(val3) == raw3, \
+                        '%s.%s 往返失败: %r' % (tname2, fld3, raw3[:20])
+                    assert '*/' not in raw3 and '/*' not in raw3
+                    n3 = alloc_fresh(raw3)
+                    if start3 is None:
+                        start3 = n3
+                edits2.append((reg2[0] + h3.start(), reg2[0] + k3 + 1,
+                               '%s_ns: %d, %s_len: %d' % (fld3, start3, fld3, len(lits3))))
+            tables2_report.append('%s.%s: %d 行 → (ns, len) 对，段内连号'
+                                  % (tname2, fld3, nrows2))
+        if edits2:
+            out_edits.setdefault(fkey2, []).extend(edits2)
+    for (tname4, fkey4, basekey4, expect4) in ARR_TABLES:
+        if basekey4 in inc_bases:
+            b4v = inc_bases[basekey4]
+            assert next_n - 1 >= b4v + expect4 - 1, '%s 基址段越界' % basekey4
+            new_base_emits[basekey4] = b4v
+            tables2_report.append('%s: 基址回读 %d（表本体应已换 fn，幂等）' % (basekey4, b4v))
+            continue
+        if fkey4 not in FTXT:
+            FTXT[fkey4] = (SRC_DIR / fkey4).read_text(encoding='utf-8')
+        ftext4 = FTXT[fkey4]
+        reg4 = find_table_region(ftext4, tname4)
+        if reg4 is None:
+            tables2_report.append('%s: 表体未找到且无基址登记——跳过（人工核对）' % tname4)
+            continue
+        lits4 = LIT.findall(ftext4[reg4[0]:reg4[1]])
+        assert len(lits4) == expect4, '%s 解析 %d 条 != 期望 %d' % (tname4, len(lits4), expect4)
+        base4 = next_n
+        for raw4b in lits4:
+            assert any(ord(c) > 127 for c in raw4b), \
+                '%s 含 ASCII 项会破 base+i 寻址' % tname4
+            val4b = decode_raw(raw4b)
+            assert val4b is not None and encode_val(val4b) == raw4b, \
+                '%s 往返失败: %r' % (tname4, raw4b[:20])
+            assert '*/' not in raw4b and '/*' not in raw4b
+            alloc_fresh(raw4b)
+        new_base_emits[basekey4] = base4
+        tables2_report.append('%s collected: %d rows, base N=%d（表本体由施工方换查表 fn）'
+                              % (tname4, expect4, base4))
+if tables2_report:
+    print('---- tables2 report ----')
+    for line2 in tables2_report:
+        print('  ' + line2)
+# 刀B 基址回读兜底：非 --tables2 运行也必须补齐（.inc 缺基址 = include! 断链）
+ARR_EXPECT = {'TXT_TALES_BASE': 12, 'TXT_HELP_BASE': 17, 'TXT_HINT_BASE': 14}
+for bk3, exp3 in ARR_EXPECT.items():
+    if bk3 not in new_base_emits and bk3 in inc_bases:
+        assert next_n - 1 >= inc_bases[bk3] + exp3 - 1, '%s 基址段越界' % bk3
+        new_base_emits[bk3] = inc_bases[bk3]
+
 # ---- blob 与 offsets ----
 blob = bytearray()
 offs = [0]
@@ -514,16 +919,34 @@ packed = comp.compress(bytes(blob)) + comp.flush()
 dec = zlib.decompressobj(-15)
 assert dec.decompress(packed) + dec.flush() == bytes(blob), 'deflate roundtrip failed'
 
-# ---- 源码替换（从后往前，位置不失效）----
-new_block = block
-for s0, e0, repl in sorted(kept, key=lambda t: -t[0]):
-    new_block = new_block[:s0] + repl + new_block[e0:]
+# ---- 源码替换（从后往前，位置不失效）——v1.16.29 起多文件账本 ----
+# build_event 块内账（kept 为块局部坐标）换算全文件坐标后并入 game.rs；
+# 块外通道（out_edits）与表通道（tables2 写进 out_edits）按文件合并消解后统一应用。
+file_edits = {}
+for fname8, edits8 in out_edits.items():
+    file_edits[fname8] = list(edits8)
+blk_shift = [(s0 + i, e0 + i, repl) for s0, e0, repl in kept]
+if blk_shift:
+    file_edits.setdefault('game.rs', []).extend(blk_shift)
 
-new_src = src[:i] + new_block + src[end:]
+final_texts = {}
+for fname8, edits8 in file_edits.items():
+    if not edits8:
+        continue
+    ftext8 = FTXT.get(fname8)
+    if ftext8 is None:
+        ftext8 = (SRC_DIR / fname8).read_text(encoding='utf-8')
+        FTXT[fname8] = ftext8
+    kept8 = resolve_contained(edits8)
+    if not kept8:
+        continue
+    final_texts[fname8] = apply_edits(ftext8, kept8)
 
-# ---- 源码引用校验：块内 evtx(N)/evf(N) 的 N 全部界内且都指向可解码行 ----
-refs = set(int(x) for x in re.findall(r'evtx\((\d+)\)', new_block))
-refs |= set(int(x) for x in re.findall(r'evf\((\d+),\s*&\[', new_block))
+# ---- 源码引用校验：全部被改文件里 evtx(N)/evf(N) 的 N 界内且都指向可解码行 ----
+refs = set()
+for ftext9 in final_texts.values():
+    refs |= set(int(x) for x in re.findall(r'evtx\((\d+)\)', ftext9))
+    refs |= set(int(x) for x in re.findall(r'evf\((\d+),\s*&\[', ftext9))
 assert all(0 <= n < len(offs) - 1 for n in refs), 'evtx/evf(N) out of range'
 for n in refs:
     assert decode_raw(table[n]) is not None, 'ref N=%d bad row' % n
@@ -575,9 +998,24 @@ if name_base is not None:
 if brief_base is not None:
     inc += emit_base('TXT_BRIEF3_BASE',
                      inc_bases.get('TXT_BRIEF3_BASE', BRIEF3_BASE_MANIFEST))
-OFFS.write_text(inc, encoding='utf-8')
-GAME.write_text(new_src, encoding='utf-8')
-print('written: %s / %s / %s; game.rs updated' % (SOURCE.name, PACK.name, OFFS.name))
+# v1.16.29 段四基址（首轮 emit 取 manifest 手分值；此后回读 .inc 幂等）
+if name_base is not None:
+    inc += emit_base('TXT_NAME4_BASE',
+                     inc_bases.get('TXT_NAME4_BASE', NAME4_BASE_MANIFEST))
+if brief_base is not None:
+    inc += emit_base('TXT_BRIEF4_BASE',
+                     inc_bases.get('TXT_BRIEF4_BASE', BRIEF4_BASE_MANIFEST))
+# v1.16.29 刀B 整表基址（首轮 emit 收编 N 段基址；此后每次运行从 .inc 回读重发，
+# 与段一/二/三同款幂等——非 --tables2 运行也不许丢基址，否则 include! 断链）
+for bk2 in BASE_KEYS_TABLES2:
+    if bk2 in new_base_emits:
+        inc += emit_base(bk2, new_base_emits[bk2])
+OFFS.write_text(inc)
+for fname10 in sorted(final_texts):
+    (SRC_DIR / fname10).write_text(final_texts[fname10], encoding='utf-8')
+print('written: %s / %s / %s; sources updated: %s'
+      % (SOURCE.name, PACK.name, OFFS.name,
+         ', '.join(sorted(final_texts)) or '(none)'))
 if name_base is not None:
     print('TXT_NAME_BASE=%d  TXT_BRIEF_BASE=%s'
           % (name_base, brief_base if brief_base is not None else '-'))

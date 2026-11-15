@@ -125,11 +125,11 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
                 prewarm_comp_page();
             }
             // v1.16.28 江湖声望行标签首开帧预热（照图鉴/旧稿先例）：总览页右列新增
-            // 「声望」标签与「江湖声望」值前缀四字不在 PANEL_WARM_CHARS，漏灌则
-            // 首开帧冷栅格化触发图集整图重传——页 0 首开一次灌齐（动态数字 0..=9
-            // 已在 WARM 表）
+            // 「声望」标签不在 PANEL_WARM_CHARS，漏灌则首开帧冷栅格化触发图集整图
+            // 重传——页 0 首开一次灌齐（动态数字 0..=9 已在 WARM 表）。
+            // v1.16.29 值前缀四字已删（值留裸数字），预热面同步缩到「声望」。
             if i == 0 {
-                prewarm_text("声望江湖", &[14]);
+                prewarm_text("声望", &[14]);
             }
             g.char_tab = i;
             g.play(crate::sounds::Which::Page);
@@ -805,7 +805,7 @@ fn draw_npc_card(
     let seg = tale_unlocked(fav);
     if seg > 0 {
         if npc_row_vis(y + 196.0) {
-            wrap_draw(NPC_TALES[i][seg - 1], col, y + 196.0, 14, 640.0, 22.0, C_TEXT);
+            wrap_draw(npc_tale(i, seg - 1), col, y + 196.0, 14, 640.0, 22.0, C_TEXT);
         }
     } else if npc_row_vis(y + 196.0) {
         txt("交情愈深，其人故事自会显于纸上。", col, y + 196.0, 14, C_DIM);
@@ -1902,7 +1902,9 @@ fn draw_overview(g: &Game, l: &Life) {
     // 440 之间，零版式位移零碰撞——标签照「宿敌/道侣/成就」col2+值 col2+45 惯例）
     txt("声望", col2, 410.0, 14, C_DIM);
     txt(
-        &format!("江湖声望 {}", g.meta.fame),
+        // v1.16.29 值留裸数字（照右列宿敌/成就行裸值惯例）——「江湖声望」前缀与
+        // 「声望」标签四字重复，删前缀 −13B raw，帧路径分配量不变（既有 format!）
+        &format!("{}", g.meta.fame),
         col2 + 45.0,
         410.0,
         14,

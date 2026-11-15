@@ -26,9 +26,51 @@ full = sum(1 for c in leaf if ord(c) > 0x2000)
 half = len(leaf) - full
 print(f'终局叶 {len(leaf)} 字符（全角 {full} + 半角 {half}）@18px 宽 = {w:.1f}px')
 print(f'右端 = 444 + {w:.1f} = {444+w:.1f}px；章签 num 锚 992 → 安全隙 = {992-444-w:.1f}px')
-# 供对照：其余叶的最长者（guide.rs 全部 HINTS text @18px）
-src = open('src/guide.rs', encoding='utf-8').read()
-texts = re.findall(r'text: "([^"]+)",', src)
+# 供对照：其余叶的最长者（HINTS text @18px）
+# v1.16.29 清账：HINTS text 自刀B起收编进 textpack（guide.rs 已改 text_n 查表）——
+# 旧按 guide.rs `text: "…"` 正则解析失配，改为按 TXT_HINT_BASE 读真相源
+# assets/text_source.txt 连号 14 行（与 EVENT_BRIEF 同口径）
+ESC = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\", "'": "'", "0": "\0"}
+
+
+def decode_hint_raw(raw):
+    if "\\" not in raw:
+        return raw
+    out = []
+    k = 0
+    while k < len(raw):
+        c = raw[k]
+        if c != "\\":
+            out.append(c)
+            k += 1
+            continue
+        k += 1
+        d = raw[k]
+        if d == "u":
+            close = raw.index("}", k + 2)
+            out.append(chr(int(raw[k + 2:close], 16)))
+            k = close + 1
+        elif d in ESC:
+            out.append(ESC[d])
+            k += 1
+        else:
+            return None
+    return "".join(out)
+
+
+_inc = open('src/text_offsets.inc', encoding='utf-8').read()
+_hint_base = int(re.search(r'pub static TXT_HINT_BASE: u32 = (\d+);', _inc).group(1))
+_hint_rows = {}
+for _line in open('assets/text_source.txt', encoding='utf-8'):
+    if not _line.strip():
+        continue
+    _ns, _, _raw = _line.rstrip('\n').partition('\t')
+    _hint_rows[int(_ns)] = _raw
+texts = []
+for _k in range(_hint_base, _hint_base + 14):
+    _v = decode_hint_raw(_hint_rows[_k])
+    assert _v is not None, f'HINTS 行 {_k} 解码失败'
+    texts.append(_v)
 best = []
 for t in texts:
     ww = width_px(t, 18)
@@ -78,9 +120,9 @@ for line in open('assets/text_source.txt', encoding='utf-8'):
     n_s, _, raw = line.rstrip('\n').partition('\t')
     src_rows[int(n_s)] = raw
 inc = open('src/text_offsets.inc', encoding='utf-8').read()
-_SEG1, _SEG2 = 291, 299
+_SEG1, _SEG2, _SEG3 = 291, 299, 309
 bases = []
-for key in ('TXT_BRIEF_BASE', 'TXT_BRIEF2_BASE', 'TXT_BRIEF3_BASE'):
+for key in ('TXT_BRIEF_BASE', 'TXT_BRIEF2_BASE', 'TXT_BRIEF3_BASE', 'TXT_BRIEF4_BASE'):
     m = re.search(r'pub static %s: u32 = (\d+);' % key, inc)
     bases.append(int(m.group(1)) if m else None)
 n_events = int(re.search(r'pub const N_EVENTS: usize = (\d+);', d).group(1))
@@ -91,9 +133,13 @@ for i in range(n_events):
     elif i < _SEG2:
         assert bases[1] is not None, '扩池后段二基址缺失'
         n = bases[1] + (i - _SEG1)
-    else:
+    elif i < _SEG3:
         assert bases[2] is not None, '扩池后段三基址缺失'
         n = bases[2] + (i - _SEG2)
+    else:
+        # v1.16.29 段四（ev309..316 → N1833..1840，基址随单1/单2 顺延）
+        assert bases[3] is not None, '扩池后段四基址缺失'
+        n = bases[3] + (i - _SEG3)
     assert n in src_rows, f'EVENT_BRIEF 段缺行 N={n}'
     briefs.append(decode_raw(src_rows[n]))
 lens = [(len(b), b) for b in briefs]

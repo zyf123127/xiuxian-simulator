@@ -1455,138 +1455,153 @@ pub struct ChapterGoal {
 pub struct ChapterDef {
     pub num: &'static str,   // 章次字面量（"第一章"，禁运行时拼数字）
     pub name: &'static str,  // 章名（横幅/章节书行）
-    pub intro: &'static str, // 引入剧情（章节书右栏，wrap_draw 单段）
+    pub intro_n: u16, // 引入剧情（章节书右栏，wrap_draw 单段）——v1.16.29 刀B 收编 textpack
     pub goals: &'static [ChapterGoal],
     // v1.16.9 章成之礼：达成边沿由 game.rs check_chapters 唯一发放（newly 位命中处
     // meta.dao_yun += reward，chap_done 位即领取凭证，零新存档键零迁移）。奖励行
     // 显示走 reward_note 全静态字面量（含「道韵 +N」），帧路径零分配；reward 数字
     // 与 note 文本的对应由 chapter_tests 表一致性单测钉死，防两处手改漂移。
     pub reward: u32,          // 章成之礼道韵（meta 跨世持久标量；不发灵石等现世资源）
-    pub reward_note: &'static str, // 奖励行文案（章节书右栏 + 达成金行 log 复用）
+    pub reward_note_n: u16, // 奖励行文案（章节书右栏 + 达成金行 log 复用）——刀B 收编
     // v1.16.9 章间记事：逐段解锁的章内插曲（段 i 的可见条件=本章已毕目标数 ≥ i，
     // 右栏只显示最新解锁段——纯显示推导零存档；段首自带「其一/其二」序号，全静态）。
-    pub lore: &'static [&'static str],
+    // v1.16.29 刀B 章间记事收编 textpack：lore_ns=本章节段首 N（行主序连号）、
+    // lore_len=段数（2..=3 变长）——访问器 lore(k) 越界空串兜底（evtx 同款防御）。
+    pub lore_ns: u16,
+    pub lore_len: u8,
     // v1.16.20 章开场白（故事沉浸续作）：章 i 了边沿由 game.rs check_chapters 唯一
     // 追发下一章「【第X章·启】<open>」金行日志（章1 开局已有 intro、无前边沿不
     // 发；末章了后无下一章不发——首行 open 恒不演出，保非空供表契约单测钉死）。
     // 显示位=日志金行单行，预算 ≤24 字；不进章节书右栏（intro 预算不动）。
-    pub open: &'static str,
+    pub open_n: u16,
     // v1.16.28 章回联句（故事沉浸续作②）：每章一句对仗联语（上下联以逗号分，
     // 单行 ≤14 字预算）。显示位两处——章节书右栏章名下（draw.rs draw_chapter_view）
     // 与结算屏「下一章」行尾（draw.rs settle 行）；字形由结算屏 real_die 章签
     // 预热口一次灌齐（game.rs prewarm 块，与 num/name/reward_note 同块）——两处
     // 显示共用同串同字号 @14，预热一处覆盖两面。纯静态表字段零存档零迁移；
     // 非空与预算由 chapter_tests::chapters_table_shape 随表钉死。
-    pub couplet: &'static str,
+    pub couplet_n: u16,
+}
+
+// v1.16.29 刀B 访问器：intro/open/reward_note/couplet/lore 收编 textpack 连号段
+//（pack_text.py --tables2 产侧原位写 N）。evtx O(1) 纯算术零分配——章节书/横幅/
+// 结算屏帧路径安全（性能十戒）；行内容与旧字面量逐字节等价（真相源
+// text_source.txt 行 + chapter_tests 钉测）。
+impl ChapterDef {
+    pub fn intro(&self) -> &'static str {
+        evtx(self.intro_n as usize)
+    }
+    pub fn open(&self) -> &'static str {
+        evtx(self.open_n as usize)
+    }
+    pub fn reward_note(&self) -> &'static str {
+        evtx(self.reward_note_n as usize)
+    }
+    pub fn couplet(&self) -> &'static str {
+        evtx(self.couplet_n as usize)
+    }
+    /// 章间记事第 k 段（越界空串兜底；段数变长 2..=3 由 lore_len 携带）
+    pub fn lore(&self, k: usize) -> &'static str {
+        if k < self.lore_len as usize {
+            evtx(self.lore_ns as usize + k)
+        } else {
+            ""
+        }
+    }
+    pub fn lore_len(&self) -> usize {
+        self.lore_len as usize
+    }
 }
 
 pub const CHAPTERS: [ChapterDef; 9] = [
     ChapterDef {
         num: "第一章",
         name: "雨夜执印",
-        intro: "雨夜乱葬岗，你从尸堆里爬出来，手里攥着一枚方印——印身无字，只有层层叠叠被划掉的痕迹。识海里有个累坏了的少年嗓音：你的名字是错的，天写错了。——先推演一生，看看错在哪里。",
+        intro_n: 1606,
         goals: &[
             ChapterGoal { text: "转生入世——此身既立，主线自此始", pid: 12 },
             ChapterGoal { text: "开卷首模拟——耗 1 枚点数推演一生", pid: 0 },
         ],
         reward: 50,
-        reward_note: "章成之礼：道韵 +50",
-        lore: &[
-            "其一：方印无字，划痕却比字多。识海里那声叹息说——这不是印，是账；前头十万稿，都记在它上头。",
-            "其二：你试着把印按进土里，土里渗出金纹，拼出半句话：先推演。推演不误砍柴工。",
-        ],
-        open: "方印无字，你有十万稿可写。",
-        couplet: "雨夜拾残印，灯前写错名",
+        reward_note_n: 1624,
+        lore_ns: 1642, lore_len: 2,
+        open_n: 1615,
+        couplet_n: 1633,
     },
     ChapterDef {
         num: "第二章",
         name: "镜中万象",
-        intro: "轮回镜里万象森罗：游历遇敌、闭关破境、奇遇结缘。模拟中的一战一胜，都是现实这具身体的磨刀石。",
+        intro_n: 1607,
         goals: &[
             ChapterGoal { text: "首胜——模拟中战退一次强敌", pid: 1 },
             ChapterGoal { text: "现实首破境——闭关圆满，冲击新境", pid: 2 },
         ],
         reward: 80,
-        reward_note: "章成之礼：道韵 +80",
-        lore: &[
-            "其一：轮回镜不照脸，照的是没走的路。镜里那人赢了，你输了；镜里那人死了，你还站着。",
-            "其二：镜背刻着一行小字：万象皆稿。你忽然明白，模拟不是梦——是起草。",
-        ],
-        open: "轮回镜起雾了——镜里那人，先你一步醒。",
-        couplet: "镜中观万象，纸上起初稿",
+        reward_note_n: 1625,
+        lore_ns: 1644, lore_len: 2,
+        open_n: 1616,
+        couplet_n: 1634,
     },
     ChapterDef {
         num: "第三章",
         name: "血仇得报",
-        intro: "删你字的血仇之敌仍按册候查。变强，寻仇，阵斩之——夺其家产，据其职牒。此吏不除，书不成书。",
+        intro_n: 1608,
         goals: &[
             ChapterGoal { text: "首斩宿敌——现实中寻仇得胜", pid: 3 },
             ChapterGoal { text: "再斩一敌——血仇之链，一环扣一环", pid: 14 },
         ],
         reward: 120,
-        reward_note: "章成之礼：道韵 +120",
-        lore: &[
-            "其一：血仇之敌死前盯着你的方印，笑出声：「你也是被删了名字的？」你没答——收刀，取牒。",
-            "其二：职牒入手温热，像墨迹未干的纸。牒上官名被划掉，补了一行小字：暂缺，待补。",
-        ],
-        open: "血仇的名字又浮上册面。这一次，你先出手。",
-        couplet: "血债按册候，一剑偿旧年",
+        reward_note_n: 1626,
+        lore_ns: 1646, lore_len: 2,
+        open_n: 1617,
+        couplet_n: 1635,
     },
     ChapterDef {
         num: "第四章",
         name: "文狱讨牒",
-        intro: "每斩一吏，其职牒便归你名下。六牒齐聚之日，文狱闻你名而却步——问笔终战的门票，一张一张攒出来。",
+        intro_n: 1609,
         goals: &[
             ChapterGoal { text: "讨牒三成——职牒 3/6 归档", pid: 4 },
             ChapterGoal { text: "六牒归档——讨牒 6/6，道韵+166", pid: 5 },
         ],
         reward: 166,
-        reward_note: "章成之礼：道韵 +166",
-        lore: &[
-            "其一：文狱里文书成精，专吃写错的名字。讨牒六张，张张带血——不是你的血，是名字的血。",
-            "其二：六牒齐了那夜，方印烫了一瞬。印身划痕浅了一层：账，还了一笔。",
-        ],
-        open: "文狱的灯次第亮起：六张牒，一张都不能少。",
-        couplet: "文狱灯次第，六牒一册收",
+        reward_note_n: 1627,
+        lore_ns: 1648, lore_len: 2,
+        open_n: 1618,
+        couplet_n: 1636,
     },
     ChapterDef {
         num: "第五章",
         name: "山河万象",
-        intro: "山河图志五大区域，各有风土与机缘：宗门兴望、大漠秘藏、瘴惑灵芽、冰心澄神、仙屿潮音。行走、换幕、初至有赏——把五个域的名字都走一遍。",
+        intro_n: 1610,
         goals: &[
             ChapterGoal { text: "三域已至——山河图志初成", pid: 6 },
             ChapterGoal { text: "五域全至——图志圆满", pid: 7 },
         ],
         reward: 200,
-        reward_note: "章成之礼：道韵 +200",
-        lore: &[
-            "其一：山河图志摊开，五域风土扑面。你走过的地方，图志上便多一笔墨——像有人在替你续稿。",
-            "其二：仙屿潮音夜里响，声里混着纸页翻动。图志合上时，你听见一句：第五章，过。",
-        ],
-        open: "图志摊开，五域的风各有各的味道。",
-        couplet: "五域风谣异，一图山河同",
+        reward_note_n: 1628,
+        lore_ns: 1650, lore_len: 2,
+        open_n: 1619,
+        couplet_n: 1637,
     },
     ChapterDef {
         num: "第六章",
         name: "同页之缘",
-        intro: "模拟世中有人愿与你缝作同页；现实里有长老、掌柜、宁清霜、醉道人四位故人。缘是线，把散稿订成书。",
+        intro_n: 1611,
         goals: &[
             ChapterGoal { text: "首结缘——与一人缝作同页", pid: 8 },
             ChapterGoal { text: "故人心事——好感达标，抉择一场专属事件", pid: 9 },
         ],
         reward: 240,
-        reward_note: "章成之礼：道韵 +240",
-        lore: &[
-            "其一：缝作同页的人说：稿子写坏了不要撕，缝进去——废稿也是稿，垫在底下，书才厚。",
-            "其二：故人们各有心事。心事不重，一张纸的分量；可一册书，就是一张纸一张纸摞出来的。",
-        ],
-        open: "线穿针眼——有人愿意与你缝作同页了。",
-        couplet: "结缘同页上，缝补灯影间",
+        reward_note_n: 1629,
+        lore_ns: 1652, lore_len: 2,
+        open_n: 1620,
+        couplet_n: 1638,
     },
     ChapterDef {
         num: "第七章",
         name: "问笔终战",
-        intro: "六牒在手，修为圆满——现实破境的雷劫里，执笔人在等你。九重雷劫尽数扛下，便是落笔之刻。",
+        intro_n: 1612,
         goals: &[
             ChapterGoal { text: "现实问笔——九重雷劫扛下，首登仙界", pid: 10 },
             // v1.16.19 目标行去重：原「封卷已斩——讨牒 6/6 方见终战卡」与四章目标
@@ -1594,31 +1609,24 @@ pub const CHAPTERS: [ChapterDef; 9] = [
             ChapterGoal { text: "六牒在手——封卷吏候你多时", pid: 5 },
         ],
         reward: 320,
-        reward_note: "章成之礼：道韵 +320",
-        lore: &[
-            "其一：九重雷劫，一重一问。问到第七重时，天问累了——你没累。",
-            "其二：天门开处没有仙宫，只有一张摆好纸笔的案。执笔人不在，笔在等你。",
-        ],
-        open: "雷云在峰顶集结。笔在案上，等你落款。",
-        couplet: "九霄雷作问，一笔答苍天",
+        reward_note_n: 1630,
+        lore_ns: 1654, lore_len: 2,
+        open_n: 1621,
+        couplet_n: 1639,
     },
     ChapterDef {
         num: "第八章",
         name: "落款成书",
-        intro: "终战卡上四种落款：认写、撕稿、夺笔、合订。你如何落款，书便如何成——十万稿废纸，等你一个结尾。",
+        intro_n: 1613,
         goals: &[
             ChapterGoal { text: "落款成书——达成任一结局", pid: 11 },
             ChapterGoal { text: "四卷全览——四种结局皆已落款", pid: 13 },
         ],
         reward: 400,
-        reward_note: "章成之礼：道韵 +400",
-        lore: &[
-            "其一：执笔人递笔：你如何落款，书便如何成。十万稿废纸在身后哗哗作响，像十万人在等你。",
-            "其二：落款那一刻，方印划痕尽褪，字浮出来——是你的名字。这一次，天没有写错。",
-            "其三：书成之后还有书。合订的人说：下一册，从别人的名字写起。",
-        ],
-        open: "十万稿废纸忽然安静——它们在等你一个结尾。",
-        couplet: "落款尘已定，合卷墨犹香",
+        reward_note_n: 1631,
+        lore_ns: 1656, lore_len: 3,
+        open_n: 1622,
+        couplet_n: 1640,
     },
     // v1.16.10 书外之章：四结局全览后的首个「书外」进行态目标——终局不再是悬空。
     // pid13（四卷全览）为第八章既有谓词复用（章九开局即已毕其一），新谓词 pid15
@@ -1627,7 +1635,7 @@ pub const CHAPTERS: [ChapterDef; 9] = [
     ChapterDef {
         num: "第九章",
         name: "书外之章",
-        intro: "书成了，故事却没有。合订的人说：下一册，从别人的名字写起——可你的名字，还要往上写。执卷之人，先把自己这一卷读到头。",
+        intro_n: 1614,
         goals: &[
             // v1.16.19 目标行去重：原句与八章第二目标「四卷全览——四种结局皆已落款」
             // 全同——改叙事新句（pid13 不动，纯字面量；达成谓词同口）
@@ -1635,13 +1643,10 @@ pub const CHAPTERS: [ChapterDef; 9] = [
             ChapterGoal { text: "执卷境——历代最高修为抵执卷，书外续行", pid: 15 },
         ],
         reward: 500,
-        reward_note: "章成之礼：道韵 +500",
-        lore: &[
-            "其一：书成之夜，方印上多了一行小字：本卷完，续卷无期。你笑了——无期，不是无。",
-            "其二：合订的人临行回头：书外的路没有稿，走一步，是一步。你提印出门，天光正好。",
-        ],
-        open: "书成了。你的名字，还要往上写。",
-        couplet: "书外天曹远，笔下有余章",
+        reward_note_n: 1632,
+        lore_ns: 1659, lore_len: 2,
+        open_n: 1623,
+        couplet_n: 1641,
     },
 ];
 
@@ -1694,14 +1699,20 @@ pub const ORIGINS: [OriginDef; 6] = [
 // 轮盘路径纳秒级）；行可读形态与 tools/tables_recheck.py、ledger_recheck.py 的
 // 4 元组解析口径零变（表行仍是 (id,w,mr,good)）；打包无损性由 game.rs
 // events_bitfield_pack_lossless 全表逐行钉测兜底（w>63/mr>7 当场红）。
-pub const N_EVENTS: usize = 309;
+pub const N_EVENTS: usize = 317;
 /// 名/简 textpack 段一条数（v1.16.26 末态；段二自 v1.16.27 扩池起连号追加）
 const EV_SEG1: usize = 291;
 /// 名/简 textpack 段二条数（v1.16.27 末态；段三自 v1.16.28 扩池起连号追加）。
-/// 段界常量是 len2/len3 的唯一正确写法：len2 若写 N_EVENTS−EV_SEG1，N_EVENTS
+/// 段界常量是 len2/len3/len4 的唯一正确写法：len2 若写 N_EVENTS−EV_SEG1，N_EVENTS
 /// 增长时 len2 会静默变大、id299..308 名/简读到段二简行错位（错行非空串，
 /// is_empty 防线抓不住）——batch_tables_aligned 的段三 get 首尾逐字钉为内容级防线
 const EV_SEG2: usize = 299;
+/// 名/简 textpack 段三条数界（v1.16.28 末态 309；段四自 v1.16.29 扩池起连号
+/// 追加）。len3 一律写 EV_SEG3−EV_SEG2 段界常量差（勿写 N_EVENTS−EV_SEG2——
+/// N_EVENTS 增长时 len3 静默吞掉段四行、id309..316 名/简读到段三错行非空串，
+/// is_empty 防线抓不住——段四 get 首尾逐字钉为内容级防线，见
+/// ev_tables_section_bounds / batch_tables_aligned v1.16.29 段）
+const EV_SEG3: usize = 309;
 
 pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (0, 12, 0, true),  // 灵草满坡
@@ -2313,6 +2324,18 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     // 0:40 条178权/1:62 条226权/2:50 条182权/3:31 条97权/4:31 条95权/
     // 5:26 条79权/6:18 条53权/7:16 条50权（mr3 31 条/mr5 26 条两最薄层本批
     // +3/+1 摊薄；恶缘 mr2/mr3 各 +1）
+    // v1.16.29 扩池 8（老年层 2——309 雪堤喂雀/310 旧席重缝，11→13 条摊薄
+    // 重见率最高层；mr5 1——311 下山买茶 26→27；具名 NPC 2——312 雪水研墨
+    // 宁清霜 Npc(2) 第二卡、313 第三本账 胡掌柜 Npc(1) 第六卡，正文钉名⟺
+    // Npc(n) 照 248/292/301 口径；mr3 1——314 檐下折梅；稀有 1——315 琅函倒页
+    // w1 mr7，稀有 23→24 条 43→44 权 ≈4.48% 守带（w2 会得 4.57% 出带，w1
+    // 先例 15/57/73）；mr4 恶 1——316 药童卷方，恶缘 9→10）。单1 减包
+    // −10.27KB 达 6~8 条分级上沿；真相源段四名/简连号段 1825..=1832/1833..=1840
+    // 先于正文手写（基址因单1/单2 占 N1492..1824 顺延）。
+    // 扩池后账本实测复算（tools/ledger_recheck.py）：总基权 960→982（本批
+    // +22=7×w3+1×w1）；稀有 24 条 44 权 ≈4.48%；恶缘常规 63→64 条 225→228 权
+    // ≈23.2%；mr 全行分布（317 条）0:76/1:63/2:51/3:32/4:33/5:27/6:18/7:17；
+    // 常态池（w>0）mr5 27 条 82 权/mr3 32 条 100 权两最薄层续摊（本批各 +1）
     (299, 3, 2, true),  // 合誊旧稿（老年×有伴双门控第 7 条，mr2 换层）
     (300, 3, 7, true),  // 晨课互校（伴随白名单第 27 条，mr7 有伴第 2 条）
     (301, 3, 3, true),  // 霜窗描枝（宁清霜 Npc(2) mr3 首卡）
@@ -2323,6 +2346,19 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (306, 3, 6, true),  // 抄经赠邻（mr6 善）
     (307, 3, 2, false), // 书船遇风（mr2 恶）
     (308, 3, 3, true),  // 醉后忘句（醉道人 Npc(3) mr3 首卡）
+    // v1.16.29 扩池 8 条（单1 净减 10.27KB 达 6~8 条分级上沿；总基权 960→982，
+    // 稀有 23→24 条 43→44 权 ≈4.48% 守勘察带）：老年层 +2（309/310——重见率
+    // 最高层摊薄）/mr5 最薄层 1（311）/具名 NPC 2（312 宁清霜 Npc(2) 第二卡/
+    // 313 胡掌柜 Npc(1) 第六卡，正文钉名⟺Npc(n) 照 248/292/301 口径）/mr3 1
+    // （314）/稀有 w1 1（315——w1 先例 15/57/73）/mr4 恶 1（316，恶缘 9→10）
+    (309, 3, 0, true),  // 雪堤喂雀（老年层，余量≤10 载门控）
+    (310, 3, 1, true),  // 旧席重缝（老年层，余量≤10 载门控）
+    (311, 3, 5, true),  // 下山买茶（mr5 善，最薄层补位）
+    (312, 3, 4, true),  // 雪水研墨（宁清霜 Npc(2) 第二卡）
+    (313, 3, 2, true),  // 第三本账（胡掌柜 Npc(1) 第六卡）
+    (314, 3, 3, true),  // 檐下折梅（mr3 善）
+    (315, 1, 7, true),  // 琅函倒页（稀有 w1：mr7 稀有第 3 条）
+    (316, 3, 4, false), // 药童卷方（mr4 恶）
 ];
 
 const fn pack_ev(r: (u16, u8, u8, bool)) -> u16 {
@@ -2392,8 +2428,9 @@ pub fn ev_good(p: u16) -> bool {
 // 字形，钉测 event_brief_11628_batch7_within_18。
 // v1.16.27 减包刀②/③：两表 291×2 条 &str 常量收编进 textpack（pack_text.py --tables
 // 连号段，基址见 text_offsets.inc：TXT_NAME_BASE=820、TXT_BRIEF_BASE=1111）；扩池批
-// 名/简连号追加为段二/段三（基址 TXT_NAME2_BASE=1402/TXT_BRIEF2_BASE=1410/
-// TXT_NAME3_BASE=1442/TXT_BRIEF3_BASE=1452），表本体
+// 名/简连号追加为段二/段三/段四（基址 TXT_NAME2_BASE=1402/TXT_BRIEF2_BASE=1410/
+// TXT_NAME3_BASE=1442/TXT_BRIEF3_BASE=1452/TXT_NAME4_BASE=1825/TXT_BRIEF4_BASE=
+// 1833——v1.16.29 段四 8 条，基址因单1/单2 用 N1492..1824 顺延），表本体
 // 换查表器：.get(i)/[id]/len() 调用面零改（gallery.rs 手札/图鉴行渲染仍零分配——
 // evtx O(1) 切片，仅每行多一次 OnceLock 原子 load，纳秒级）。行内容零变化（脚本
 // 往返断言 + game.rs event_names_match_card_titles 运行期全 id 对账——双源漂移防线
@@ -2410,15 +2447,22 @@ pub struct EvTable {
     len2: usize,
     // v1.16.28 扩池起：段二（v1.16.27 末态 8 条）满员后，新批连号追加为段三
     //（TXT_NAME3_BASE/TXT_BRIEF3_BASE 同款登记与产出）；四面同步扩三段连寻。
-    // len2/len3 一律取段界常量差（EV_SEG2−EV_SEG1 / N_EVENTS−EV_SEG2）——
+    // len2/len3 一律取段界常量差（EV_SEG2−EV_SEG1 / EV_SEG3−EV_SEG2）——
     // len2 写 N_EVENTS−EV_SEG1 会随 N_EVENTS 增长静默错位（见 EV_SEG2 注）
     base3: usize,
     len3: usize,
+    // v1.16.29 扩池起：段三（v1.16.28 末态 10 条）满员后，新批连号追加为段四
+    //（TXT_NAME4_BASE/TXT_BRIEF4_BASE 同款登记与产出；单1/单2 已用 N1492..1824，
+    // 段四基址顺延 1825/1833）；四面同步扩四段连寻。len4 取段界常量差
+    // N_EVENTS−EV_SEG3（勿写 N_EVENTS−EV_SEG2——会静默吞掉段四行，见 EV_SEG3 注）
+    base4: usize,
+    len4: usize,
 }
 
 impl EvTable {
-    /// 界内查表（旧 [&str; N].get(i) 等价：界内 Some，越界 None）；三段连寻：
-    /// i < len 走段一，len..len+len2 走段二，len+len2..len+len2+len3 走段三
+    /// 界内查表（旧 [&str; N].get(i) 等价：界内 Some，越界 None）；四段连寻：
+    /// i < len 走段一，len..len+len2 走段二，len+len2..len+len2+len3 走段三，
+    /// len+len2+len3..len+len2+len3+len4 走段四
     #[inline]
     pub fn get(&self, i: usize) -> Option<&'static str> {
         if i < self.len {
@@ -2430,19 +2474,23 @@ impl EvTable {
         if i < self.len + self.len2 + self.len3 {
             return Some(evtx(self.base3 + i - self.len - self.len2));
         }
+        if i < self.len + self.len2 + self.len3 + self.len4 {
+            return Some(evtx(self.base4 + i - self.len - self.len2 - self.len3));
+        }
         None
     }
     #[inline]
     pub fn len(&self) -> usize {
-        self.len + self.len2 + self.len3
+        self.len + self.len2 + self.len3 + self.len4
     }
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.len + self.len2 + self.len3 == 0
+        self.len + self.len2 + self.len3 + self.len4 == 0
     }
     /// 全表迭代（旧 [&str; N].iter() 等价：Item 为 &'static str，行序即 id 序）
     pub fn iter(&self) -> impl Iterator<Item = &'static str> + '_ {
-        (0..self.len + self.len2 + self.len3).map(move |i| self.get(i).unwrap_or(""))
+        (0..self.len + self.len2 + self.len3 + self.len4)
+            .map(move |i| self.get(i).unwrap_or(""))
     }
 }
 
@@ -2452,7 +2500,7 @@ impl core::ops::Index<usize> for EvTable {
     /// 直下标仅测试可达，测试恒界内）
     #[inline]
     fn index(&self, i: usize) -> &str {
-        if i >= self.len + self.len2 + self.len3 {
+        if i >= self.len + self.len2 + self.len3 + self.len4 {
             return "";
         }
         self.get(i).unwrap_or("")
@@ -2466,7 +2514,11 @@ pub static EVENT_NAMES: EvTable = EvTable {
     // 段界常量差（勿写 N_EVENTS−EV_SEG1——N_EVENTS=309 时静默变 18、段二简行错位）
     len2: EV_SEG2 - EV_SEG1,
     base3: TXT_NAME3_BASE as usize,
-    len3: N_EVENTS - EV_SEG2,
+    // 段界常量差（勿写 N_EVENTS−EV_SEG2——N_EVENTS 增长时静默吞掉段四行，见
+    // EV_SEG3 注）
+    len3: EV_SEG3 - EV_SEG2,
+    base4: TXT_NAME4_BASE as usize,
+    len4: N_EVENTS - EV_SEG3,
 };
 
 
@@ -2478,7 +2530,10 @@ pub static EVENT_BRIEF: EvTable = EvTable {
     base2: TXT_BRIEF2_BASE as usize,
     len2: EV_SEG2 - EV_SEG1,
     base3: TXT_BRIEF3_BASE as usize,
-    len3: N_EVENTS - EV_SEG2,
+    // 段界常量差（同 EVENT_NAMES len3 注）
+    len3: EV_SEG3 - EV_SEG2,
+    base4: TXT_BRIEF4_BASE as usize,
+    len4: N_EVENTS - EV_SEG3,
 };
 
 
@@ -2551,8 +2606,15 @@ pub struct NodeDef {
     pub name: &'static str,
     pub x: f32,
     pub y: f32,
-    pub desc: &'static str,
+    pub desc_n: u16, // v1.16.29 刀B：节点简介收编 textpack（name/acts 短串留原地）
     pub acts: &'static [&'static str],
+}
+
+impl NodeDef {
+    /// 节点简介（山河图·洞府面板显示位；O(1) 零分配帧路径安全）
+    pub fn desc(&self) -> &'static str {
+        evtx(self.desc_n as usize)
+    }
 }
 
 pub const NODE_SECT: usize = 0; // 青云宗
@@ -2568,42 +2630,42 @@ pub const LOCATIONS: [NodeDef; 6] = [
         name: "青云宗",
         x: 200.0,
         y: 130.0,
-        desc: "南疆第一仙宗，山门巍峨，剑气冲霄。拜入宗门可得名师指点，修炼事半功倍；完成宗门任务更可积攒贡献，换取宗门珍藏。",
+        desc_n: 1677,
         acts: &["拜入青云", "宗门任务·1年", "宗门商店"],
     },
     NodeDef {
         name: "临仙坊市",
         x: 640.0,
         y: 230.0,
-        desc: "凡仙杂处的水陆大埠，三教九流云集。坊市丹药对本地修士九折优惠，南来北往的消息也最为灵通。",
+        desc_n: 1678,
         acts: &["打开坊市"],
     },
     NodeDef {
         name: "落霞秘境",
         x: 980.0,
         y: 110.0,
-        desc: "上古修士遗府，每逢霞光贯日便开启一线。秘境中机缘与凶险并存——深入远征，逐层探取宝藏，见好就收方为上策。",
+        desc_n: 1679,
         acts: &["开始远征·1年"],
     },
     NodeDef {
         name: "清源洞府",
         x: 430.0,
         y: 90.0,
-        desc: "一处灵气充沛的天然洞天，泉鸣如琴，石髓生烟。于此闭关修炼，每载修为+25%；亦可经营洞府——聚灵阵、灵田、丹房随四时气象日益兴旺。",
+        desc_n: 1680,
         acts: &["闭关修炼·1年", "经营洞府"],
     },
     NodeDef {
         name: "荒骨战场",
         x: 1120.0,
         y: 330.0,
-        desc: "上古大战的古场，白骨露野，煞气不散。血仇之敌常于此设伏等你——是了断恩怨之地。",
+        desc_n: 1681,
         acts: &["寻仇"],
     },
     NodeDef {
         name: "天雷峰",
         x: 780.0,
         y: 390.0,
-        desc: "直插云霄的孤峰，峰顶终年雷云不散。峰顶问笔台引雷入体淬炼元神——冲击大境界时，每重雷劫存活+2%。",
+        desc_n: 1682,
         acts: &["冲击境界"],
     },
 ];
@@ -3081,28 +3143,12 @@ pub const NPC_TIER_NAMES: [&str; 5] = [
 // companion_lives≥1 保底、段2/3 comp_fav≥40/70）——零存档键，旧档天然兼容。
 // 每卡常显最新解锁 1 段（14px ≤2 行 wrap），完整 3 段收进后续展开或下版。
 // NPC_TALES[npc][seg]：seg 0/1/2 分别为点头之交(20)/相谈甚欢(40)/莫逆之交(70) 档故事。
-pub const NPC_TALES: [[&str; 3]; 4] = [
-    [
-        "他掌外门三千杂役的名册，也掌着每一页被天曹划掉的废稿。有人说他记性差——其实他只是装作没看见。看得太多，就得写进册子里。",
-        "某夜你路过后山，见他独自焚稿。火光里念的不是咒，是一串名字。次日他照旧板着脸派活，仿佛那夜的灰烬从不曾存在。",
-        "他终于对你说了实话：藏经阁下压着半卷没写完的书，他是最后一个读完全卷的人。「守住它。别让天曹的笔，翻到那一页。」",
-    ],
-    [
-        "万宝楼的账有三本：一本给天曹查，一本给自己赚，还有一本谁也没见过，记的是「人情」。你在第三本上，刚刚有了名字。",
-        "他收过假丹，放过水货，唯独没让你的灵石短过一文。问他缘故，他拨着算盘笑：「熟客的秤，得准——这是招牌。」",
-        "坊市大集那夜他多了几杯，翻出一枚旧算珠：「家师的。他说买卖做的是人心。这话在牌匾下挂了三十年，今日转赠于你。」",
-    ],
-    [
-        "她练剑从不用好纸——剑意太利，纸留不住。演武场的青石上全是她一个人的剑痕，深浅如一，像同一个人写了千遍的「正」字。",
-        "你见过她一次出鞘。不是对人，是对一场雨：剑起雨分，落回原处一滴不乱。她说剑心通明不是无情，「是不肯写错一笔。」",
-        "破境那日她立于你身后，剑未出鞘，鞘上已覆薄霜。「天曹要改你的稿，先问过我这柄剑。」后来你才知道，她的剑从不替人出第二次。",
-    ],
-    [
-        "他讨酒从不白讨：一壶浊酒换一句醉话，十句九虚，虚里那句偏又正中你眼下的要害。坊市都笑他疯，疯子记账却比谁都清醒。",
-        "有回他醉倒在你洞府门口，酒葫芦滚了出来，葫芦底贴着半张文狱封条。你没问，他醒来也没提。那壶酒，是你请的。",
-        "大醉那夜他忽然清醒：「我原是天曹的笔吏，写坏了一个名字，被贬下界做衬托。」顿了顿又道：「你这卷书写下去，别管我。」言毕复醉。",
-    ],
-];
+// v1.16.29 刀B：NPC_TALES 表本体收编 textpack（TXT_TALES_BASE 起 12 条行主序连号：
+// npc*3+seg，基址见 text_offsets.inc）——查表 fn 单口，O(1) 纯算术零分配（帧路径
+// 安全）；行内容与旧字面量逐字节等价（真相源 text_source.txt 行 + 钉测）。
+pub fn npc_tale(npc: usize, seg: usize) -> &'static str {
+    evtx(TXT_TALES_BASE as usize + npc.min(3) * 3 + seg.min(2))
+}
 // COMP_TALES[seg]：道侣槽共通小传（同页人），段 1 结缘即解（companion_lives≥1 保底）。
 pub const COMP_TALES: [&str; 3] = [
     "两页残稿缝作同页，墨迹便再分不开彼此。她的名字住进你的行间，你的批注她也读得见——同页之人，同命之笔。",
@@ -3146,16 +3192,24 @@ pub const INHERIT_LEGACY_FAV: i32 = 10; // 遗泽承接好感加成
 // 字体 cmap 与 charset_diff_check 口径不变；存档只存事件 id，零兼容影响。
 pub static TEXTPACK: &[u8] = include_bytes!("../assets/textpack.bin");
 // 生成件（pack_text.py 产出）：pub static TXT_ANCH: [u32; A]（每 K32=32 条一个绝对
-// 锚）+ pub static TXT_DELTA: [u16; N]（组内 delta，off(i)=ANCH[i>>5]+DELTA[i]，
+// 锚，锚数 A=ceil(行数/32)——v1.16.29 末态 1,866 行→59 锚）+
+// pub static TXT_DELTA: [u16; N]（组内 delta，off(i)=ANCH[i>>5]+DELTA[i]，
 // v1.16.28 刀C——旧 [u32;N] 5772B→两级 3174B）+ TXT_NAME_BASE/TXT_BRIEF_BASE/
-// TXT_NAME2_BASE/TXT_BRIEF2_BASE/TXT_NAME3_BASE/TXT_BRIEF3_BASE（双表三段基址）
-// 六常量，item 位置 include! 展开（随收编追加
-// 自动重产，勿手改；历史槽数注 577/623/648/671/1403/1443 均已过期清账——
+// TXT_NAME2_BASE/TXT_BRIEF2_BASE/TXT_NAME3_BASE/TXT_BRIEF3_BASE（段一~三基址）/
+// TXT_NAME4_BASE/TXT_BRIEF4_BASE（v1.16.29 段四基址，因单1/单2 占 N1492..1824
+// 顺延 1825/1833）八常量，item 位置 include! 展开（随收编追加
+// 自动重产，勿手改；历史槽数注 577/623/648/671/1403/1443/1492 均已过期清账——
 // 槽数=条数+1，随收编增长：0..=669 事件臂文案 + 670..=819 事件臂 format! 模板
 //（刀①）+ 820..=1110 EVENT_NAMES 段一 + 1111..=1401 EVENT_BRIEF 段一 +
 // 1402..=1409 名段二/1410..=1417 简段二（v1.16.27 扩池 8 条）+ 1418..=1441
 // 扩池臂文案（v1.16.27 收编 24 站）+ 1442..=1451 名段三/1452..=1461 简段三
-//（v1.16.28 扩池 10 条）+ 1462..=1491 扩池臂文案（v1.16.28 收编 30 站）；
+//（v1.16.28 扩池 10 条）+ 1462..=1491 扩池臂文案（v1.16.28 收编 30 站）+
+// 1492..=1605 块外 evf 模板（v1.16.29 单1 刀A 收编 114 站）+ 1606..=1725 表
+// 通道字段级（单1 刀B：CHAPTERS intro/open/reward_note/couplet/lore+
+// ENDINGS 四字段+LOCATIONS desc+HINTS text+NPC_TALES+HELP_LINES 共 120 行）+
+// 1726..=1825 块外散件 evtx（单1 刀C 100 站，内含 1800/1801 两行 INHERITS
+// const 语境回退后的 dead rows）+ 1825..=1832 名段四/1833..=1840 简段四
+//（v1.16.29 扩池 8 条）+ 1841..=1864 扩池臂文案（v1.16.29 收编 24 站）；
 // N 追加不变号，段基址稳定）
 include!("text_offsets.inc");
 
@@ -3163,8 +3217,8 @@ static TEXT_BLOB: std::sync::OnceLock<&'static [u8]> = std::sync::OnceLock::new(
 
 /// 解包单源（get_or_init 的初始化闭包）：成功返回 leak 后的 blob，失败/校验不
 /// 过返回 EMPTY 哨兵——INIT_TRIED 钉死「只试一次」，失败后不再重试（防帧路径
-/// 反复 inflate）。EMPTY 即失败态（真实 blob 恒非空：1,492 条非空文案串接，
-/// 随收编增长勿当硬断言——v1.16.26 注 647 已过期清账）。
+/// 反复 inflate）。EMPTY 即失败态（真实 blob 恒非空：1,865 条非空文案串接，
+/// 随收编增长勿当硬断言——v1.16.26 注 647/v1.16.29 注 1,492 均已过期清账）。
 static TEXT_INIT_TRIED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 fn unpack_text() -> &'static [u8] {
@@ -3344,9 +3398,9 @@ mod text_tests {
     #[test]
     fn ev_tables_section_bounds() {
         init_text();
-        // v1.16.28 扩池：len = 段一 291 + 段二 8 + 段三 10 = 309
-        assert_eq!(EVENT_NAMES.len(), 309);
-        assert_eq!(EVENT_BRIEF.len(), 309);
+        // v1.16.29 扩池：len = 段一 291 + 段二 8 + 段三 10 + 段四 8 = 317
+        assert_eq!(EVENT_NAMES.len(), 317);
+        assert_eq!(EVENT_BRIEF.len(), 317);
         assert_eq!(EVENT_NAMES.get(0), Some("灵草满坡"));
         assert_eq!(EVENT_NAMES.get(290), Some("误入猎套"));
         assert_eq!(EVENT_BRIEF.get(0), Some("满坡灵草露水未干，采满一筐"));
@@ -3362,9 +3416,115 @@ mod text_tests {
         assert_eq!(EVENT_NAMES.get(308), Some("醉后忘句"));
         assert_eq!(EVENT_BRIEF.get(299), Some("灯下合誊两册旧稿为一卷"));
         assert_eq!(EVENT_BRIEF.get(308), Some("醉道人醉后念诀醒后不认"));
-        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=309）
-        assert_eq!(EVENT_NAMES.get(309), None);
-        assert_eq!(EVENT_BRIEF.get(309), None);
+        // 段四（v1.16.29 扩池 8 条，TXT_NAME4_BASE=1825/TXT_BRIEF4_BASE=1833，
+        // 单1/单2 已用 N1492..1824 故段四顺延）：len3 漂移唯一内容级防线——
+        // 首尾逐字钉，len3 写 N_EVENTS−EV_SEG2 静默吞段四时在此必红
+        assert_eq!(EVENT_NAMES.get(309), Some("雪堤喂雀"));
+        assert_eq!(EVENT_NAMES.get(316), Some("药童卷方"));
+        assert_eq!(EVENT_BRIEF.get(309), Some("雪落堤上，你撒谷喂雀"));
+        assert_eq!(EVENT_BRIEF.get(316), Some("药童卷走三张丹方去了邻城"));
+        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=317）
+        assert_eq!(EVENT_NAMES.get(317), None);
+        assert_eq!(EVENT_BRIEF.get(317), None);
         assert_eq!(EVENT_NAMES.get(usize::MAX), None);
+    }
+
+    // ---------------- v1.16.29 单1 三刀等价性钉测（逐字节回归） ----------------
+
+    /// 刀A 块外 evf 模板：与原 format! 的 "{}" Display 语义逐字节一致
+    ///（原字面量取自 game.rs:2225/npc.rs:336/world.rs:114 收编站「原文」注释）
+    #[test]
+    fn evf_block_out_format_equivalence() {
+        init_text();
+        assert_eq!(
+            evf(1493, &[&"某吏"]),
+            "此外，血仇未销——某吏。它删过你的字、批过你的行；此吏不除，书不成书。"
+        );
+        assert_eq!(
+            evf(1587, &[&"玄诚长老", &2]),
+            "你备下一份厚礼赠予玄诚长老，交情更进一分。（好感+2）"
+        );
+        assert_eq!(evf(1588, &[&"青云宗"]), "你收拾行装赶路，此番抵达青云宗。");
+        // v1.16.29 单2 故事润色改写钉（N1574 真相源行直改后唯一无简钉的文本
+        // 改写——此处补齐；原文注释同步见 game.rs 寻仇胜句站）
+        assert_eq!(
+            evf(1574, &[&"血仇之敌"]),
+            "血仇得报——血仇之敌授首，账清了。"
+        );
+    }
+
+    /// 刀B 表通道扩容：字段级 `_n`/`(ns,len)` 连号与整表基址查表，行内容与旧
+    /// const 表字面量逐字节等价（N 错行在此必红；样例覆盖全部六张新表）
+    #[test]
+    fn tables2_textpack_equivalence() {
+        init_text();
+        // CHAPTERS：intro/open/reward_note/couplet 单值连号 + lore (ns,len) 对
+        assert_eq!(
+            CHAPTERS[0].intro(),
+            "雨夜乱葬岗，你从尸堆里爬出来，手里攥着一枚方印——印身无字，只有层层叠叠被划掉的痕迹。识海里有个累坏了的少年嗓音：你的名字是错的，天写错了。——先推演一生，看看错在哪里。"
+        );
+        assert_eq!(CHAPTERS[0].open(), "方印无字，你有十万稿可写。");
+        assert_eq!(CHAPTERS[0].reward_note(), "章成之礼：道韵 +50");
+        assert_eq!(CHAPTERS[0].couplet(), "雨夜拾残印，灯前写错名");
+        assert_eq!(
+            CHAPTERS[0].lore(0),
+            "其一：方印无字，划痕却比字多。识海里那声叹息说——这不是印，是账；前头十万稿，都记在它上头。"
+        );
+        assert_eq!(
+            CHAPTERS[0].lore(1),
+            "其二：你试着把印按进土里，土里渗出金纹，拼出半句话：先推演。推演不误砍柴工。"
+        );
+        assert_eq!(CHAPTERS[0].lore_len(), 2);
+        assert_eq!(CHAPTERS[7].lore_len(), 3); // 第八章三段（变长 lore 唯一行）
+        assert_eq!(CHAPTERS[0].lore(99), ""); // 越界空串兜底（evtx 同款防御）
+        // ENDINGS：四字段全收编（表在 game.rs，全限定）
+        assert_eq!(crate::game::ENDINGS[0].name(), "定稿");
+        assert_eq!(crate::game::ENDINGS[0].alias(), "认写");
+        assert_eq!(
+            crate::game::ENDINGS[0].body(),
+            "你赢了封卷吏。执笔人出现，递来笔：「字不错。入正文吧。从此你的每一行都是天定——天定，也就永不动删。」\n你看了很久那支笔。\n「我要是入了正文，」你问，「还能改自己吗？」\n「一字不改。永生换的。」"
+        );
+        assert_eq!(
+            crate::game::ENDINGS[1].gain(),
+            "【隐藏成就：后事不详 —— 一行之外，谁也写不了你】"
+        );
+        // NPC_TALES → npc_tale(npc, seg)（TXT_TALES_BASE 行主序 npc*3+seg）
+        assert_eq!(
+            npc_tale(0, 0),
+            "他掌外门三千杂役的名册，也掌着每一页被天曹划掉的废稿。有人说他记性差——其实他只是装作没看见。看得太多，就得写进册子里。"
+        );
+        assert_eq!(
+            npc_tale(3, 2),
+            "大醉那夜他忽然清醒：「我原是天曹的笔吏，写坏了一个名字，被贬下界做衬托。」顿了顿又道：「你这卷书写下去，别管我。」言毕复醉。"
+        );
+        // HELP_LINES → help_line(idx)（TXT_HELP_BASE 17 行连号）
+        assert_eq!(
+            crate::draw::help_line(0),
+            "【轮回镜】耗 1 枚模拟点数，推演「可能的你」的一生，直至死亡。"
+        );
+        // HINTS.text（TXT_HINT_BASE 14 行连号）
+        assert_eq!(crate::guide::HINTS[0].text(), "山穷水尽：观看幻境广告，得 2 枚模拟点");
+        // LOCATIONS.desc（desc_n 字段级）
+        assert_eq!(
+            LOCATIONS[0].desc(),
+            "南疆第一仙宗，山门巍峨，剑气冲霄。拜入宗门可得名师指点，修炼事半功倍；完成宗门任务更可积攒贡献，换取宗门珍藏。"
+        );
+        assert_eq!(
+            LOCATIONS[2].desc(),
+            "上古修士遗府，每逢霞光贯日便开启一线。秘境中机缘与凶险并存——深入远征，逐层探取宝藏，见好就收方为上策。"
+        );
+    }
+
+    /// 刀C 块外 ≥40B 散件 evtx 化：查池值与原字面量逐字节等价
+    ///（原字面量取自 game.rs/main.rs/ui.rs 收编站「原文」注释）
+    #[test]
+    fn evtx_block_out_literal_equivalence() {
+        init_text();
+        assert_eq!(
+            evtx(1726),
+            "雨夜。乱葬岗。你从尸堆里爬出来，手里攥着一枚方印——印身无字，只有层层叠叠被划掉的痕迹。"
+        );
+        assert_eq!(evtx(1802), "等待点击（输入正常，不催促）");
+        assert_eq!(evtx(1824), "字体解压失败（deflate 流损坏）");
     }
 }

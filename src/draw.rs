@@ -830,7 +830,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         // 无副标档 18px 绘制，变化帧绘制路径自栅格化一次，仍属事件级一次性，稳态零 churn）
         if g.guide_last != Some(idx) {
             let hint = &crate::guide::HINTS[idx as usize];
-            prewarm_text(hint.text, &[16, 18]);
+            prewarm_text(hint.text(), &[16, 18]);
             prewarm_text("目标", &[16]);
             if let Some(b) = hint.btn {
                 prewarm_text(b, &[16, 18]);
@@ -861,7 +861,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         );
         draw_rectangle(376.0, 86.0, 4.0, 40.0, C_GOLD_D); // 左缘 4px 金竖条
         txt("目标", 392.0, 96.0, 16, C_GOLD_D);
-        txt(hint.text, 444.0, 92.0, 18, C_GOLD);
+        txt(hint.text(), 444.0, 92.0, 18, C_GOLD);
         // 右段章签：num+name 两静态分片直绘（禁 format!——横带稳态帧零分配红线；
         // 章名全表 4 字，992/1042 双锚定宽布局）
         let chc = &crate::data::CHAPTERS[curch];
@@ -2456,7 +2456,7 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
             .iter()
             .any(|gl| !crate::game::Game::chapter_goal_met(&g.meta, gl.pid))
         {
-            txt_r(ch.reward_note, 980.0, 524.0, 14, C_GOLD_D);
+            txt_r(ch.reward_note(), 980.0, 524.0, 14, C_GOLD_D);
             if let Some(gl) = ch
                 .goals
                 .iter()
@@ -3121,29 +3121,12 @@ fn draw_upgrade_panel(g: &mut Game) {
 // v1.8.0 B2：两页签「玩法」/「操作·技巧」，行距 41→52、字号 16→17（8 行 ×52 起点 200 底 616 < 650）
 // v1.16.26：引导页文案自 draw_help_panel 局部提升为常量（字节中性，rodata 同址）
 // ——供 draw_tests::help_lines_quote_style 引号规范回归钉测
-pub const HELP_LINES: [&str; 17] = [
-    "【轮回镜】耗 1 枚模拟点数，推演「可能的你」的一生，直至死亡。",
-    "【模拟前】3 选 1 天赋（仅此一梦生效）；模拟中自动修炼、游历、闭关、突破。",
-    "【模拟毕】随机给出数项「造化」，选一项带回现实：修为、功法、法宝、丹药……",
-    "【现实】闭关涨修为（寿元-1年）；修为满可突破；清源洞府闭关+25%，天雷峰问笔更稳。",
-    // v1.12.1 终战引导：终战门槛（neme_slain>=6 才弹终战卡）的可发现性兜底
-    "【终战】现实破境至问笔、九重雷劫全扛，且斩敌链通至封卷——终战卡上落款四结局，书志可重看。",
-    "【坊市】灵石购丹药，亦可兑换模拟点数（境界越高越贵）。",
-    "【宿敌】血仇之敌每世模拟中皆会遭遇——实力不足则被斩，可逃可死。",
-    // v1.16.0 交游图鉴引导（玩法签末行）
-    "【交游图鉴】角色面板·图鉴页签：同页人结缘与文狱四友，随轮回烙印存档。",
-    // v1.16.16 章节书引导（玩法签末行，v1.16.8 起缺席的主线入口兜底）
-    "【章节书】任务钮→章节书签：主线九章目标、进度与章间记事。",
-    "【斩敌】在模拟中反杀宿敌（领悟其招）或现实寻仇，皆可得灵石、点数与大笔道韵。",
-    "【宿敌不灭】斩其一身，还有更强的幕后之敌接棒，直至……",
-    "【现实身死】寿元耗尽则一世归尘，结算大笔道韵；轮回再起，烙印永存。",
-    "【轮回烙印】道韵购买永久强化：属性下限、继承选项数、点数返还……",
-    "【操作】M 键打开山河图（世界地图），C 键查看角色面板；模拟中空格暂停、数字键调速。",
-    "此身虽微，万世可期。道友，请开始你的第一次模拟。",
-    // v1.8.0 B2：操作·技巧页新增两行
-    "【区域】山河图志五大区域各有专属机制：宗门兴望、大漠秘藏、瘴惑灵芽、冰心澄神、仙屿潮音——初至区域，图鉴有赏。",
-    "【炼化】行囊·法宝页可「炼化」：献祭一件法宝为材料，为另一件提升灵纹（攻效与灵性再上一层，至多 +3 级）。",
-];
+// v1.16.29 刀B：帮助页文案表收编 textpack（TXT_HELP_BASE 起 17 行连号，
+// 基址见 text_offsets.inc）——查表 fn 单口，O(1) 纯算术零分配（帮助页开屏
+// 帧路径安全）；行内容与旧字面量逐字节等价（真相源 text_source.txt 行 + 钉测）。
+pub fn help_line(idx: usize) -> &'static str {
+    crate::data::evtx(crate::data::TXT_HELP_BASE as usize + idx.min(16))
+}
 
 fn draw_help_panel(g: &mut Game) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
@@ -3168,8 +3151,7 @@ fn draw_help_panel(g: &mut Game) {
         }
     }
     // v1.16.26 直引号统一：弯引号 “ ” → 「」（字形均在 cmap，字节中性）；
-    // 文案本体已提升为 HELP_LINES 常量（见 fn 上方）
-    let lines = HELP_LINES;
+    // 文案本体已收编 textpack（v1.16.29 刀B：help_line 查表 fn，见 fn 上方）
     // v1.16.0：玩法签 7→8 行（新增图鉴行居第 8）；v1.16.16：玩法签 8→9 行（章节书
     // 行居第 9，末行 y=200+8×52=616、行高 30 → 底 646 < 卡底 650），操作·技巧签
     // 后移至 base 9（行数不变）
@@ -3177,7 +3159,7 @@ fn draw_help_panel(g: &mut Game) {
     for j in 0..count {
         let i = base + j;
         let c = if j == 0 { C_GOLD } else { C_TEXT };
-        wrap_draw(lines[i], 180.0, 200.0 + j as f32 * 52.0, 16, 920.0, 30.0, c);
+        wrap_draw(help_line(i), 180.0, 200.0 + j as f32 * 52.0, 16, 920.0, 30.0, c);
     }
 }
 
@@ -3222,10 +3204,10 @@ pub fn prewarm_chapter_view(g: &Game) {
     for ch in crate::data::CHAPTERS.iter() {
         prewarm_text(ch.num, &[14]);
         prewarm_text(ch.name, &[14, 16, 20]);
-        prewarm_text(ch.intro, &[16]);
-        prewarm_text(ch.reward_note, &[14]); // 章成之礼行（含「道韵 +N」数字）
-        for seg in ch.lore.iter() {
-            prewarm_text(seg, &[14]); // 章间记事全段预热（可见性是纯显示推导）
+        prewarm_text(ch.intro(), &[16]);
+        prewarm_text(ch.reward_note(), &[14]); // 章成之礼行（含「道韵 +N」数字）
+        for lk in 0..ch.lore_len() {
+            prewarm_text(ch.lore(lk), &[14]); // 章间记事全段预热（可见性是纯显示推导）
         }
         for gl in ch.goals.iter() {
             prewarm_text(gl.text, &[16]);
@@ -3249,7 +3231,7 @@ pub fn prewarm_guide_panel(g: &Game) {
     prewarm_text(GUIDE_PANEL_NOTE, &[14]);
     let idx = crate::guide::guide_index(g).min(crate::guide::HINTS.len() as u8 - 1);
     let hint = &crate::guide::HINTS[idx as usize];
-    prewarm_text(hint.text, &[20]);
+    prewarm_text(hint.text(), &[20]);
     if let Some(b) = hint.btn {
         prewarm_text(b, &[18]);
     }
@@ -3377,7 +3359,7 @@ fn draw_guide_panel(g: &mut Game) {
     let idx = crate::guide::guide_index(g).min(crate::guide::HINTS.len() as u8 - 1);
     let hint = &crate::guide::HINTS[idx as usize];
     txt("当前目标", 170.0, 184.0, 16, C_GOLD_D);
-    wrap_draw(hint.text, 170.0, 214.0, 20, 900.0, 32.0, C_GOLD);
+    wrap_draw(hint.text(), 170.0, 214.0, 20, 900.0, 32.0, C_GOLD);
     if let Some(b) = hint.btn {
         if button(170.0, 262.0, 240.0, 54.0, b, None, true) {
             crate::guide::exec_jump(g, hint.act);
@@ -3432,8 +3414,8 @@ fn draw_chapter_view(g: &mut Game) {
     // 联句 ≤14 字约 170px 收在卡内右缘前，同行零版式位移零碰撞；结算屏「下一章」
     // 行已被 goal/礼行/进度三段占满不加挤，单点显示维持宁缺毋滥）。字形经结算屏
     // real_die 章签预热口灌齐（同串同字号，两页共用缓存）
-    txt(ch.couplet, 648.0, 190.0, 14, C_DIM);
-    wrap_draw(ch.intro, 490.0, 222.0, 16, 600.0, 28.0, C_TEXT);
+    txt(ch.couplet(), 648.0, 190.0, 14, C_DIM);
+    wrap_draw(ch.intro(), 490.0, 222.0, 16, 600.0, 28.0, C_TEXT);
     draw_rectangle(490.0, 340.0, 610.0, 1.5, Color::from_rgba(96, 76, 130, 160));
     txt("本章目标", 490.0, 352.0, 16, C_GOLD_D);
     let mut cur_goal_hit = false; // 首未了目标行标记（金字高亮一次）
@@ -3459,16 +3441,16 @@ fn draw_chapter_view(g: &mut Game) {
         }
     }
     // 章成之礼行：达成奖励预告（全静态字面量，发放幂等性在 game.rs check_chapters）
-    txt(ch.reward_note, 490.0, 448.0, 14, C_GOLD_D);
+    txt(ch.reward_note(), 490.0, 448.0, 14, C_GOLD_D);
     draw_rectangle(490.0, 474.0, 610.0, 1.5, Color::from_rgba(96, 76, 130, 160));
     // 章间记事：lore 段序号「其一/其二」自带静态文本，随进度翻段
-    if !ch.lore.is_empty() {
+    if ch.lore_len() > 0 {
         let met_n = ch
             .goals
             .iter()
             .filter(|gl| crate::game::Game::chapter_goal_met(&g.meta, gl.pid))
             .count();
-        let seg = ch.lore[met_n.min(ch.lore.len() - 1)];
+        let seg = ch.lore(met_n.min(ch.lore_len() - 1));
         txt("章间记事", 490.0, 486.0, 14, C_DIM);
         wrap_draw(seg, 490.0, 508.0, 14, 610.0, 20.0, C_TEXT);
     }
@@ -3510,7 +3492,7 @@ pub fn draw_ending_page(g: &mut Game, idx: usize, from_book: bool) {
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(8, 5, 16, dim_a));
     panel_card_a(190.0, 80.0, 900.0, 560.0, card_a);
     txt_c(
-        &format!("《{}》 · {}", e.name, e.alias),
+        &format!("《{}》 · {}", e.name(), e.alias()),
         V_W * 0.5,
         130.0,
         32,
@@ -3543,7 +3525,7 @@ pub fn draw_ending_page(g: &mut Game, idx: usize, from_book: bool) {
         .and_then(|l| l.companion.as_deref())
         .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn));
     let body_w = if comp_idx.is_some() { 560.0 } else { 760.0 };
-    wrap_draw(e.body, 260.0, 186.0, 17, body_w, 30.0, fade(C_TEXT, body_a));
+    wrap_draw(e.body(), 260.0, 186.0, 17, body_w, 30.0, fade(C_TEXT, body_a));
     if let Some(ci) = comp_idx {
         let (px, py, pw, ph) = (906.0, 182.0, 170.0, 296.0); // 卡右缘（卡体 190..1090，右缩 14）
         let alpha = gain_a.clamp(0.0, 1.0);
@@ -3566,7 +3548,7 @@ pub fn draw_ending_page(g: &mut Game, idx: usize, from_book: bool) {
             }
         }
     }
-    for (j, ln) in e.gain.lines().enumerate() {
+    for (j, ln) in e.gain().lines().enumerate() {
         txt_c(ln, V_W * 0.5, 412.0 + j as f32 * 26.0, 16, fade(C_CYAN, gain_a));
     }
     // 合页钮 y470..518：书志重看路径下标题屏底层按钮带（开始 522-576/底排 592-636）
@@ -3619,8 +3601,8 @@ fn draw_book_record(g: &mut Game) {
         let y = 170.0 + i as f32 * 88.0;
         let (label, sub) = if seen {
             (
-                format!("《{}》 · {}", e.name, e.alias),
-                e.gain.lines().next().unwrap_or("").to_string(),
+                format!("《{}》 · {}", e.name(), e.alias()),
+                e.gain().lines().next().unwrap_or("").to_string(),
             )
         } else if i == 3 {
             (
@@ -3708,8 +3690,8 @@ pub fn prewarm_book_record(g: &Game) {
     for e in crate::game::ENDINGS.iter() {
         // 行首括号/间隔符与名/alias 一次灌齐（事件帧 format! 豁免，照 build_event
         // 卡面预热同口径）
-        prewarm_text(&format!("《{}》 · {}", e.name, e.alias), &[20]);
-        prewarm_text(e.gain.lines().next().unwrap_or(""), &[14]);
+        prewarm_text(&format!("《{}》 · {}", e.name(), e.alias()), &[20]);
+        prewarm_text(e.gain().lines().next().unwrap_or(""), &[14]);
     }
     // 全貌带静态标签与动态源（九章章名 + 当前佩戴称号串，两源皆静态表成员）；
     // v1.16.15 全卷标注两态静态段灌齐（四结局集齐后此行才可能出现）
@@ -3779,7 +3761,9 @@ mod draw_tests {
     // 提升 HELP_LINES 常量）——全 17 行禁弯引号，修过的两行钉死含「」
     #[test]
     fn help_lines_quote_style() {
-        for (i, l) in crate::draw::HELP_LINES.iter().enumerate() {
+        // v1.16.29 刀B：HELP_LINES 表体收编 textpack → help_line(idx) 查表（17 行）
+        for (i, _l) in (0usize..17).enumerate() {
+            let l = crate::draw::help_line(i);
             assert!(
                 !l.contains('“') && !l.contains('”'),
                 "HELP_LINES[{}] 弯引号残留: {}",
@@ -3788,11 +3772,11 @@ mod draw_tests {
             );
         }
         assert!(
-            crate::draw::HELP_LINES[0].contains("「可能的你」"),
+            crate::draw::help_line(0).contains("「可能的你」"),
             "轮回镜行引号漂移"
         );
         assert!(
-            crate::draw::HELP_LINES[2].contains("「造化」"),
+            crate::draw::help_line(2).contains("「造化」"),
             "模拟毕行引号漂移"
         );
     }

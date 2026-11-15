@@ -102,7 +102,7 @@ fn maybe_fav_event(g: &mut Game, i: usize) {
         g.modal_anim = 0.18;
         g.rmodal = Some(card);
         g.rmodal_npc = Some(i);
-        g.log(format!("{}似有心事欲言，且听分说……", NPC_NAMES[i]), C_GOLD);
+        g.log(evf(1585, &[&(NPC_NAMES[i])])/* 原文：{}似有心事欲言，且听分说…… */, C_GOLD);
         g.play(crate::sounds::Which::Ding);
     }
 }
@@ -156,44 +156,44 @@ pub fn npc_event_card(i: usize) -> Option<EventCard> {
         0 => {
             let mut e1 = Eff::new();
             e1.relic = Some(3); // 墨骨伞（apply_reff：未拥有入包、已有折 15000 灵石）
-            e1.msg = vec!["你郑重接过旧伞，伞骨上的旧痕犹温。".to_string()];
+            e1.msg = vec![evtx(1804)/* 原文：你郑重接过旧伞，伞骨上的旧痕犹温。 */.to_string()];
             card.opts.push(("受伞".to_string(), e1));
             let mut e2 = Eff::new();
             e2.contrib = 150;
             e2.stones = 3000;
-            e2.msg = vec!["你婉谢宝伞，长老大笑转赠灵石，并记你一功。".to_string()];
+            e2.msg = vec![evtx(1805)/* 原文：你婉谢宝伞，长老大笑转赠灵石，并记你一功。 */.to_string()];
             card.opts.push(("婉谢折现".to_string(), e2));
         }
         1 => {
             let mut e1 = Eff::new();
             e1.stones = 8000;
-            e1.msg = vec!["席散人去，锦盒里是厚厚一沓灵石票。".to_string()];
+            e1.msg = vec![evtx(1806)/* 原文：席散人去，锦盒里是厚厚一沓灵石票。 */.to_string()];
             card.opts.push(("收下厚礼".to_string(), e1));
             let mut e2 = Eff::new();
             e2.pill = Some((0, 3));
-            e2.msg = vec!["你只讨了一匣聚气丹——掌柜直笑你识货。".to_string()];
+            e2.msg = vec![evtx(1807)/* 原文：你只讨了一匣聚气丹——掌柜直笑你识货。 */.to_string()];
             card.opts.push(("只讨丹药".to_string(), e2));
         }
         2 => {
             let mut e1 = Eff::new();
             e1.qi_pct = 0.25;
-            e1.msg = vec!["一番论剑，你于剑意中窥得自家路——修为大进。".to_string()];
+            e1.msg = vec![evtx(1808)/* 原文：一番论剑，你于剑意中窥得自家路——修为大进。 */.to_string()];
             card.opts.push(("倾力一战".to_string(), e1));
             let mut e2 = Eff::new();
             e2.dao = 4.0;
             e2.life_y = 10.0;
-            e2.msg = vec!["你拱手请教，清霜剑语如泉——道心通明，身心俱泰。".to_string()];
+            e2.msg = vec![evtx(1809)/* 原文：你拱手请教，清霜剑语如泉——道心通明，身心俱泰。 */.to_string()];
             card.opts.push(("拱手请教".to_string(), e2));
         }
         _ => {
             let mut e1 = Eff::new();
             e1.luck = 5.0;
-            e1.msg = vec!["醉话三分真——你依言改了行功路线，隐隐气机圆转。".to_string()];
+            e1.msg = vec![evtx(1810)/* 原文：醉话三分真——你依言改了行功路线，隐隐气机圆转。 */.to_string()];
             card.opts.push(("倾耳听真言".to_string(), e1));
             let mut e2 = Eff::new();
             e2.dy = 40;
             e2.stones = 2000;
-            e2.msg = vec!["你扶他回屋，他袖中滑出一枚玉简与一袋灵石：「酒钱。」".to_string()];
+            e2.msg = vec![evtx(1811)/* 原文：你扶他回屋，他袖中滑出一枚玉简与一袋灵石：「酒钱。」 */.to_string()];
             card.opts.push(("扶他回屋".to_string(), e2));
         }
     }
@@ -264,7 +264,7 @@ fn apply_reff(g: &mut Game, e: &Eff) {
             } else {
                 l.stones += 15000; // 已有同宝：折 15000 灵石
                 logs.push((
-                    format!("此宝你已有了，{}折价灵石 15000。", RELICS[r].name),
+                    evf(1586, &[&(RELICS[r].name)])/* 原文：此宝你已有了，{}折价灵石 15000。 */,
                     crate::game::C_CYAN,
                 ));
             }
@@ -333,10 +333,7 @@ pub fn gift_npc(g: &mut Game, i: usize) {
     }
     add_fav(g, i, NPC_GIFT_FAV);
     g.log(
-        format!(
-            "你备下一份厚礼赠予{}，交情更进一分。（好感+{}）",
-            NPC_NAMES[i], NPC_GIFT_FAV
-        ),
+        evf(1587, &[&(NPC_NAMES[i]), &(NPC_GIFT_FAV)])/* 原文：你备下一份厚礼赠予{}，交情更进一分。（好感+{}） */,
         C_GOLD,
     );
     g.play(crate::sounds::Which::Coin);

@@ -97,7 +97,7 @@ pub fn draw_sub(g: &mut Game) {
                 vec![
                     (
                         "闭关苦修".to_string(),
-                        format!("一载苦修 · 修为+{}", gain),
+                        evf(1583, &[&(gain)])/* 原文：一载苦修 · 修为+{} */,
                         true,
                         0u8,
                     ),
@@ -195,7 +195,7 @@ pub fn draw_atlas(g: &mut Game) {
         txt(REGION_MECH[i].desc, 386.0, y + 34.0, 14, C_TEXT);
         let (dy, st) = REGION_VISIT_REWARD[i % REGION_VISIT_REWARD.len()];
         txt(
-            &format!("初至：道韵+{} · 灵石+{}", fmt_int(dy), fmt_int(st)),
+            &evf(1584, &[&(fmt_int(dy)), &(fmt_int(st))])/* 原文：初至：道韵+{} · 灵石+{} */,
             386.0,
             y + 52.0,
             14,
