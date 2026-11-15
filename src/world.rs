@@ -275,7 +275,7 @@ pub fn exp_start(g: &mut Game) {
         g.toast("需亲临落霞秘境", C_RED);
         return;
     }
-    if !spend_year(g, evtx(1816)/* 原文：你殒落于落霞秘境深处，无人收殓。 */) {
+    if !spend_year(g, evtx(1816)/* 原文：你殒落霞光深处，无人收殓。 */) {
         return;
     }
     let len = EXPED_LEN_BASE + gen_range(0usize, 3usize);
@@ -336,7 +336,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
     };
     let kind = EXPED_STEPS[step_idx].kind as usize;
     // 先耗时后判定（途中寿尽则已入结算）
-    if !spend_year(g, evtx(1816)/* 原文：你殒落于落霞秘境深处，无人收殓。 */) {
+    if !spend_year(g, evtx(1816)/* 原文：你殒落霞光深处，无人收殓。 */) {
         return;
     }
     let (padj, mult) = if i == 0 {

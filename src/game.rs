@@ -71,9 +71,11 @@ pub const CHAIN_TTL: u8 = 8;
 // 白名单 25→26。Comp 立绘反查照 262/257 模式。
 // v1.16.28 伴随 +1：300 晨课互校（mr7 有伴第 2 条，摊薄 241 独苗）——
 // 白名单 26→27。Comp 立绘反查照 262/257 模式。
+// v1.16.30 伴随 +1：321 同封新茶（mr3 有伴第 3 条，mr3 伴随 2→3 与 322 老年
+// ×伴双摊 mr3 薄层）——白名单 27→28。Comp 立绘反查照 262/257 模式。
 // 第三处硬编码副本 tools/ledger_recheck.py COMPANION 集合同批同步（漏一处
 // 账本 mr0 无伴口径对不上）
-pub const COMPANION_EVENTS: [usize; 27] = [
+pub const COMPANION_EVENTS: [usize; 28] = [
     53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185, 203, 210, 211, 212,
     225, 226, 240, 241, 257, // v1.16.23 扩池 +1：257 灯市挑灯（mr4 第 3 条）
     262, // v1.16.24 扩池 +1：262 同研一笺（mr1 第 10 条）
@@ -81,6 +83,7 @@ pub const COMPANION_EVENTS: [usize; 27] = [
     283, // v1.16.26 扩池 +1：283 纵马霜原（mr5 有伴第 2 条）
     293, // v1.16.27 扩池 +1：293 袖里暖石（mr6 有伴第 3 条）
     300, // v1.16.28 扩池 +1：300 晨课互校（mr7 有伴第 2 条）
+    321, // v1.16.30 扩池 +1：321 同封新茶（mr3 有伴第 3 条）
 ];
 
 // v1.16.7 置链臂 special 槽位段：20..=31（apply_eff 链裁决据此区分「重写链态」
@@ -3186,7 +3189,7 @@ impl Game {
 
                 s.seclusion = None;
 
-                (evtx(1741)/* 原文：心魔骤起，走火入魔！你喷出一口鲜血，被迫出关。 */, C_RED)
+                (evtx(1741)/* 原文：心魔骤起，走火入魔——血染稿纸，被迫出关。 */, C_RED)
             }
         };
 
@@ -4029,13 +4032,18 @@ impl Game {
             // v1.16.28 双门控第七条（299 合誊旧稿，同 if 并臂勿拆；不入 COMPANION
             // 白名单——同 297 口径，徽标走老年臂；现 6 条 mr 全 mr1×5+mr5×1，
             // 本条 mr2 换层）
+            // v1.16.30 双门控第八条（322 树下尝果，同 if 并臂勿拆；不入 COMPANION
+            // 白名单——同 299 口径，徽标走老年臂；mr3 换层照 299 先例。勘察按
+            // 310 老年层同族口径称「第 9 条」——310 实为老年单门控（4006 区
+            // 名单内），if 表内本条为第 8，勘误随批注入档）
             if (id == 204
                 || id == 212
                 || id == 239
                 || id == 268
                 || id == 288
                 || id == 297
-                || id == 299)
+                || id == 299
+                || id == 322)
                 && !(comp
                     && self
                         .sim
@@ -4128,7 +4136,12 @@ impl Game {
         let mut card = EventCard {
             kind: CardKind::Npc,
 
-            title: String::new(),
+            // v1.16.30 单1 主刀②：标题单源查表——原 317 臂各写一行
+            // card.title="…".into() 字面量（与 EVENT_NAMES 双源），手术删臂行、
+            // 构造改查表；手术前对账证据与术后静态钉 tools/title_recheck.py
+            //（--reconcile 317 臂全等 0 不符后才动的刀）。EVENT_NAMES[id] 越界
+            // 空串兜底不 panic（panic=abort 纪律）；弹卡一次性路径，帧路径零涉及。
+            title: EVENT_NAMES[id].into(),
 
             text: String::new(),
 
@@ -4149,7 +4162,6 @@ impl Game {
 
         match id {
             28 => {
-                card.title = "同页天成".into();
                 let ci = gen_range(0, COMPANION_NAMES.len());
                 let cn = COMPANION_NAMES[ci];
                 // v1.16.3 邂逅卡立绘：卡面主角即递稿之人（卡面文本与立绘同源同名；
@@ -4167,7 +4179,6 @@ impl Game {
                 card.opts.push(("专注于道".into(), e2));
             }
             29 => {
-                card.title = "宗门大比".into();
                 card.text = evtx(1)/* 原文：十年一度的宗门大比开擂，掌门放话：魁首可入藏经阁任拣一卷功法！ */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.1;
@@ -4185,7 +4196,6 @@ impl Game {
                 // launch_sim 清零门闩）；三选走 EventCard→choose_option→apply_eff 既有链
                 self.blank_used = true;
 
-                card.title = "空白行".into();
 
                 card.text =
                     evtx(3)/* 原文：翻到这一页——天曹漏写了，整页空白。你握着笔，听见自己的心跳：这一年，你自己写。 */
@@ -4221,7 +4231,6 @@ impl Game {
             0 => {
                 let g = (80.0 * ss * gen_range(0.7, 1.4)) as i64;
 
-                card.title = "灵草满坡".into();
 
                 // v1.16.19 前期高频卡画面化：单段「画面+一断」体（不加减段——邂逅
                 // 版式 5 行判定 draw_event_text 预算不变；下同 id 1/3/4/5/6/12）
@@ -4237,7 +4246,6 @@ impl Game {
             }
 
             1 => {
-                card.title = "妖兽拦路".into();
 
                 card.text = evtx(8)/* 原文：林风忽静。一头妖兽自树影里扑出，獠牙滴涎——它拦的不是路，是你腰间的储物袋。 */.into();
 
@@ -4251,7 +4259,6 @@ impl Game {
             }
 
             2 => {
-                card.title = "上古洞府".into();
 
                 // v1.16.20 前期高频卡正文画面化第二批（id 2/9/18，照前批 7 条口径：
                 // 只改字不加段，单段 ≤60 字预算由单测钉死）
@@ -4277,7 +4284,6 @@ impl Game {
             }
 
             3 => {
-                card.title = "坊市淘宝".into();
 
                 if gen_range(0.0, 1.0) < 0.5 {
                     let g = (150.0 * ss * gen_range(0.7, 1.4)) as i64;
@@ -4328,7 +4334,6 @@ impl Game {
             }
 
             4 => {
-                card.title = "恶修劫道".into();
 
                 card.text = evtx(15)/* 原文：「此路是我开！」黑衣修士横剑拦道，眼里贪光像淬了毒——他打量你的行囊，比打量你的剑更久。 */.into();
 
@@ -4352,7 +4357,6 @@ impl Game {
             }
 
             5 => {
-                card.title = "道友论道".into();
 
                 card.text = evtx(17)/* 原文：山亭里避雨，遇一位云游道友。两人就着一壶粗茶，从剑谈到琴，从琴谈到天光放晴——各有所得。 */.into();
 
@@ -4368,7 +4372,6 @@ impl Game {
             }
 
             6 => {
-                card.title = "宗门相邀".into();
 
                 // v1.16.19 画面化保留括注机制口径（入门收益提示是决策依据，原样保留）
                 card.text =
@@ -4392,7 +4395,6 @@ impl Game {
             }
 
             7 => {
-                card.title = "心魔袭扰".into();
 
                 card.text = evtx(21)/* 原文：静坐之间，旧日执念化作心魔，在你识海中张牙舞爪…… */.into();
 
@@ -4406,7 +4408,6 @@ impl Game {
             }
 
             8 => {
-                card.title = "天材地宝".into();
 
                 card.text = evtx(22)/* 原文：前方灵气冲霄——一株千年灵乳正在成形！旁边盘着一头护宝妖兽。 */.into();
 
@@ -4428,7 +4429,6 @@ impl Game {
             }
 
             9 => {
-                card.title = "灵脉洞府".into();
 
                 // v1.16.20 正文画面化第二批：括注记账体改画面+机制注（加成数值保留）
                 card.text = evtx(24)/* 原文：山坳深处泉鸣如琴，灵气浓得化不开——迁入此府，本世修炼环境+50% */.into();
@@ -4443,7 +4443,6 @@ impl Game {
             }
 
             10 => {
-                card.title = "上古传承".into();
 
                 card.text = evtx(26)/* 原文：一道苍老的声音在识海中响起：「吾道后继有人……」 */.into();
 
@@ -4459,7 +4458,6 @@ impl Game {
             }
 
             11 => {
-                card.title = "秘境探秘".into();
 
                 card.text = evtx(27)/* 原文：空间裂缝中露出一座上古秘境的入口，宝光与凶险并存。 */.into();
 
@@ -4483,7 +4481,6 @@ impl Game {
             }
 
             12 => {
-                card.title = "红尘历练".into();
 
                 card.text = evtx(28)/* 原文：你下山入世。市集讨价、桥头让路、替哭闹的孩童变出一朵纸花——烟火气里，道心悄悄稳了一分。 */.into();
 
@@ -4499,7 +4496,6 @@ impl Game {
             }
 
             13 => {
-                card.title = "灵气潮汐".into();
 
                 card.text = evtx(29)/* 原文：天地灵气忽然暴涨，如潮水般涌来！ */.into();
 
@@ -4513,7 +4509,6 @@ impl Game {
             }
 
             14 => {
-                card.title = "邪修偷袭".into();
 
                 card.text = evtx(30)/* 原文：一道黑影自暗中暴起偷袭！招招夺命。 */.into();
 
@@ -4527,7 +4522,6 @@ impl Game {
             }
 
             15 => {
-                card.title = "仙人遗府".into();
 
                 card.text = evtx(31)/* 原文：轰然一声，山体崩开，露出一座流光溢彩的仙人遗府！ */.into();
 
@@ -4545,7 +4539,6 @@ impl Game {
             }
 
             16 => {
-                card.title = "妖丹入手".into();
 
                 card.text = evtx(32)/* 原文：你路遇两妖相争两败俱伤，捡漏一枚温润妖丹。 */.into();
 
@@ -4559,7 +4552,6 @@ impl Game {
             }
 
             17 => {
-                card.title = "云游商人".into();
 
                 // v1.16.15 复审口径：洗髓丹是永久灵根+2 的重价丹（铺底价
                 // PILL_PRICES[4]=5000），800 平价不随境界与经济规模脱节——照铺价
@@ -4596,7 +4588,6 @@ impl Game {
             }
 
             18 => {
-                card.title = "前辈指点".into();
 
                 // v1.16.20 正文画面化第二批：「醍醐灌顶」结论词改动作画面（只改字不加段）
                 card.text = evtx(34)/* 原文：白眉老者只随手点了三处，你回头再看旧稿，字字都换了个意思。 */.into();
@@ -4613,7 +4604,6 @@ impl Game {
             }
 
             19 => {
-                card.title = "灵兽认主".into();
 
                 card.text = evtx(35)/* 原文：一只雪白小兽一路跟着你，赶也赶不走，与你甚是有缘。 */.into();
 
@@ -4631,7 +4621,6 @@ impl Game {
             }
 
             20 => {
-                card.title = "仙人问道".into();
 
                 card.text =
                     evtx(36)/* 原文：云端降下一位白须仙人，含笑看你：「小子，老夫可指你一条路，要哪般？」 */.into();
@@ -4666,7 +4655,6 @@ impl Game {
             }
 
             21 => {
-                card.title = "灵泉洞天".into();
 
                 card.text =
                     evtx(40)/* 原文：山谷深处一眼温泉汩汩冒泡，灵气凝成白雾，你入泉浸泡三日，通体舒泰。 */.into();
@@ -4683,7 +4671,6 @@ impl Game {
             }
 
             22 => {
-                card.title = "古剑冢".into();
 
                 card.text =
                     evtx(42)/* 原文：荒原上插着十万柄锈剑，剑鸣如龙吟。中央一柄古剑兀自震颤，似在择主。 */.into();
@@ -4708,7 +4695,6 @@ impl Game {
             }
 
             23 => {
-                card.title = "魔窟探宝".into();
 
                 card.text = evtx(44)/* 原文：山腹中一座魔修洞窟，入口白骨累累，深处宝光与魔气交织翻涌。 */.into();
 
@@ -4728,7 +4714,6 @@ impl Game {
             }
 
             24 => {
-                card.title = "雷击木".into();
 
                 card.text =
                     evtx(46)/* 原文：一株遭天雷劈中的古木倒在路边，焦黑树干里雷光未散，正是炼丹好材料。 */.into();
@@ -4743,7 +4728,6 @@ impl Game {
             }
 
             25 => {
-                card.title = "商队护送".into();
 
                 card.text = evtx(48)/* 原文：一支灵石商队遭妖兽围困，管事高声求援：「护我商队，重金相谢！」 */.into();
 
@@ -4767,7 +4751,6 @@ impl Game {
             }
 
             26 => {
-                card.title = "仙人赠礼".into();
 
                 card.text =
                     evtx(50)/* 原文：一位乘鹤老者路过，随手抛下锦盒：「与你有缘，收着吧。」鹤影转瞬没入云中。 */
@@ -4787,7 +4770,6 @@ impl Game {
             }
 
             27 => {
-                card.title = "天机阁卜卦".into();
 
                 card.text =
                     evtx(51)/* 原文：天机阁的瞎眼卦师掐指一算：「道友印堂有光，是福是祸，在一念之间。」 */.into();
@@ -4821,7 +4803,6 @@ impl Game {
             // 1/2/3/7 型臂带 return 会跳过通用结算段），赌局走普通 fight
             // （sim_fight 内建胜缴获/败重伤）—— eff_desc 副标签自动生成
             31 => {
-                card.title = "雨夜借宿".into();
                 card.text =
                     evtx(53)/* 原文：山雨骤至，你叩响山腰人家的柴门。老丈披衣开门：「道友不嫌简陋，同吃一锅热粥。」 */
                         .into();
@@ -4838,7 +4819,6 @@ impl Game {
                 card.opts.push(("留下谢仪".into(), e2));
             }
             32 => {
-                card.title = "古碑残字".into();
                 card.text =
                     evtx(56)/* 原文：荒径尽头立着半截古碑，苔痕下残字若隐若现，似是一篇未写完的行功总纲。 */.into();
                 let mut e1 = Eff::new();
@@ -4853,7 +4833,6 @@ impl Game {
                 card.opts.push(("拓印售卖".into(), e2));
             }
             33 => {
-                card.title = "雾锁迷林".into();
                 card.text = evtx(58)/* 原文：白雾灌林，方向尽失。雾深处有人低低唤你的名字，一声比一声近。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 0.85;
@@ -4866,7 +4845,6 @@ impl Game {
                 card.opts.push(("原地守心".into(), e2));
             }
             34 => {
-                card.title = "墨市笔坊".into();
                 card.text = evtx(60)/* 原文：坊市新张一家笔坊，掌柜拍胸脯：「我这兽毫，一笔落纸可定千行！」案上笔杆根根乌亮。 */.into();
                 let g = (100.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -4880,7 +4858,6 @@ impl Game {
                 card.opts.push(("观摩制笔".into(), e2));
             }
             35 => {
-                card.title = "断桥济人".into();
                 card.text = evtx(63)/* 原文：溪桥塌了半边，一位货郎守着翻倒的担子发愁。你袖袍一卷，把货担稳稳送上对岸。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -4894,7 +4871,6 @@ impl Game {
                 card.opts.push(("收些脚钱".into(), e2));
             }
             36 => {
-                card.title = "瘴谷寻药".into();
                 card.text = evtx(65)/* 原文：瘴气谷口石碑刻着「药王留谷，取之有度」，谷底灵药成片，雾气泛着幽绿。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.05;
@@ -4908,7 +4884,6 @@ impl Game {
                 card.opts.push(("谷口拾遗".into(), e2));
             }
             37 => {
-                card.title = "渡灵舟".into();
                 card.text = evtx(66)/* 原文：灵舟行至江心，墨色巨浪忽然立起，船家面色发白：「水妖翻浪——稳住！」 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.0;
@@ -4921,7 +4896,6 @@ impl Game {
                 card.opts.push(("闭舱守心".into(), e2));
             }
             38 => {
-                card.title = "残卷拍卖".into();
                 card.text = evtx(68)/* 原文：拍卖行压轴一幅无名残卷，起拍百灵石——据说落款处藏着一篇功法总纲。 */.into();
                 let g = (180.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -4936,7 +4910,6 @@ impl Game {
                 card.opts.push(("袖手旁观".into(), e2));
             }
             39 => {
-                card.title = "灵田佃户".into();
                 card.text = evtx(71)/* 原文：灵田佃户老周拦路作揖：「仙长，田里灵谷一夜白穗，您给瞧瞧是何缘故？」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 4.0;
@@ -4950,7 +4923,6 @@ impl Game {
                 card.opts.push(("指点几句".into(), e2));
             }
             40 => {
-                card.title = "酒楼斗法".into();
                 card.text = evtx(73)/* 原文：坊市酒楼里两名外乡修士斗法，桌椅横飞波及无辜，掌柜朝你直使眼色。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.15;
@@ -4963,7 +4935,6 @@ impl Game {
                 card.opts.push(("掩护撤离".into(), e2));
             }
             41 => {
-                card.title = "前人手札".into();
                 card.text = evtx(75)/* 原文：旧书摊的线装手札里夹着几页批注，墨迹已淡，隐约指着一处行功捷径。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.20;
@@ -4977,7 +4948,6 @@ impl Game {
                 card.opts.push(("高价转售".into(), e2));
             }
             42 => {
-                card.title = "废墟道场".into();
                 card.text = evtx(77)/* 原文：山雾散处露出一座废弃道场，蒲团积尘盈寸，梁上剑痕犹新。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.12;
@@ -4991,7 +4961,6 @@ impl Game {
                 card.opts.push(("扫尘七日".into(), e2));
             }
             43 => {
-                card.title = "沙暴藏窟".into();
                 card.text = evtx(80)/* 原文：沙暴过后，崖壁上裸出一处洞窟，铁链断了一半，深处隐隐透出陈年墨香。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.2;
@@ -5013,7 +4982,6 @@ impl Game {
             44 => {
                 // 链1 首段：神秘货郎（万宝楼外柜——与胡掌柜同门，复用其脸，见
                 // draw.rs 邂逅版式；npc_tex(1) 为 None 时自动落旧版式，可接受）
-                card.title = "货郎奇遇".into();
                 card.actor = Some(CardActor::Npc(1));
                 // v1.16.7 两段文案（邂逅版式 5 行内）：叙述与叫卖分段，段间 8px
                 card.text = evtx(81)/* 原文：山道拐角，万宝楼外柜的货郎拦住你，担子里一支墨锭透着幽光，隐有灵气盘旋。\n「引灵墨，观道友有缘——先拿去用，账回头再算。」 */.into();
@@ -5033,7 +5001,6 @@ impl Game {
             }
             45 => {
                 // 链1 分支b 段（仅链内）：两个选项均无置链臂 → 抉择即链终局
-                card.title = "罗盘相赠·续".into();
                 card.actor = Some(CardActor::Npc(1));
                 card.text = evtx(83)/* 原文：数年后山道再遇，货郎认出你，把一枚旧罗盘塞进你手里，针尾还系着个红线结：「当初不买是我看走眼——赠你把玩，结个善缘。」 */.into();
                 let mut e1 = Eff::new();
@@ -5048,7 +5015,6 @@ impl Game {
             }
             46 => {
                 // 链1 分支a 段（仅链内）：战或赔都终结这条孽缘
-                card.title = "恩怨上门·续".into();
                 card.actor = Some(CardActor::Npc(1));
                 card.text = evtx(86)/* 原文：夜半拍门声急。货郎躲在门外，脸色发白：「兄台，你赊的那支墨……原主寻上门了，说要么十倍赔付，要么见血！」 */.into();
                 let mut e1 = Eff::new();
@@ -5065,7 +5031,6 @@ impl Game {
             }
             47 => {
                 // 链2 首段：雾中古碑（文案基因承 id32 古碑残字，为另一方碑）
-                card.title = "古碑残篇".into();
                 // v1.16.7 两段文案共 4 行 → 首个走加高版式（600×440）的剧情卡
                 card.text = evtx(88)/* 原文：雾锁的山坳立着一方丈高古碑，苔痕不生，碑面无字——山风过处，隐有金石摩挲之声。\n你走近时，指尖竟渗出墨意，在碑上洇出半个「行」字，如有人隔世落笔。 */.into();
                 let mut e1 = Eff::new();
@@ -5081,7 +5046,6 @@ impl Game {
             }
             48 => {
                 // 链2 中段（仅链内）：焚拓 = 「碑随雾散」自洽收尾
-                card.title = "拓印风波·续".into();
                 card.text = evtx(91)/* 原文：你携拓片到坊市装裱，老裱工却变了脸色：「此拓火气太重，三日必有争端——要么焚了它，要么我引你去见一个人。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -5097,7 +5061,6 @@ impl Game {
             }
             49 => {
                 // 链2 末段（仅链内）：special4 道心检定臂（过授功法，败负内创）
-                card.title = "守碑人·续".into();
                 // 历史复用（v1.16.7）：守碑人非玄诚长老本体，仅共用其脸——
                 // 勿当 v1.16.22「具名与脸同源」先例抄：新卡正文未钉名者不挂 Npc
                 card.actor = Some(CardActor::Npc(0));
@@ -5113,7 +5076,6 @@ impl Game {
             }
             50 => {
                 // 链3 首段：江底墨匣
-                card.title = "江底墨匣".into();
                 // v1.16.7 两段文案共 4 行 → 加高版式
                 card.text = evtx(95)/* 原文：渡舟行至江心，你失足落水。呛了几口江水，指尖却触到江底一只冰凉的铜匣，匣身纹路温润如墨玉。\n匣面錾着「沉墨候主」四字——指腹刚碰到，匣身微微发热，湍急的江水竟在你四周静了下来。 */.into();
                 let mut e1 = Eff::new();
@@ -5130,7 +5092,6 @@ impl Game {
             51 => {
                 // 链3 中段（仅链内）：老渔翁（复用醉道人脸）——历史复用勿当
                 // v1.16.22 具名同源先例抄（正文未钉名「醉道人」）
-                card.title = "渔村释疑·续".into();
                 card.actor = Some(CardActor::Npc(3));
                 card.text = evtx(98)/* 原文：沿江渔村有位不苟言笑的老渔翁，见匣惊起：「这是『沉墨』——墨痴三十年前沉江的遗物。他说『匣候有缘，缘至当还』。」 */.into();
                 let mut e1 = Eff::new();
@@ -5146,7 +5107,6 @@ impl Game {
             }
             52 => {
                 // 链3 末段（仅链内）：special12 参悟入大事记
-                card.title = "匣底真迹·续".into();
                 card.text = evtx(100)/* 原文：江心礁下，铜匣无风自开——匣底一页真迹，笔势枯润相生。你看得入神，竟忘了身在水中，灵气自四面八方涌来。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.18;
@@ -5163,7 +5123,6 @@ impl Game {
             53 => {
                 // 伴随事件：道侣论道（companion 白名单门控才入池；卡面立绘反查
                 // COMPANION_NAMES 下标 → Comp 版式，名必同源）
-                card.title = "道侣论道".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -5189,7 +5148,6 @@ impl Game {
             }
             54 => {
                 // 伴随事件：赠剑同舟（special5 战力 buff 臂）
-                card.title = "赠剑同舟".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -5213,7 +5171,6 @@ impl Game {
             }
             55 => {
                 // 伴随事件：危难共护（无好的绕行——硬受也有回报）
-                card.title = "危难共护".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -5241,7 +5198,6 @@ impl Game {
             }
             56 => {
                 // 稀有：星坠荒原（w2；special6 五五开试炼臂）
-                card.title = "星坠荒原".into();
                 card.text = evtx(107)/* 原文：夜半天穹忽亮，一颗流星坠入荒原。追到坑口，陨铁未冷，坑底静卧一卷星纹绢书。 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 6;
@@ -5255,7 +5211,6 @@ impl Game {
             }
             57 => {
                 // 稀有：无面镜客（w1；special26 赌命臂 / fight 碎镜）
-                card.title = "无面镜客".into();
                 // v1.16.7 两段文案共 4 行 → 加高版式（镜中怪谈的节奏感靠分段撑）
                 card.text = evtx(109)/* 原文：荒庙断壁前立着一面古镜，镜中人没有脸。它抬手，你也抬手；它偏头，你也偏头。\n而后它开口，用的正是你的声音：「赌一次么？赢，得我半生修为；输，留十年寿数。」 */.into();
                 let mut e1 = Eff::new();
@@ -5269,7 +5224,6 @@ impl Game {
             }
             58 => {
                 // 稀有：灵潮倒卷（w2；special27 漩心洞府臂）
-                card.title = "灵潮倒卷".into();
                 card.text = evtx(110)/* 原文：地脉异动，灵潮倒卷成漩——漩心隐见一座前人闭死的洞府，灵气疯狂外泄，诱人至极，也凶险至极。 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 27;
@@ -5290,7 +5244,6 @@ impl Game {
             // 一律只经本函数尾统一预热（prewarm_text title 24/text 16）
             59 => {
                 // 普通：书院讲经
-                card.title = "书院讲经".into();
                 card.text = evtx(112)/* 原文：山坳蒙学书院，白发先生讲《上清章句》，学童齐声诵读，书声里隐有文气流转。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -5305,7 +5258,6 @@ impl Game {
             }
             60 => {
                 // 普通：灵蜂酿蜜
-                card.title = "灵蜂酿蜜".into();
                 card.text = evtx(114)/* 原文：崖壁灵蜂采百花蕊酿蜜，蜂巢边缘凝着一点金芒——那是花髓千日一滴的精华。 */.into();
                 let g = (40.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -5321,7 +5273,6 @@ impl Game {
             }
             61 => {
                 // 普通：画师留影
-                card.title = "画师留影".into();
                 card.text = evtx(116)/* 原文：云游画师道人拦路，称见你「眉间有墨」，要为你白描一幅小像，分文不取。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -5337,7 +5288,6 @@ impl Game {
             }
             62 => {
                 // 普通：雪崩沟谷（危机双臂皆负——受创换气运/损耗绕行）
-                card.title = "雪崩沟谷".into();
                 card.text = evtx(118)/* 原文：沟谷雪线在头顶断裂，积雪裹着碎石轰然倾泻——退已不及，寒气先一步蚀骨。 */.into();
                 let mut e1 = Eff::new();
                 e1.injure = true;
@@ -5357,7 +5307,6 @@ impl Game {
             }
             63 => {
                 // 普通：赌坊押擂（good=false；登台走 fight 臂照 id46 先例）
-                card.title = "赌坊押擂".into();
                 card.text = evtx(121)/* 原文：坊市地窖里开着一处地下斗擂，庄家嘶声吆喝——押赢的抱银子，上台的赌性命。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.2;
@@ -5373,7 +5322,6 @@ impl Game {
             }
             64 => {
                 // 普通：漕运夜航
-                card.title = "漕运夜航".into();
                 card.text = evtx(123)/* 原文：夜航漕船满载灵米北上，船老大拱手相邀：近来水路不太平，缺一位护道的。 */.into();
                 let g = (60.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -5387,7 +5335,6 @@ impl Game {
             }
             65 => {
                 // 普通：温泉濯尘
-                card.title = "温泉濯尘".into();
                 card.text = evtx(125)/* 原文：山间野温泉雾气氤氲，泉底铺着圆润的白石，水温恰能化开筋骨里的滞涩。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.05;
@@ -5401,7 +5348,6 @@ impl Game {
             }
             66 => {
                 // 普通：棋枰斗弈
-                card.title = "棋枰斗弈".into();
                 card.text = evtx(127)/* 原文：山亭里两位老叟对弈，一局棋下了三年——落子处松针积了寸许，无人肯先离席。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -5415,7 +5361,6 @@ impl Game {
             }
             67 => {
                 // 普通：铸兵守炉
-                card.title = "铸兵守炉".into();
                 card.text = evtx(130)/* 原文：铸兵铺的老铁匠要闭关淬一口剑胚，请你替他守一夜炉火——火候差一分，前功尽弃。 */.into();
                 let g = (50.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -5429,7 +5374,6 @@ impl Game {
             }
             68 => {
                 // 普通：蜃楼残景（mr3 高界一条）
-                card.title = "蜃楼残景".into();
                 card.text = evtx(132)/* 原文：海市蜃楼现于海上，楼台街市皆前人笔意——那是仙域投在凡世的一道残影，转瞬即散。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 4.0;
@@ -5442,7 +5386,6 @@ impl Game {
             }
             69 => {
                 // 普通：井底传声
-                card.title = "井底传声".into();
                 card.text = evtx(135)/* 原文：荒村古井夜半传声，井底有人断断续续诵经——村人说，井是前朝道士封的。 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 2.0;
@@ -5457,7 +5400,6 @@ impl Game {
             }
             70 => {
                 // 普通：药市问诊
-                card.title = "药市问诊".into();
                 card.text = evtx(137)/* 原文：药市义诊的悬壶老叟搭住你的腕：「气是够的，就是走岔了道——老朽替你顺一顺？」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
@@ -5472,7 +5414,6 @@ impl Game {
             }
             71 => {
                 // 普通：驿壁题诗
-                card.title = "驿壁题诗".into();
                 card.text = evtx(139)/* 原文：官道驿站粉壁斑驳，留满前人题诗——最末一行墨迹未干：「此身虽微，万世可期。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -5486,7 +5427,6 @@ impl Game {
             }
             72 => {
                 // 稀有：墨渊垂钓（w2；special33 墨叟一问检定 / 静观悟道）
-                card.title = "墨渊垂钓".into();
                 card.actor = Some(CardActor::Npc(3)); // 蓑衣钓叟（复用醉道人脸——历史复用勿当同源先例抄）
                 card.text = evtx(142)/* 原文：夜半墨渊，蓑衣老叟垂钓，钩上无饵——钓的是水里的「字」。老叟头也不回：「来者可是爱字之人？老朽钓上一个，你认得，便归你。」 */.into();
                 let mut e1 = Eff::new();
@@ -5500,7 +5440,6 @@ impl Game {
             }
             73 => {
                 // 稀有：纸人夜行（w1 mr3；special34 拦问检定 / 避道小损）
-                card.title = "纸人夜行".into();
                 card.text = evtx(144)/* 原文：深夜纸扎铺无人，纸人却列队而出，抬着一口巴掌大的小棺，步调整齐得可怕。 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 34;
@@ -5516,7 +5455,6 @@ impl Game {
             }
             74 => {
                 // 章节联动（第三章·血仇得报已了门控）：文狱余波——血仇从来传代
-                card.title = "血仇余响".into();
                 card.text = evtx(146)/* 原文：被斩宿敌的门生循着旧档寻上门，声言讨一个「说法」——文狱的账，从来传代。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -5535,7 +5473,6 @@ impl Game {
             }
             75 => {
                 // 章节联动（第六章·同页之缘已了且有伴门控）：灯节重逢，挂道侣立绘
-                card.title = "同页灯约".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -5559,7 +5496,6 @@ impl Game {
             }
             76 => {
                 // 链4 首段：灯楼谜约（宁清霜脸作灯楼主人；首段建链待分支）
-                card.title = "灯楼谜约".into();
                 card.actor = Some(CardActor::Npc(2));
                 // v1.16.7 两段文案（邂逅版式 5 行内）：谜面独立成段
                 card.text = evtx(151)/* 原文：上元灯会，临水灯楼悬一盏无火自明的青灯，楼主人立灯下：「青灯有主三十载，只候一个能对上灯谜的人。」\n谜面只有一行小字：「写它的人不在了，读它的人还没来。」 */.into();
@@ -5576,7 +5512,6 @@ impl Game {
             }
             77 => {
                 // 链4 中段（仅链内）：灯楼主人设问（复用宁清霜脸）
-                card.title = "灯下问答·续".into();
                 card.actor = Some(CardActor::Npc(2));
                 card.text = evtx(154)/* 原文：灯楼主人引你上楼，满架残卷蒙尘，唯第三层遮着素布：「布下是我未写完的书。你若问得三问，便替我揭了它。」 */.into();
                 let mut e1 = Eff::new();
@@ -5592,7 +5527,6 @@ impl Game {
             }
             78 => {
                 // 链4 末段（仅链内）：special32 青灯三问检定臂收尾
-                card.title = "青灯问藏·续".into();
                 card.actor = Some(CardActor::Npc(2));
                 card.text = evtx(156)/* 原文：三问已毕，青灯灯火忽然大盛。主人手按素布：「最后一问没有答案——你自己的书，写到哪里了？」 */.into();
                 let mut e1 = Eff::new();
@@ -5606,7 +5540,6 @@ impl Game {
             }
             79 => {
                 // 链5 首段：傩面还愿（村野戏台无立绘；双分支皆推链照链1 special20/21）
-                card.title = "傩面还愿".into();
                 card.text = evtx(158)/* 原文：村中傩班唱还愿戏，班主捧出一副彩面：「欠了笔墨债的，戴它跳一场『谢墨傩』，债便两清——你面相上，有债。」 */.into();
                 let g = (25.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -5623,7 +5556,6 @@ impl Game {
             }
             80 => {
                 // 链5 分支a 段（仅链内）：两选项均无置链臂 → 抉择即链终局
-                card.title = "戏毕面热·续".into();
                 card.text = evtx(160)/* 原文：一场傩戏跳罢，面具内里温热如体温。班主朝你长揖：「面里封着老辈一笔愿——你替他还了。」 */.into();
                 let g = (45.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -5638,7 +5570,6 @@ impl Game {
             }
             81 => {
                 // 链5 分支b 段（仅链内）：两选项均无置链臂 → 抉择即链终局
-                card.title = "愿成符赠·续".into();
                 card.text = evtx(162)/* 原文：戏台收场，班主取下傩面一角削成木符递你：「戏钱抵了愿钱，这符镇夜路。」 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 3.0;
@@ -5654,7 +5585,6 @@ impl Game {
             }
             82 => {
                 // 伴随事件：灯下缝页（缝页人设定题材；Comp 立绘照名反查模式）
-                card.title = "灯下缝页".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -5679,7 +5609,6 @@ impl Game {
             }
             83 => {
                 // 伴随事件：同摘霜橘（Comp 立绘）
-                card.title = "同摘霜橘".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -5704,7 +5633,6 @@ impl Game {
             }
             84 => {
                 // 伴随事件：论道起隙（无纯坏臂——僵局两解皆有得）
-                card.title = "论道起隙".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -5741,7 +5669,6 @@ impl Game {
             // 真对决仍走既有两口
             85 => {
                 // 链6 首段：仇踪入册（动态宿敌名）
-                card.title = "仇踪入册".into();
                 let nfull = self
                     .meta
                     .neme
@@ -5762,7 +5689,6 @@ impl Game {
             }
             86 => {
                 // 链6 中段（仅链内）：探虚实
-                card.title = "仇踪暗访·续".into();
                 let nname = self
                     .meta
                     .neme
@@ -5782,7 +5708,6 @@ impl Game {
             }
             87 => {
                 // 链6 末段（仅链内）：趁虚夺积——通用 Eff 结算，无第三份胜率公式
-                card.title = "乘虚夺积·续".into();
                 let nname = self
                     .meta
                     .neme
@@ -5811,7 +5736,6 @@ impl Game {
             // 门控）。措辞按「大限将至」而非精确年数——门控是当次入池判定，弹卡后
             // 寿元再变化（无面镜客/仙人赠礼）不撤卡
             88 => {
-                card.title = "灯下了愿".into();
                 card.text = evtx(177)/* 原文：灯芯将尽。你把这些年欠下的愿一件件数过——有些还了，有些再不还就来不及了。\n今夜把灯挑亮，了结最后一桩。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.10;
@@ -5827,7 +5751,6 @@ impl Game {
                 card.opts.push(("只了心结".into(), e2));
             }
             89 => {
-                card.title = "薪火相托".into();
                 card.text = evtx(180)/* 原文：山下少年仰着脸问：「先生，您这一身本事，往后传给谁？」\n你望着他，像望见很多年前那个没名没姓的自己。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -5847,7 +5770,6 @@ impl Game {
             // 高境界补充（90..=91）：mr 地板 EVENTS 第三元直写即生效（weights 内
             // realm<mr→0），补高境界普通层缺口——原 mr≥4 仅 15/26 两条稀有
             90 => {
-                card.title = "雷池遗蜕".into();
                 card.text = evtx(183)/* 原文：雷池深处，一具渡劫失败的前辈遗蜕盘坐如生，周身雷纹未散，池底沉着半截焦雷之髓。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.12;
@@ -5864,7 +5786,6 @@ impl Game {
                 card.opts.push(("敬而退走".into(), e2));
             }
             91 => {
-                card.title = "仙门论道".into();
                 card.text = evtx(186)/* 原文：仙门真传云游至此，与你论道三日。对方执仙家礼数，你以十万废稿为注——一场论下来，谁也没说服谁。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 4.0;
@@ -5880,7 +5801,6 @@ impl Game {
             // 常规批次（92..=99）：题材查重对账见 data.rs 批注（茶棚/染坊/傀儡/
             // 煎茶/悬棺/鱼龙/盐井/矿洞/梦笔，均不撞既有 85 条）
             92 => {
-                card.title = "染坊秘色".into();
                 card.text = evtx(189)/* 原文：镇尾染坊晾出一匹「会动的青」，布上水色随日光流转，像把去年的一段江装了进去。 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 2.0;
@@ -5896,7 +5816,6 @@ impl Game {
                 card.opts.push(("讨教染法".into(), e2));
             }
             93 => {
-                card.title = "傀儡戏班".into();
                 card.text = evtx(192)/* 原文：傀儡戏班夜宿破庙，班主醉后哀叹：祖传三具傀儡，如今只有一具还会动——另两具，是「老了」。 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 2.0;
@@ -5911,7 +5830,6 @@ impl Game {
                 card.opts.push(("向傀儡学艺".into(), e2));
             }
             94 => {
-                card.title = "雪夜煎茶".into();
                 card.text = evtx(195)/* 原文：雪夜投宿无门，山亭里一位老者正煎雪水煮茶。见你来，他不多话，只把第二只盏推了过来。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -5928,7 +5846,6 @@ impl Game {
                 card.opts.push(("讨问茶道".into(), e2));
             }
             95 => {
-                card.title = "断崖悬棺".into();
                 card.text = evtx(198)/* 原文：断崖半腰悬着七具石棺，绳索早已朽断。风过时，棺中传出极轻的翻书声。 */.into();
                 let g0 = (50.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -5942,7 +5859,6 @@ impl Game {
                 card.opts.push(("拜而去".into(), e2));
             }
             96 => {
-                card.title = "春汛鱼龙".into();
                 card.text = evtx(200)/* 原文：春汛夜，江面忽然沸腾——成群的银鱼跃出水面，鳞光映月，像一场逆着下的星雨。 */.into();
                 let g0 = (55.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -5958,7 +5874,6 @@ impl Game {
                 card.opts.push(("临流观化".into(), e2));
             }
             97 => {
-                card.title = "盐井卤灾".into();
                 card.text = evtx(202)/* 原文：盐井连日出黑卤，气味刺鼻。井户说井底「有东西翻身」，夜里，井口传来咕咚咕咚的响。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 0.9; // 通用战斗乘区（sim_fight 单口；敌按自身战力缩放）
@@ -5974,7 +5889,6 @@ impl Game {
                 card.opts.push(("封井另凿".into(), e2));
             }
             98 => {
-                card.title = "矿洞钟声".into();
                 card.text = evtx(205)/* 原文：废弃矿洞每逢雨夜自鸣钟声，声如闷雷。挖矿人说，洞底压着「不该醒的东西」。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
@@ -5990,7 +5904,6 @@ impl Game {
                 card.opts.push(("买断封洞".into(), e2));
             }
             99 => {
-                card.title = "梦笔生花".into();
                 card.text = evtx(208)/* 原文：连着三夜梦见同一支笔。第四夜醒来，它就立在案头——笔身无字，笔尖却有墨，像等了很久。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -6013,7 +5926,6 @@ impl Game {
             // 权重 0 仅链内直取，推进经 special 37..=40 新窗（CHAIN78_SPECIAL_LO/HI），
             // 末段抉择即「{名}·缘了」入大事记（stage 表见函数尾）
             100 => {
-                card.title = "焚字炉".into();
                 card.text = evtx(211)/* 原文：城中焚字炉前，抄经人焚烧废旧经稿。一页稿纸在火里卷了三卷而不化，灰烬让开，显出一行小字。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
@@ -6029,7 +5941,6 @@ impl Game {
                 card.opts.push(("帮检旧纸".into(), e2));
             }
             101 => {
-                card.title = "笔冢祭".into();
                 card.text = evtx(213)/* 原文：山阴处一座笔冢，埋的都是写秃的笔。冢前石桌搁着一盏残灯，灯下压着半页祭文笔账——写账的人不知去了哪。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 4.0;
@@ -6045,7 +5956,6 @@ impl Game {
                 card.opts.push(("捡拾秃笔".into(), e2));
             }
             102 => {
-                card.title = "涸河龙祠".into();
                 card.text = evtx(215)/* 原文：河床干了三年，龙祠香火早断。村民为最后一眼活泉争得头破血流，祠祝拦都拦不住。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -6062,7 +5972,6 @@ impl Game {
                 card.opts.push(("袖手评理".into(), e2));
             }
             103 => {
-                card.title = "纸鸢传书".into();
                 card.text = evtx(217)/* 原文：一只断线纸鸢栽在你院里，鸢尾系着半幅血书：山那头采药人坠了涧，字迹潦草，只写了个大概方位。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 4.0;
@@ -6079,7 +5988,6 @@ impl Game {
                 card.opts.push(("交驿充公".into(), e2));
             }
             104 => {
-                card.title = "砚山叩泉".into();
                 card.text = evtx(219)/* 原文：一座山形如巨砚，叩击山壁的不同方位，石缝里涌出的泉水竟带着墨香——饮之，识海清明。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.12;
@@ -6095,7 +6003,6 @@ impl Game {
                 card.opts.push(("拓售叩谱".into(), e2));
             }
             105 => {
-                card.title = "古戍点兵".into();
                 card.text = evtx(221)/* 原文：废戍楼在月圆之夜自燃烽火，楼下空地影影绰绰列队点兵——都是千年前战死者的影子，操练至今。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
@@ -6113,7 +6020,6 @@ impl Game {
                 card.opts.push(("焚香收操".into(), e2));
             }
             106 => {
-                card.title = "天蚕茧室".into();
                 card.text = evtx(224)/* 原文：整座洞窟挂满天蚕茧，万千白茧幽幽吐光。传说万茧之中有一枚「书茧」——茧里裹着蚕读了千年的字。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.15;
@@ -6129,7 +6035,6 @@ impl Game {
                 card.opts.push(("帮工收茧".into(), e2));
             }
             107 => {
-                card.title = "空舟拦江".into();
                 card.text = evtx(226)/* 原文：一艘官船无人自横，拦在江心。舱内桌椅齐整，茶犹温，只有一册翻到一半的无字书——读的人像是一去不回了。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -6147,7 +6052,6 @@ impl Game {
             }
             108 => {
                 // 稀有：墨鲸背城（w2）
-                card.title = "墨鲸背城".into();
                 card.text = evtx(228)/* 原文：海雾散开，一头墨色巨鲸浮出水面换气——鲸背上竟驮着一座小城，城郭灯火，街市隐隐有人声。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 5.0;
@@ -6164,7 +6068,6 @@ impl Game {
                 card.opts.push(("缘边拾遗".into(), e2));
             }
             109 => {
-                card.title = "借名修行".into();
                 card.text = evtx(230)/* 原文：山下发馆收徒的散修，顶着你的名号开坛讲法——讲得似是而非，偏生徒众不少。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -6182,7 +6085,6 @@ impl Game {
             }
             110 => {
                 // 宿敌同世回响：链6 缘了（chain6_closed）才入池；具名 Some 兜底泛称
-                card.title = "夺积余波".into();
                 let nname = self
                     .meta
                     .neme
@@ -6204,7 +6106,6 @@ impl Game {
             }
             111 => {
                 // 宿敌跨世回响：neme_slain≥1 才入池——新宿敌登册的余波
-                card.title = "仇册新墨".into();
                 let nfull = self
                     .meta
                     .neme
@@ -6227,7 +6128,6 @@ impl Game {
             }
             112 => {
                 // 链7 首段：灯花渡舟（首段建链待分支）
-                card.title = "灯花渡舟".into();
                 card.text = evtx(235)/* 原文：起大雾的夜，渡口只有一条不点篙的船。老船夫说：「雾河渡人不收灵石，只收旧渡资——讲一段你记得的旧事，灯花替你付账。」 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
@@ -6246,7 +6146,6 @@ impl Game {
             }
             113 => {
                 // 链7 中段（仅链内）
-                card.title = "灯下旧账·续".into();
                 card.text = evtx(237)/* 原文：行至河心，你借灯看清了舱壁——挂满一船灯纸，每张都写着一段旧事。其中一张的字迹，你从未写过，却认得是你自己的。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -6262,7 +6161,6 @@ impl Game {
             }
             114 => {
                 // 链7 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
-                card.title = "一渡一灯·续".into();
                 card.text = evtx(239)/* 原文：老船夫终于开口：「灯上记的，都是天曹删掉的名字——删一笔，我渡一程。船到岸了，客官，你的那页，想怎么写？」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
@@ -6280,7 +6178,6 @@ impl Game {
             }
             115 => {
                 // 链8 首段：药炉童子（首段建链待分支）
-                card.title = "药炉童子".into();
                 card.text = evtx(241)/* 原文：荒废丹房的炉火忽然自己着了。守炉的童子拉住你——看不出年岁的一张小脸：「先生救命，炉要走了！它守着一味丹引，等一个肯读它的人。」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.05;
@@ -6297,7 +6194,6 @@ impl Game {
             }
             116 => {
                 // 链8 中段（仅链内）
-                card.title = "炉语问心·续".into();
                 card.text = evtx(244)/* 原文：守到半夜，炉火忽明忽暗，竟像在说话。童子垂首：「炉主走火那晚，把一页烧残的稿子当了丹引咽下去。这炉等这一夜，等了一百年。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -6312,7 +6208,6 @@ impl Game {
             }
             117 => {
                 // 链8 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
-                card.title = "守炉一夜·续".into();
                 card.text = evtx(246)/* 原文：天将亮时炉门自开——炉中无丹，只有一页完稿，墨迹如新。童子拜了三拜：「炉主的名字有人接了。炉可以冷了。」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.15;
@@ -6335,7 +6230,6 @@ impl Game {
             // 宿敌），全程泛称不具名，避免误指
             118 => {
                 // 链9 首段：血册投书（首段建链待分支）
-                card.title = "血册投书".into();
                 card.text = evtx(249)/* 原文：雨夜有物钉门——半页旧册残页，朱笔圈着你斩落的那位血仇之敌的名讳，末行一行新墨：「师仇未雪，门下递呈。」落款七个名字，按入门次序排着。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
@@ -6353,7 +6247,6 @@ impl Game {
             }
             119 => {
                 // 链9 中段（仅链内）
-                card.title = "雪夜拦道·续".into();
                 card.text = evtx(252)/* 原文：你没等三日。雪夜兼程走到半途，山道上一列灯笼拦路——七人皆缟素，为首的捧着那半页册子：「师叔之仇，按门规由我等分摊。先生，请了。」 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
@@ -6369,7 +6262,6 @@ impl Game {
             }
             120 => {
                 // 链9 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
-                card.title = "断名之局·续".into();
                 card.text = evtx(255)/* 原文：断名崖下，风把雪吹成一面白幡。为首者递出那半页册：「赢了你撕，输了我等收殓。」你认得他握剑的手势——与他师父，一个师门教出来的。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
@@ -6390,7 +6282,6 @@ impl Game {
             // 天曹口径互不相涉（回声只关乎「你写过的字」）
             121 => {
                 // 链10 首段：旧页回声（首段建链待分支）
-                card.title = "旧页回声".into();
                 card.text = evtx(258)/* 原文：灯市书摊，一页残稿压在《千字文》下——字迹是你自己的，你却从未写过：那是某一世里，你写给谁的半行。「客官好眼力，这页等一个认得它的人，等了很多年。」 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
@@ -6407,7 +6298,6 @@ impl Game {
             }
             122 => {
                 // 链10 中段（仅链内）
-                card.title = "灯市换页·续".into();
                 card.text = evtx(261)/* 原文：灯市最深处果然有个不挂灯的摊子。摊主披蓑戴笠，案上摞着几百页旧稿，各朝各代的纸色都有：「只换不卖——一页旧稿，换我一页新墨。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -6423,7 +6313,6 @@ impl Game {
             }
             123 => {
                 // 链10 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
-                card.title = "换页重逢·续".into();
                 // v1.16.16 具名升级：历世结缘次数最多的同页人（comp_bonds 反查
                 // COMPANION_NAMES，零新键）——「某一世里与你同页的人」泛称升具名，
                 // 情感密度落地。兜底纪律照 85 臂：门控 121 已保证 comp_bonds 任意
@@ -6461,7 +6350,6 @@ impl Game {
             // 全部 118 条：断弦琴/龙窑夜火/埙/枯禅遗偈/兽潮/玉贩/引魂幡/磁山/
             // 天梯/断虹，其中稀有 1（133 断虹饮涧 w=2）。查重对账见本批次施工单
             124 => {
-                card.title = "断弦琴意".into();
                 card.text = evtx(265)/* 原文：山亭里一把无主的旧琴，七弦断其三。亭柱刻着半阙未完的曲名。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -6476,7 +6364,6 @@ impl Game {
                 card.opts.push(("抱琴换钱".into(), e2));
             }
             125 => {
-                card.title = "百窑夜火".into();
                 card.text = evtx(267)/* 原文：山坳龙窑夜半无火自燃，窑工跪了一地不敢近——窑头说，这窑三年前封的那一炉，「回来了」。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.05;
@@ -6493,7 +6380,6 @@ impl Game {
                 card.opts.push(("封土还窑".into(), e2));
             }
             126 => {
-                card.title = "埙声穿垣".into();
                 card.text = evtx(270)/* 原文：断垣深处传出埙声，呜咽着反复同一个调子。走近了看——垣心供着一具石埙，无人而自鸣。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -6510,7 +6396,6 @@ impl Game {
                 card.opts.push(("拢垣掩埙".into(), e2));
             }
             127 => {
-                card.title = "枯禅遗偈".into();
                 card.text = evtx(273)/* 原文：崖洞里一位坐化的老僧，壁间遗偈只写了上半——「我于人间留一问」。墨迹已枯了不知多少年。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -6526,7 +6411,6 @@ impl Game {
                 card.opts.push(("拓偈易石".into(), e2));
             }
             128 => {
-                card.title = "兽潮围栅".into();
                 card.text = evtx(275)/* 原文：灵兽潮涌自山脊压下，围了猎户的山栅。栅内孩童哭声一片，栅外兽瞳在暮色里连成一片星。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.05; // 通用战斗单口 sim_fight（勿另写胜率公式）
@@ -6541,7 +6425,6 @@ impl Game {
                 card.opts.push(("弃饵引潮".into(), e2));
             }
             129 => {
-                card.title = "玉贩困隘".into();
                 card.text = evtx(277)/* 原文：雪隘口的坡道塌了半边，一队玉贩的车马困在崖沿。领队的朝你长揖：「先生过路，搭把手，玉随您挑。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -6558,7 +6441,6 @@ impl Game {
                 card.opts.push(("收酬让道".into(), e2));
             }
             130 => {
-                card.title = "引魂幡影".into();
                 card.text = evtx(279)/* 原文：荒岭上一杆白幡夜夜招魂，幡影里浮着些看不清的影子，来往客商绕着走。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -6575,7 +6457,6 @@ impl Game {
                 card.opts.push(("随幡借宿".into(), e2));
             }
             131 => {
-                card.title = "磁山迷辙".into();
                 card.text = evtx(282)/* 原文：磁山吸针，车马的指北针在这里全成了摆设——一队商旅在山坳里兜了两天，辙印绕成一团乱麻。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -6591,7 +6472,6 @@ impl Game {
                 card.opts.push(("绕山缓行".into(), e2));
             }
             132 => {
-                card.title = "天梯断级".into();
                 card.text = evtx(285)/* 原文：通天石梯到此断了一级，断口平整如切——梯上仙气粼然，梯下望不见底。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.12;
@@ -6608,7 +6488,6 @@ impl Game {
                 card.opts.push(("跃过缺口".into(), e2));
             }
             133 => {
-                card.title = "断虹饮涧".into();
                 card.text = evtx(288)/* 原文：雨后断虹垂涧，虹脚没入一汪积水——水色映出的天，是你从未见过的那一副。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.15;
@@ -6628,7 +6507,6 @@ impl Game {
             // sim_event_weights 读 meta.dongfu 跨世持久态）。措辞一律「你名下/
             // 历年经营」口径（跨世持久，非「本世」所得——照 111/110 措辞纪律）
             134 => {
-                card.title = "阵眼共鸣".into();
                 card.text = evtx(291)/* 原文：你名下洞府的聚灵阵历年养到三重圆满——今晨山河灵潮过境，阵眼无风自鸣，灵机如细溪汇入你的吐纳。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.12;
@@ -6646,7 +6524,6 @@ impl Game {
             }
             135 => {
                 let g = (120.0 * ss * gen_range(1.0, 1.6)) as i64;
-                card.title = "田畦岁稔".into();
                 card.text = evtx(294)/* 原文：你名下灵田垦到三等沃腴——岁末灵稻垂穗，田埂雾气未散，山下的散修都来讨一捧新米尝鲜。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones = g;
@@ -6660,7 +6537,6 @@ impl Game {
                 card.opts.push(("开仓施粥".into(), e2));
             }
             136 => {
-                card.title = "丹房遗香".into();
                 card.text = evtx(296)/* 原文：你名下丹房历年扩到三重鼎室——开炉取丹时，砖缝里渗出经年的丹香，凝而不散，闻之神思一清。 */.into();
                 let mut e1 = Eff::new();
                 e1.pill = Some((0, 1));
@@ -6686,7 +6562,6 @@ impl Game {
             // mr=4 由 sim_event_weights 既有 realm<mr 归零承担
             137 => {
                 // 链11 首段：劫云过境（首段建链待分支）
-                card.title = "劫云过境".into();
                 card.text = evtx(299)/* 原文：山口茶棚歇脚，邻山之巅劫云盘结——云底雷光垂而未落，云下有遁光不隐不避。老板娘照常添水：「第三位了。渡过去的，下山都来喝碗茶。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
@@ -6703,7 +6578,6 @@ impl Game {
             }
             138 => {
                 // 链11 中段（仅链内）
-                card.title = "劫灰拾遗·续".into();
                 card.text = evtx(302)/* 原文：劫云散时你行至山腰回望——那道遁光顶着末重雷落了下来，山火燎出一道焦痕，雨一浇，白烟像香。次日你循焦痕拾级，雷火淬过的矿壳沿途散落，拾一枚还在嗡。 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
@@ -6718,7 +6592,6 @@ impl Game {
             }
             139 => {
                 // 链11 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
-                card.title = "劫后茶话·续".into();
                 card.text = evtx(304)/* 原文：渡劫客伤愈将行，临别与你就着茶棚炉火对坐。他说雷劫劈的不是人，是人身上的侥幸——劈完了，剩下的那部分才真正是自己的。老板娘在旁听了一路，给两人都续了茶。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
@@ -6740,7 +6613,6 @@ impl Game {
             // 47/48 同第五窗
             140 => {
                 // 链12 首段：书肆易主（首段建链待分支）
-                card.title = "书肆易主".into();
                 card.text = evtx(307)/* 原文：城南书肆挂出「易主」木牌。老掌柜正把架上旧抄本一摞摞装箱，见你翻得仔细，摆手：「随便看。认字的人来了，书就不算白搬一趟。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
@@ -6757,7 +6629,6 @@ impl Game {
             }
             141 => {
                 // 链12 中段（仅链内）
-                card.title = "代笔提要·续".into();
                 card.text = evtx(309)/* 原文：新书主是个绸缎商，不识修行书，却把铺面翻修得亮堂。他听伙计说你识货，请你替架上旧抄本各写一句提要——写得中肯书就卖得动，酬你一成书资。 */.into();
                 // v1.16.15 复审口径：卡面既言「酬你一成书资」，msg 补灵石实付
                 // （照 116 添柴 30*ss 同量级取 45*ss，与既有收入事件持平）
@@ -6777,7 +6648,6 @@ impl Game {
             }
             142 => {
                 // 链12 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
-                card.title = "肆后书案·续".into();
                 card.text = evtx(311)/* 原文：书肆生意果然好了。开春时绸缎商在肆后添了张书案，笔墨齐全，说：「给像你这样的人留的——城里的字，总得有人接着认。」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
@@ -6796,7 +6666,6 @@ impl Game {
             // 常规 8（143..=150）照 134..=136 词汇：纯 dao/stones/msg 效果、ss 缩放
             // 灵石、不占 special（战斗不走，题材皆市井山野静态局）
             143 => {
-                card.title = "公道秤".into();
                 card.text = evtx(314)/* 原文：集市东头有杆老秤，挂在「公道秤」的木牌下，说是称人心。你把储物袋搁上去，秤星自己挪了三格，停在一个不上不下的位置。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -6811,7 +6680,6 @@ impl Game {
                 card.opts.push(("借秤称物".into(), e2));
             }
             144 => {
-                card.title = "渡蚁桥".into();
                 card.text = evtx(316)/* 原文：山雨冲断溪上小桥，一队黑蚁衔着碎叶在水面连成一线，摇摇欲坠。队伍尽头，蚁群正往你鞋边爬来。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -6831,7 +6699,6 @@ impl Game {
                 card.opts.push(("灵气渡蚁".into(), e2));
             }
             145 => {
-                card.title = "冰窖遗鲜".into();
                 card.text = evtx(319)/* 原文：城中冰窖清底，窖底最深处冻着一枚桃——贡品样式，签条上的年号是三百年前的。管窖的老说，冻着的仙桃不会坏，只会等。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 5.0;
@@ -6849,7 +6716,6 @@ impl Game {
                 card.opts.push(("请回窖底".into(), e2));
             }
             146 => {
-                card.title = "夜磨坊".into();
                 card.text = evtx(322)/* 原文：河湾水磨坊半夜水轮自转，坊里无人。磨眼里的不是麦，是月光——磨出的粉落在石槽上，风一吹就没了。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -6864,7 +6730,6 @@ impl Game {
                 card.opts.push(("问坊主讨面".into(), e2));
             }
             147 => {
-                card.title = "货栈灵鼠".into();
                 card.text = evtx(324)/* 原文：货栈掌柜愁眉苦脸：栈里灵鼠成精，专偷丹药房那格。你去看时，那鼠正抱着枚培元丹，见你来了，把丹往你脚边一推。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -6880,7 +6745,6 @@ impl Game {
                 card.opts.push(("捉鼠还丹".into(), e2));
             }
             148 => {
-                card.title = "采薇客".into();
                 card.text = evtx(326)/* 原文：高秋的南崖上有人采薇而歌，歌声不悲不喜，一句一句往云里去。你循声攀上崖，见个青袍人背影，篓里薇菜浅浅一层。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 4.0;
@@ -6897,7 +6761,6 @@ impl Game {
                 card.opts.push(("分他行粮".into(), e2));
             }
             149 => {
-                card.title = "补鞍匠".into();
                 card.text = evtx(329)/* 原文：官道旁补鞍的老匠人拆开一副旧马鞍，夹层里掉出一封没有火漆的信，信皮上的字迹被磨得只剩半行。老匠不识字，摊着手问你。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -6913,7 +6776,6 @@ impl Game {
                 card.opts.push(("买下旧鞍".into(), e2));
             }
             150 => {
-                card.title = "雪泥鸿迹".into();
                 card.text = evtx(331)/* 原文：大雪初霁，雪原上只有一行脚印，从你门前直到林深处——去程的。没有回程的。你认得这脚印的步幅，像极了一个人负手慢行。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -6939,7 +6801,6 @@ impl Game {
             // 记（stage 表见函数尾）
             151 => {
                 // 链13 首段：当铺死当（首段建链待分支）
-                card.title = "当铺死当".into();
                 card.text = evtx(334)/* 原文：镇口老当铺的死当架上，一管旧箫落了薄尘，签条一个「死」字——三年无人来赎，按例今岁拆料重铸。箫尾刻着个小小的「归」字，笔画被摩挲得发亮。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
@@ -6956,7 +6817,6 @@ impl Game {
             }
             152 => {
                 // 链13 中段（仅链内）
-                card.title = "访主赎当·续".into();
                 card.text = evtx(337)/* 原文：循当票存根寻到城郊药庐，物主是位咳疾缠身的老丹师——当年为给同门购药，把随身旧箫典进了当铺。他说物随缘去，不赎也罢，只是每年冬至会朝镇上望一眼。 */.into();
                 let g = (30.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -6974,7 +6834,6 @@ impl Game {
             }
             153 => {
                 // 链13 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
-                card.title = "物归旧主·续".into();
                 card.text = evtx(339)/* 原文：旧箫归架那日，老丹师的精神竟好了些。他说箫是故人手制，箫声起时，药庐里经年的药苦味都淡了。曲罢他执意送你到篱外，往你袖里塞了一撮窖了多年的灵茶。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
@@ -6995,7 +6854,6 @@ impl Game {
             // 缩放灵石、不占 special（不入链不入稀有，题材是宗门兴望的世情侧写）
             // ——入池门控（入宗门+东境青云）在 sim_event_weights，见该函数块注
             154 => {
-                card.title = "新掌接印".into();
                 card.text = evtx(342)/* 原文：青云宗今岁接印大典——老掌门功成闭关，新掌门于观星台受印。山门外候观的散修排成长龙，你随人流上山，满山彩绸映得檐角都在发亮。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
@@ -7010,7 +6868,6 @@ impl Game {
                 card.opts.push(("帮接彩头".into(), e2));
             }
             155 => {
-                card.title = "旧掌传灯".into();
                 card.text = evtx(344)/* 原文：老掌门闭关前最后一次开讲，讲的不是功法，是一句「接印容易守印难」。大殿里挤满了人，你坐在窗根下听完，出殿时暮钟正响。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7035,7 +6892,6 @@ impl Game {
             // 灵石臂照 ss 缩放；题材查重见 data.rs EVENTS 表 v1.16.15 批注）
             156 => {
                 // 伴随事件：雪窖藏酿（Comp 立绘）
-                card.title = "雪窖藏酿".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -7064,7 +6920,6 @@ impl Game {
             }
             157 => {
                 // 伴随事件：同守昙花（Comp 立绘）
-                card.title = "同守昙花".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -7091,7 +6946,6 @@ impl Game {
             }
             158 => {
                 // 伴随事件：雨后补瓦（Comp 立绘）
-                card.title = "雨后补瓦".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -7119,7 +6973,6 @@ impl Game {
                 card.opts.push(("灵气熔凝".into(), e2));
             }
             159 => {
-                card.title = "萤火引路".into();
                 card.text = evtx(352)/* 原文：夏夜山道起雾迷了路，一列萤火忽然自林间亮起，蜿蜒向北——雾气竟随它们让出一条道来。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
@@ -7136,7 +6989,6 @@ impl Game {
                 card.opts.push(("让道萤行".into(), e2));
             }
             160 => {
-                card.title = "山洪改道".into();
                 card.text = evtx(355)/* 原文：连日暴雨，山洪裹着断木直冲下游村落。你在洪头之上，身边只有一炷香的工夫。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -7151,7 +7003,6 @@ impl Game {
                 card.opts.push(("落村帮抢收".into(), e2));
             }
             161 => {
-                card.title = "白鹿过涧".into();
                 card.text = evtx(357)/* 原文：雪霁。一头白鹿自涧底踏雪而过，蹄印落处竟生出一线青草，走到对面山脊才回头望你一眼。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
@@ -7168,7 +7019,6 @@ impl Game {
                 card.opts.push(("长揖目送".into(), e2));
             }
             162 => {
-                card.title = "月蚀之夜".into();
                 card.text = evtx(360)/* 原文：十五夜，圆月被啃去一角。村中锣声四起——老人们说月蚀是天上犬在吞月，要敲响器救它。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7186,7 +7036,6 @@ impl Game {
                 card.opts.push(("静观复圆".into(), e2));
             }
             163 => {
-                card.title = "壶中天".into();
                 card.text = evtx(363)/* 原文：集上老者售一柄陶壶：「壶里有一座山。」你冲水入壶，壶口竟传出一线飞瀑声，久久不歇。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.06;
@@ -7202,7 +7051,6 @@ impl Game {
                 card.opts.push(("转赠孩童".into(), e2));
             }
             164 => {
-                card.title = "檐铃无风".into();
                 card.text = evtx(366)/* 原文：客栈檐角一枚铁铃，无风自响。店家说这铃响时，北面官道必有游子还乡——响一声，还一个。 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 2.0;
@@ -7223,7 +7071,6 @@ impl Game {
             // 落在链裁决窗之外，抉择即自然清链（本就无链，语义无害）
             165 => {
                 // 结局回响·A 定稿（入正文之人的世界侧写）
-                card.title = "定稿之世".into();
                 card.text = evtx(369)/* 原文：茶馆说书人开了段新话本，主角的名字你听着耳熟——那是入了正文的人。听客们交头接耳：「这名字一字改不得。」说书人一拍醒木：「天定的稿子，谁敢改。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7240,7 +7087,6 @@ impl Game {
             }
             166 => {
                 // 结局回响·B 留白（后事不详之地的世界侧写）
-                card.title = "留白之野".into();
                 card.text = evtx(371)/* 原文：行脚客们多了个去处：某镇外一片无名野地。官册上那一格空着，卦摊说这叫「后事不详」——无名无姓，反倒谁都能去。野草长得很高，高过所有批注。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -7257,7 +7103,6 @@ impl Game {
             }
             167 => {
                 // 结局回响·C 执笔（执笔人视点的世界侧写）
-                card.title = "执笔之赠".into();
                 card.text = evtx(374)/* 原文：废稿市上新添一个怪摊：不卖书，只替人描名字——把磨没了的名字一笔一笔描清楚，分文不取。你蹲看半日，摊主把笔一转，笔杆朝你：「你也描一个？」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7275,7 +7120,6 @@ impl Game {
             }
             168 => {
                 // 书外之章联动（第九章·书外之章已了门控）：天曹余波
-                card.title = "天曹补写".into();
                 card.text = evtx(377)/* 原文：天曹卷宗房漏了一夜雨，晒卷的小吏发现你那一册的页脚多了行小字，墨色很新，像谁趁夜补写：「此卷之外，另有续行。」小吏不敢涂，上报了事。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -7291,7 +7135,6 @@ impl Game {
             }
             169 => {
                 // 书外之章联动（第九章·书外之章已了门控）：书肆余波
-                card.title = "书肆新声".into();
                 card.text = evtx(379)/* 原文：书肆最深处新到一册无脊之书，页页相连找不到头尾。掌柜说这书不吃价、只吃缘：「有缘人翻开哪页，就从哪页读起——翻不开的，看一眼脊梁骨都摸不着。」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
@@ -7314,7 +7157,6 @@ impl Game {
             // fight+injure 照 62 雪崩沟谷危机臂先例
             170 => {
                 // 老年层：炉暖旧器（交托回望）
-                card.title = "炉暖旧器".into();
                 card.text = evtx(382)/* 原文：巷尾老匠的炉火不熄，煨着几件街坊送来的旧物——锈锁、断梳、豁口的陶壶。见你路过，他招手：「后生，搭把手，替我把这封回信捎去城南。人老了，腿脚先老。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7332,7 +7174,6 @@ impl Game {
             }
             171 => {
                 // 老年层：灯影授业（交托回望）
-                card.title = "灯影授业".into();
                 card.text = evtx(384)/* 原文：油灯将尽的老屋里，一位白发的教书先生还醒着。他望着你的印，像是认得它的气息：「我不问你从哪来。灯影里还剩半课——年少时我不敢讲，如今敢讲了。」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
@@ -7350,7 +7191,6 @@ impl Game {
             }
             172 => {
                 // 开局层：义渡（与 112 灯花渡舟分域——那是灵异奇遇，这是渡口日常）
-                card.title = "义渡".into();
                 card.text = evtx(387)/* 原文：河面无桥，老船工撑船义渡，船头木牌写着「分文不取，随缘添香」。今日风大，他朝你招手：「后生，来帮我压一压船头。」 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 2.0;
@@ -7368,7 +7208,6 @@ impl Game {
             }
             173 => {
                 // 开局层：村塾借灯
-                card.title = "村塾借灯".into();
                 card.text = evtx(389)/* 原文：夜宿山村，村塾的灯油见了底，老先生摸黑批课业，笔尖全凭手感。他窘迫地笑：「灯借不得，油却买得——穷教书人，只剩这张脸。」 */.into();
                 let g = (16.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -7386,7 +7225,6 @@ impl Game {
             }
             174 => {
                 // 开局层：霜桥早市
-                card.title = "霜桥早市".into();
                 card.text = evtx(391)/* 原文：霜天未亮，石桥两廊早市已开：热粥、姜茶、新出炉的炊饼。摊主们跺脚呵手，见你走来，竟不约而同往桥心让了让——像给什么人留位。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.06;
@@ -7404,7 +7242,6 @@ impl Game {
             }
             175 => {
                 // 链14 首段：修伞记（凡伞铺老匠——只修凡伞，不识法器；首段建链待分支）
-                card.title = "修伞记".into();
                 card.text = evtx(393)/* 原文：雨夜投宿，巷口一间伞铺还亮着灯。老匠戴顶破笠，正给一把油纸伞换骨：「小店只修凡伞——金的铁的、会发光的，别拿来。我不识，也不碰。」 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
@@ -7423,7 +7260,6 @@ impl Game {
             }
             176 => {
                 // 链14 中段（仅链内）
-                card.title = "伞骨重削·续".into();
                 card.text = evtx(396)/* 原文：翌日再来，老匠却对着拆开的伞面皱眉：「你这伞骨相古怪——三十六骨该匀不匀，像被法力催过。我照凡伞的规矩重削，你莫怪。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7441,7 +7277,6 @@ impl Game {
             }
             177 => {
                 // 链14 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
-                card.title = "还伞·续".into();
                 card.text = evtx(399)/* 原文：伞修好了。老匠把伞递还，另塞给你一支新削的伞骨：「竹子这东西，削直了就直一辈子——人也一样。去你的路吧，雨要停了。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7460,7 +7295,6 @@ impl Game {
             }
             178 => {
                 // 恶缘：沼瘴蚀符（mr2 薄档补恶）
-                card.title = "沼瘴蚀符".into();
                 card.text = evtx(401)/* 原文：沼地瘴气翻涌如粥，你护身的符纸一夜之间蚀出细密斑点，蜷边发黑——像被什么东西啃着，不急，也不停。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.05;
@@ -7480,7 +7314,6 @@ impl Game {
             }
             179 => {
                 // 恶缘·稀有：赝丹局（mr3 薄档补恶；w2 入稀有层）
-                card.title = "赝丹局".into();
                 card.text = evtx(404)/* 原文：丹市深处，锦衣人低声兜售「九转遗丹」，要价惊人。丹香扑鼻——可香得过火，你识海里那点灵觉隐隐发腻。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 2.0;
@@ -7501,7 +7334,6 @@ impl Game {
             }
             180 => {
                 // 高境风味：云阶试步（mr5 独占）
-                card.title = "云阶试步".into();
                 card.text = evtx(406)/* 原文：生花境深处有云阶千级，浮云所砌，每级只承一息。登山的人说：步急了阶散，步滞了云走——唯有自己的呼吸配得上它。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
@@ -7518,7 +7350,6 @@ impl Game {
             }
             181 => {
                 // 高境风味：观澜悟潮（mr5 独占）
-                card.title = "观澜悟潮".into();
                 card.text = evtx(409)/* 原文：崖下澜潮昼夜不歇，撞石的声势却循着某种极缓的呼吸。你盘膝崖上，忽然发觉自己的心跳，正在偷偷向潮声看齐。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
@@ -7536,7 +7367,6 @@ impl Game {
             }
             182 => {
                 // 伴随事件：霜夜补裘（Comp 立绘，照 156 模板）
-                card.title = "霜夜补裘".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -7567,7 +7397,6 @@ impl Game {
             183 => {
                 // 伴随事件：灯下习字（mr0 白丁有伴层首条伴随——遗泽玩家的白丁推演
                 // 此前零伴随；Comp 立绘照 82 反查模式，呼应道侣专页）
-                card.title = "灯下习字".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -7598,7 +7427,6 @@ impl Game {
                 // 伴随事件：同参一炉（mr2 双修题材——呼应现实侧双修共进与
                 // COMPANION_CULT_MULT 好感档；Eff.comp_fav 好感通道首用，
                 // +5 照 COMPANION_GIFT_FAV 量级）
-                card.title = "同参一炉".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -7623,7 +7451,6 @@ impl Game {
             }
             185 => {
                 // 伴随事件：云海携游（mr4+ 有伴层——此前伴随 mr 全≤3，mr4+ 零覆盖）
-                card.title = "云海携游".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -7650,7 +7477,6 @@ impl Game {
             186 => {
                 // 恶缘：仙曹索卷（mr5 独占——高境墨气冲霄才有人来索；mr5 无条件
                 // 常态池 7→9 条补薄）
-                card.title = "仙曹索卷".into();
                 card.text = evtx(418)/* 原文：一名佩牍仙曹踏云而至，展册点名：「你名下稿卷墨气冲霄，按例当入天曹文库里架——交卷归档，或领催墨单。」 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.08;
@@ -7666,7 +7492,6 @@ impl Game {
             }
             187 => {
                 // 善缘：星槎访客（mr5 独占——前路无名的问路者）
-                card.title = "星槎访客".into();
                 card.text = evtx(421)/* 原文：一叶星槎泊于云端，槎上客披星而下，向你讨一盏茶：「行到此处，前路无名——借高士一盏茶的工夫，问一问路。」 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.08;
@@ -7684,7 +7509,6 @@ impl Game {
             }
             188 => {
                 // 恶缘：灵税催帖（mr3 恶缘薄档补位——仙府催赋题材此前零覆盖）
-                card.title = "灵税催帖".into();
                 card.text = evtx(424)/* 原文：仙府催帖贴上洞府门楣：岁修灵税逾期，按例当缴——落款朱印鲜然，不容分说。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.06;
@@ -7700,7 +7524,6 @@ impl Game {
             }
             189 => {
                 // 老年层：旧履还坊（「回望交托」散件第五条；余量≤10 载门控同批扩）
-                card.title = "旧履还坊".into();
                 card.text = evtx(427)/* 原文：脚上这双履陪了你大半世。鞋匠铺老匠接过去端详半晌：「底磨得偏左——半世的路，都往一边偏。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7717,7 +7540,6 @@ impl Game {
             }
             190 => {
                 // 章节联动（第一章·雨夜执印已了门控 bit0）：雨夜回访——原点重临
-                card.title = "雨夜寻印".into();
                 card.text = evtx(430)/* 原文：又是雨夜。路过乱葬岗，新坟旁一枚无字方印半埋土中，印身划痕层层叠叠——与你怀中那枚，一模一样。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7734,7 +7556,6 @@ impl Game {
             }
             191 => {
                 // 章节联动（第四章·文狱讨牒已了门控 bit3）：牒成的回响——文狱来问
-                card.title = "文狱退牒".into();
                 card.text = evtx(433)/* 原文：一名文书吏抱着一摞职牒拦路：「讨牒六张的名讳，文狱都记着——有人托我问一句：牒多了，压手么？」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7752,7 +7573,6 @@ impl Game {
             }
             192 => {
                 // 开局层：书僮窃墨（mr0 w4——摊薄开局头部集中度）
-                card.title = "书僮窃墨".into();
                 card.text = evtx(436)/* 原文：借宿的书院里，小书僮揣了你一块松烟墨，被你堵在墙角——他仰起头理直气壮：「先生罚抄的《千字文》，我差一页的墨。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
@@ -7770,7 +7590,6 @@ impl Game {
             193 => {
                 // mr6 长生世独占首批·善缘：后辈证道（realm≥6 藏锋起寿 4500 载层
                 // 原零独占——长生世专属叙事首条；realm<mr 归零天然支持零代码）
-                card.title = "后辈证道".into();
                 card.text = evtx(439)/* 原文：一名后辈在崖下摆开证道台，请帖递上山来：请山中三位最老的前辈观礼。你掐指数了数——这山中比你老的，早就不剩三位了。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7787,7 +7606,6 @@ impl Game {
             }
             194 => {
                 // mr6 恶缘：冒籍疑云（长生世独占恶缘首条——名讳被冒的高境烦恼）
-                card.title = "冒籍疑云".into();
                 card.text = evtx(442)/* 原文：仙籍吏登门，面有难色：册上另有一个与你同名同姓同貌的修士，近年在北域行医济世，声名鹊起——籍只有一个，得去一个。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7805,7 +7623,6 @@ impl Game {
             }
             195 => {
                 // mr6 善缘：万卷尘页（长生世的回望题材——万卷旧稿只有走过的人读得动）
-                card.title = "万卷尘页".into();
                 card.text = evtx(445)/* 原文：藏经阁顶层，你搁了不知多少万卷的旧稿自己翻动起来——尘页上的字迹早被岁月洇开，唯独你亲手写下的批注，一笔未褪。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7823,7 +7640,6 @@ impl Game {
             }
             196 => {
                 // 章节联动（第二章·镜中万象已了门控 bit1）：轮回镜回放首胜
-                card.title = "镜影忆战".into();
                 card.text = evtx(448)/* 原文：轮回镜无故自亮，映出的不是当下，而是你的第一场胜仗——镜中那人出手时的破绽，隔着这些年岁，如今看得分明。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7840,7 +7656,6 @@ impl Game {
             }
             197 => {
                 // 章节联动（第五章·山河万象已了门控 bit4）：五域风谣收最后一域
-                card.title = "五域风谣".into();
                 card.text = evtx(451)/* 原文：一个背满歌册的行脚客拦路讨歌：五域风谣已收齐四域，独缺你脚下这一域——风谣须得本地人亲口唱，可愿补一句？ */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
@@ -7858,7 +7673,6 @@ impl Game {
             }
             198 => {
                 // 老年层（余量≤10 载门控）：窗前晒卷——晒的是一辈子的字
-                card.title = "窗前晒卷".into();
                 card.text = evtx(454)/* 原文：好日头。你把一辈子的卷册搬到窗前晾晒，纸页在风里哗啦啦翻动成一片——每一页都晒出了旧年的声音。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7875,7 +7689,6 @@ impl Game {
             }
             199 => {
                 // 老年层（余量≤10 载门控）：旧邻问名——名字的来历
-                card.title = "旧邻问名".into();
                 card.text = evtx(457)/* 原文：山下旧邻的孩童上山采药，坐在你门槛上歇脚，仰头问：前辈的名字，是爹娘取的，还是自己取的？ */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -7892,7 +7705,6 @@ impl Game {
             }
             200 => {
                 // mr5 恶缘：仙籍勾误（勾错名讳的文书灾——恶缘薄档补位）
-                card.title = "仙籍勾误".into();
                 card.text = evtx(460)/* 原文：仙籍吏持册登门，面有难色：上头勾错了名讳，把你的寿数记到了旁人账上——更正要按例核验，得先收一样东西作保。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.08;
@@ -7910,7 +7722,6 @@ impl Game {
             }
             201 => {
                 // mr3 恶缘：坊契赖账（赊出去的旧账与新东家的翻脸）
-                card.title = "坊契赖账".into();
                 // v1.16.22 立绘客串（照链1货郎=Npc(1) 显式复用先例）：坊市契账即
                 // 胡掌柜增益域（NPC_BRIEF[1]「购丹价格随交情打折」），正文同步钉名
                 // 「胡掌柜」使文与脸同源；纹理未到走邂逅版式兜底链（npc_pixel_tex
@@ -7933,7 +7744,6 @@ impl Game {
             }
             202 => {
                 // mr0 恶缘：夜叩柴门（开局层恶缘第 4 条——摊薄妖兽拦路 w11 独大）
-                card.title = "夜叩柴门".into();
                 card.text = evtx(466)/* 原文：三更，柴门被叩得山响。门外人影幢幢，自称赶夜路的行商——可行商不走夜路，更不会人人在袖里揣着刀。 */.into();
                 let mut e1 = Eff::new();
                 e1.luck = 1.0;
@@ -7948,7 +7758,6 @@ impl Game {
             }
             203 => {
                 // 伴随事件（白名单第 14 条）：云海拾简（mr4 层）——半句残简与同读的人
-                card.title = "云海拾简".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -7976,7 +7785,6 @@ impl Game {
             204 => {
                 // 老年×有伴双门控首条：同席说岁——数算共同走过的年岁（两门控交集，
                 // 无伴不揭此题、余量富余时不数）
-                card.title = "同席说岁".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -8018,7 +7826,6 @@ impl Game {
             // 分域纪律）/mr0 恶缘 1（218 囊带乍断 w3，摊薄开局头部）
             205 => {
                 // 链15 首段：观星问岁（醉道人——醉里数星，指星对账；首段建链待分支）
-                card.title = "观星问岁".into();
                 card.actor = Some(CardActor::Npc(3));
                 card.text = evtx(470)/* 原文：高山夜清，醉道人拉你崖头坐下，酒葫芦往石上一搁：「数星星去。天上每一颗都是一笔账——记账的那位，岁数大了，时常漏记。」 */.into();
                 let mut e1 = Eff::new();
@@ -8039,7 +7846,6 @@ impl Game {
             }
             206 => {
                 // 链15 中段（仅链内）
-                card.title = "指间星图·续".into();
                 card.actor = Some(CardActor::Npc(3));
                 card.text = evtx(473)/* 原文：他以指蘸酒，石桌上画星图——一笔一划是旧年的天。画到末了，指头停在一处空缺：「这儿该有一颗的。是我记漏了，还是天漏了？」 */.into();
                 let mut e1 = Eff::new();
@@ -8058,7 +7864,6 @@ impl Game {
             }
             207 => {
                 // 链15 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
-                card.title = "问岁之约·续".into();
                 card.actor = Some(CardActor::Npc(3));
                 card.text = evtx(476)/* 原文：醉道人指着那颗星：「看，它挪了一格。那是我自己的名字——挪一格，就老一分。」他把星图撕给你：「明年今夜，替我对账。」 */.into();
                 let mut e1 = Eff::new();
@@ -8076,7 +7881,6 @@ impl Game {
             }
             208 => {
                 // mr7 长生世风味·善缘：剑冢阅武（realm≥7 铁画起；不触破境裁决）
-                card.title = "剑冢阅武".into();
                 card.text = evtx(478)/* 原文：万剑归冢的山谷夜夜有剑鸣，如群剑自阅武。今夜鸣声忽然齐了一瞬——冢中无名剑朝你剑鞘遥遥一引，邀你下场走一遭。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.12;
@@ -8094,7 +7898,6 @@ impl Game {
             }
             209 => {
                 // mr7 长生世风味·恶缘：界碑拓铭（界碑名讳洇雨，拓碑吏索重铭费）
-                card.title = "界碑拓铭".into();
                 card.text = evtx(481)/* 原文：界碑高可摩云，碑上万灵名讳如林。一名拓碑吏踏云而来，面无表情：连日阴雨，你名下那一笔铭文洇了——按例当重铭，工费自付。 */.into();
                 let g = (60.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -8112,7 +7915,6 @@ impl Game {
             }
             210 => {
                 // 伴随事件（白名单第 15 条）：雨檐听铃（mr3 层，补伴随 mr3 零位）
-                card.title = "雨檐听铃".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -8139,7 +7941,6 @@ impl Game {
             }
             211 => {
                 // 伴随事件（白名单第 16 条）：云上放灯（mr5 高境有伴风味）
-                card.title = "云上放灯".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -8166,7 +7967,6 @@ impl Game {
             }
             212 => {
                 // 老年×有伴双门控第二条：相扶看雪（照 204 模板——余量≤10 载且有伴才入池）
-                card.title = "相扶看雪".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -8193,7 +7993,6 @@ impl Game {
             }
             213 => {
                 // mr6 稀有·善缘：仙池映世（w2 入稀有层；池水映第一世的脸）
-                card.title = "仙池映世".into();
                 card.text = evtx(486)/* 原文：高岭有一泓仙池，水色如凝墨。临水一照——池中映出的却不是你如今的脸，而是一副你认得又陌生的眉眼：那是你头一世的脸。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -8210,7 +8009,6 @@ impl Game {
             }
             214 => {
                 // mr6 恶缘：晚钟误点（钟多敲一记，人心自扰——不触破境裁决）
-                card.title = "晚钟误点".into();
                 card.text = evtx(489)/* 原文：入夜，境内古钟报晚的钟声多敲了一记。钟声不大，人心却乱了——多一记，依古例是「催岁」，一时满城修者疑心大限，道途都滞了。 */.into();
                 let g = (40.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -8229,7 +8027,6 @@ impl Game {
             }
             215 => {
                 // 老年层（余量≤10 载门控）：灶火留谱——把火候留给山下灶口
-                card.title = "灶火留谱".into();
                 card.text = evtx(491)/* 原文：山下饭铺的灶火总不如你洞府的旺。掌勺的少年上来讨教过几回，眼睛亮——你一辈子的火候，都在几张灶谱的批注里。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -8246,7 +8043,6 @@ impl Game {
             }
             216 => {
                 // 老年层（余量≤10 载门控）：旧约转托——年轻时未赴的旧约
-                card.title = "旧约转托".into();
                 card.text = evtx(494)/* 原文：翻旧箱翻出一枚旧笺——年轻时与人约定同去看一场「彻夜不谢的灯」，后来各自西东，笺压了箱底，灯会年年还办。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -8263,7 +8059,6 @@ impl Game {
             }
             217 => {
                 // 章节联动（第七章 bit6）：邻人扛劫——只看旁人扛劫，绝不触玩家自身破境裁决
-                card.title = "邻人扛劫".into();
                 card.text = evtx(496)/* 原文：邻山方向雷云盘结了一整夜。你登高望去，隔谷有人影立于劫云之下——九重雷一重一重落，那人一重一重扛，始终没有跪。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -8280,7 +8075,6 @@ impl Game {
             }
             218 => {
                 // mr0 恶缘：囊带乍断（开局层恶缘——摊薄妖兽拦路独大）
-                card.title = "囊带乍断".into();
                 card.text = evtx(499)/* 原文：山道转过一处陡坡，行囊背带「啪」地断了——囊口一歪，几块灵石顺着碎石坡骨碌碌往下滚，滚一声，你的心就跟着沉一声。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.04;
@@ -8314,7 +8108,6 @@ impl Game {
             // 与结局回响「世界侧写」分域写亲历视角）
             219 => {
                 // 链16 首段：剑穗生结（宁清霜——旧剑穗磨断，求一个慢结；首段建链待分支）
-                card.title = "剑穗生结".into();
                 card.actor = Some(CardActor::Npc(2));
                 card.text = evtx(501)/* 原文：演武场边风急。宁清霜解下旧剑——剑穗磨得只剩几缕，她却没丢，递来一束新丝：「替这穗打个结——要打得慢。」 */.into();
                 let mut e1 = Eff::new();
@@ -8335,7 +8128,6 @@ impl Game {
             }
             220 => {
                 // 链16 中段（仅链内）
-                card.title = "剑穗缓结·续".into();
                 card.actor = Some(CardActor::Npc(2));
                 card.text = evtx(504)/* 原文：丝线里缠着一缕旧穗——她师尊留的。这穗要缓结：一日一寸，丝才不吃力。你打了一半，她忽然说：「我等的，是有人陪我慢一回。」 */.into();
                 let mut e1 = Eff::new();
@@ -8355,7 +8147,6 @@ impl Game {
             }
             221 => {
                 // 链16 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
-                card.title = "剑成赠穗·续".into();
                 card.actor = Some(CardActor::Npc(2));
                 card.text = evtx(507)/* 原文：穗成之日，她把旧穗里师尊的那缕丝分出一段，系成小结递给你：「剑穗护手，也护心。这截旧丝跟了我三十年——如今换它护你。」 */.into();
                 let mut e1 = Eff::new();
@@ -8375,7 +8166,6 @@ impl Game {
             222 => {
                 // mr7 善缘：星砂还账（醉道人 Npc(3)——链15「明年今夜」散件呼应，
                 // 不依赖链态；跨世新面孔，他记得的是事不是脸）
-                card.title = "星砂还账".into();
                 card.actor = Some(CardActor::Npc(3));
                 card.text = evtx(510)/* 原文：醉道人踏月而来，摊开手心一小撮星砂：「去年今夜有人替我数过星。这是谢礼——可惜数星的人换了一副面目，你见着他了么？」 */.into();
                 let g = (30.0 * ss) as i64;
@@ -8393,7 +8183,6 @@ impl Game {
             }
             223 => {
                 // mr7 恶缘：玉价新例（玉价涨，工钱照新例——账目分明不容还价）
-                card.title = "玉价新例".into();
                 card.text = evtx(512)/* 原文：集尾一位玉匠拦路，捧出你寄磨半载的道玉：「玉成了。只是今年玉价涨了三成——工钱照新例，也涨三成。」账目分明，不容还价。 */.into();
                 let g = (60.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -8412,7 +8201,6 @@ impl Game {
             224 => {
                 // mr7 稀有·善缘：坠星动冢（w2 入稀有层，mr7 首条；只写万剑向天
                 // 揖让的礼数，不触玩家自身破境裁决）
-                card.title = "坠星动冢".into();
                 card.text = evtx(514)/* 原文：万剑归冢的山谷忽然静了——一颗坠星划过天顶，星未落，冢中万剑先齐齐低鸣一瞬，如群剑向天揖让。你行经谷口，剑鞘嗡嗡相和。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.15;
@@ -8430,7 +8218,6 @@ impl Game {
             }
             225 => {
                 // 伴随事件（白名单第 18 条）：同数流星（mr6 有伴层首条）
-                card.title = "同数流星".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -8458,7 +8245,6 @@ impl Game {
             226 => {
                 // 伴随事件（白名单第 19 条）：霜晨共伞（mr0 有伴第 2 条，照 174
                 // 霜桥早市成对分域——同是霜晨，这边写两人让伞）
-                card.title = "霜晨共伞".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -8485,7 +8271,6 @@ impl Game {
             }
             227 => {
                 // 老年层（余量≤10 载门控）：半檐躲雨——半边檐下两人一雨
-                card.title = "半檐躲雨".into();
                 card.text = evtx(519)/* 原文：急雨没处躲，你挨进一处半檐——檐下已站了个避雨的货郎，见你年事高，默默往里让了半步。两个人，一场雨，谁也没说话。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -8502,7 +8287,6 @@ impl Game {
             }
             228 => {
                 // mr6 常态·善缘：池边洗鞘（旧痕浮出当年一击——描一遍记一遍稳）
-                card.title = "池边洗鞘".into();
                 card.text = evtx(521)/* 原文：池水见底。你解下剑鞘浸在池里搓洗——鞘上一道旧痕浮出来，是多年前替人挡下的一击。水纹荡开，像那年替你心惊的人还在岸上。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -8519,7 +8303,6 @@ impl Game {
             }
             229 => {
                 // mr3 恶缘：佃契抽成（田主侧——与 39 灵田佃户佃户侧成对分域）
-                card.title = "佃契抽成".into();
                 card.text = evtx(524)/* 原文：灵田佃户捧着佃契上门：秋收薄了三成，佃契上的抽成一字未改——他求你减，又说「契在，减不减都依你」。灯把两张脸照得一样黄。 */.into();
                 let g = (50.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -8538,7 +8321,6 @@ impl Game {
             230 => {
                 // 章节联动（第八章 bit7）：落款撞名——与结局回响 165-167「世界
                 // 侧写」分域，写亲历视角（落款是你的，册子不是）
-                card.title = "落款撞名".into();
                 card.text = evtx(526)/* 原文：书成之后你翻检旧稿，一册无名书上落着你的名字——笔画分毫不差，落款那日你却在千里之外。管书吏查遍册底，查不出第二只手。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -8555,7 +8337,6 @@ impl Game {
             }
             231 => {
                 // 链17 首段：星槎再访（187 星槎访客续线，mr5 零链补位；首段建链待分支）
-                card.title = "星槎再访".into();
                 card.text = evtx(529)/* 原文：又见星槎。槎上客认出你，隔云一揖：「上次问的路，高士如今走出名了么？说来听听。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
@@ -8574,7 +8355,6 @@ impl Game {
             }
             232 => {
                 // 链17 中段（仅链内）
-                card.title = "星轨留书·续".into();
                 card.text = evtx(532)/* 原文：他引你到槎前——槎心嵌着一幅星轨图，唯独缺一笔：「上回你说的路，我记到一半，天快亮了。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -8592,7 +8372,6 @@ impl Game {
             }
             233 => {
                 // 链17 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
-                card.title = "槎去留星·续".into();
                 card.text = evtx(535)/* 原文：临别，星客把那幅星轨图拆成两半，一半插进你的行囊：「路无名时，就回来看它——记得替后来的人添一笔。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -8609,7 +8388,6 @@ impl Game {
             }
             234 => {
                 // 稀有：旧砚问道（w2 mr2；special66 道心检定 / 买砚小得）
-                card.title = "旧砚问道".into();
                 card.text = evtx(537)/* 原文：荒摊角落一方旧砚，砚池无墨自润。摊主不言，只以指叩砚——砚声如叩问：「你修道，为的什么？」 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 66;
@@ -8624,7 +8402,6 @@ impl Game {
             }
             235 => {
                 // mr5 恶缘：影市黑秤（恶缘薄档补位——影市暗秤题材此前零覆盖）
-                card.title = "影市黑秤".into();
                 card.text = evtx(538)/* 原文：影市深处，黑秤匠替你称行囊——秤成他袖手一笑：「这秤准得很，只是准的从来是我的秤。」 */.into();
                 let g = (45.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -8642,7 +8419,6 @@ impl Game {
             }
             236 => {
                 // mr7 善缘：云海拾阶（w4；守长生世纪律——不写寿元不触破境裁决）
-                card.title = "云海拾阶".into();
                 card.text = evtx(540)/* 原文：云海退去一瞬，崖前露出一段旧石阶，阶尽处一座无名旧观，观门虚掩，蒲团犹温。 */.into();
                 let mut e1 = Eff::new();
                 e1.qi_pct = 0.10;
@@ -8660,7 +8436,6 @@ impl Game {
             }
             237 => {
                 // mr7 恶缘：剑赋催帖（双臂「纳赋/以剑代赋」——fight 臂照 4 恶修劫道模板）
-                card.title = "剑赋催帖".into();
                 card.text = evtx(543)/* 原文：剑冢岁帖贴上你的剑鞘：佩剑者岁纳剑赋，例不可免。帖角另有一行小字——「或以剑代之」。 */.into();
                 let g = (55.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -8675,7 +8450,6 @@ impl Game {
             }
             238 => {
                 // mr4 恶缘：行会追赔（与 188 灵税催帖/229 佃契抽成题材分域——商行契赔）
-                card.title = "行会追赔".into();
                 card.text = evtx(544)/* 原文：商行会执事上门：你押运的一单出了损耗，按契由押运人分偿——契上按着你三年前的手印。 */.into();
                 let g = (50.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -8697,7 +8471,6 @@ impl Game {
                 // v1.16.25 立绘续作唯一处：兄弟双门控 204/212/268 皆挂 Comp 立绘，
                 // 239 立绘客串波（v1.16.22）前建卡漏挂——照 268 反查模板补挂，
                 // 正文钉名改 format!（N546 行随之成为无引用保留行，旧 N 不变号）
-                card.title = "共守岁灯".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -8734,7 +8507,6 @@ impl Game {
             // 251 末段 w0 仅链内，抉择即缘了）
             240 => {
                 // 伴随事件（白名单第 20 条）：药圃赌芽（mr3 层第 2 条，摊薄 210 独苗）
-                card.title = "药圃赌芽".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -8761,7 +8533,6 @@ impl Game {
             }
             241 => {
                 // 伴随事件（白名单第 21 条）：踏云题字（mr7 有伴首条，守长生世纪律）
-                card.title = "踏云题字".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -8788,7 +8559,6 @@ impl Game {
             }
             242 => {
                 // mr6 恶缘第 3 条：灵渠截流（194 冒籍/214 晚钟分域——水利契账）
-                card.title = "灵渠截流".into();
                 card.text = evtx(551)/* 原文：上游新落的灵渠按新契分水——轮到你名下这段灵脉，只分得七成。旧约压在渠主案头，他只认新契。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.06;
@@ -8807,7 +8577,6 @@ impl Game {
             }
             243 => {
                 // mr6 善缘：村谷抢收（233/242 分域——高境助凡人，不触洞府经营门控）
-                card.title = "村谷抢收".into();
                 card.text = evtx(554)/* 原文：山下凡人村谷雨将至，独户老人的谷子还摊在场上。你路过村口——凡人的手慢，云来得快。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -8826,7 +8595,6 @@ impl Game {
             244 => {
                 // mr7 善缘：酒账千年（醉道人 Npc(3) 散件照 222 模板——千年酒账，
                 // 他记得的是字不是脸；跨世纪律：账与人皆跨世存续）
-                card.title = "酒账千年".into();
                 card.actor = Some(CardActor::Npc(3));
                 card.text = evtx(557)/* 原文：酒肆里掌柜后人捧出千年前的酒账，欠主画押一个「醉」字。醉道人把葫芦一晃：「是我的字。今日连本带利，一起清了？」 */.into();
                 let g = (40.0 * ss) as i64;
@@ -8845,7 +8613,6 @@ impl Game {
             245 => {
                 // mr4 恶缘第 6 条：滩头讹偿（与 37 渡灵舟真劫/238 行会契赔分域——
                 // 滩头讹索，假借声势）
-                card.title = "滩头讹偿".into();
                 card.text = evtx(559)/* 原文：渡口滩头，一艘搁浅灵舟的船主拦住你，指认你过船时气浪掀翻了他的货——看热闹的人越围越多。 */.into();
                 let g = (30.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -8863,7 +8630,6 @@ impl Game {
             }
             246 => {
                 // 稀有：松风问琴（w2 mr3 稀有第 3 条；special69 道心检定照 234 模板）
-                card.title = "松风问琴".into();
                 card.text = evtx(561)/* 原文：荒亭里横一张无弦古琴，松风过处琴自鸣——无弦何鸣？亭柱上刻着四个小字：「答者留琴」。 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 69;
@@ -8879,7 +8645,6 @@ impl Game {
             247 => {
                 // 稀有：雾锁仙市（w2 mr5 稀有第 2 条，纯效果散件——187 星槎访客/
                 // 231 链17 分域，此为雾市一瞥无续线）
-                card.title = "雾锁仙市".into();
                 card.text = evtx(563)/* 原文：大雾锁江三日不散，雾开一线时浮出一条街市——市中人影往来如常，摊上的货却都是旧年的样式。 */.into();
                 let g = (60.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -8898,7 +8663,6 @@ impl Game {
             248 => {
                 // 具名 NPC 散件：长老巡山（mr2 善——Npc(0) 玄诚长老守碑人线外首卡，
                 // 具名与脸同源照 249/201 口径；巡山验行功是其掌外门杂役的域内事）
-                card.title = "长老巡山".into();
                 card.actor = Some(CardActor::Npc(0));
                 card.text = evtx(565)/* 原文：山道上遇上巡山的玄诚长老。他听你行功三息便皱了眉，折下讲义半页塞给你：「此处气脉走岔半分——旁人不说，是怕你多心。」 */.into();
                 let mut e1 = Eff::new();
@@ -8917,7 +8681,6 @@ impl Game {
             249 => {
                 // 具名 NPC 散件：万宝旧档（mr1 善——Npc(1) 胡掌柜链1 世界外延，
                 // 与 201 坊契赖账成对分域：一赖一还）
-                card.title = "万宝旧档".into();
                 card.actor = Some(CardActor::Npc(1));
                 card.text = evtx(568)/* 原文：万宝楼后堂，胡掌柜翻出一份旧档：「三年前你寄卖的一支旧笔早卖了——钱在柜上压了三年，你倒把这儿忘了。」 */.into();
                 let g = (35.0 * ss) as i64;
@@ -8935,7 +8698,6 @@ impl Game {
             250 => {
                 // 链18 首段：云窟归卷（mr7 零链补位；两段式省一臂——opt0 直推照
                 // 205 首段约定，opt1 断链收获；长生世纪律：不写寿元不触破境裁决）
-                card.title = "云窟归卷".into();
                 card.text = evtx(570)/* 原文：高崖半腰藏着一窟旧籍，风蚀日晒，可救的卷册十不存三。守窟老人朝你长揖：「抄一卷是一卷——老朽等得起，纸等不起。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
@@ -8954,7 +8716,6 @@ impl Game {
             }
             251 => {
                 // 链18 末段（仅链内）：两选项均无置链臂 → 抉择即链终局（缘了）
-                card.title = "补笔归卷·续".into();
                 card.text = evtx(573)/* 原文：抄移半月，窟中最要紧的百卷都上了新纸。老人取出一册空白：「留个名吧——救书的人，该和书一起被记着。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -8974,7 +8735,6 @@ impl Game {
                 // v1.16.23 扩池：宁清霜散件首卡（mr2 善，Npc(2) 照 248/249 具名
                 // +脸同源模式——正文钉名「宁清霜」；题材避 208 剑冢/219 剑穗/
                 // npc.rs 剑冢论剑，取手谈；链11 分域：不触破境裁决，只记棋理）
-                card.title = "枰边手谈".into();
                 card.actor = Some(CardActor::Npc(2));
                 card.text = evtx(576)/* 原文：演武场侧，宁清霜摆了棋枰等你——她说棋道如修行，先手未必赢，厚势方能活。终局你输了半子，她反而点头：「记得这个感觉。」 */.into();
                 let mut e1 = Eff::new();
@@ -8994,7 +8754,6 @@ impl Game {
                 // v1.16.23 扩池：玄诚长老第二卡（mr3 善，Npc(0) 同源钉名；题材
                 // 避巡山（248）/授业/守碑（链2 复用脸），取藏经阁差事——增益域
                 // 宗门任务的靠山（NPC_BRIEF[0]）
-                card.title = "经阁理简".into();
                 card.actor = Some(CardActor::Npc(0));
                 card.text = evtx(579)/* 原文：玄诚长老唤你进藏经阁，替新收的拓本理册。末了他抽出一页残卷压在你手边：「看得懂多少，是你的缘——登记完早些歇。」 */.into();
                 let mut e1 = Eff::new();
@@ -9012,7 +8771,6 @@ impl Game {
             }
             254 => {
                 // v1.16.23 扩池：mr5 恶缘 4→5 条（无脸——actor None 原版式）
-                card.title = "旧败上门".into();
                 card.text = evtx(582)/* 原文：一名多年前输给你而封剑的散修寻上门来，身后跟着几个新收的帮手——他要讨回的不是灵石，是当年当众落地的那张脸。 */.into();
                 let g = (40.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -9031,7 +8789,6 @@ impl Game {
             255 => {
                 // v1.16.23 扩池：mr6 善（常态最薄层 10→11 条；长生世纪律——
                 // 不写寿元将尽、不触破境裁决，只叙山河与茶）
-                card.title = "旧友茶叙".into();
                 card.text = evtx(584)/* 原文：一位百年间结识的旧友托人捎来口信，约你在旧亭喝茶。茶烟里数各自走过的山河——谁也没提岁数，只把茶续满。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
@@ -9049,7 +8806,6 @@ impl Game {
             256 => {
                 // v1.16.23 扩池：mr7 恶 3→4 条（世纪律同上——只写冒名风波，
                 // 不触寿元与破境）
-                card.title = "冒名敛财".into();
                 card.text = evtx(587)/* 原文：有修士顶着你的名号敛财。你寻到那处庄院时，对方已闻风遁走——只留一屋子受欺的年轻人。你留下几句真话，擦了假名。 */.into();
                 let g = (30.0 * ss) as i64;
                 let mut e1 = Eff::new();
@@ -9068,7 +8824,6 @@ impl Game {
             257 => {
                 // v1.16.23 扩池：伴随 mr4 善（185/203 后第 3 条，白名单 21→22）
                 // ——Comp 立绘反查照 210 模式；无伴不入池门控在 sim_event_weights
-                card.title = "灯市挑灯".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -9094,7 +8849,6 @@ impl Game {
             258 => {
                 // v1.16.23 扩池：mr1 稀有 w2（57/133 后第 3 条，纯效果散件——
                 // 无 special 勿动窗位；高风险高回报照 56 口径但不走检定臂）
-                card.title = "枯井鸣灵".into();
                 card.text = evtx(589)/* 原文：一口被符纸层层封死的枯井，入夜后井口漏出月光似的灵气。邻人说井底沉着前朝遗府的地基——下去是深渊，也是机缘。 */.into();
                 let mut e1 = Eff::new();
                 e1.fight = 1.0;
@@ -9123,7 +8877,6 @@ impl Game {
             259 => {
                 // v1.16.24 扩池：mr0 首张 NPC 专卡（胡掌柜 Npc(1)，市口开肆——
                 // 题材避 3 坊市淘宝/249 万宝旧档，取开市看秤）
-                card.title = "市头新肆".into();
                 card.actor = Some(CardActor::Npc(1));
                 card.text = evtx(592)/* 原文：胡掌柜在市口盘下一间小肆，开张头一日人手不齐。他递来一杆小秤：「帮着看一眼秤，别让头一日的招牌蒙了灰。」 */.into();
                 let mut e1 = Eff::new();
@@ -9142,7 +8895,6 @@ impl Game {
             260 => {
                 // v1.16.24 扩池：mr0 恶缘 4→5 条（摊薄妖兽拦路 w11 独大；与 172
                 // 义渡对向分域——义渡渡人不收钱，夜渡坐地起价）
-                card.title = "夜渡多收".into();
                 let g = (15.0 * ss) as i64;
                 card.text = evtx(595)/* 原文：夜里赶渡，船到江心，摆渡人停了船：风浪钱、月色钱、赶夜钱——三样并作一样收，是白日的十倍。对岸灯火就在眼前。 */.into();
                 let mut e1 = Eff::new();
@@ -9160,7 +8912,6 @@ impl Game {
             261 => {
                 // v1.16.24 扩池：醉道人低境首卡（Npc(3)，呼应 NPC_TALES[3] 醉倒
                 // 门口一段；与 244 酒账千年/222 星砂还账分域）
-                card.title = "醉倒门前".into();
                 card.actor = Some(CardActor::Npc(3));
                 card.text = evtx(597)/* 原文：清晨开门，醉道人横睡在门槛上，酒葫芦滚在脚边。邻人探头看笑话，他忽然睁眼：「莫笑——扶我一把，前夜的酒账还没还。」 */.into();
                 let mut e1 = Eff::new();
@@ -9179,7 +8930,6 @@ impl Game {
             262 => {
                 // v1.16.24 扩池：伴随 mr1 善（白名单 22→23，mr1 第 10 条）——Comp
                 // 立绘反查照 210/257 模式；无伴不入池门控在 sim_event_weights
-                card.title = "同研一笺".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -9205,7 +8955,6 @@ impl Game {
             263 => {
                 // v1.16.24 扩池：宁清霜第二卡（Npc(2)，链16 剑穗世界外延——
                 // 题材避 208 剑冢/219-221 链16 正文与 npc.rs 论剑）
-                card.title = "旧穗试锋".into();
                 card.actor = Some(CardActor::Npc(2));
                 card.text = evtx(600)/* 原文：演武场侧，宁清霜递来一柄旧剑，柄上系着洗得发白的旧穗：「剑换了三柄，穗没换过。今日借你的手，试试它还认不认得锋。」 */.into();
                 let mut e1 = Eff::new();
@@ -9224,7 +8973,6 @@ impl Game {
             264 => {
                 // v1.16.24 扩池：胡掌柜第三卡（Npc(1)，NPC_TALES[1] 算珠线余波——
                 // 与 249 万宝旧档（还旧款）/201 坊契赖账（追债）分域，取年终盘账）
-                card.title = "盘账夜灯".into();
                 card.actor = Some(CardActor::Npc(1));
                 card.text = evtx(603)/* 原文：年终盘账，万宝楼后堂灯亮到三更。胡掌柜拨着一把旧算珠招你核对：「帮我校个尾数——这珠子是前辈传的，认的账比人多一样。」 */.into();
                 let mut e1 = Eff::new();
@@ -9244,7 +8992,6 @@ impl Game {
                 // v1.16.24 扩池：mr4 稀有 w2（108 后第 2 条，纯效果散件——
                 // 无 special 勿动窗位；与 68 纸鸢传书分域：纸鸢是人题诗、
                 // 信鸟是天送无主信）
-                card.title = "信鸟投窗".into();
                 card.text = evtx(606)/* 原文：一只青羽信鸟撞窗三匝，足环上系着一封无名信。拆开只有一行小字：「书成之日，替我抄一遍。」落款的墨迹未干——像刚有人搁笔。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -9263,7 +9010,6 @@ impl Game {
             266 => {
                 // v1.16.24 扩池：mr5 恶缘 5→6 条（与 186 仙曹索卷/200 仙籍勾误/
                 // 235 影市黑秤/254 旧败上门分域——官牙抽成是「官面的秤」）
-                card.title = "官牙抽引".into();
                 card.text = evtx(609)/* 原文：你在官牙挂单卖一批旧符材，成交当日，牙人捧出新章：凡经官手，抽引一成——章是新刻的，墨都还没干透。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.06;
@@ -9282,7 +9028,6 @@ impl Game {
             267 => {
                 // v1.16.24 扩池：玄诚长老第三卡（Npc(0)，NPC_TALES[0] 名册线余波——
                 // 与 248 巡山/253 经阁分域，取名册寻人）
-                card.title = "名册补名".into();
                 card.actor = Some(CardActor::Npc(0));
                 card.text = evtx(612)/* 原文：玄诚长老把外门名册摊开：「三年前有个杂役出山历练，册上忘了他的名。你替我留意——若他还活着，就把这一格补上。」 */.into();
                 let mut e1 = Eff::new();
@@ -9301,7 +9046,6 @@ impl Game {
             268 => {
                 // v1.16.24 扩池：老年×有伴双门控第 4 条（照 204/212/239 模板——
                 // 余量≤10 载且有伴才入池，不入 COMPANION 白名单，徽标走老年臂）
-                card.title = "炉边说旧".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -9329,7 +9073,6 @@ impl Game {
             269 => {
                 // v1.16.24 扩池：mr3 恶缘（与 201 坊契赖账/229 佃契抽成三案分域——
                 // 赖账收不回/抽成薄收成/转押铺易手；无脸 actor None 原版式）
-                card.title = "坊契转押".into();
                 card.text = evtx(616)/* 原文：中人捎来口信：你名下一间旧铺的坊契，被他私自转押给牙行抵债——赎回要按押期付利，铺子今日起已不是你的。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.07;
@@ -9349,7 +9092,6 @@ impl Game {
                 // v1.16.24 扩池：mr7 善缘（链18 云窟归卷余波散件，照 222 呼应链15
                 // 模板但不依赖链态、不挂 NPC 脸——守窟老人无注册立绘；长生世纪律
                 // 不写寿元将尽、不触破境裁决）
-                card.title = "窟灯未熄".into();
                 card.text = evtx(619)/* 原文：重过高崖，旧窟窟口半掩，没再见守窟的老人——盏灯还亮着，新纸的卷册码得齐整，风绕着纸架走，像有人刚扫过尘。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -9376,7 +9118,6 @@ impl Game {
             271 => {
                 // v1.16.25 扩池：mr2 恶缘（胡掌柜 Npc(1)；题材避 249 万宝旧档/
                 // 201 坊契赖账/264 盘账夜灯——取新伙计错认盗卖赃物柜前对质）
-                card.title = "柜前压价".into();
                 card.actor = Some(CardActor::Npc(1));
                 card.text = evtx(622)/* 原文：万宝楼柜前，新来的伙计把一件寄售旧物扣下——失窃册上有半行同名。胡掌柜从后堂出来，先看了看物，再翻那册。 */.into();
                 let mut e1 = Eff::new();
@@ -9397,7 +9138,6 @@ impl Game {
                 // v1.16.25 扩池：伴随 mr2 善（白名单 23→24，mr2 第 4 条）——
                 // Comp 立绘反查照 262/257 模式；无伴不入池门控在
                 // sim_event_weights
-                card.title = "寒江共网".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -9423,7 +9163,6 @@ impl Game {
             273 => {
                 // v1.16.25 扩池：玄诚长老第 4 卡（Npc(0)；题材避 248 巡山/
                 // 253 经阁/267 名册——取领外门洒扫、阶缝里扫出半页旧门规）
-                card.title = "扫阶拾规".into();
                 card.actor = Some(CardActor::Npc(0));
                 card.text = evtx(625)/* 原文：玄诚长老领你去扫外门石阶：「扫阶不是轻活——阶缝里的字，前人的规矩都埋在灰里。」你扫到第七级，扫出半页旧门规。 */.into();
                 let mut e1 = Eff::new();
@@ -9443,7 +9182,6 @@ impl Game {
                 // v1.16.25 扩池：mr5 恶缘 NPC 卡（醉道人 Npc(3) 照 201 恶缘
                 // NPC 卡先例——醉话指近道雾里绕到天明，他只认酒钱不认路；
                 // 题材避 261 醉倒门前/222 星砂还账/链15 观星问岁）
-                card.title = "醉引歧路".into();
                 card.actor = Some(CardActor::Npc(3));
                 card.text = evtx(628)/* 原文：雾谷口，醉道人拍着酒葫芦指了条近道：「此路省三十里。」你信了半句——绕到天明，雾把他和你一起送回谷口。 */.into();
                 let g = (20.0 * ss) as i64;
@@ -9462,7 +9200,6 @@ impl Game {
             275 => {
                 // v1.16.25 扩池：宁清霜第 3 散卡（Npc(2)；题材避 252 枰边手谈/
                 // 263 旧穗试锋/链16 剑穗正文——取远行闭关前托剑寄存西窗）
-                card.title = "寄剑西窗".into();
                 card.actor = Some(CardActor::Npc(2));
                 card.text = evtx(630)/* 原文：宁清霜要闭关百日，行前把佩剑解下托你：「挂西窗，晨昏各拭一遍——它认人，你别跟它客套。」 */.into();
                 let mut e1 = Eff::new();
@@ -9481,7 +9218,6 @@ impl Game {
             276 => {
                 // v1.16.25 扩池：mr6 善（常态第 2 薄层 11→13 条；长生世纪律
                 // ——不写寿元将尽、不触破境裁决，只叙星图校补）
-                card.title = "岁星校图".into();
                 card.text = evtx(633)/* 原文：观星台的万年星图又摊开了——岁星今夜走位，与旧图错了一分。掌图人请你落笔校补：「这一笔，等了三百年。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -9499,7 +9235,6 @@ impl Game {
             277 => {
                 // v1.16.25 扩池：mr6 恶 3→4 条（题材避 269 坊契转押/229 佃契
                 // 抽成——取牙行连年抬租旧铺难租）
-                card.title = "故市抬租".into();
                 card.text = evtx(636)/* 原文：故市牙行换了新主，连三年抬两回租——你名下一间旧铺，租约上那行新墨，比旧墨深了一倍不止。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.05;
@@ -9519,7 +9254,6 @@ impl Game {
                 // v1.16.25 扩池：mr7 善（守长生世纪律——不写寿元将尽、不触
                 // 破境裁决，只叙万年岁宴一席；题材避 222/244 醉道人线与
                 // 236 云海拾阶）
-                card.title = "岁宴万年".into();
                 card.text = evtx(639)/* 原文：万年岁宴的帖子送到洞府——长生席一甲子一开，今年轮到你携坛入席。席上为你添了一副新杯箸。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -9538,7 +9272,6 @@ impl Game {
                 // v1.16.25 扩池：稀有 w2 mr3（special73 道心检定照 234/246
                 // 模板——本轮唯一 special 新支；题材避 246 松风问琴：谷之
                 // 回声 vs 亭之无弦琴）
-                card.title = "空谷叩问".into();
                 card.text = evtx(642)/* 原文：空谷无风，你的一声咳却传回三声——末一声变了调，像谁在谷底等你：既肯出声，敢不敢应到底？ */.into();
                 let mut e1 = Eff::new();
                 e1.special = 73;
@@ -9554,7 +9287,6 @@ impl Game {
             280 => {
                 // v1.16.25 扩池：mr0 善（摊薄开局头部——题材避 243 村谷抢收/
                 // 39 灵田佃户，取替凡人独户修堰分水）
-                card.title = "堰口分水".into();
                 card.text = evtx(644)/* 原文：春汛到，凡人独户的堰口裂了半边——上亩要水，下田要排。你停下替他把堰垒齐，分水的石头一块块咬紧。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
@@ -9582,7 +9314,6 @@ impl Game {
             281 => {
                 // v1.16.26 扩池：mr3 善（胡掌柜 Npc(1)；题材避 249 万宝旧档/
                 // 259 市头新肆/264 盘账夜灯/271 柜前压价——取柜后传眼教新伙计）
-                card.title = "柜后传眼".into();
                 card.actor = Some(CardActor::Npc(1));
                 card.text = evtx(647)/* 原文：万宝楼后堂，胡掌柜把一匣碎玉推到新伙计面前：「掌眼先认旧气，再认刀工——你也来搭一手。」 */.into();
                 let mut e1 = Eff::new();
@@ -9601,7 +9332,6 @@ impl Game {
             282 => {
                 // v1.16.26 扩池：mr5 善（宁清霜 Npc(2)；题材避 252 枰边手谈/
                 // 263 旧穗试锋/275 寄剑西窗/链16 剑穗正文——取寒泉夜淬执灯照泉）
-                card.title = "霜泉淬锋".into();
                 card.actor = Some(CardActor::Npc(2));
                 card.text = evtx(650)/* 原文：宁清霜新剑初成，要借后山寒泉夜淬。她请你执灯照泉：「淬锋怕惊，灯要稳。」 */.into();
                 let mut e1 = Eff::new();
@@ -9622,7 +9352,6 @@ impl Game {
                 // 211 独苗）——Comp 立绘反查照 272/262/257 模式；无伴不入池门控
                 // 在 sim_event_weights。283 原题「并辔霜原」辔缺字库，题材复检
                 // 换字「纵马霜原」
-                card.title = "纵马霜原".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -9650,7 +9379,6 @@ impl Game {
                 // 模板——本轮唯一 special 新支；题材避 246 松风问琴/279 空谷叩
                 // 问：池之涟漪逆雨 vs 谷之回声 vs 亭之无弦琴。284 原题「枯荷夜
                 // 雨」荷缺字库，题材复检换字「枯莲夜雨」）
-                card.title = "枯莲夜雨".into();
                 card.text = evtx(653)/* 原文：夜雨落在枯莲池上，声声如叩。池心忽起一圈涟漪，逆着雨走——像有什么在等一个答案。 */.into();
                 let mut e1 = Eff::new();
                 e1.special = 74;
@@ -9666,7 +9394,6 @@ impl Game {
             285 => {
                 // v1.16.26 扩池：mr6 善（常态第 3 薄层 13→15 条；长生世纪律
                 // ——不写寿元将尽、不触破境裁决，只叙千年石桥补桥合石）
-                card.title = "桥心合石".into();
                 card.text = evtx(655)/* 原文：千年石桥今年再修，补桥人捧着最后一块桥心石请你来合：「桥过千人之手，只缺你这一块。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -9685,7 +9412,6 @@ impl Game {
                 // v1.16.26 扩池：mr6 善（守长生世纪律——愿力簿还名是祠祝旧事，
                 // 不涉本人寿元；题材避 230 落款撞名/257 名册补名：愿力簿借名
                 // 作证 vs 墨名撞名 vs 宗门名册）
-                card.title = "香火还名".into();
                 card.text = evtx(658)/* 原文：山神祠的愿力簿上，一位旧修的名讳被后人顶了三十年。祠祝捧簿请你作证：「名是借的，愿得还。」 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -9704,7 +9430,6 @@ impl Game {
                 // v1.16.26 扩池：mr7 善（守长生世纪律——千年一度鹤群过山是山
                 // 的节律，不写寿元将尽、不触破境裁决；题材避 276 岁星校图/
                 // 278 岁宴万年：观鹤记形 vs 校星图 vs 赴万年宴）
-                card.title = "千鹤过山".into();
                 card.text = evtx(661)/* 原文：千年一度的鹤群今晨过山，鹤鸣连成一片，云被羽尖裁开又合拢。老人们说，上一回这样的白昼，还是祖辈亲见的。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -9722,7 +9447,6 @@ impl Game {
             288 => {
                 // v1.16.26 扩池：老年×有伴双门控第 5 条（照 204/212/239/268 模板
                 // ——余量≤10 载且有伴才入池，不入 COMPANION 白名单，徽标走老年臂）
-                card.title = "同封岁坛".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -9750,7 +9474,6 @@ impl Game {
                 // 同点——斩过宿敌之后，其同门才流落坊市销踪谋生；题材避 111
                 // 仇册新墨/118 血册投书/链9：兜售行踪之市井侧写；正文泛称
                 // 「你斩过之人」不误指现任宿敌）
-                card.title = "同门销踪".into();
                 card.text = evtx(664)/* 原文：坊市暗角有人压嗓兜售：「某位同门的行踪，只卖有缘人。」你听得真切——那口音，正是你斩过之人的门下。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.05;
@@ -9769,7 +9492,6 @@ impl Game {
             290 => {
                 // v1.16.26 扩池：mr0 恶（摊薄开局头部——题材避 4 恶修劫道/
                 // 260 夜渡多收/68 纸鸢无涉：山道猎套讹索，凡人细碎恶缘）
-                card.title = "误入猎套".into();
                 card.text = evtx(667)/* 原文：山道绕过灌木时脚下一紧——误踩了猎户的索套。猎户从坡上下来，张口就索「惊兽赔偿」：兽都吓跑三只了。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.05;
@@ -9789,7 +9511,6 @@ impl Game {
                 // v1.16.27 扩池：老年层（余量≤10 载门控，十条扩到十一条——
                 // v1.16.20 后五轮未补的重见率最高层；题材照交托回望域，避
                 // 170 炉暖旧器/198 窗前晒卷/215 灶火留谱/227 半檐躲雨）
-                card.title = "换窗新纸".into();
                 card.text = evtx(1418)/* 原文：入冬头一场霜，你把窗上的旧纸揭下来重糊。邻家小子伸着手替你按住纸角——糊的是新纸，记的是旧冬，一年一回。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -9808,7 +9529,6 @@ impl Game {
                 // v1.16.27 扩池：具名 NPC 玄诚长老 mr4 首卡（Npc(0)，具名与脸
                 // 同源照 248 口径——两人 mr4 零布点补位；题材避 248 巡山/
                 // 253/267/273：讲堂补席是掌课外的事务）
-                card.title = "讲堂补席".into();
                 card.actor = Some(CardActor::Npc(0));
                 card.text = evtx(1421)/* 原文：散了课，玄诚长老蹲在讲堂檐下，把一排旧坐席的破洞逐个缝上：「坐得稳，才问得深——你们要问的题，先得坐得住。」 */.into();
                 let mut e1 = Eff::new();
@@ -9828,7 +9548,6 @@ impl Game {
                 // v1.16.27 扩池：伴随 mr6 善（白名单 25→26，mr6 有伴第 3 条
                 // 摊薄 211/225 独苗）——Comp 立绘反查照 283/272 模板；无伴
                 // 不入池门控在 sim_event_weights
-                card.title = "袖里暖石".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -9854,7 +9573,6 @@ impl Game {
             294 => {
                 // v1.16.27 扩池：mr3 恶（恶缘 6→7 条——题材避 23/125/188/
                 // 201/229/269 与 259/264/271 丹市诸臂：夜摊假丹是骗局侧写）
-                card.title = "假丹换真".into();
                 card.text = evtx(1427)/* 原文：坊市夜摊有人压嗓兜售「上好聚气丹」，你以一枚真丹相换——回房一验，药气浮得像油花。再出门，摊位灯还亮着，人已散了。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.06;
@@ -9874,7 +9592,6 @@ impl Game {
                 // v1.16.27 扩池：mr5 恶（恶缘 5→6 条，最薄恶层——题材避
                 // 186 仙曹索卷/200 仙籍勾误/235 影市黑秤/254 旧败上门/
                 // 266 官牙抽引：同款压价是行市倾轧）
-                card.title = "符价压市".into();
                 card.text = evtx(1430)/* 原文：一夜之间，坊市涌进几百张同款符纸，价压到你摊上那批的三成——画得比你工整，卖得比你便宜。你收摊时，抛符的正数钱装车。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.06;
@@ -9894,7 +9611,6 @@ impl Game {
                 // v1.16.27 扩池：具名 NPC 醉道人 mr4 首卡（Npc(3)，两人 mr4
                 // 零布点补位；题材避 222 星砂还账/244 酒账千年/261 醉倒门前/
                 // 274：题旗是字债不是酒债）
-                card.title = "醉题酒旗".into();
                 card.actor = Some(CardActor::Npc(3));
                 card.text = evtx(1433)/* 原文：酒旗旧了，你请醉道人题一幅新句。他倒了半壶酒才落笔，字歪得像醉步，写的却是句醒话：「醉是借来的，醒是自己的。」 */.into();
                 let mut e1 = Eff::new();
@@ -9915,7 +9631,6 @@ impl Game {
                 // 288 模板——余量≤10 载且有伴才入池，不入 COMPANION 白名单，
                 // 徽标走老年臂；题材避 204 同席说岁/212 相扶看雪/239 共守
                 // 岁灯/268 炉边说旧/288 同封岁坛：翻缝冬衣是灯下的旧物新面）
-                card.title = "重缝冬衣".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -9944,7 +9659,6 @@ impl Game {
                 // v1.16.27 扩池：mr6 恶（恶缘 4→5 条——题材避 194/214/242/
                 // 277：灵脉被截是「新契压旧年」的圈地层，守长生世纪律不触
                 // 破境裁决）
-                card.title = "灵脉被截".into();
                 card.text = evtx(1439)/* 原文：上游新贵圈地起楼，把过你洞府的那缕灵脉拦腰截走——地契齐全，官印鲜亮。洞里灵气一夜薄了三成，丹炉火苗细了半分。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.07;
@@ -9966,7 +9680,6 @@ impl Game {
                 // 名单，徽标走老年臂；现 6 条 mr 全 mr1×5+mr5×1，本条 mr2 换层；
                 // 题材避 204 同席说岁/212 相扶看雪/239 共守岁灯/268 炉边说旧/
                 // 288 同封岁坛/297 重缝冬衣：合誊旧稿是灯下的书稿母题）
-                card.title = "合誊旧稿".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -9996,7 +9709,6 @@ impl Game {
                 // 241 独苗）——Comp 立绘反查照 293/297 模板；无伴不入池门控在
                 // sim_event_weights；题材避 241 踏云题字/211 云上放灯/225 同数
                 // 流星/293 袖里暖石：互校功课是长生岁晨课日常
-                card.title = "晨课互校".into();
                 let cn = {
                     let s = self.sim.as_ref().unwrap();
                     s.companion
@@ -10025,7 +9737,6 @@ impl Game {
                 // v1.16.28 扩池：具名 NPC 宁清霜 mr3 首卡（Npc(2)，正文钉名⟺
                 // Npc(n) 照 248/292 口径；题材避 252 枰边手谈/263 旧穗试锋/
                 // 275 寄剑西窗/282 霜泉淬锋：霜窗描枝是霜天写意）
-                card.title = "霜窗描枝".into();
                 card.actor = Some(CardActor::Npc(2));
                 card.text = evtx(1468)/* 原文：冬窗结霜，宁清霜以指尖在霜面描枝——枝走处霜化，露出一痕晴色。她说霜天写意，不宜描满。 */.into();
                 let mut e1 = Eff::new();
@@ -10045,7 +9756,6 @@ impl Game {
                 // v1.16.28 扩池：具名 NPC 玄诚长老 mr1 首卡（Npc(0)，正文钉名⟺
                 // Npc(n) 照 248/292 口径；题材避 248 巡山/253 经阁理简/267 名册
                 // 补名/273 扫阶拾规/292 讲堂补席：校钟是山门晨课的音律面）
-                card.title = "晨钟校音".into();
                 card.actor = Some(CardActor::Npc(0));
                 card.text = evtx(1471)/* 原文：玄诚长老绕钟三匝，以指扣壁听音——第七声哑了半调。他说晨钟唤醒山门，哑半调，山门便醒一半。 */.into();
                 let mut e1 = Eff::new();
@@ -10065,7 +9775,6 @@ impl Game {
                 // v1.16.28 扩池：mr7 稀有 w2（稀有 22→23 条，mr7 稀有第 2 条
                 // 摊薄 224 坠星动冢独苗；题材避 224 坠星/223 玉价/256 冒名：
                 // 雷纹落纸是天机异象，守世纪律不触破境裁决）
-                card.title = "雷纹入纸".into();
                 card.text = evtx(1474)/* 原文：案上白纸无风自动，纸心浮出雷纹拓样，隐隐作鸣——天机落纸，百年不遇。你以淡墨描下，纹路竟随墨深一分。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -10084,7 +9793,6 @@ impl Game {
                 // v1.16.28 扩池：mr5 善（mr5 常态 25 条为最薄层补位；题材避
                 // 282 霜泉淬锋/283 纵马霜原/295 符价压市/297 重缝冬衣：
                 // 代书家信是笔直与托信的人情面）
-                card.title = "代书家信".into();
                 card.text = evtx(1477)/* 原文：村口老树下设案代书，一天写了九封家信——识字的少，托口的从。收信的老人按着信纸直念出声。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -10102,7 +9810,6 @@ impl Game {
             305 => {
                 // v1.16.28 扩池：mr3 恶（恶缘 7→8 条；题材避 229 佃契抽成/
                 // 269 坊契转押/294 假丹换真：窖壁渗水是天灾失藏不是人祸）
-                card.title = "灵窖渗漏".into();
                 card.text = evtx(1480)/* 原文：窖壁渗水，存了两年的灵谷坏了半窖——湿斑爬满窖底，翻晒已迟。你连夜清窖，倒出的谷灰扑了满脸。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.06;
@@ -10122,7 +9829,6 @@ impl Game {
                 // v1.16.28 扩池：mr6 善（题材避 243 村谷抢收/255 旧友茶叙/
                 // 276 岁星校图/285 桥心合石/286 香火还名：抄经赠邻是字迹
                 // 与眼花的人情面）
-                card.title = "抄经赠邻".into();
                 card.text = evtx(1483)/* 原文：闲来抄经三卷，字大行宽——邻家老人眼花，正好念得。卷尾你添一行小注：念不动时，听山风也一样的。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -10140,7 +9846,6 @@ impl Game {
             307 => {
                 // v1.16.28 扩池：mr2 恶（恶缘 8→9 条；题材避 271 柜前压价/
                 // 289 同门销踪/290 误入猎套：书船遇风是天灾损稿，书稿母题）
-                card.title = "书船遇风".into();
                 card.text = evtx(1486)/* 原文：托运书稿的渡船遇上横风，半舱浸水——你捞起的书页字迹晕成一团墨云。船工连声赔话，赔的钱不够裱一页。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.06;
@@ -10161,7 +9866,6 @@ impl Game {
                 // Npc(n) 照 248/292 口径；题材避 222 星砂还账/244 酒账千年/
                 // 261 醉倒门前/274 醉引歧路/296 醉题酒旗：醉后念诀是酒与
                 // 功法的错位面）
-                card.title = "醉后忘句".into();
                 card.actor = Some(CardActor::Npc(3));
                 card.text = evtx(1489)/* 原文：醉道人饮至半醉，随口念出半句炼气诀，念完便伏案睡去。你抄录在手，他酒醒后一抹嘴：醉话不作数。 */.into();
                 let mut e1 = Eff::new();
@@ -10182,7 +9886,6 @@ impl Game {
                 // 单1 减包腾量后按分级补位；题材照交托回望域，避 89 薪火相托/
                 // 215 灶火留谱/227 半檐躲雨/291 换窗新纸：喂雀是冬日堤上与
                 // 雀群的老友面）
-                card.title = "雪堤喂雀".into();
                 card.text = evtx(1841)/* 原文：大雪封了堤，雀群躲在石缝里不叫。你每天抓一把谷来喂雀，撒在同一块石头上——它们等的是你，不止是谷。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -10201,7 +9904,6 @@ impl Game {
                 // v1.16.29 扩池：老年层（同 309 批注十二条；题材避 170 炉暖旧器/
                 // 198 窗前晒卷/297 重缝冬衣：重缝旧席是补缀母题的坐卧面，
                 // 补席如补书）
-                card.title = "旧席重缝".into();
                 card.text = evtx(1844)/* 原文：睡了几十年的旧席散了边。你坐在檐下拆开重补，补席如补书——料还是旧料，手却记得当年的活，做到掌灯才收尾。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -10220,7 +9922,6 @@ impl Game {
                 // v1.16.29 扩池：mr5 善（mr5 最薄层 26→27 补位；题材避 91 仙门
                 // 论道/169 书肆新声/211 云上放灯/247 雾锁仙市/283 纵马霜原/
                 // 304 代书家信：下山买茶是高境界与凡人队的错位面）
-                card.title = "下山买茶".into();
                 card.text = evtx(1847)/* 原文：你下山赶集，排在凡人队尾买春茶。掌柜问你修为，你摆手：茶要紧。半城人见过你排队，没见过你飞。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -10240,7 +9941,6 @@ impl Game {
                 // Npc(n) 照 248/292/301 口径；题材避 252 枰边手谈/263 旧穗试锋/
                 // 275 寄剑西窗/282 霜泉淬锋/301 霜窗描枝：雪水研墨是霜天
                 // 写意的文房面）
-                card.title = "雪水研墨".into();
                 card.actor = Some(CardActor::Npc(2));
                 card.text = evtx(1850)/* 原文：宁清霜收了半盏檐雪，搁在炉边化开：雪水研墨，墨色最静。她推来半锭墨——你的字，也该有个冬天的样子。 */.into();
                 let mut e1 = Eff::new();
@@ -10260,7 +9960,6 @@ impl Game {
                 // v1.16.29 扩池：具名 NPC 胡掌柜第六卡（Npc(1)，正文钉名⟺
                 // Npc(n) 照 248/292/301 口径；题材避 271 柜前压价/281 柜后传眼/
                 // 295 符价压市：第三本账直连 NPC_TALES[1] 人情账母题）
-                card.title = "第三本账".into();
                 card.actor = Some(CardActor::Npc(1));
                 card.text = evtx(1853)/* 原文：盘库夜，胡掌柜从柜底抽出第三本账推给你看——不记银钱，记人情：谁欠谁一句实话，谁替谁垫过秤。你的名字在头一页。 */.into();
                 let mut e1 = Eff::new();
@@ -10280,7 +9979,6 @@ impl Game {
                 // v1.16.29 扩池：mr3 善（mr3 常态补位 31→32；题材避 102 涸河
                 // 龙祠/144 渡蚁桥/210 雨檐听铃/240 药圃赌芽/246 松风问琴/
                 // 305 灵窖渗漏：折梅探病是梅与探望的人情面）
-                card.title = "檐下折梅".into();
                 card.text = evtx(1856)/* 原文：檐下梅枝头一回开。邻家老人起不来床，你折梅一枝送去，插在粗陶碗里——满屋药味里，就这一缕是甜的。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
@@ -10300,7 +9998,6 @@ impl Game {
                 // ≈4.48% 守勘察带内；w1 先例 15 仙人遗府/57 无面镜客/73 纸人
                 // 夜行；题材避 224 坠星动冢/284 枯莲夜雨/303 雷纹入纸：琅函
                 // 倒页直连琅函/未竟稿母题，守世纪律不触破境裁决）
-                card.title = "琅函倒页".into();
                 card.text = evtx(1859)/* 原文：夜半无风，琅函那边送出一页残纸，正落在你未写完的稿上——纸上无字，只有一道折痕，像被读过千遍又放回。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
@@ -10319,7 +10016,6 @@ impl Game {
                 // v1.16.29 扩池：mr4 恶（恶缘 9→10 条；mr4 恶现 6 条最薄档；
                 // 题材避 105 古戍点兵/130 引魂幡影/147 货栈灵鼠/238 行会追赔/
                 // 245 滩头讹偿/294 假丹换真：药童卷方是熟人造成的失窃面）
-                card.title = "药童卷方".into();
                 card.text = evtx(1862)/* 原文：药童不见了，柜里三张老丹方跟着没了——窗绳打着结，是连夜走的。明日半城药铺，就会挂出你的方子。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.05;
@@ -10334,6 +10030,182 @@ impl Game {
                     evtx(1864)/* 原文：你凭记性把三张方子重写，一味一味改稳。他偷走的是旧稿，你留的是手艺。道心+1 */.into(),
                 ];
                 card.opts.push(("重写更稳".into(), e2));
+            }
+            317 => {
+                // v1.16.30 扩池：mr5 善（mr5 最薄层 27→30 本批 +1 续摊；题材避
+                // 91 仙门论道/169 书肆新声/211 云上放灯/247 雾锁仙市/283 纵马
+                // 霜原/304 代书家信/311 下山买茶：崖灯照径是高处的人做低处事
+                // 的灯火面）
+                card.text = evtx(1881)/* 原文：危崖转角最险，夜归的山民常在此失足。你凿壁悬起一盏风灯，添满三夜灯油——高处的人做低处的事，不费修为，费心。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(1882)/* 原文：第七夜灯还亮着，灯下多了一碗热粥——山民不知谢谁，就谢灯。道心+2 */.into(),
+                ];
+                card.opts.push(("守灯添油".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1883)/* 原文：你没留名。后来山里都叫它仙人灯，你听着，只当说的是别人。气运+1 */.into(),
+                ];
+                card.opts.push(("不告而去".into(), e2));
+            }
+            318 => {
+                // v1.16.30 扩池：mr5 恶（恶缘常规 64→65 条；mr5 恶现 6 条薄层
+                // +1 摊薄；题材避 186/200 仙籍勾误/235/254/266/295 符价压市：
+                // 云路设卡是云上亦有买路财的市侩面）
+                card.text = evtx(1884)/* 原文：御云赶路，前方浮牌拦云：此段云路已被包下，过云一次，灵石三枚。云上什么时候，也开始收钱了。 */.into();
+                let mut e1 = Eff::new();
+                e1.stones_pct = -0.05;
+                e1.good = false;
+                e1.msg = vec![
+                    evtx(1885)/* 原文：你数出三枚「云资」。掌卡修士抬手放行，头也不抬——这条云是他家的了。灵石-5% */.into(),
+                ];
+                card.opts.push(("缴资过云".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.msg = vec![
+                    evtx(1886)/* 原文：你落下云头，沿山脊多走半日旱路。云是别人的，脚下的路还是自己的。道心+1 */.into(),
+                ];
+                card.opts.push(("绕云千里".into(), e2));
+            }
+            319 => {
+                // v1.16.30 扩池：具名 NPC 玄诚长老第七卡（Npc(0)，mr5 第二卡
+                //——缺位面 mr0/6/7 摊 mr5 现有两卡层；正文钉名⟺Npc(n) 照
+                // 248/292/301 口径；题材避 248 长老巡山/253 经榿理简/267 名册
+                // 补名/273 扫阶拾规/292 讲堂补席/302 晨钟校音：烛下问疑是
+                // 规条之外的学者面）
+                card.actor = Some(CardActor::Npc(0));
+                card.text = evtx(1887)/* 原文：殿里烛火将尽，玄诚长老翻出自己年轻时的批注问你：这一处，你看得出错在哪吗？他等这个答案，等了六十年。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(1888)/* 原文：你照实说了。长老提笔把那页批注重抄一遍：错留了六十年，总算有人接了它。道心+2 */.into(),
+                ];
+                card.opts.push(("指出错处".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1889)/* 原文：你说规矩是死的，人是活的。长老大笑，把批注送了你——他说，比书值钱。气运+1 */.into(),
+                ];
+                card.opts.push(("请他自解".into(), e2));
+            }
+            320 => {
+                // v1.16.30 扩池：具名 NPC 宁清霜第七卡（Npc(2)，mr0 首卡——照
+                // 259 市头新肆 mr0 NPC 专卡先例摊薄开局头部 top4 集中度；正文
+                // 钉名⟺Npc(n) 照 248/292/301 口径；题材避 252 枰边手谈/263 旧穗
+                // 试锋/275 寄剑西窗/282 霜泉淬锋/301 霜窗描枝/312 雪水研墨：
+                // 雪里拾稿是初雪与初稿的相识面）
+                card.actor = Some(CardActor::Npc(2));
+                card.text = evtx(1890)/* 原文：一阵风把你未干的稿纸掀进雪里。宁清霜一张张拾起，拍去雪粒，按内容排好次序递还：「这篇，该接着上句写。」 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 1.0;
+                e1.msg = vec![
+                    evtx(1891)/* 原文：你顺着她排的次序续写，竟一笔接通了。她说：稿子自己认得路。道心+1 */.into(),
+                ];
+                card.opts.push(("接她的次序".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1892)/* 原文：你把最末一页折好送她。她收进袖中：等写完了，我讨全本看。气运+1 */.into(),
+                ];
+                card.opts.push(("留页相赠".into(), e2));
+            }
+            321 => {
+                // v1.16.30 扩池：伴随 mr3 善（白名单 27→28，mr3 伴随 2→3——与
+                // 322 老年×伴双摊 mr3 常态次薄层）——Comp 立绘反查照 262/257
+                // 模式；无伴不入池门控在 sim_event_weights；题材避 210 雨檐
+                // 听铃/240 药圃赌芽：同封新茶是春锅与封条的人情面
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = evf(1893, &[&(cn)])/* 原文：头锅春茶出炉，你与{}各分一罐封好，封条上各写各的心思：你的写「勿早开」，另一罐写「等谁来」。 */;
+                let mut e1 = Eff::new();
+                e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
+                e1.dao = 1.0;
+                e1.msg = vec![evf(1894, &[&(crate::data::COMPANION_GIFT_FAV)])/* 原文：你在自己罐上再添一层封，写着「开来年」。（好感+{}）道心+1 */];
+                card.opts.push(("添封留盏".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![evf(1895, &[&(cn)])/* 原文：{}手快，提前开了一角罐口：新茶的气，先跑出来了。（气运+1） */];
+                card.opts.push(("先开一盏".into(), e2));
+            }
+            322 => {
+                // v1.16.30 扩池：老年×有伴双门控第 8 条（if 表内照 204..299 模板
+                // 并臂勿拆；不入 COMPANION 白名单，徽标走老年臂；mr3 换层照 299
+                // 先例——勘察按 310 老年层同族口径称第 9 条，勘误见权重表注）；
+                // 题材避 204 同席说岁/212 相扶看雪/239 共守岁灯/268 炉边说旧/
+                // 288 同封岁坛/297 重缝冬衣/299 合誊旧稿：树下尝果是果熟与
+                // 牙口的岁味面
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = evf(1896, &[&(cn)])/* 原文：老树年年落果，今年你与{}树下捡了满袖。你咬一口递过去，换回来时少了一口——牙口不如从前，味道倒比从前足。 */;
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(1897)/* 原文：你把最圆的几颗收进布袋，说明年埋在檐下——还结这一树。道心+2 */.into(),
+                ];
+                card.opts.push(("留种来年".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![evf(1898, &[&(cn)])/* 原文：你埋下果核，{}用树枝在土上插了个记号——开春好找。（气运+1） */];
+                card.opts.push(("埋核檐下".into(), e2));
+            }
+            323 => {
+                // v1.16.30 扩池：mr7 善（全行 17→18 条最薄层 +1；守长生世纪律
+                // 不写寿元将尽不触破境裁决，照 270 窟灯未熄/287 千鹤过山模板；
+                // 题材避 211 云上放灯/241 踏云题字/300 晨课互校/306 抄经赠邻：
+                // 云上迎雪是雪往高处落的倒景面）
+                card.text = evtx(1899)/* 原文：你在云海之上接住一片往上落的雪——低处的雪要升到高处，得借一辈子的风。凉意散尽，掌心留下一点人间的暖。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(1900)/* 原文：你煮雪为茶，茶烟直上云海。高处的孤，就这样化开了半盏。道心+2 */.into(),
+                ];
+                card.opts.push(("煮雪入茶".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1901)/* 原文：你摊开手，雪片一晃往人间落了回去——替谁暖的，就让谁收着。气运+1 */.into(),
+                ];
+                card.opts.push(("任它落回".into(), e2));
+            }
+            324 => {
+                // v1.16.30 扩池：稀有 w1 mr6（稀有 24→25 条 44→45 权 ≈4.48%
+                // 守带——w2 会推 4.57% 出带，w1 先例 15/57/73/315；213 仙池映世
+                // 独苗摊薄；纯效果散件无 special 勿动窗位；题材避 15 仙人遗府/
+                // 57 无面镜客/73 纸人夜行/303 雷纹入纸/315 琅函倒页：旧卷
+                // 新墨是未竟稿母题的时间错格面）
+                card.text = evtx(1902)/* 原文：藏书楼最深一层，你在百年前的旧卷里认出自己的字迹——一笔不差，连涂改的位置都相同，落款年份，却在你出生之前。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 3.0;
+                e1.msg = vec![
+                    evtx(1903)/* 原文：你把卷子放回原处，行了个礼。有些答案，书比你先知道就够了。道心+3 */.into(),
+                ];
+                card.opts.push(("原样归架".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(1904)/* 原文：你临下那页字，墨迹竟比原卷更润。是谁在写谁，不必说破。气运+1 */.into(),
+                ];
+                card.opts.push(("临页带走".into(), e2));
             }
 
             _ => {}
@@ -10428,8 +10300,9 @@ impl Game {
             self.note_event(id);
 
             // v1.16.11 手札回味：同点捕获卡面正文（构建帧即存，纯会话展示缓存；
-            // 标题不存——event_names_match_card_titles 钉死 card.title==EVENT_NAMES[id]
-            // 静态双源，回看时按 id 查表零新增分配）
+            // 标题不存——v1.16.30 单1 起 card.title 本身即构造行查表
+            //（EVENT_NAMES[id]，臂内零字面量，tools/title_recheck.py 静态钉），
+            // 回看时按 id 查表零新增分配）
             self.ev_memo_set(id, &card.text);
 
             // v1.16.7 稀有事件遭遇记事：入本世大事记（旧稿 story 数据源；卡构建
@@ -16841,6 +16714,15 @@ mod chain_event_tests {
             (314, false, None),
             (315, true, None),
             (316, false, None),
+            // v1.16.30 扩池 8 条抽检：324 w1 入稀有区，317..=324 其余散件非稀有
+            (317, false, None),
+            (318, false, None),
+            (319, false, None),
+            (320, false, None),
+            (321, false, None),
+            (322, false, None),
+            (323, false, None),
+            (324, true, None),
         ] {
             g.modal = None;
             g.build_event(id);
@@ -16921,8 +16803,13 @@ mod v11610_event_tests {
         }
     }
 
-    // 标题双源对账（v1.16.10 图鉴铺设前提）：EVENT_NAMES[id] ⟺ build_event
-    // card.title 逐 id 相等；EVENT_BRIEF 非空且 ≤22 字一行（手札行布局预算）
+    // 标题对账（v1.16.10 图鉴铺设前提；v1.16.30 单1 主刀②后语义升级）：原钉
+    // 「EVENT_NAMES[id] ⟺ build_event card.title 逐 id 相等」的臂内字面量已删
+    //（card.title 改构造行查表，静态双源归一）——本测保留转「运行期守门」：
+    // ① 全 id 逐条 build_event 不 panic、臂齐全（无卡臂即红，臂覆盖无人看守
+    //   就此断线的防线仍在线）；② 查表路径产出非空（evtx 段基址漂移/未装载
+    //   空串兜底被 title.is_empty 类断言当场红）；③ EVENT_BRIEF 非空且 ≤22 字
+    //   一行（手札行布局预算）。静态面漂移由 tools/title_recheck.py 常驻钉看守。
     #[test]
     fn event_names_match_card_titles() {
         assert_eq!(EVENT_NAMES.len(), EVENTS.len(), "名表与事件表同长");
@@ -16935,6 +16822,10 @@ mod v11610_event_tests {
                 .modal
                 .as_ref()
                 .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
+            // v1.16.30 单1：全 id 非空断言上移至此（查表化后 card.title==表值，
+            // 等式两边同空串时相等式恒真、失守——非空钉补住 evtx 段漂移/未装载
+            // 空串兜底；此前仅 31..=155/219..=230 批测有此钉，其余 id 无看守）
+            assert!(!card.title.is_empty(), "事件 {} 标题查表得空串", id);
             assert_eq!(
                 card.title, EVENT_NAMES[id as usize],
                 "事件 {} 标题双源漂移: card「{}」≠ 表「{}」",
@@ -18178,10 +18069,12 @@ mod event_batch_v1168_tests {
         // 宁清霜 302 玄诚 308 醉道人/稀有 303 mr7 w2/散件 4 304 mr5 305 mr3 恶
         // 306 mr6 307 mr2 恶）→ 309 条；v1.16.29 扩池 8（老年层 2 309/310/
         // mr5 311/具名 NPC 2 312 宁清霜 313 胡掌柜/mr3 314/稀有 315 琅函倒页
-        // w1/mr4 恶 316）→ 317 条，
+        // w1/mr4 恶 316）→ 317 条；v1.16.30 扩池 8（mr5 3 317/318/319 玄诚
+        // 第七卡/mr0 320 宁清霜第七卡/伴随 321/老年×伴 322/mr7 323/稀有 324
+        // w1 mr6）→ 325 条，
         // 稀有基权合计口径见 data.rs
         // 各批注释——账本数字一律以重算为准）
-        assert_eq!(EVENTS.len(), 317);
+        assert_eq!(EVENTS.len(), 325);
     }
 }
 
@@ -18728,19 +18621,25 @@ mod v11615_reward_and_pool_tests {
     // （312 宁清霜 w3 mr4/313 胡掌柜 w3 mr2）/mr3 1（314 w3）/稀有 1（315 w1
     // mr7——稀有 23→24 条 43→44 权，44/982≈4.48% 守勘察带内）/mr4 恶 1（316 w3），
     // 共 8 条（单1 净减 10.27KB 达 6~8 条分级上沿）
+    // v1.16.30 扩池批 +22：mr5 3（317 崖灯照径 w3 善/318 云路设卡 w3 恶/319
+    // 烛下问疑 w3 玄诚长老 Npc(0) 第七卡）/mr0 1（320 雪里拾稿 w3 宁清霜
+    // Npc(2) 第七卡）/mr3 2（321 同封新茶 w3 伴随白名单 27→28/322 树下尝果 w3
+    // 老年×伴双门控）/mr7 1（323 云上迎雪 w3）/稀有 1（324 旧卷新墨 w1 mr6
+    // ——稀有 24→25 条 44→45 权，45/1004≈4.48% 守勘察带内），
+    // 共 8 条（单1 净减 16.88KB 达 ≥8KB 分级上沿，A1..A8 全 8 条）
     #[test]
     fn pool_ledger_recheck() {
         let total: i32 = EVENTS.iter().map(|&p| ev_w(p)).sum();
-        assert_eq!(total, 982, "总基权漂移——照 data.rs v1.16.29 批注重算");
+        assert_eq!(total, 1004, "总基权漂移——照 data.rs v1.16.30 批注重算");
         let rare: Vec<(usize, i32)> = EVENTS
             .iter()
             .filter(|&&p| ev_w(p) > 0 && ev_w(p) <= crate::data::RARE_W)
             .enumerate()
             .map(|(id, &p)| (id, ev_w(p)))
             .collect();
-        assert_eq!(rare.len(), 24, "稀有条数漂移");
+        assert_eq!(rare.len(), 25, "稀有条数漂移");
         let rare_w: i32 = rare.iter().map(|&(_, w)| w).sum();
-        assert_eq!(rare_w, 44, "稀有基权漂移");
+        assert_eq!(rare_w, 45, "稀有基权漂移");
     }
 
     // 链14 全程：175 首段建链待分支 → special53 → 直取 176 → special54 → 直取
@@ -19198,10 +19097,10 @@ mod v11617_pool_tests {
         // v1.16.26 扩池 10 条（281..=290）同批随批注口径 252→291
         // v1.16.27 扩池 8 条（291..=298）同批随批注口径 291→299
         // v1.16.28 扩池 10 条（299..=308）同批随批注口径 299→309
-        // v1.16.29 扩池 8 条（309..=316）同批随批注口径 309→317
-        assert_eq!(EVENTS.len(), 317);
-        assert_eq!(EVENT_NAMES.len(), 317);
-        assert_eq!(EVENT_BRIEF.len(), 317);
+        // v1.16.30 扩池 8 条（317..=324）同批随批注口径 317→325
+        assert_eq!(EVENTS.len(), 325);
+        assert_eq!(EVENT_NAMES.len(), 325);
+        assert_eq!(EVENT_BRIEF.len(), 325);
         for id in 183..=204usize {
             assert_eq!(EVENTS_ROWS[id].0 as usize, id, "新增段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
@@ -19274,6 +19173,13 @@ mod v11617_pool_tests {
         // 连号 N1825..=1832/N1833..=1840（段四首尾逐字钉在 ev_tables_section_bounds）
         for id in 309..=316usize {
             assert_eq!(EVENTS_ROWS[id].0 as usize, id, "v1.16.29 段 id 连续");
+            assert!(!EVENT_NAMES[id].is_empty());
+            assert!(!EVENT_BRIEF[id].is_empty());
+        }
+        // v1.16.30 扩池 8 条（317..=324）同批随批注口径 317→325；名/简第五段
+        // 连号 N1865..=1872/N1873..=1880（段五首尾逐字钉在 ev_tables_section_bounds）
+        for id in 317..=324usize {
+            assert_eq!(EVENTS_ROWS[id].0 as usize, id, "v1.16.30 段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
             assert!(!EVENT_BRIEF[id].is_empty());
         }
@@ -20371,8 +20277,8 @@ mod v11623_pool_tests {
             "257 立绘应锁定道侣 6"
         );
         // 白名单 24→25（v1.16.26 批 283 入列）→26（v1.16.27 批 293 入列）
-        // →27（v1.16.28 批 300 入列）
-        assert_eq!(COMPANION_EVENTS.len(), 27, "伴随白名单 26→27");
+        // →27（v1.16.28 批 300 入列）→28（v1.16.30 批 321 入列）
+        assert_eq!(COMPANION_EVENTS.len(), 28, "伴随白名单 27→28");
     }
 }
 
@@ -20948,7 +20854,34 @@ mod v11626_pool_tests {
         assert!(COMPANION_EVENTS.contains(&293usize), "293 应入伴随白名单");
         // 白名单成员：300 入 COMPANION_EVENTS（v1.16.28 批第 27 条）
         assert!(COMPANION_EVENTS.contains(&300usize), "300 应入伴随白名单");
-        assert_eq!(COMPANION_EVENTS.len(), 27, "伴随白名单 26→27");
+        // 白名单成员：321 入 COMPANION_EVENTS（v1.16.30 批第 28 条）
+        assert!(COMPANION_EVENTS.contains(&321usize), "321 应入伴随白名单");
+        assert_eq!(COMPANION_EVENTS.len(), 28, "伴随白名单 27→28");
+    }
+
+    // v1.16.30 伴随 321 门控收口（照 companion_gate_283 模式）：无伴不入池/
+    // 有伴 mr3 入池/进卡 Comp 锁定当前道侣
+    #[test]
+    fn companion_gate_321() {
+        let mut g0 = sim_game(5, 40.0);
+        g0.recent_events.clear();
+        let (ws0, _) = g0.sim_event_weights(40.0, 5, false, false, false);
+        let i321 = ev_pos(321);
+        assert_eq!(ws0[i321], 0.0, "无伴：321 不入池");
+        let mut g1 = sim_game(5, 40.0);
+        g1.recent_events.clear();
+        let (ws1, _) = g1.sim_event_weights(40.0, 5, false, false, true);
+        assert!(ws1[i321] > 0.0, "有伴 realm5：321 应入池");
+        // 反查：有伴进卡 → Comp(下标) 锁定（COMPANION_NAMES[2]=第 3 人）
+        let mut g2 = sim_game(7, 40.0);
+        g2.sim.as_mut().unwrap().companion = Some(COMPANION_NAMES[2].to_string());
+        g2.modal = None;
+        g2.build_event(321);
+        let card = g2.modal.as_ref().unwrap();
+        assert!(
+            matches!(card.actor, Some(CardActor::Comp(2))),
+            "321 立绘应锁定道侣 2"
+        );
     }
 
     // 稀有检定 284（special74）：入稀有区 w2/检定臂结算两态必居其一——
@@ -21175,6 +21108,19 @@ mod v11626_story_tests {
                 "WEATHER_FLAVOR[{}] 弯引号残留: {}",
                 i,
                 w
+            );
+        }
+        // v1.16.30 单2 扩面：六表通道 N1606..=1725（CHAPTERS/ENDINGS/LOCATIONS/
+        // HINTS/NPC_TALES/HELP_LINES 字段级 120 行）+ 块外散件 evtx N1726..=1824
+        //（单1 刀C 99 站，内含 1800/1801 dead rows 空串 contains 恒假自然过）
+        //——本轮 grep 全库实测零弯引号后纯防复发，零字节成本
+        for n in 1606usize..=1824 {
+            let t = crate::data::evtx(n);
+            assert!(
+                !t.contains('“') && !t.contains('”'),
+                "N{} 弯引号残留: {}",
+                n,
+                t
             );
         }
     }
@@ -21737,6 +21683,135 @@ mod v11628_pool_tests {
         );
     }
 
+    // v1.16.30 复审必修兜底：常驻静态钉 tools/title_recheck.py（单1 主刀②的
+    // 「臂内禁 card.title 赋值+名段覆盖」静态防线，data.rs:2435 与 game.rs
+    // 构造行/ev_memo/标题对账测四处注释称「常驻」）本体是新文件——若提交轮
+    // 漏 add 进不了仓库，本测在任意 checkout 立即红，钉缺失不静默（施工纪律
+    // 施工方不碰 git add，入库由主会话负责；本测即「钉的钉」）
+    #[test]
+    fn title_recheck_pin_script_present() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tools")
+            .join("title_recheck.py");
+        assert!(
+            p.exists(),
+            "常驻静态钉 tools/title_recheck.py 缺失——单1 主刀②的「臂内禁 \
+             card.title 赋值+名段覆盖」静态防线不在仓库，提交轮漏 add 该新文件"
+        );
+    }
+
+    // v1.16.30 扩池 8 条正文钉名⟺Npc(n)（照 named_cards_11628 口径——钉名必须
+    // 与脸同源；319 玄诚长老 Npc(0)/320 宁清霜 Npc(2)）
+    #[test]
+    fn named_cards_11630_text_pins_name() {
+        for (id, name) in [(319usize, "玄诚"), (320, "宁清霜")] {
+            let mut g = sim_game(7, 40.0);
+            g.modal = None;
+            g.build_event(id);
+            let card = g.modal.as_ref().unwrap();
+            assert!(
+                card.text.contains(name),
+                "事件 {} 文本须具名 {}",
+                id,
+                name
+            );
+        }
+        // 321/322 Comp 反查：有伴进卡正文随 sim.companion 钉名
+        let mut g = sim_game(7, 40.0);
+        g.sim.as_mut().unwrap().companion = Some(COMPANION_NAMES[0].to_string());
+        g.modal = None;
+        g.build_event(321);
+        assert!(
+            g.modal.as_ref().unwrap().text.contains(COMPANION_NAMES[0]),
+            "321 正文须具名道侣"
+        );
+        g.build_event(322);
+        assert!(
+            g.modal.as_ref().unwrap().text.contains(COMPANION_NAMES[0]),
+            "322 正文须具名道侣"
+        );
+    }
+
+    // v1.16.30 扩池 8 条良构：标题双源/正文非空且段≤60/两选项/special 恒 0/
+    // 抉择全链不 panic（立绘钉 319=Npc(0) 320=Npc(2) 321/322=Comp；散件不挂脸）
+    #[test]
+    fn batch11_cards_well_formed() {
+        for id in 317..=324usize {
+            let mut g = sim_game(7, 40.0);
+            g.sim.as_mut().unwrap().companion = Some(COMPANION_NAMES[0].to_string());
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
+            assert_eq!(card.title, EVENT_NAMES[id], "标题双源 id {}", id);
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两选项", id);
+            assert!(card.opts.len() <= 3, "事件 {} 至多三选项", id);
+            for (si, seg) in card.text.split('\n').enumerate() {
+                let n = seg.chars().count();
+                assert!(
+                    n <= 60,
+                    "事件 {} 第 {} 段 {} 字超 ≤60 预算：{}",
+                    id,
+                    si + 1,
+                    n,
+                    seg
+                );
+            }
+            for (label, e) in &card.opts {
+                assert_eq!(e.special, 0, "事件 {} 选项「{}」special 非零", id, label);
+            }
+            match id {
+                319 => assert!(
+                    matches!(card.actor, Some(CardActor::Npc(0))),
+                    "319 立绘应锁定玄诚长老 Npc(0)"
+                ),
+                320 => assert!(
+                    matches!(card.actor, Some(CardActor::Npc(2))),
+                    "320 立绘应锁定宁清霜 Npc(2)"
+                ),
+                321 | 322 => assert!(
+                    matches!(card.actor, Some(CardActor::Comp(0))),
+                    "{} 立绘应锁定道侣 Comp(0)",
+                    id
+                ),
+                _ => assert!(card.actor.is_none(), "{} 散件不应挂脸", id),
+            }
+            g.choose_option(0); // apply_eff 全链不 panic（sync_save 仅置脏不落盘）
+        }
+    }
+
+    // v1.16.30 第九批简语画面化钉测（照 event_brief_11629_pool_batch_within_18
+    // 模式）：≤18 字非空 + kw 取词自对应臂 evtx/evf 行 verbatim——八条「改写即
+    // 减字」外的扩池新批，简语 N1873..=1880 与名 N1865..=1872 连号段先于正文
+    // 手写（真相源段五；kw 注 N 号为正文收编后行号）
+    #[test]
+    fn event_brief_11630_pool_batch_within_18() {
+        for (id, kw) in [
+            (317usize, "危崖"),   // N1881「危崖转角最险…」
+            (318, "云路"),        // N1884「御云赶路…此段云路已被包下」
+            (319, "批注"),        // N1887「殿里烛火将尽…自己年轻时的批注」
+            (320, "宁清霜"),      // N1890「…宁清霜一张张拾起…」
+            (321, "春茶"),        // N1893「头锅春茶出炉，你与{}各分一罐封好」
+            (322, "落果"),        // N1896「老树年年落果…」
+            (323, "往上落"),      // N1899「…接住一片往上落的雪」
+            (324, "旧卷"),        // N1902「…百年前的旧卷里…」
+        ] {
+            let b = &EVENT_BRIEF[id];
+            let n = b.chars().count();
+            assert!(
+                !b.is_empty() && n <= 18,
+                "事件 {} 简越 18 字预算: {} ({}字)",
+                id,
+                b,
+                n
+            );
+            assert!(b.contains(kw), "事件 {} 简画面化改写漂移: {}", id, b);
+        }
+    }
+
     // 简语预算 + 简-臂同源钉（照 event_brief_11627_pool_batch_within_18 模式：
     // ≤18 字非空 + kw 取自臂内原文）
     #[test]
@@ -21767,10 +21842,13 @@ mod v11628_pool_tests {
     }
 
     // 白名单 27 收口 + 300 入列（照 companion_gate_283 收口模式）
+    // v1.16.30 扩池：白名单 27→28（321 同封新茶入列）——本测转历史收口点续读
+    // 现值，断言随批更新
     #[test]
     fn companion_whitelist_27() {
-        assert_eq!(COMPANION_EVENTS.len(), 27, "伴随白名单 26→27");
+        assert_eq!(COMPANION_EVENTS.len(), 28, "伴随白名单 27→28");
         assert!(COMPANION_EVENTS.contains(&300usize), "300 应入伴随白名单");
+        assert!(COMPANION_EVENTS.contains(&321usize), "321 应入伴随白名单");
     }
 
     // v1.16.28 江湖声望 drift 挂点钉测：事件帧 +1（note_event 同帧位）/ 现实
@@ -21843,6 +21921,36 @@ mod v11628_pool_tests {
             (140, "易主"),      // N1251 取 N307「易主」木牌（evtx(307) 臂）
             (200, "寿数"),      // N1311 取 N460「把你的寿数记到了旁人账上」
             (301, "描枝"),      // N1454 取 N1468「以指尖在霜面描枝」
+        ] {
+            let b = &EVENT_BRIEF[id];
+            let n = b.chars().count();
+            assert!(
+                !b.is_empty() && n <= 18,
+                "事件 {} 简越 18 字预算: {} ({}字)",
+                id,
+                b,
+                n
+            );
+            assert!(b.contains(kw), "事件 {} 简画面化改写漂移: {}", id, b);
+        }
+    }
+
+    // v1.16.30 第九批简语画面化钉测（照 event_brief_11629_batch8_within_18 模式）：
+    // ≤18 字非空 + kw 取词自对应臂 evtx 行 verbatim——六条「改写即减字」合计
+    // −51B raw（真相源行直改 N 不变号）。勘察 id 标签错位已纠（照 batch8 先例）：
+    // 勘察所标 260/264/270（名 N1080/1084/1090=夜渡多收/盘账夜灯/窟灯未熄）与
+    // 拟文主题不符，实为 261/265/271（名 N1081/1085/1091=醉倒门前/信鸟投窗/
+    // 柜前压价）；byte 账照实 −51B（勘察 −57B 按错位旧值所估）。
+    // 换字纪律零新字（fontTools 实测 cmap 2321 miss_glyph 全空），零重建。
+    #[test]
+    fn event_brief_11630_batch9_within_18() {
+        for (id, kw) in [
+            (178usize, "斑点"),   // N1289 取 N401「…符纸一夜之间蚀出细密斑点」
+            (199, "孩童"),        // N1310 取 N457「山下旧邻的孩童上山采药」
+            (229, "佃户"),        // N1340 取 N524「灵田佃户捧着佃契上门」
+            (261, "醉道人"),      // N1372 取 N597「醉道人横睡在门槛上」
+            (265, "无名信"),      // N1376 取 N606「足环上系着一封无名信」
+            (271, "万宝楼"),      // N1382 取 N622「万宝楼柜前，新来的伙计…」
         ] {
             let b = &EVENT_BRIEF[id];
             let n = b.chars().count();

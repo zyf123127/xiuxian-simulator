@@ -1,0 +1,221 @@
+# -*- coding: utf-8 -*-
+"""title_recheck.py —— v1.16.30 单1 主刀②静态纪律钉（card.title 查表化对账）。
+
+背景（v1.16.30 单1）：build_event 弹卡一次性路径的 card.title 曾是 317 臂各写
+一行 `card.title = "...".into();` 字面量，与 data.rs EVENT_NAMES（textpack 名段）
+构成「双源」。单1 主刀②删除 317 臂字面量行，构造改 `title: EVENT_NAMES[id].into()`
+单源化——本脚本固化为常驻静态钉，看守三件事：
+
+  钉A（臂内禁 card.title 赋值）：build_event 函数体内不得再出现任何
+     `card.title = ...` 行（字面量或动态都禁）——标题唯一来源是构造行查表。
+     若未来某臂需要「与表不同的标题」，必须先回评审改设计，不许静默回填字面量。
+  钉B（名段覆盖断言）：EVENT_NAMES 名段（段一..段五基址 × EV_SEG 段界，段五自
+     v1.16.30 扩池起）对
+     id 0..=N_EVENTS-1 逐条可解析、非空、行号=N 不错位——段基址/段界漂移当场红。
+  钉C（构造行单源断言）：臂内零赋值形态下，EventCard 构造行必须存在
+     `title: EVENT_NAMES[id].into()`——标题单源链断不得。
+
+兼容模式（--reconcile）：若臂内仍存在赋值行（手术前状态或回滚验证），按
+「id→名段 N 映射」逐 id 全等比对，并断言 id 全覆盖、每臂恰 1 次赋值——
+这正是单1 手术前做过的一次性对账，留作复跑证据入口。
+
+对账口径（手术前已全绿一次，证据见当轮施工汇报）：
+  - 名段映射：id<EV_SEG1 → TXT_NAME_BASE+id；EV_SEG1..EV_SEG2 →
+    TXT_NAME2_BASE+id−EV_SEG1；EV_SEG2..EV_SEG3 → TXT_NAME3_BASE+id−EV_SEG2；
+    ≥EV_SEG3 → TXT_NAME4_BASE+id−EV_SEG3。段界/基址常量直接从
+    src/data.rs 与 src/text_offsets.inc 解析，不硬编码。
+  - text_source.txt 行号=N（0 基），真相源权威。
+
+纪律注：
+  - 本脚本只读 src/ 与 assets/，不写任何产物。
+  - 循环变量一律 k/eid（勿用 i——v1.16.28 pack_text.py 循环变量泄漏压行事故纪律）。
+  - 字面量解析要求纯形 `card.title = "...".into();`（grep 已证手术前 317 行全为
+    纯形；标题域禁 \ 转义与动态拼接——动态赋值行在 reconcile 下报非纯形红）。
+
+用法：PYTHONIOENCODING=utf-8 python tools/title_recheck.py [--reconcile]
+"""
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+GAME = ROOT / "src" / "game.rs"
+DATA = ROOT / "src" / "data.rs"
+INC = ROOT / "src" / "text_offsets.inc"
+SRC = ROOT / "assets" / "text_source.txt"
+
+# 构造行锚（钉C）：EventCard 构造里 title 单源查表
+CTOR_ANCHOR = re.compile(r"title:\s*EVENT_NAMES\[id\]\.into\(\)")
+# 臂内纯形赋值行：`card.title = "...".into();` 独立行
+ARM_TITLE_PURE = re.compile(r'^\s*card\.title\s*=\s*"([^"]*)"\.into\(\);\s*$')
+ARM_TITLE_ANY = re.compile(r"card\.title\s*=")
+# 外层 match 臂首（恰好 12 空格缩进）：`28 => {`
+ARM_START = re.compile(r"^( {12})(\d+) => \{\s*$")
+# 外层 match 臂尾（恰好 12 空格缩进）：`}` 或 `},`
+ARM_END = re.compile(r"^ {12}\},?\s*$")
+
+
+def parse_const(text, name):
+    m = re.search(r"(?:pub\s+)?const\s+" + name + r":\s*usize\s*=\s*(\d+)", text)
+    if not m:
+        raise SystemExit("FATAL: 常量 " + name + " 在 data.rs 解析不到")
+    return int(m.group(1))
+
+
+def parse_inc_base(name):
+    pat = re.compile(r"pub\s+static\s+" + name + r":\s*u32\s*=\s*(\d+);")
+    for ln in INC.read_text(encoding="utf-8").splitlines():
+        m = pat.search(ln)
+        if m:
+            return int(m.group(1))
+    raise SystemExit("FATAL: " + name + " 在 text_offsets.inc 解析不到")
+
+
+def build_event_span(lines):
+    """返回 (start,end) 0 基半开区间：fn build_event 行 到 下一个同级 fn 前。"""
+    st = None
+    for k, ln in enumerate(lines):
+        if ln.startswith("    fn build_event("):
+            st = k
+            break
+    if st is None:
+        raise SystemExit("FATAL: build_event 找不到")
+    for k in range(st + 1, len(lines)):
+        if re.match(r"    (pub )?fn \w+", lines[k]):
+            return st, k
+    raise SystemExit("FATAL: build_event 终界找不到")
+
+
+def main():
+    want_reconcile = "--reconcile" in sys.argv
+    data_txt = DATA.read_text(encoding="utf-8")
+    n_events = parse_const(data_txt, "N_EVENTS")
+    seg1 = parse_const(data_txt, "EV_SEG1")
+    seg2 = parse_const(data_txt, "EV_SEG2")
+    seg3 = parse_const(data_txt, "EV_SEG3")
+    seg4 = parse_const(data_txt, "EV_SEG4")
+    b1 = parse_inc_base("TXT_NAME_BASE")
+    b2 = parse_inc_base("TXT_NAME2_BASE")
+    b3 = parse_inc_base("TXT_NAME3_BASE")
+    b4 = parse_inc_base("TXT_NAME4_BASE")
+    b5 = parse_inc_base("TXT_NAME5_BASE")
+
+    # id -> 名段 N 映射（与 data.rs EvTable 五段连寻同口径）
+    def name_n(eid):
+        if eid < seg1:
+            return b1 + eid
+        if eid < seg2:
+            return b2 + (eid - seg1)
+        if eid < seg3:
+            return b3 + (eid - seg2)
+        if eid < seg4:
+            return b4 + (eid - seg3)
+        return b5 + (eid - seg4)
+
+    # 钉B：名段覆盖断言（真相源逐条可解析、非空、行号=N）
+    src_lines = SRC.read_text(encoding="utf-8").splitlines()
+    names = {}
+    bad = []
+    for eid in range(n_events):
+        n = name_n(eid)
+        if n >= len(src_lines):
+            bad.append("id%d: N%d 越真相源界" % (eid, n))
+            continue
+        m = re.match(r"^(\d+)\t(.*)$", src_lines[n])
+        if not m:
+            bad.append("id%d: N%d 行格式异常" % (eid, n))
+            continue
+        if int(m.group(1)) != n:
+            bad.append("id%d: N%d 行号错位（行首 %s）" % (eid, n, m.group(1)))
+            continue
+        if not m.group(2):
+            bad.append("id%d: N%d 空串" % (eid, n))
+            continue
+        names[eid] = m.group(2)
+    if bad:
+        raise SystemExit("FATAL 钉B 名段覆盖断言失败:\n  " + "\n  ".join(bad[:8]))
+
+    game_lines = GAME.read_text(encoding="utf-8").splitlines()
+    st, en = build_event_span(game_lines)
+    body = game_lines[st:en]
+
+    # 钉A 扫描：臂内 card.title 赋值行（带臂归属）
+    hits = []  # (行号1基, 臂id 或 None, 行文本)
+    cur = None
+    for k, ln in enumerate(body):
+        mstart = ARM_START.match(ln)
+        if mstart:
+            cur = int(mstart.group(2))
+            continue
+        if ARM_END.match(ln):
+            cur = None
+            continue
+        if ln.lstrip().startswith("//"):
+            continue  # 注释行不算赋值（含 card.title==EVENT_NAMES 字样的钉注不误报）
+        if ARM_TITLE_ANY.search(ln):
+            hits.append((st + k + 1, cur, ln.rstrip()))
+
+    ctor_ok = any(CTOR_ANCHOR.search(ln) for ln in body)
+
+    if not hits:
+        # 手术后形态：钉A（臂内零赋值）+ 钉C（构造单源）
+        if not ctor_ok:
+            raise SystemExit(
+                "FATAL 钉C: 臂内已无 card.title 赋值，但构造行查不到 "
+                "`title: EVENT_NAMES[id].into()`——标题单源链断了"
+            )
+        print(
+            "OK 钉A 臂内 card.title 赋值=0（build_event 行 %d..%d，%d 行）；"
+            "钉C 构造行查表单源 ✓" % (st + 1, en, en - st)
+        )
+    else:
+        if not want_reconcile:
+            raise SystemExit(
+                "FATAL 钉A: build_event 臂内存在 %d 处 card.title 赋值"
+                "（手术后应为 0；若为回滚态请加 --reconcile 走全等对账）:\n  " % len(hits)
+                + "\n  ".join("%s: %s" % (p, t) for p, _e, t in hits[:6])
+            )
+        # 兼容模式：逐臂全等对账（手术前/回滚验证）
+        noarm = [(p, t) for p, e, t in hits if e is None]
+        if noarm:
+            raise SystemExit(
+                "FATAL reconcile: 有赋值行归属不到臂（臂结构解析失配，先修解析）:\n  "
+                + "\n  ".join("%s: %s" % (p, t) for p, t in noarm[:6])
+            )
+        # 覆盖断言（每臂至少出现一次赋值行才算臂存在）
+        seen = set(e for _p, e, _t in hits)
+        missing = [e for e in range(n_events) if e not in seen]
+        if missing:
+            raise SystemExit("FATAL reconcile: 臂缺失 id %s" % missing[:12])
+        multi = {}
+        for p, e, _t in hits:
+            multi.setdefault(e, []).append(p)
+        over = {e: v for e, v in multi.items() if len(v) != 1}
+        if over:
+            raise SystemExit("FATAL reconcile: 臂内 title 赋值数≠1: %s" % over)
+        # 全等比对
+        mismatch = []
+        for p, e, t in hits:
+            mp = ARM_TITLE_PURE.match(t)
+            if not mp:
+                mismatch.append('id%d: 行 %s 非纯形 `card.title = "..".into();`' % (e, p))
+                continue
+            if mp.group(1) != names.get(e):
+                mismatch.append(
+                    'id%d: card「%s」≠ 名段「%s」' % (e, mp.group(1), names.get(e))
+                )
+        if mismatch:
+            raise SystemExit("FATAL reconcile 双源漂移:\n  " + "\n  ".join(mismatch[:12]))
+        print(
+            "OK reconcile %d 臂 title 字面量 == 名段 全等 0 不符；id 0..=%d 全覆盖、"
+            "每臂恰 1 次赋值" % (len(hits), n_events - 1)
+        )
+    print(
+        "OK 钉B 名段覆盖 ✓（N_EVENTS=%d 段界 %d/%d/%d/%d 基址 %d/%d/%d/%d/%d）"
+        % (n_events, seg1, seg2, seg3, seg4, b1, b2, b3, b4, b5)
+    )
+    print("title_recheck 全绿")
+
+
+if __name__ == "__main__":
+    main()
