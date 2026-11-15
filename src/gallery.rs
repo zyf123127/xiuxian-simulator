@@ -196,10 +196,13 @@ pub fn event_badge(id: usize) -> (&'static str, Color) {
         // v1.16.31 老年徽标扩 328（册间拜帖，双门控第 9 条——同 322 口径不入
         // COMPANION 白名单，老年臂先命中出「老年」徽标）；327 灯下拼卷入
         // COMPANION 白名单走上方伴随臂，勿挂本臂。
+        // v1.16.32 单3 老年徽标扩 342（灯花并盏，双门控第 10 条——同 328 口径
+        // 不入 COMPANION 白名单，老年臂先命中出「老年」徽标）；339 岁暮并账入
+        // COMPANION 白名单走上方伴随臂，勿挂本臂。
         // 212 相扶看雪同为老年×有伴双门控，但在 COMPANION_EVENTS 白名单内，
         // 上方 COMPANION 臂先命中恒出「伴随」徽标——不入本臂（死模式勿挂）
         88 | 89 | 170 | 171 | 189 | 198 | 199 | 204 | 215 | 216 | 227 | 239 | 268 | 288
-        | 291 | 297 | 299 | 309 | 310 | 322 | 328 => {
+        | 291 | 297 | 299 | 309 | 310 | 322 | 328 | 342 => {
             return ("老年", C_GOLD_D)
         }
         // v1.16.26 宿敌徽标扩 289（同门销踪，宿敌回响——照 110 夺积余波口径，
@@ -803,7 +806,7 @@ fn draw_gal_comp_card(g: &Game, i: usize, y: f32, cur: bool) {
         // 识人小传：tale_unlocked 同口径（首段结缘保底），≤2 行不越卡底
         let cseg = tale_unlocked(cfav).max((g.meta.companion_lives >= 1) as usize);
         if cseg > 0 && npc_row_vis(y + 116.0) {
-            wrap_draw(COMP_TALES[cseg - 1], col, y + 116.0, 14, 660.0, 22.0, C_TEXT);
+            wrap_draw(comp_tale(cseg - 1), col, y + 116.0, 14, 660.0, 22.0, C_TEXT);
         }
     } else if known {
         if npc_row_vis(y + 84.0) {

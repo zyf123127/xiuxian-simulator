@@ -184,7 +184,7 @@ pub fn draw_atlas(g: &mut Game) {
             draw_rectangle(370.0, y, 540.0, 70.0, Color::from_rgba(255, 255, 255, 6));
         }
         let visited = g.meta.region_visited[i]; // i 本身 0..5，直接索引安全
-        txt(MAP_THEMES[i].name, 386.0, y + 10.0, 16, C_GOLD);
+        txt(MAP_THEMES[i].name(), 386.0, y + 10.0, 16, C_GOLD);
         txt_r(
             if visited { "已至" } else { "未至" },
             894.0,
@@ -192,7 +192,7 @@ pub fn draw_atlas(g: &mut Game) {
             14,
             if visited { C_GREEN } else { C_DIM },
         );
-        txt(REGION_MECH[i].desc, 386.0, y + 34.0, 14, C_TEXT);
+        txt(REGION_MECH[i].desc(), 386.0, y + 34.0, 14, C_TEXT);
         let (dy, st) = REGION_VISIT_REWARD[i % REGION_VISIT_REWARD.len()];
         txt(
             &evf(1584, &[&(fmt_int(dy)), &(fmt_int(st))])/* 原文：初至：道韵+{} · 灵石+{} */,

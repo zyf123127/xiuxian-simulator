@@ -109,30 +109,41 @@ fn maybe_fav_event(g: &mut Game, i: usize) {
 
 // ---- v1.8.0 D2：好感专属事件表 ----
 // 四事件各两选项；Eff 字段由 apply_reff 消费（现实侧），选项副标签走 eff_desc。
+// v1.16.32 单1 副刀：title/text 收编 textpack（title_n/text_n 显式 N）——访问器
+// O(1) 零分配，npc_event_card 构卡路径安全（事件触发期，非帧路径）。
 pub struct NpcEventDef {
-    pub title: &'static str,
-    pub text: &'static str,
+    pub title_n: u16,
+    pub text_n: u16,
+}
+
+impl NpcEventDef {
+    pub fn title(&self) -> &'static str {
+        evtx(self.title_n as usize)
+    }
+    pub fn text(&self) -> &'static str {
+        evtx(self.text_n as usize)
+    }
 }
 pub const NPC_EVENTS: [NpcEventDef; 4] = [
     // 0 长老「旧伞相赠」：取伞（墨骨伞；已有折灵石）/ 折现（贡献+150、灵石+3000）
     NpcEventDef {
-        title: "旧伞相赠",
-        text: "玄诚长老唤你入静室，取出一柄旧伞：「此伞随老夫半生，今日赠你——莫坠了它的名声。」",
+        title_n: 2241,
+        text_n: 2245,
     },
     // 1 掌柜「万宝楼夜宴」：灵石+8000 / 聚气丹×3
     NpcEventDef {
-        title: "万宝楼夜宴",
-        text: "胡掌柜在万宝楼设下夜宴，席间推杯换盏：「道友肯赏光，是万宝楼的荣光——这点心意，务必收下！」",
+        title_n: 2242,
+        text_n: 2246,
     },
     // 2 宁清霜「剑冢论剑」：修为+25% / 道心+4·寿元+10
     NpcEventDef {
-        title: "剑冢论剑",
-        text: "宁清霜约你于后山剑冢论剑。一场切磋下来，她收剑而立，眸光微亮：「你的剑，比上次快了。」",
+        title_n: 2243,
+        text_n: 2247,
     },
     // 3 醉道人「醉后真言」：气运+5 / 道韵+40·灵石+2000
     NpcEventDef {
-        title: "醉后真言",
-        text: "醉道人又醉倒在洞府门前，却忽然睁眼一笑：「小子……老夫压箱底的这点东西，就当酒钱了。」",
+        title_n: 2244,
+        text_n: 2248,
     },
 ];
 
@@ -148,8 +159,8 @@ pub fn npc_event_card(i: usize) -> Option<EventCard> {
         cat: None, // v1.16.21 类目 chip 仅模拟池（build_event）挂——现实好感卡带【名】前缀自辨
         scene: None,
         brk: false,
-        title: format!("【{}】{}", NPC_NAMES[i], def.title),
-        text: def.text.to_string(),
+        title: format!("【{}】{}", NPC_NAMES[i], def.title()),
+        text: def.text().to_string(),
         opts: Vec::new(),
     };
     match i {
@@ -258,13 +269,13 @@ fn apply_reff(g: &mut Game, e: &Eff) {
             if !l.relics.contains(&r) {
                 l.relics.push(r);
                 logs.push((
-                    format!("得法宝【{}】！", RELICS[r].name),
+                    format!("得法宝【{}】！", RELICS[r].name()),
                     crate::game::C_GOLD,
                 ));
             } else {
                 l.stones += 15000; // 已有同宝：折 15000 灵石
                 logs.push((
-                    evf(1586, &[&(RELICS[r].name)])/* 原文：此宝你已有了，{}折价灵石 15000。 */,
+                    evf(1586, &[&(RELICS[r].name())])/* 原文：此宝你已有了，{}折价灵石 15000。 */,
                     crate::game::C_CYAN,
                 ));
             }

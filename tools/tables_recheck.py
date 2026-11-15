@@ -13,8 +13,11 @@
 # 与 data.rs EV_SEG5=325 同批登记，故段六起于 1905；
 # v1.16.31 新功能批起七段连号——段七基址 TXT_NAME7_BASE/TXT_BRIEF7_BASE=
 # 1954/1957，与 data.rs EV_SEG6=335 同批登记（段六名/简紧连封死，续批开新段
-# 照段四→段五先例），故段七起于 1954），
-# 对账：段行数 == EVENTS 行数 == 338、NAMES 去「·续」后互异、基址段界内。只读。
+# 照段四→段五先例），故段七起于 1954）；
+# v1.16.32 单3 扩池起八段连号——段八基址 TXT_NAME8_BASE/TXT_BRIEF8_BASE=
+# 2338/2344，与 data.rs EV_SEG7=338 同批登记（单1/单2 已用 N1971..2337 故
+# 段八顺延），故段八起于 2338。
+# 对账：段行数 == EVENTS 行数 == 344、NAMES 去「·续」后互异、基址段界内。只读。
 import io
 import re
 import sys
@@ -70,6 +73,7 @@ _SEG3 = 309
 _SEG4 = 317
 _SEG5 = 325
 _SEG6 = 335
+_SEG7 = 338
 _name2 = re.search(r"pub static TXT_NAME2_BASE: u32 = (\d+);", inc)
 _brief2 = re.search(r"pub static TXT_BRIEF2_BASE: u32 = (\d+);", inc)
 _name3 = re.search(r"pub static TXT_NAME3_BASE: u32 = (\d+);", inc)
@@ -94,10 +98,14 @@ name6_base = int(_name6.group(1)) if _name6 else None
 brief6_base = int(_brief6.group(1)) if _brief6 else None
 name7_base = int(_name7.group(1)) if _name7 else None
 brief7_base = int(_brief7.group(1)) if _brief7 else None
+_name8 = re.search(r"pub static TXT_NAME8_BASE: u32 = (\d+);", inc)
+_brief8 = re.search(r"pub static TXT_BRIEF8_BASE: u32 = (\d+);", inc)
+name8_base = int(_name8.group(1)) if _name8 else None
+brief8_base = int(_brief8.group(1)) if _brief8 else None
 
 
-def _seg_rows(base, base2, base3, base4, base5, base6, base7, n):
-    """段一 0..min(n,291) + 段二..段七续号（扩池批）；返回行号列表"""
+def _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, n):
+    """段一 0..min(n,291) + 段二..段八续号（扩池批）；返回行号列表"""
     out = [base + i for i in range(min(n, _SEG1))]
     if n > _SEG1:
         assert base2 is not None, "扩池后段二基址缺失（pack_text.py 未登记）"
@@ -116,24 +124,27 @@ def _seg_rows(base, base2, base3, base4, base5, base6, base7, n):
         out += [base6 + i for i in range(min(n, _SEG6) - _SEG5)]
     if n > _SEG6:
         assert base7 is not None, "扩池后段七基址缺失（pack_text.py 未登记）"
-        out += [base7 + i for i in range(n - _SEG6)]
+        out += [base7 + i for i in range(min(n, _SEG7) - _SEG6)]
+    if n > _SEG7:
+        assert base8 is not None, "扩池后段八基址缺失（pack_text.py 未登记）"
+        out += [base8 + i for i in range(n - _SEG7)]
     return out
 brief_base = int(re.search(r"pub static TXT_BRIEF_BASE: u32 = (\d+);", inc).group(1))
 
 tables = {}
-for tname, base, base2, base3, base4, base5, base6, base7 in (
-        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base, name6_base, name7_base),
-        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base, brief6_base, brief7_base)):
+for tname, base, base2, base3, base4, base5, base6, base7, base8 in (
+        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base, name6_base, name7_base, name8_base),
+        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base, brief6_base, brief7_base, brief8_base)):
     entries = []
-    for n in _seg_rows(base, base2, base3, base4, base5, base6, base7, n_events):
+    for n in _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, n_events):
         assert n in rows, f"{tname} 段缺行 N={n}（基址漂移/收编段不齐）"
         val = decode_raw(rows[n])
         assert val is not None, f"{tname} N={n} 不可解码"
         entries.append(val)
     tables[tname] = entries
     print(tname, "base", base, "base2", base2, "base3", base3, "base4", base4,
-          "base5", base5, "base6", base6, "base7", base7, "rows", len(entries),
-          "aligned:", len(entries) == n_events == 338)
+          "base5", base5, "base6", base6, "base7", base7, "base8", base8,
+          "rows", len(entries), "aligned:", len(entries) == n_events == 344)
 
 names = tables["EVENT_NAMES"]
 seen = set()
@@ -151,14 +162,18 @@ print("NAMES distinct bases:", len(seen), "dup:", dup if dup else "none")
 _C = r"(?:\s*//[^\n]*)*"
 for tname in ("EVENT_NAMES", "EVENT_BRIEF"):
     pat = (
+        # v1.16.32 单1：EvTable 字段窄化 u16、段界差括号化（(N_EVENTS - EV_SEG6)
+        # as u16）——形态同步
         r"pub static %s: EvTable = EvTable \{" % tname + _C +
-        r"\s*base: \w+ as usize," + _C + r"\s*len: \w+," + _C +
-        r"\s*base2: \w+ as usize," + _C + r"\s*len2: \w+ - \w+," + _C +
-        r"\s*base3: \w+ as usize," + _C + r"\s*len3: \w+ - \w+," + _C +
-        r"\s*base4: \w+ as usize," + _C + r"\s*len4: \w+ - \w+," + _C +
-        r"\s*base5: \w+ as usize," + _C + r"\s*len5: \w+ - \w+," + _C +
-        r"\s*base6: \w+ as usize," + _C + r"\s*len6: \w+ - \w+," + _C +
-        r"\s*base7: \w+ as usize," + _C + r"\s*len7: \w+ - \w+,\s*\};"
+        r"\s*base: \w+ as u16," + _C + r"\s*len: \w+ as u16," + _C +
+        r"\s*base2: \w+ as u16," + _C + r"\s*len2: \(?\w+ - \w+\)? as u16," + _C +
+        r"\s*base3: \w+ as u16," + _C + r"\s*len3: \(?\w+ - \w+\)? as u16," + _C +
+        r"\s*base4: \w+ as u16," + _C + r"\s*len4: \(?\w+ - \w+\)? as u16," + _C +
+        r"\s*base5: \w+ as u16," + _C + r"\s*len5: \(?\w+ - \w+\)? as u16," + _C +
+        r"\s*base6: \w+ as u16," + _C + r"\s*len6: \(?\w+ - \w+\)? as u16," + _C +
+        # v1.16.32 单3 扩段八：base8/len8 双段登记（len8 末段 N_EVENTS−EV_SEG7）
+        r"\s*base7: \w+ as u16," + _C + r"\s*len7: \(?\w+ - \w+\)? as u16," + _C +
+        r"\s*base8: \w+ as u16," + _C + r"\s*len8: \(?\w+ - \w+\)? as u16,\s*\};"
     )
     m = re.search(pat, src)
     assert m, f"{tname} EvTable 声明缺失"
@@ -171,9 +186,25 @@ print("EvTable statics 七段声明在位，len() == n_events:", n_events)
 _TALES_BASE = int(re.search(r"pub static TXT_TALES_BASE: u32 = (\d+);", inc).group(1))
 _HELP_BASE = int(re.search(r"pub static TXT_HELP_BASE: u32 = (\d+);", inc).group(1))
 _HINT_BASE = int(re.search(r"pub static TXT_HINT_BASE: u32 = (\d+);", inc).group(1))
+# v1.16.32 单1 第三批 ARR 基址（9 表 63 行）——基址在 .inc，行数钉死，逐行可解码
+_ARR2 = {
+    _k: int(re.search(r"pub static %s: u32 = (\d+);" % _k, inc).group(1))
+    for _k in ("TXT_MINOR_BASE", "TXT_COMPT_BASE", "TXT_NPCBRIEF_BASE",
+               "TXT_DFD_BASE", "TXT_WFLAV_BASE", "TXT_EXPCHO_BASE",
+               "TXT_ADCREA_BASE", "TXT_DONE_BASE", "TXT_CHAIN_BASE")
+}
 for _tname, _base, _cnt in (("NPC_TALES", _TALES_BASE, 12),
                             ("HELP_LINES", _HELP_BASE, 17),
-                            ("HINTS.text", _HINT_BASE, 14)):
+                            ("HINTS.text", _HINT_BASE, 14),
+                            ("MINOR_LINES", _ARR2["TXT_MINOR_BASE"], 10),
+                            ("COMP_TALES", _ARR2["TXT_COMPT_BASE"], 3),
+                            ("NPC_BRIEF", _ARR2["TXT_NPCBRIEF_BASE"], 4),
+                            ("DONGFU_FAC_DESC", _ARR2["TXT_DFD_BASE"], 3),
+                            ("WEATHER_FLAVOR", _ARR2["TXT_WFLAV_BASE"], 5),
+                            ("EXPED_CHOICE_LABELS", _ARR2["TXT_EXPCHO_BASE"], 8),
+                            ("AD_CREATIVES", _ARR2["TXT_ADCREA_BASE"], 3),
+                            ("DONE_NOTE", _ARR2["TXT_DONE_BASE"], 9),
+                            ("CHAIN_NAMES", _ARR2["TXT_CHAIN_BASE"], 18)):
     for _i in range(_cnt):
         _n = _base + _i
         assert _n in rows, f"{_tname} 段缺行 N={_n}"
@@ -182,13 +213,21 @@ for _tname, _base, _cnt in (("NPC_TALES", _TALES_BASE, 12),
     print(_tname, "base", _base, "rows", _cnt, "all decode: OK")
 
 # 结构体表字段级：表体内 `field_n: N` / `lore_ns: S` 全部界内可解码
+# v1.16.32 单1 第三批：字段级面扩至 376（data+game 327 = CHAPTERS intro/open/
+# reward_note/couplet 36 + num 9 + name 134 + desc 136 + ENDINGS alias/body/gain
+# 12；text 40 = CHAPTERS goals 18 + EXPED_STEPS 8 + HINTS 14 + NPC_EVENTS 4；
+# mech 5 = REGION_MECH；title 4 = NPC_EVENTS）
 data_txt = src  # data.rs（上文已读）
 game_src = open("src/game.rs", encoding="utf-8").read()
-_field_ns = [int(x) for x in re.findall(r"\b(?:intro_n|open_n|reward_note_n|couplet_n|desc_n|name_n|alias_n|body_n|gain_n): (\d+)", data_txt + game_src)]
-_field_ns += [int(x) for x in re.findall(r"\btext_n: (\d+)", open("src/guide.rs", encoding="utf-8").read())]
+npc_src = open("src/npc.rs", encoding="utf-8").read()
+guide_src = open("src/guide.rs", encoding="utf-8").read()
+_field_ns = [int(x) for x in re.findall(r"\b(?:intro_n|open_n|reward_note_n|couplet_n|desc_n|name_n|alias_n|body_n|gain_n|num_n): (\d+)", data_txt + game_src)]
+_field_ns += [int(x) for x in re.findall(r"\btext_n: (\d+)", guide_src + data_txt + npc_src)]
+_field_ns += [int(x) for x in re.findall(r"\bmech_n: (\d+)", data_txt)]
+_field_ns += [int(x) for x in re.findall(r"\btitle_n: (\d+)", npc_src)]
 _lore_starts = [int(x) for x in re.findall(r"\blore_ns: (\d+)", data_txt)]
-assert len(_field_ns) == 9 * 4 + 4 * 4 + 6 + 14, \
-    f"字段级 N 总数 {len(_field_ns)} != 72（CHAPTERS 36 + ENDINGS 16 + desc 6 + HINTS text 14）"
+assert len(_field_ns) == 327 + 40 + 5 + 4, \
+    f"字段级 N 总数 {len(_field_ns)} != 376（v1.16.32 单1 第三批口径，见上注）"
 for _n in _field_ns + _lore_starts:
     assert _n in rows, f"结构体表字段 N={_n} 缺行"
     _v = decode_raw(rows[_n])

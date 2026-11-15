@@ -6,12 +6,14 @@ pack_text.py —— v1.16.23 减包刀②（文案资产化）：把 game.rs bui
 raw=源码转义形态单行），源码侧原地替换为 evtx(N)/* 原文：<raw> */（查池函数
 data::evtx，避让 ui.rs::txt 绘制函数重名），并产出：
   - assets/textpack.bin    raw-deflate(wbits=-15, level 9) 的串接 blob
-  - src/text_offsets.inc   pub static TXT_ANCH: [u32; A]（每 K32=32 条一个绝对锚）
+  - src/text_offsets.inc   pub static TXT_ANCH: [u32; A]（每 K32=128 条一个绝对锚；
+                            v1.16.32 单1 自 32 粗化至 128——锚数省 4B×3/32 行，
+                            组内 delta u16 域由产侧 assert 固化）
                            + TXT_DELTA: [u16; N]（组内 delta，v1.16.28 刀C 两级表）
-                           + 双表基址常量（data.rs include!；v1.16.31 新功能末态
-                           七对十四常量：TXT_NAME6/TXT_BRIEF6 后增 TXT_NAME7/
-                           TXT_BRIEF7——历史注「六段基址十常量」与全角 include！
-                           均为笔误，v1.16.31 已两批随段清账）
+                           + 双表基址常量（data.rs include!；v1.16.32 单3 末态
+                           八对十六常量：TXT_NAME6/TXT_BRIEF6 后增 TXT_NAME7/
+                           TXT_BRIEF7、TXT_NAME8/TXT_BRIEF8——历史注「六段基址
+                           十常量」与全角 include！均为笔误，已随段清账）
 运行期 data.rs::init_text() boot 一次 miniz_oxide::inflate::decompress_to_vec
 （与 ui.rs 字体同款通路），txt(i) O(1) 切片零分配。
 
@@ -94,6 +96,11 @@ BRIEF6_BASE_MANIFEST = 1915
 # 先于正文；第十批改写后下一空 N=1954——与 data.rs EV_SEG6=335 同批登记）
 NAME7_BASE_MANIFEST = 1954
 BRIEF7_BASE_MANIFEST = 1957
+# v1.16.32 单3 扩池起：段七（3 条）满员后新批连号追加为段八（6 条：名
+# 2338..=2343/简 2344..=2349，真相源手写连号段先于正文；单1/单2 已用
+# N1971..2337 故段八顺延 2338/2344——与 data.rs EV_SEG7=338 同批登记）
+NAME8_BASE_MANIFEST = 2338
+BRIEF8_BASE_MANIFEST = 2344
 
 dry = '--dry-run' in sys.argv
 collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测用；表收编后自动幂等）
@@ -113,23 +120,64 @@ SRC_DIR = ROOT / 'src'
 # ARR_TABLES：整表连号（行主序 alloc_fresh，基址 emit 进 text_offsets.inc；表本体
 # 随后由施工方换查表 fn——重跑时表已不在源码，走 .inc 基址回读，绝不二次收编）。
 #   (表名, 文件, 基址键, 期望条数)
+# v1.16.32 单1 第三批：副刀（DONE_NOTE/CHAIN_NAMES@game.rs）+ data.rs 尾部小表批。
+# 期望条数=数组字面量条数（LIT.findall 全量对账）；表体含引号注释会虚增计数——
+# 勘察已核：九表体内均无引号注释（INHERITS 体内注释含 "already borrowed" 走
+# STRUCT 通道按字段匹配，不入本清单）。
 ARR_TABLES = [
     ('NPC_TALES', 'data.rs', 'TXT_TALES_BASE', 12),   # [[&str;3];4] 行主序 npc*3+seg
     ('HELP_LINES', 'draw.rs', 'TXT_HELP_BASE', 17),   # [&str;17]
+    ('MINOR_LINES', 'data.rs', 'TXT_MINOR_BASE', 10),  # [&str;10] 模拟杂事线
+    ('COMP_TALES', 'data.rs', 'TXT_COMPT_BASE', 3),   # [&str;3] 道侣共通小传
+    ('NPC_BRIEF', 'data.rs', 'TXT_NPCBRIEF_BASE', 4),  # [&str;4] 人物页一行简介
+    ('DONGFU_FAC_DESC', 'data.rs', 'TXT_DFD_BASE', 3),  # [&str;3] 洞府设施说明
+    ('WEATHER_FLAVOR', 'data.rs', 'TXT_WFLAV_BASE', 5),  # [&str;5] 天象流转画面句
+    ('EXPED_CHOICE_LABELS', 'data.rs', 'TXT_EXPCHO_BASE', 8),  # [[&str;2];4] 行主序 k*2+j
+    ('AD_CREATIVES', 'data.rs', 'TXT_ADCREA_BASE', 3),  # [&str;3] 假广告轮换
+    ('DONE_NOTE', 'game.rs', 'TXT_DONE_BASE', 9),     # [&str;9] 章成金行副句
+    ('CHAIN_NAMES', 'game.rs', 'TXT_CHAIN_BASE', 18),  # [&str;18] 连锁链名
 ]
 # STRUCT_TABLES：结构体表字段级——表体内 `field: "raw"` 原位换 `field_n: N`
 #（alloc_fresh 行主序，同字段各行连号）；`lore: &[...]` 类对子字段换
 # `lore_ns: S, lore_len: L`（段内连号）。字段声明与 impl 访问器由施工方手改
 #（脚本只动表体与真相源，与刀②/③分工同款）；期望条数按行数钉死防半收编。
 #   (表名, 文件, 单值字段列表, 对子字段列表, 行数)
+# v1.16.32 单1 主刀第三批：data.rs 结构体表整批 + npc.rs/game.rs 副刀结构体表。
+# CHAPTERS 双条目——第一条目 num/name（9 行），第二条目 goals.text（嵌套
+# ChapterGoal{ text, pid } 原位换 text_n，pid 保留；期望 18=9 章×2 目标钉死）。
+# NPC_DESC 不收编（#[allow(dead_code)] 死表——未引用 const 零 rdata，收编反而净增）。
 STRUCT_TABLES = [
     ('CHAPTERS', 'data.rs', ['intro', 'open', 'reward_note', 'couplet'], ['lore'], 9),
     ('ENDINGS', 'game.rs', ['name', 'alias', 'body', 'gain'], [], 4),
     ('LOCATIONS', 'data.rs', ['desc'], [], 6),
     ('HINTS', 'guide.rs', ['text'], [], 14),
+    ('CHAPTERS', 'data.rs', ['num', 'name'], [], 9),
+    ('CHAPTERS', 'data.rs', ['text'], [], 18),
+    ('TECHS', 'data.rs', ['name', 'desc'], [], 8),
+    ('RELICS', 'data.rs', ['name', 'desc'], [], 8),
+    ('PILLS', 'data.rs', ['name', 'desc'], [], 6),
+    ('TALENTS', 'data.rs', ['name', 'desc'], [], 33),
+    ('UPGRADES', 'data.rs', ['name', 'desc'], [], 10),
+    ('ACHS', 'data.rs', ['name', 'desc'], [], 30),
+    ('ORIGINS', 'data.rs', ['name', 'desc'], [], 6),
+    ('MAP_THEMES', 'data.rs', ['name', 'desc'], [], 5),
+    ('REGION_MECH', 'data.rs', ['mech', 'desc'], [], 5),
+    ('SECT_GOODS', 'data.rs', ['name', 'desc'], [], 6),
+    ('EXPED_STEPS', 'data.rs', ['text'], [], 8),
+    ('NPC_EVENTS', 'npc.rs', ['title', 'text'], [], 4),
+    ('INHERITS', 'game.rs', ['name', 'desc'], [], 9),
 ]
 # HINTS text 单值连号 → 附发基址（static_measure.py 指引叶宽度口径改走真相源）
-BASE_KEYS_TABLES2 = ('TXT_TALES_BASE', 'TXT_HELP_BASE', 'TXT_HINT_BASE')
+# v1.16.32 单1 第三批整表连号基址：副刀 ARR（DONE_NOTE/CHAIN_NAMES）+ data.rs
+# 尾部小表批（MINOR_LINES/COMP_TALES/NPC_BRIEF/DONGFU_FAC_DESC/WEATHER_FLAVOR/
+# EXPED_CHOICE_LABELS/AD_CREATIVES）。WEATHERS/SLOTS/TIER_NAMES/PORTRAIT_STAGE_
+# NAMES/DONGFU_FACS/NPC_NAMES/NPC_TIER_NAMES/COMPANION_NAMES/L12/L4 净负或≈0
+# 不收编（勘察模型：raw 太短，访问器+delta 吃光收益；COMPANION_NAMES 另涉
+# save.rs 读档匹配路径 30+ 站）
+BASE_KEYS_TABLES2 = ('TXT_TALES_BASE', 'TXT_HELP_BASE', 'TXT_HINT_BASE',
+                     'TXT_MINOR_BASE', 'TXT_COMPT_BASE', 'TXT_NPCBRIEF_BASE',
+                     'TXT_DFD_BASE', 'TXT_WFLAV_BASE', 'TXT_EXPCHO_BASE',
+                     'TXT_ADCREA_BASE', 'TXT_DONE_BASE', 'TXT_CHAIN_BASE')
 
 src = GAME.read_text(encoding='utf-8')
 data_src = DATA.read_text(encoding='utf-8')
@@ -719,7 +767,8 @@ def table_bases_from_inc():
                      'TXT_BRIEF2_BASE', 'TXT_NAME3_BASE', 'TXT_BRIEF3_BASE',
                      'TXT_NAME4_BASE', 'TXT_BRIEF4_BASE', 'TXT_NAME5_BASE',
                      'TXT_BRIEF5_BASE', 'TXT_NAME6_BASE', 'TXT_BRIEF6_BASE',
-                     'TXT_NAME7_BASE', 'TXT_BRIEF7_BASE')
+                     'TXT_NAME7_BASE', 'TXT_BRIEF7_BASE',
+                     'TXT_NAME8_BASE', 'TXT_BRIEF8_BASE')
                     + BASE_KEYS_TABLES2):
             mm = re.search(r'pub static %s: u32 = (\d+);' % key, txt)
             if mm:
@@ -887,7 +936,10 @@ if tables2_report:
     for line2 in tables2_report:
         print('  ' + line2)
 # 刀B 基址回读兜底：非 --tables2 运行也必须补齐（.inc 缺基址 = include! 断链）
-ARR_EXPECT = {'TXT_TALES_BASE': 12, 'TXT_HELP_BASE': 17, 'TXT_HINT_BASE': 14}
+ARR_EXPECT = {'TXT_TALES_BASE': 12, 'TXT_HELP_BASE': 17, 'TXT_HINT_BASE': 14,
+              'TXT_MINOR_BASE': 10, 'TXT_COMPT_BASE': 3, 'TXT_NPCBRIEF_BASE': 4,
+              'TXT_DFD_BASE': 3, 'TXT_WFLAV_BASE': 5, 'TXT_EXPCHO_BASE': 8,
+              'TXT_ADCREA_BASE': 3, 'TXT_DONE_BASE': 9, 'TXT_CHAIN_BASE': 18}
 for bk3, exp3 in ARR_EXPECT.items():
     if bk3 not in new_base_emits and bk3 in inc_bases:
         assert next_n - 1 >= inc_bases[bk3] + exp3 - 1, '%s 基址段越界' % bk3
@@ -911,10 +963,14 @@ for k in range(len(offs) - 1):
     assert offs[k] <= offs[k + 1], 'offsets not monotonic at %d' % k
 
 # v1.16.28 减包刀C：offsets 产物 [u32;N]（5772B）改「u32 锚 + u16 组内 delta」两级
-# 表——每 K32=32 条一个绝对锚 TXT_ANCH（offs[k*32]），TXT_DELTA[i]=offs[i]−组首。
+# 表——每 K32=128 条一个绝对锚 TXT_ANCH（offs[k*128]），TXT_DELTA[i]=offs[i]−组首。
+# v1.16.32 单1 组距 32→128（纯算术等价：off(i)=ANCH[i>>7]+DELTA[i] 逐值不变，
+# data.rs txt_off 同批换 i>>7；组距上限=128×行宽 u16 域 assert 兜底）。
 # 运行期 evtx 解码 = ANCH[i>>5] + DELTA[i]，O(1) 纯算术零分配（热路径等价）；
 # 组内 32 条串长和 ≤64KB 恒成立（单条 <200B×32），u16 域 assert 固化。
-K32 = 32
+# v1.16.32 单1：32→128 粗化（锚 rdata −4B×(N/32−N/128)；u16 delta 域按组距
+# 128×行宽 assert 固化，现最大组距 ~9KB « 65535）
+K32 = 128
 anchors = offs[::K32]
 assert len(anchors) == (len(offs) + K32 - 1) // K32, 'anchor count mismatch'
 deltas = []
@@ -1046,6 +1102,13 @@ if name_base is not None:
 if brief_base is not None:
     inc += emit_base('TXT_BRIEF7_BASE',
                      inc_bases.get('TXT_BRIEF7_BASE', BRIEF7_BASE_MANIFEST))
+# v1.16.32 单3 段八基址（首轮 emit 取 manifest 手分值；此后回读 .inc 幂等）
+if name_base is not None:
+    inc += emit_base('TXT_NAME8_BASE',
+                     inc_bases.get('TXT_NAME8_BASE', NAME8_BASE_MANIFEST))
+if brief_base is not None:
+    inc += emit_base('TXT_BRIEF8_BASE',
+                     inc_bases.get('TXT_BRIEF8_BASE', BRIEF8_BASE_MANIFEST))
 # v1.16.29 刀B 整表基址（首轮 emit 收编 N 段基址；此后每次运行从 .inc 回读重发，
 # 与段一/二/三同款幂等——非 --tables2 运行也不许丢基址，否则 include! 断链）
 for bk2 in BASE_KEYS_TABLES2:

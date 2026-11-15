@@ -9,8 +9,8 @@
   钉A（臂内禁 card.title 赋值）：build_event 函数体内不得再出现任何
      `card.title = ...` 行（字面量或动态都禁）——标题唯一来源是构造行查表。
      若未来某臂需要「与表不同的标题」，必须先回评审改设计，不许静默回填字面量。
-  钉B（名段覆盖断言）：EVENT_NAMES 名段（段一..段七基址 × EV_SEG 段界，段七自
-     v1.16.31 新功能批起）对
+  钉B（名段覆盖断言）：EVENT_NAMES 名段（段一..段八基址 × EV_SEG 段界，段八自
+     v1.16.32 单3 扩池批起）对
      id 0..=N_EVENTS-1 逐条可解析、非空、行号=N 不错位——段基址/段界漂移当场红。
   钉C（构造行单源断言）：臂内零赋值形态下，EventCard 构造行必须存在
      `title: EVENT_NAMES[id].into()`——标题单源链断不得。
@@ -104,6 +104,7 @@ def main():
     seg4 = parse_const(data_txt, "EV_SEG4")
     seg5 = parse_const(data_txt, "EV_SEG5")
     seg6 = parse_const(data_txt, "EV_SEG6")
+    seg7 = parse_const(data_txt, "EV_SEG7")
     b1 = parse_inc_base("TXT_NAME_BASE")
     b2 = parse_inc_base("TXT_NAME2_BASE")
     b3 = parse_inc_base("TXT_NAME3_BASE")
@@ -111,8 +112,9 @@ def main():
     b5 = parse_inc_base("TXT_NAME5_BASE")
     b6 = parse_inc_base("TXT_NAME6_BASE")
     b7 = parse_inc_base("TXT_NAME7_BASE")
+    b8 = parse_inc_base("TXT_NAME8_BASE")
 
-    # id -> 名段 N 映射（与 data.rs EvTable 七段连寻同口径）
+    # id -> 名段 N 映射（与 data.rs EvTable 八段连寻同口径）
     def name_n(eid):
         if eid < seg1:
             return b1 + eid
@@ -126,7 +128,9 @@ def main():
             return b5 + (eid - seg4)
         if eid < seg6:
             return b6 + (eid - seg5)
-        return b7 + (eid - seg6)
+        if eid < seg7:
+            return b7 + (eid - seg6)
+        return b8 + (eid - seg7)
 
     # 钉B：名段覆盖断言（真相源逐条可解析、非空、行号=N）
     src_lines = SRC.read_text(encoding="utf-8").splitlines()
@@ -227,8 +231,9 @@ def main():
             "每臂恰 1 次赋值" % (len(hits), n_events - 1)
         )
     print(
-        "OK 钉B 名段覆盖 ✓（N_EVENTS=%d 段界 %d/%d/%d/%d/%d/%d 基址 %d/%d/%d/%d/%d/%d/%d）"
-        % (n_events, seg1, seg2, seg3, seg4, seg5, seg6, b1, b2, b3, b4, b5, b6, b7)
+        "OK 钉B 名段覆盖 ✓（N_EVENTS=%d 段界 %d/%d/%d/%d/%d/%d/%d 基址 %d/%d/%d/%d/%d/%d/%d/%d）"
+        % (n_events, seg1, seg2, seg3, seg4, seg5, seg6, seg7, b1, b2, b3, b4,
+           b5, b6, b7, b8)
     )
     print("title_recheck 全绿")
 

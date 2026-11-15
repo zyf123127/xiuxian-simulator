@@ -798,7 +798,7 @@ fn draw_npc_card(
         txt(&eff, col, y + 136.0, 14, C_CYAN);
     }
     if npc_row_vis(y + 168.0) {
-        wrap_draw(NPC_BRIEF[i], col, y + 168.0, 14, 660.0, 22.0, C_DIM);
+        wrap_draw(npc_brief(i), col, y + 168.0, 14, 660.0, 22.0, C_DIM);
     }
     // v1.14.0 识人小传：常显最新解锁 1 段（14px ≤2 行，赠礼钮 y+258 之上不挤压）；
     // 未解锁给书道口径占位行
@@ -936,7 +936,7 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
             // v1.14.0 识人小传：道侣槽共通段（首段结缘保底，段2/3 随情谊 40/70 解锁）
             let cseg = tale_unlocked(cfav).max((g.meta.companion_lives >= 1) as usize);
             if cseg > 0 && npc_row_vis(y + 222.0) {
-                wrap_draw(COMP_TALES[cseg - 1], col, y + 222.0, 14, 640.0, 22.0, C_TEXT);
+                wrap_draw(comp_tale(cseg - 1), col, y + 222.0, 14, 640.0, 22.0, C_TEXT);
             }
         }
         None => {
@@ -993,7 +993,7 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
             }
             // v1.14.0 识人小传：未结缘但历世有缘（companion_lives≥1 保底）亦显首段旧谊
             if g.meta.companion_lives >= 1 && npc_row_vis(y + 192.0) {
-                wrap_draw(COMP_TALES[0], col, y + 192.0, 14, 640.0, 22.0, C_TEXT);
+                wrap_draw(comp_tale(0), col, y + 192.0, 14, 640.0, 22.0, C_TEXT);
             }
             // 剪影下缘小字一行（直接回应「女角色立绘丢了」的误读；v1.16.1 随卡加高
             // 下沉：y+286/290 → y+386/390，仍盖在立绘盒底边上方）
@@ -1313,7 +1313,7 @@ fn draw_comp_main_card(
             // 识人小传：道侣槽共通段（首段结缘保底，段2/3 随情谊 40/70 解锁，照 :895 口径）
             let cseg = tale_unlocked(cfav).max((g.meta.companion_lives >= 1) as usize);
             if cseg > 0 && npc_row_vis(y + 240.0) {
-                wrap_draw(COMP_TALES[cseg - 1], col, y + 240.0, 14, 640.0, 22.0, C_TEXT);
+                wrap_draw(comp_tale(cseg - 1), col, y + 240.0, 14, 640.0, 22.0, C_TEXT);
             }
             // 双修共进钮 340×60（底对齐 y+358 照赠礼钮；整钮可见才可点；执行口
             // act_dual_cult 内部再全门控校验——按钮仅 UI 门）
@@ -1457,7 +1457,7 @@ fn draw_comp_main_card(
             }
             // 历世有缘者显首段旧谊（照 :953 口径）
             if g.meta.companion_lives >= 1 && npc_row_vis(y + 260.0) {
-                wrap_draw(COMP_TALES[0], col, y + 260.0, 14, 640.0, 22.0, C_TEXT);
+                wrap_draw(comp_tale(0), col, y + 260.0, 14, 640.0, 22.0, C_TEXT);
             }
             // 剪影下缘小字（历世兜底显真图时不画，照 :959 口径）
             if comp_tex.is_none() && npc_row_vis(y + 390.0) {
@@ -1662,7 +1662,8 @@ pub(crate) fn prewarm_comp_page() {
         prewarm_text(n, &[16]);
     }
     // 小传（@14 wrap 两行）
-    for t in COMP_TALES.iter() {
+    for ct_k in 0..COMP_TALES_LEN {
+        let t = comp_tale(ct_k);
         prewarm_text(t, &[14]);
     }
 }
@@ -1797,12 +1798,12 @@ fn draw_overview(g: &Game, l: &Life) {
     }
     txt("功法", col1, 246.0, 14, C_DIM);
     txt(
-        &format!("《{}》", TECHS[l.tech].name),
+        &format!("《{}》", TECHS[l.tech].name()),
         col1 + 45.0,
         246.0, 14,
         C_GOLD,
     );
-    txt(TECHS[l.tech].desc, col1 + 45.0, 268.0, 14, C_DIM);
+    txt(TECHS[l.tech].desc(), col1 + 45.0, 268.0, 14, C_DIM);
     txt("法宝", col1, 304.0, 14, C_DIM);
     // v1.5.0：只留计数摘要（装备详情见法宝页），宽约 120px < 295px 可用
     if l.relics.is_empty() {
@@ -1827,7 +1828,7 @@ fn draw_overview(g: &Game, l: &Life) {
             .iter()
             .enumerate()
             .filter(|(i, _)| l.pills[*i] > 0)
-            .map(|(i, p)| format!("{}×{}", p.name, l.pills[i]))
+            .map(|(i, p)| format!("{}×{}", p.name(), l.pills[i]))
             .collect();
         if owned.is_empty() {
             txt("无", col1 + 45.0, 344.0, 14, C_DIM);
@@ -1846,7 +1847,7 @@ fn draw_overview(g: &Game, l: &Life) {
         for (i, &t) in l.talents.iter().take(6).enumerate() {
             let (tr, tg, tb) = TIER_COLORS[TALENTS[t].tier as usize];
             txt(
-                TALENTS[t].name,
+                TALENTS[t].name(),
                 col2 + 45.0,
                 104.0 + i as f32 * 24.0,
                 14,
@@ -1975,13 +1976,13 @@ fn draw_relic_page(g: &Game) -> Option<PanelAct> {
         if filled {
             // v1.16.5 专属像素画替代共用剑图标（r 即 RELICS 下标，filled 臂内恒有效）
             draw_texture(&crate::art::art().relic_icons[r], 196.0, y + 18.0, WHITE);
-            txt(&format!("【{}】", RELICS[r].name), 228.0, y + 14.0, 16, C_GOLD);
+            txt(&format!("【{}】", RELICS[r].name()), 228.0, y + 14.0, 16, C_GOLD);
             // v1.8.0 E3：灵纹等级徽标
             let lv = g.life.as_ref().map(|x| x.relic_lv[r.min(7)]).unwrap_or(0);
             if lv > 0 {
                 txt(&format!("+{}", lv), 352.0, y + 16.0, 14, C_PURPLE);
             }
-            txt(RELICS[r].desc, 228.0, y + 40.0, 14, C_TEXT);
+            txt(RELICS[r].desc(), 228.0, y + 40.0, 14, C_TEXT);
             txt_c("卸下", 510.0, y + 24.0, 14, C_RED);
         } else {
             txt(
@@ -2049,7 +2050,7 @@ fn draw_relic_page(g: &Game) -> Option<PanelAct> {
         // 点击命中区 600..1120 不动（与图标无冲突）
         draw_texture(&crate::art::art().relic_icons[k], 616.0, y + 6.0, WHITE);
         txt(
-            &format!("【{}】", rl.name),
+            &format!("【{}】", rl.name()),
             640.0,
             y + 6.0,
             16,
@@ -2061,7 +2062,7 @@ fn draw_relic_page(g: &Game) -> Option<PanelAct> {
             txt(&format!("+{}", lv), 758.0, y + 8.0, 14, C_PURPLE);
         }
         txt(
-            rl.desc,
+            rl.desc(),
             804.0,
             y + 8.0, 14,
             if owned { C_TEXT } else { C_DIM },
@@ -2128,7 +2129,7 @@ fn draw_ach_title_page(g: &Game) -> Option<PanelAct> {
         let y = 150.0 + row as f32 * 32.0;
         let done = g.meta.ach[i];
         txt(
-            &format!("{} {}", if done { "■" } else { "□" }, ACHS[i].name),
+            &format!("{} {}", if done { "■" } else { "□" }, ACHS[i].name()),
             x,
             y,
             14,

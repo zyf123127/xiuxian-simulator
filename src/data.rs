@@ -260,127 +260,149 @@ pub fn root_color(r: f32) -> (u8, u8, u8) {
 }
 
 // ---------------- 功法 ----------------
+// v1.16.32 单1 主刀第三批：name/desc 收编 textpack（field_n 显式 N；真相源
+// text_source.txt 行 + tables2 等价钉测）——访问器 O(1) 纯算术零分配（evtx 同款），
+// 调用点 .name→.name() 编译器逐站收口（漏改即编译错，安全失败模式）。
 pub struct TechDef {
-    pub name: &'static str,
+    pub name_n: u16,
     pub mult: f64,
     pub pow: f64,
-    pub desc: &'static str,
+    pub desc_n: u16,
+}
+
+impl TechDef {
+    pub fn name(&self) -> &'static str {
+        evtx(self.name_n as usize)
+    }
+    pub fn desc(&self) -> &'static str {
+        evtx(self.desc_n as usize)
+    }
 }
 pub const TECHS: [TechDef; 8] = [
     TechDef {
-        name: "养行篇",
+        name_n: 2007,
         mult: 1.0,
         pow: 1.0,
-        desc: "入门养行之法，字缓行匀，绵绵不绝",
+        desc_n: 2015,
     },
     TechDef {
-        name: "勾留诀",
+        name_n: 2008,
         mult: 1.3,
         pow: 1.0,
-        desc: "勾留行间灵气，皆为己用",
+        desc_n: 2016,
     },
     TechDef {
-        name: "漏行书",
+        name_n: 2009,
         mult: 1.6,
         pow: 1.0,
-        desc: "行间漏字，藏尽天机",
+        desc_n: 2017,
     },
     TechDef {
-        name: "横行赋",
+        name_n: 2010,
         mult: 2.0,
         pow: 1.2,
-        desc: "一赋横行，笔锋攻伐无双",
+        desc_n: 2018,
     },
     TechDef {
-        name: "藏锋经",
+        name_n: 2011,
         mult: 2.5,
         pow: 1.1,
-        desc: "锋藏笔中，深不可测",
+        desc_n: 2019,
     },
     TechDef {
-        name: "断行七策",
+        name_n: 2012,
         mult: 3.1,
         pow: 1.3,
-        desc: "七策断行，字字杀伐",
+        desc_n: 2020,
     },
     TechDef {
-        name: "无行录",
+        name_n: 2013,
         mult: 3.8,
         pow: 1.15,
-        desc: "无行无列，道心不堕",
+        desc_n: 2021,
     },
     TechDef {
-        name: "天笔遗墨",
+        name_n: 2014,
         mult: 4.8,
         pow: 1.4,
-        desc: "天笔遗落的一滴墨，可开万卷",
+        desc_n: 2022,
     },
 ];
 
 // ---------------- 法宝 ----------------
+// v1.16.32 单1 主刀第三批：name/desc 收编 textpack（同 TechDef 注）
 pub struct RelicDef {
-    pub name: &'static str,
+    pub name_n: u16,
     pub pow: f64,
     pub cult: f64,
-    pub desc: &'static str,
+    pub desc_n: u16,
     /// v1.7.0 献祭折算的模拟点数（永久失去法宝；按 pow+cult 强弱定价）
     pub pt: i32,
 }
+
+impl RelicDef {
+    pub fn name(&self) -> &'static str {
+        evtx(self.name_n as usize)
+    }
+    pub fn desc(&self) -> &'static str {
+        evtx(self.desc_n as usize)
+    }
+}
 pub const RELICS: [RelicDef; 8] = [
     RelicDef {
-        name: "呵霜毫",
+        name_n: 2023,
         pow: 0.15,
         cult: 1.0,
-        desc: "笔毫呵气成霜，落笔生寒",
+        desc_n: 2031,
         pt: 3,
     },
     RelicDef {
-        name: "裁云笺",
+        name_n: 2024,
         pow: 0.25,
         cult: 1.0,
-        desc: "裁云作笺，笺缘利可裂金",
+        desc_n: 2032,
         pt: 4,
     },
     RelicDef {
-        name: "镇行钉",
+        name_n: 2025,
         pow: 0.0,
         cult: 1.25,
-        desc: "钉住书行，墨不散，笔愈疾",
+        desc_n: 2033,
         pt: 4,
     },
     RelicDef {
-        name: "墨骨伞",
+        name_n: 2026,
         pow: 0.40,
         cult: 1.0,
-        desc: "墨骨撑开，来墨皆挡于伞外",
+        desc_n: 2034,
         pt: 6,
     },
     RelicDef {
-        name: "曝书炉",
+        name_n: 2027,
         pow: 0.0,
         cult: 1.40,
-        desc: "炉上曝书，墨香入骨自养人",
+        desc_n: 2035,
         pt: 7,
     },
     RelicDef {
-        name: "闲章",
+        name_n: 2028,
         pow: 0.60,
         cult: 1.0,
-        desc: "闲章盖处，一行即是一疆",
+        desc_n: 2036,
         pt: 9,
     },
     RelicDef {
-        name: "洗笔江",
+        name_n: 2029,
         pow: 0.90,
         cult: 1.0,
-        desc: "一江洗笔，笔锋所指，江开路现",
+        desc_n: 2037,
         pt: 12,
     },
     RelicDef {
-        name: "无字簿",
+        name_n: 2030,
         pow: 1.50,
         cult: 1.30,
-        desc: "满簿无字，落笔皆成真",
+        desc_n: 2038,
         pt: 15,
     },
 ];
@@ -391,48 +413,60 @@ pub const AD_REWARD: i32 = 2;
 /// 幻境广告时长（真实秒）
 pub const AD_SECONDS: f32 = 5.0;
 /// 轮回商阁假广告创意（按已看次数轮换）
-pub const AD_CREATIVES: [&str; 3] = [
-    "琼华仙丹 · 服之延寿一纪",
-    "青云宗 · 今岁招收外门弟子",
-    "轮回镜保养指南 · 镜灵亲自认证",
-];
+// v1.16.32 单1 小表批：表体收编 textpack（TXT_ADCREA_BASE 起 3 条行主序连号，
+// 基址见 text_offsets.inc；pack_text.py --tables2 ARR 通道产侧断言对账）——
+// 查表 fn 单口 O(1) 零分配；行内容与旧字面量逐字节等价（真相源行 + tables2
+// 等价钉测）。
+pub fn ad_creative(k: usize) -> &'static str {
+    evtx(TXT_ADCREA_BASE as usize + k.min(2))
+}
 
 // ---------------- 丹药 ----------------
+// v1.16.32 单1 主刀第三批：name/desc 收编 textpack（同 TechDef 注）
 pub struct PillDef {
-    pub name: &'static str,
-    pub desc: &'static str,
+    pub name_n: u16,
+    pub desc_n: u16,
     pub edible: bool,
+}
+
+impl PillDef {
+    pub fn name(&self) -> &'static str {
+        evtx(self.name_n as usize)
+    }
+    pub fn desc(&self) -> &'static str {
+        evtx(self.desc_n as usize)
+    }
 }
 pub const PILL_PRICES: [i64; 6] = [200, 1500, 2500, 800, 5000, 4000];
 pub const PILLS: [PillDef; 6] = [
     PillDef {
-        name: "聚气丹",
-        desc: "服之修为大增（当前层6%）",
+        name_n: 2039,
+        desc_n: 2045,
         edible: true,
     },
     PillDef {
-        name: "成行丹",
-        desc: "冲击成行境时自动服用 +25%",
+        name_n: 2040,
+        desc_n: 2046,
         edible: false,
     },
     PillDef {
-        name: "破境丹",
-        desc: "突破大境界 +12%（至多叠3）",
+        name_n: 2041,
+        desc_n: 2047,
         edible: false,
     },
     PillDef {
-        name: "培元丹",
-        desc: "延寿15年，疗愈重伤",
+        name_n: 2042,
+        desc_n: 2048,
         edible: true,
     },
     PillDef {
-        name: "洗髓丹",
-        desc: "永久提升灵根+2",
+        name_n: 2043,
+        desc_n: 2049,
         edible: true,
     },
     PillDef {
-        name: "护神丹",
-        desc: "问笔时每重雷劫+10%存活",
+        name_n: 2044,
+        desc_n: 2050,
         edible: false,
     },
 ];
@@ -454,21 +488,34 @@ pub struct TEff {
     pub trib_add: f32,   // 问笔每重存活+
     pub event_mult: f32, // 奇遇(善缘)权重倍率
     pub pill_mult: f64,  // 丹药效果倍率
-    pub relic: Option<usize>,
-    pub tech: Option<usize>,
+    // v1.16.32 单1：Option<usize>(16B×2)→Option<u8>(2B×2) 位宽窄化——值域
+    // 0..=7 恒界内（TALENTS 三行 Some 恒 < 8），读写点仅 game.rs teff() 合并
+    // 拷贝（TEff→TEff 同型零转换）；33 行 TALENTS rdata 每行省 24B。语义零变化
+    //（含 teff() 结果 relic/tech 现无消费面的现状行为——设计事实原样保留）。
+    pub relic: Option<u8>,
+    pub tech: Option<u8>,
 }
 
 pub struct TalentDef {
-    pub name: &'static str,
-    pub desc: &'static str,
+    pub name_n: u16,
+    pub desc_n: u16,
     pub tier: u8,
     pub e: TEff,
 }
 
+impl TalentDef {
+    pub fn name(&self) -> &'static str {
+        evtx(self.name_n as usize)
+    }
+    pub fn desc(&self) -> &'static str {
+        evtx(self.desc_n as usize)
+    }
+}
+
 pub const TALENTS: [TalentDef; 33] = [
     TalentDef {
-        name: "灵光初绽",
-        desc: "灵根 +10",
+        name_n: 2051,
+        desc_n: 2084,
         tier: 0,
         e: TEff {
             root: 10.0,
@@ -489,8 +536,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "道种入命",
-        desc: "道心 +12",
+        name_n: 2052,
+        desc_n: 2085,
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -511,8 +558,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "福缘深厚",
-        desc: "气运 +12",
+        name_n: 2053,
+        desc_n: 2086,
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -533,8 +580,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "筋骨强健",
-        desc: "体魄 +12",
+        name_n: 2054,
+        desc_n: 2087,
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -555,8 +602,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "龟鹤遐龄",
-        desc: "寿元 +20 载",
+        name_n: 2055,
+        desc_n: 2088,
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -577,8 +624,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "殷实人家",
-        desc: "初始灵石 +800",
+        name_n: 2056,
+        desc_n: 2089,
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -599,8 +646,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "勤能补拙",
-        desc: "修炼速度 ×1.15",
+        name_n: 2057,
+        desc_n: 2090,
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -621,8 +668,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "虎豹雷音",
-        desc: "战力 ×1.25",
+        name_n: 2058,
+        desc_n: 2091,
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -643,8 +690,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "心如磐石",
-        desc: "突破成功率 +4%",
+        name_n: 2059,
+        desc_n: 2092,
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -665,8 +712,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "命硬福厚",
-        desc: "问笔存活 +4%/重",
+        name_n: 2060,
+        desc_n: 2093,
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -687,8 +734,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "慧眼识珠",
-        desc: "善缘奇遇 ×1.25",
+        name_n: 2061,
+        desc_n: 2094,
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -709,8 +756,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "药王亲传",
-        desc: "丹药效果 ×1.4",
+        name_n: 2062,
+        desc_n: 2095,
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -731,8 +778,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "灵苗仙种",
-        desc: "灵根 +16",
+        name_n: 2063,
+        desc_n: 2096,
         tier: 0,
         e: TEff {
             root: 16.0,
@@ -753,8 +800,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "含玉而生",
-        desc: "初始灵石 +1500",
+        name_n: 2064,
+        desc_n: 2097,
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -775,8 +822,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "松鹤延年",
-        desc: "寿元 +40 载",
+        name_n: 2065,
+        desc_n: 2098,
         tier: 0,
         e: TEff {
             root: 0.0,
@@ -797,8 +844,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "气海辽阔",
-        desc: "灵根 +6，道心 +6",
+        name_n: 2066,
+        desc_n: 2099,
         tier: 0,
         e: TEff {
             root: 6.0,
@@ -819,8 +866,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "三清道韵",
-        desc: "修炼速度 ×1.4",
+        name_n: 2067,
+        desc_n: 2100,
         tier: 1,
         e: TEff {
             root: 0.0,
@@ -841,8 +888,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "武曲星临",
-        desc: "战力 ×1.55",
+        name_n: 2068,
+        desc_n: 2101,
         tier: 1,
         e: TEff {
             root: 0.0,
@@ -863,8 +910,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "逆天改命",
-        desc: "突破成功率 +9%",
+        name_n: 2069,
+        desc_n: 2102,
         tier: 1,
         e: TEff {
             root: 0.0,
@@ -885,8 +932,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "九天雷体",
-        desc: "问笔存活 +11%/重",
+        name_n: 2070,
+        desc_n: 2103,
         tier: 1,
         e: TEff {
             root: 0.0,
@@ -907,8 +954,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "仙缘广布",
-        desc: "善缘奇遇 ×1.55",
+        name_n: 2071,
+        desc_n: 2104,
         tier: 1,
         e: TEff {
             root: 0.0,
@@ -929,8 +976,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "丹道通神",
-        desc: "丹药效果 ×2.0",
+        name_n: 2072,
+        desc_n: 2105,
         tier: 1,
         e: TEff {
             root: 0.0,
@@ -951,8 +998,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "百岁光阴",
-        desc: "寿元 ×1.35",
+        name_n: 2073,
+        desc_n: 2106,
         tier: 1,
         e: TEff {
             root: 0.0,
@@ -973,8 +1020,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "天纵奇才",
-        desc: "灵根 +22，体魄 +8",
+        name_n: 2074,
+        desc_n: 2107,
         tier: 1,
         e: TEff {
             root: 22.0,
@@ -995,8 +1042,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "家传法宝",
-        desc: "出生自带【镇行钉】",
+        name_n: 2075,
+        desc_n: 2108,
         tier: 1,
         e: TEff {
             root: 0.0,
@@ -1017,8 +1064,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "祖传经卷",
-        desc: "出生自带《漏行书》",
+        name_n: 2076,
+        desc_n: 2109,
         tier: 1,
         e: TEff {
             root: 0.0,
@@ -1039,8 +1086,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "混沌道体",
-        desc: "修炼 ×1.65，灵根 +15",
+        name_n: 2077,
+        desc_n: 2110,
         tier: 2,
         e: TEff {
             root: 15.0,
@@ -1061,8 +1108,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "天命之子",
-        desc: "气运 +40",
+        name_n: 2078,
+        desc_n: 2111,
         tier: 2,
         e: TEff {
             root: 0.0,
@@ -1083,8 +1130,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "雷帝转世",
-        desc: "问笔存活 +20%/重",
+        name_n: 2079,
+        desc_n: 2112,
         tier: 2,
         e: TEff {
             root: 0.0,
@@ -1105,8 +1152,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "剑仙转世",
-        desc: "战力 ×1.9",
+        name_n: 2080,
+        desc_n: 2113,
         tier: 2,
         e: TEff {
             root: 0.0,
@@ -1127,8 +1174,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "长生道体",
-        desc: "寿元 ×1.7",
+        name_n: 2081,
+        desc_n: 2114,
         tier: 2,
         e: TEff {
             root: 0.0,
@@ -1149,8 +1196,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "无底砚转世",
-        desc: "出生自带【无字簿】，落笔皆成真",
+        name_n: 2082,
+        desc_n: 2115,
         tier: 2,
         e: TEff {
             root: 0.0,
@@ -1171,8 +1218,8 @@ pub const TALENTS: [TalentDef; 33] = [
         },
     },
     TalentDef {
-        name: "菩提圣心",
-        desc: "道心 +40，突破 +10%",
+        name_n: 2083,
+        desc_n: 2116,
         tier: 2,
         e: TEff {
             root: 0.0,
@@ -1199,79 +1246,88 @@ pub const TIER_COLORS: [(u8, u8, u8); 3] = [(190, 190, 190), (130, 220, 235), (2
 
 // ---------------- 轮回烙印（道韵永久强化） ----------------
 pub struct UpgDef {
-    pub name: &'static str,
-    pub desc: &'static str,
+    pub name_n: u16,
+    pub desc_n: u16,
     pub max: i32,
     pub base: i64,
     pub growth: f64,
 }
+
+impl UpgDef {
+    pub fn name(&self) -> &'static str {
+        evtx(self.name_n as usize)
+    }
+    pub fn desc(&self) -> &'static str {
+        evtx(self.desc_n as usize)
+    }
+}
 pub const UPGRADES: [UpgDef; 10] = [
     UpgDef {
-        name: "灵根天成",
-        desc: "灵根下限 +8/级",
+        name_n: 2117,
+        desc_n: 2127,
         max: 6,
         base: 25,
         growth: 1.7,
     },
     UpgDef {
-        name: "道心通明",
-        desc: "道心下限 +8/级",
+        name_n: 2118,
+        desc_n: 2128,
         max: 6,
         base: 25,
         growth: 1.7,
     },
     UpgDef {
-        name: "气运加身",
-        desc: "气运下限 +8/级",
+        name_n: 2119,
+        desc_n: 2129,
         max: 6,
         base: 25,
         growth: 1.7,
     },
     UpgDef {
-        name: "铜皮铁骨",
-        desc: "体魄下限 +8/级",
+        name_n: 2120,
+        desc_n: 2130,
         max: 6,
         base: 25,
         growth: 1.7,
     },
     UpgDef {
-        name: "造化青睐",
-        desc: "每次模拟可继承 +1 项",
+        name_n: 2121,
+        desc_n: 2131,
         max: 1,
         base: 1200,
         growth: 1.0,
     },
     UpgDef {
-        name: "天赋异禀",
-        desc: "模拟天赋 3选1 → 4选2",
+        name_n: 2122,
+        desc_n: 2132,
         max: 1,
         base: 800,
         growth: 1.0,
     },
     UpgDef {
-        name: "转世富商",
-        desc: "初始灵石 ×2/级",
+        name_n: 2123,
+        desc_n: 2133,
         max: 3,
         base: 60,
         growth: 2.5,
     },
     UpgDef {
-        name: "轮回记忆",
-        desc: "修炼速度 +12%/级",
+        name_n: 2124,
+        desc_n: 2134,
         max: 5,
         base: 40,
         growth: 2.0,
     },
     UpgDef {
-        name: "龟息延年",
-        desc: "寿元 +10%/级",
+        name_n: 2125,
+        desc_n: 2135,
         max: 5,
         base: 50,
         growth: 2.0,
     },
     UpgDef {
-        name: "点数亲和",
-        desc: "模拟 25% 概率返还点数",
+        name_n: 2126,
+        desc_n: 2136,
         max: 1,
         base: 1500,
         growth: 1.0,
@@ -1284,159 +1340,171 @@ pub fn upg_cost(id: usize, lv: i32) -> i64 {
 
 // ---------------- 成就（首达奖励道韵） ----------------
 pub struct AchDef {
-    pub name: &'static str,
-    pub desc: &'static str,
-    pub reward: i64,
+    pub name_n: u16,
+    pub desc_n: u16,
+    // v1.16.32 单1：i64→i32 位宽窄化（奖励值域 10..=200_000 恒界内；行尺寸
+    // 16B→8B×30 行，rdata −240B 纯等价——消费点 game.rs 达成发放处 as i64 显式
+    // 升位，算术语义零变化）
+    pub reward: i32,
+}
+
+impl AchDef {
+    pub fn name(&self) -> &'static str {
+        evtx(self.name_n as usize)
+    }
+    pub fn desc(&self) -> &'static str {
+        evtx(self.desc_n as usize)
+    }
 }
 pub const ACHS: [AchDef; 30] = [
     AchDef {
-        name: "踏上书途",
-        desc: "沁墨初成",
+        name_n: 2137,
+        desc_n: 2167,
         reward: 10,
     },
     AchDef {
-        name: "自成一行",
-        desc: "踏入成行境",
+        name_n: 2138,
+        desc_n: 2168,
         reward: 30,
     },
     AchDef {
-        name: "洇章成文",
-        desc: "凝成洇章",
+        name_n: 2139,
+        desc_n: 2169,
         reward: 80,
     },
     AchDef {
-        name: "字字立骨",
-        desc: "书中立骨",
+        name_n: 2140,
+        desc_n: 2170,
         reward: 200,
     },
     AchDef {
-        name: "妙笔生花",
-        desc: "修至生花",
+        name_n: 2141,
+        desc_n: 2171,
         reward: 500,
     },
     AchDef {
-        name: "藏锋守拙",
-        desc: "修至藏锋",
+        name_n: 2142,
+        desc_n: 2172,
         reward: 1200,
     },
     AchDef {
-        name: "书我合一",
-        desc: "修至铁画",
+        name_n: 2143,
+        desc_n: 2173,
         reward: 3000,
     },
     AchDef {
-        name: "书成传世",
-        desc: "修至传世",
+        name_n: 2144,
+        desc_n: 2174,
         reward: 8000,
     },
     AchDef {
-        name: "问笔临头",
-        desc: "进入问笔境",
+        name_n: 2145,
+        desc_n: 2175,
         reward: 20000,
     },
     AchDef {
-        name: "飞升成仙",
-        desc: "渡过九重雷劫",
+        name_n: 2146,
+        desc_n: 2176,
         reward: 50000,
     },
     AchDef {
-        name: "位证砚尊",
-        desc: "修至砚尊",
+        name_n: 2147,
+        desc_n: 2177,
         reward: 200000,
     },
     AchDef {
-        name: "执卷至尊",
-        desc: "修至执卷",
+        name_n: 2148,
+        desc_n: 2178,
         reward: 1000000,
     },
     AchDef {
-        name: "万古长青",
-        desc: "活过十万岁",
+        name_n: 2149,
+        desc_n: 2179,
         reward: 2000,
     },
     AchDef {
-        name: "十世轮回",
-        desc: "累计轮回十世",
+        name_n: 2150,
+        desc_n: 2180,
         reward: 300,
     },
     AchDef {
-        name: "百世轮回",
-        desc: "累计轮回百世",
+        name_n: 2151,
+        desc_n: 2181,
         reward: 30000,
     },
     AchDef {
-        name: "富甲一方",
-        desc: "身家百万灵石",
+        name_n: 2152,
+        desc_n: 2182,
         reward: 200,
     },
     AchDef {
-        name: "战力通天",
-        desc: "战力破十亿",
+        name_n: 2153,
+        desc_n: 2183,
         reward: 5000,
     },
     AchDef {
-        name: "洗髓伐毛",
-        desc: "服用洗髓丹10枚",
+        name_n: 2154,
+        desc_n: 2184,
         reward: 300,
     },
     AchDef {
-        name: "剑仙之姿",
-        desc: "剑心通明+结丹",
+        name_n: 2155,
+        desc_n: 2185,
         reward: 400,
     },
     AchDef {
-        name: "寿比南山",
-        desc: "活过千岁",
+        name_n: 2156,
+        desc_n: 2186,
         reward: 80,
     },
     AchDef {
-        name: "宗门泰斗",
-        desc: "加入宗门并凝成洇章",
+        name_n: 2157,
+        desc_n: 2187,
         reward: 150,
     },
     AchDef {
-        name: "一世长生",
-        desc: "自然坐化且曾立骨",
+        name_n: 2158,
+        desc_n: 2188,
         reward: 500,
     },
     AchDef {
-        name: "道侣结缘",
-        desc: "模拟中结为道侣",
+        name_n: 2159,
+        desc_n: 2189,
         reward: 200,
     },
     AchDef {
-        name: "宗门魁首",
-        desc: "宗门大比夺魁",
+        name_n: 2160,
+        desc_n: 2190,
         reward: 150,
     },
     AchDef {
-        name: "蓄势而成",
-        desc: "蓄势圆满后破境",
+        name_n: 2161,
+        desc_n: 2191,
         reward: 100,
     },
     AchDef {
-        name: "镜灵赐福",
-        desc: "触发镜灵赐福",
+        name_n: 2162,
+        desc_n: 2192,
         reward: 200,
     },
     AchDef {
-        name: "三世情缘",
-        desc: "三世模拟中皆结道侣",
+        name_n: 2163,
+        desc_n: 2193,
         reward: 500,
     },
     AchDef {
-        name: "现实飞升",
-        desc: "现实中问笔飞升",
+        name_n: 2164,
+        desc_n: 2194,
         reward: 100000,
     },
     AchDef {
-        name: "富可敌国",
-        desc: "现实身家上亿灵石",
+        name_n: 2165,
+        desc_n: 2195,
         reward: 2000,
     },
     AchDef {
-        name: "千秋万代",
-        desc: "现实享年五千载",
+        name_n: 2166,
+        desc_n: 2196,
         reward: 1000,
     },
 ];
@@ -1447,14 +1515,24 @@ pub const ACHS: [AchDef; 30] = [
 // 元组表先例），禁第二实现。所有谓词只读 meta 标量（不含 hist/story 等 String 字段），
 // chapter_done_mask 可在存档载入帧与每帧章节视图安全调用，零分配。
 // 达成持久 = meta.chap_done 位掩码（键 ch=，缺键→0 零迁移，save.rs 回环单测）。
+// v1.16.32 单1 主刀第三批：goal text 收编 textpack（text_n 显式 N，pid 谓词位
+// 保留原语义）——访问器同款 O(1) 零分配
 pub struct ChapterGoal {
-    pub text: &'static str, // 目标文案（章节书目标行）
+    pub text_n: u16, // 目标文案（章节书目标行）——textpack N
     pub pid: u8,            // 谓词 id（game.rs chapter_goal_met 单口 match 分发表）
 }
 
+impl ChapterGoal {
+    pub fn text(&self) -> &'static str {
+        evtx(self.text_n as usize)
+    }
+}
+
 pub struct ChapterDef {
-    pub num: &'static str,   // 章次字面量（"第一章"，禁运行时拼数字）
-    pub name: &'static str,  // 章名（横幅/章节书行）
+    // v1.16.32 单1 主刀第三批：num/name 收编 textpack（num_n/name_n 显式 N；
+    // 旧「章次字面量禁运行时拼数字」纪律照旧——N 即真相源行号，非运行时拼接）
+    pub num_n: u16,   // 章次字面量（"第一章"，禁运行时拼数字）
+    pub name_n: u16,  // 章名（横幅/章节书行）
     pub intro_n: u16, // 引入剧情（章节书右栏，wrap_draw 单段）——v1.16.29 刀B 收编 textpack
     pub goals: &'static [ChapterGoal],
     // v1.16.9 章成之礼：达成边沿由 game.rs check_chapters 唯一发放（newly 位命中处
@@ -1488,6 +1566,12 @@ pub struct ChapterDef {
 // 结算屏帧路径安全（性能十戒）；行内容与旧字面量逐字节等价（真相源
 // text_source.txt 行 + chapter_tests 钉测）。
 impl ChapterDef {
+    pub fn num(&self) -> &'static str {
+        evtx(self.num_n as usize)
+    }
+    pub fn name(&self) -> &'static str {
+        evtx(self.name_n as usize)
+    }
     pub fn intro(&self) -> &'static str {
         evtx(self.intro_n as usize)
     }
@@ -1515,12 +1599,12 @@ impl ChapterDef {
 
 pub const CHAPTERS: [ChapterDef; 9] = [
     ChapterDef {
-        num: "第一章",
-        name: "雨夜执印",
+        num_n: 1971,
+        name_n: 1980,
         intro_n: 1606,
         goals: &[
-            ChapterGoal { text: "转生入世——此身既立，主线自此始", pid: 12 },
-            ChapterGoal { text: "开卷首模拟——耗 1 枚点数推演一生", pid: 0 },
+            ChapterGoal { text_n: 1989, pid: 12 },
+            ChapterGoal { text_n: 1990, pid: 0 },
         ],
         reward: 50,
         reward_note_n: 1624,
@@ -1529,12 +1613,12 @@ pub const CHAPTERS: [ChapterDef; 9] = [
         couplet_n: 1633,
     },
     ChapterDef {
-        num: "第二章",
-        name: "镜中万象",
+        num_n: 1972,
+        name_n: 1981,
         intro_n: 1607,
         goals: &[
-            ChapterGoal { text: "首胜——模拟中战退一次强敌", pid: 1 },
-            ChapterGoal { text: "现实首破境——闭关圆满，冲击新境", pid: 2 },
+            ChapterGoal { text_n: 1991, pid: 1 },
+            ChapterGoal { text_n: 1992, pid: 2 },
         ],
         reward: 80,
         reward_note_n: 1625,
@@ -1543,12 +1627,12 @@ pub const CHAPTERS: [ChapterDef; 9] = [
         couplet_n: 1634,
     },
     ChapterDef {
-        num: "第三章",
-        name: "血仇得报",
+        num_n: 1973,
+        name_n: 1982,
         intro_n: 1608,
         goals: &[
-            ChapterGoal { text: "首斩宿敌——现实中寻仇得胜", pid: 3 },
-            ChapterGoal { text: "再斩一敌——血仇之链，一环扣一环", pid: 14 },
+            ChapterGoal { text_n: 1993, pid: 3 },
+            ChapterGoal { text_n: 1994, pid: 14 },
         ],
         reward: 120,
         reward_note_n: 1626,
@@ -1557,12 +1641,12 @@ pub const CHAPTERS: [ChapterDef; 9] = [
         couplet_n: 1635,
     },
     ChapterDef {
-        num: "第四章",
-        name: "文狱讨牒",
+        num_n: 1974,
+        name_n: 1983,
         intro_n: 1609,
         goals: &[
-            ChapterGoal { text: "讨牒三成——职牒 3/6 归档", pid: 4 },
-            ChapterGoal { text: "六牒归档——讨牒 6/6，道韵+166", pid: 5 },
+            ChapterGoal { text_n: 1995, pid: 4 },
+            ChapterGoal { text_n: 1996, pid: 5 },
         ],
         reward: 166,
         reward_note_n: 1627,
@@ -1571,12 +1655,12 @@ pub const CHAPTERS: [ChapterDef; 9] = [
         couplet_n: 1636,
     },
     ChapterDef {
-        num: "第五章",
-        name: "山河万象",
+        num_n: 1975,
+        name_n: 1984,
         intro_n: 1610,
         goals: &[
-            ChapterGoal { text: "三域已至——山河图志初成", pid: 6 },
-            ChapterGoal { text: "五域全至——图志圆满", pid: 7 },
+            ChapterGoal { text_n: 1997, pid: 6 },
+            ChapterGoal { text_n: 1998, pid: 7 },
         ],
         reward: 200,
         reward_note_n: 1628,
@@ -1585,12 +1669,12 @@ pub const CHAPTERS: [ChapterDef; 9] = [
         couplet_n: 1637,
     },
     ChapterDef {
-        num: "第六章",
-        name: "同页之缘",
+        num_n: 1976,
+        name_n: 1985,
         intro_n: 1611,
         goals: &[
-            ChapterGoal { text: "首结缘——与一人缝作同页", pid: 8 },
-            ChapterGoal { text: "故人心事——好感达标，抉择一场专属事件", pid: 9 },
+            ChapterGoal { text_n: 1999, pid: 8 },
+            ChapterGoal { text_n: 2000, pid: 9 },
         ],
         reward: 240,
         reward_note_n: 1629,
@@ -1599,14 +1683,14 @@ pub const CHAPTERS: [ChapterDef; 9] = [
         couplet_n: 1638,
     },
     ChapterDef {
-        num: "第七章",
-        name: "问笔终战",
+        num_n: 1977,
+        name_n: 1986,
         intro_n: 1612,
         goals: &[
-            ChapterGoal { text: "现实问笔——九重雷劫扛下，首登仙界", pid: 10 },
+            ChapterGoal { text_n: 2001, pid: 10 },
             // v1.16.19 目标行去重：原「封卷已斩——讨牒 6/6 方见终战卡」与四章目标
             // 「六牒归档——讨牒 6/6，道韵+166」数字行全同——改叙事新句（pid5 不动）
-            ChapterGoal { text: "六牒在手——封卷吏候你多时", pid: 5 },
+            ChapterGoal { text_n: 2002, pid: 5 },
         ],
         reward: 320,
         reward_note_n: 1630,
@@ -1615,12 +1699,12 @@ pub const CHAPTERS: [ChapterDef; 9] = [
         couplet_n: 1639,
     },
     ChapterDef {
-        num: "第八章",
-        name: "落款成书",
+        num_n: 1978,
+        name_n: 1987,
         intro_n: 1613,
         goals: &[
-            ChapterGoal { text: "落款成书——达成任一结局", pid: 11 },
-            ChapterGoal { text: "四卷全览——四种结局皆已落款", pid: 13 },
+            ChapterGoal { text_n: 2003, pid: 11 },
+            ChapterGoal { text_n: 2004, pid: 13 },
         ],
         reward: 400,
         reward_note_n: 1631,
@@ -1633,14 +1717,14 @@ pub const CHAPTERS: [ChapterDef; 9] = [
     //（历代最高修为抵执卷境）进 chapter_goal_met 单口 match；ch= 位掩码 u32 位 8，
     // 旧档载入帧静默补齐口径不变（老玩家补齐不补发，与章成之礼既定取舍一致）。
     ChapterDef {
-        num: "第九章",
-        name: "书外之章",
+        num_n: 1979,
+        name_n: 1988,
         intro_n: 1614,
         goals: &[
             // v1.16.19 目标行去重：原句与八章第二目标「四卷全览——四种结局皆已落款」
             // 全同——改叙事新句（pid13 不动，纯字面量；达成谓词同口）
-            ChapterGoal { text: "四卷重温——把别人的结局读进去", pid: 13 },
-            ChapterGoal { text: "执卷境——历代最高修为抵执卷，书外续行", pid: 15 },
+            ChapterGoal { text_n: 2005, pid: 13 },
+            ChapterGoal { text_n: 2006, pid: 15 },
         ],
         reward: 500,
         reward_note_n: 1632,
@@ -1652,33 +1736,42 @@ pub const CHAPTERS: [ChapterDef; 9] = [
 
 // ---------------- 出身 ----------------
 pub struct OriginDef {
-    pub name: &'static str,
-    pub desc: &'static str,
+    pub name_n: u16,
+    pub desc_n: u16,
+}
+
+impl OriginDef {
+    pub fn name(&self) -> &'static str {
+        evtx(self.name_n as usize)
+    }
+    pub fn desc(&self) -> &'static str {
+        evtx(self.desc_n as usize)
+    }
 }
 pub const ORIGINS: [OriginDef; 6] = [
     OriginDef {
-        name: "农家子弟",
-        desc: "寒门出身，白手起家",
+        name_n: 2197,
+        desc_n: 2203,
     },
     OriginDef {
-        name: "商贾之家",
-        desc: "家资殷实，见多识广",
+        name_n: 2198,
+        desc_n: 2204,
     },
     OriginDef {
-        name: "修仙家族",
-        desc: "祖上曾出过成行修士",
+        name_n: 2199,
+        desc_n: 2205,
     },
     OriginDef {
-        name: "没落世家",
-        desc: "藏书万卷，家风清正",
+        name_n: 2200,
+        desc_n: 2206,
     },
     OriginDef {
-        name: "山村猎户",
-        desc: "筋骨强健，胆气过人",
+        name_n: 2201,
+        desc_n: 2207,
     },
     OriginDef {
-        name: "渔樵江渚",
-        desc: "生于烟波，性近自然",
+        name_n: 2202,
+        desc_n: 2208,
     },
 ];
 
@@ -1699,7 +1792,7 @@ pub const ORIGINS: [OriginDef; 6] = [
 // 轮盘路径纳秒级）；行可读形态与 tools/tables_recheck.py、ledger_recheck.py 的
 // 4 元组解析口径零变（表行仍是 (id,w,mr,good)）；打包无损性由 game.rs
 // events_bitfield_pack_lossless 全表逐行钉测兜底（w>63/mr>7 当场红）。
-pub const N_EVENTS: usize = 338;
+pub const N_EVENTS: usize = 344;
 /// 名/简 textpack 段一条数（v1.16.26 末态；段二自 v1.16.27 扩池起连号追加）
 const EV_SEG1: usize = 291;
 /// 名/简 textpack 段二条数（v1.16.27 末态；段三自 v1.16.28 扩池起连号追加）。
@@ -1733,6 +1826,13 @@ const EV_SEG5: usize = 325;
 /// is_empty 防线抓不住——段七 get 首尾逐字钉为内容级防线，见
 /// ev_tables_section_bounds / batch_tables_aligned v1.16.31 段七）
 const EV_SEG6: usize = 335;
+/// 名/简 textpack 段八条数界（v1.16.32 单3 扩池 6 条起 338..344；段八自下批
+/// 满员后续批开段九照段四→段五先例）。len7 唯一正确写法=EV_SEG7−EV_SEG6 段界
+/// 常量差（勿写 N_EVENTS−EV_SEG6——N_EVENTS 增长时 len7 静默吞掉段八行、
+/// id338..343 名/简读到段七错行非空串，is_empty 防线抓不住——段八 get 首尾
+/// 逐字钉为内容级防线，见 ev_tables_section_bounds / batch_tables_aligned
+/// v1.16.32 段八）
+const EV_SEG7: usize = 338;
 
 pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (0, 12, 0, true),  // 灵草满坡
@@ -2389,7 +2489,9 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     // 第 8 条，mr3 换层照 299 先例，不入白名单徽标走老年臂；v1.16.31 清账：
     // 本行旧写「檐下归燕」与行注/gallery/臂三面不一致，以行注 322 树下尝果
     // 为准）/mr7 最薄层 1——
-    // 323 云上迎雪 善（守长生世纪律不写寿元将尽不触破境裁决，照 270/287 模板）/
+    // 323 云上迎雪 善 mr6（行值 (323,3,6,true)——本行批注原与行注同误写
+    // mr7，v1.16.32 单4 清账对齐；守长生世纪律不写寿元将尽不触破境裁决，
+    // 照 270/287 模板）/
     // 稀有 1——324 旧卷新墨 w1 mr6（213 独苗摊薄，w1 先例 15/57/73/315；
     // 稀有 24→25 条 44→45 权 ≈4.48% 守带）。
     // 扩池后账本实测复算（tools/ledger_recheck.py）：总基权 982→1004（本批
@@ -2402,7 +2504,7 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (320, 3, 0, true),  // 雪里拾稿（宁清霜 Npc(2) 第七卡，mr0）
     (321, 3, 3, true),  // 同封新茶（伴随白名单第 28 条，mr3 有伴第 3 条）
     (322, 3, 3, true),  // 树下尝果（老年×伴双门控第 8 条，mr3 换层）
-    (323, 3, 6, true),  // 云上迎雪（mr7 善，全行最薄层）
+    (323, 3, 6, true),  // 云上迎雪（mr6 善——行注原误写 mr7，v1.16.32 单3 清账照 (323,3,6,true) 行值勘误）
     (324, 1, 6, true),  // 旧卷新墨（稀有 w1：mr6 稀有第 2 条）
     // v1.16.31 扩池 10 条（325..=334 尾部追加，id==下标纪律勿插中）：账本以
     // tools/ledger_recheck.py 重算为准。具名 NPC 2（325 坛泥留字 mr7——醉道人
@@ -2452,6 +2554,21 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (335, 3, 4, true),  // 连雨收书（雨门 weather==2，胡掌柜 Npc(1) 第八卡，mr4）
     (336, 3, 6, true),  // 迎潮一立（灵潮门 weather==4，mr6 善）
     (337, 3, 3, true),  // 三脉同焕（洞府三设施全满门，玄诚 Npc(0) 第八卡，mr3）
+    // v1.16.32 单3 扩池 6（338..=343，尾部追加勿插中——id==下标对账纪律）：
+    // 醉道人第八卡 mr7 w3 善（mr7 常态 18→19 条全行最薄+四 NPC 卡 8/8/8/8 补齐）
+    // /伴随第 30 条 mr6（有伴第 4 条，白名单 29→30）/雾天新门 w3 宁清霜第八卡
+    //（weather==3 门照 335/336 同点；五天象门控雨/灵潮/雾三面铺开）/稀有
+    // mr5 w1（稀有 26→27 条 46→47 权）/老年×伴双门控 mr4 换层第 10 条/mr6 恶
+    //（mr6 恶 5→6 条）；扩池后账本实测复算（tools/ledger_recheck.py）：总基权
+    // 1041→1057（本批 +16=5×w3+1×w1）；稀有 27 条 47 权 ≈4.45%；恶缘常规
+    // 67 条 237 权；mr 全行分布（344 条）0:79/1:63/2:53/3:36/4:38/5:32/6:24/
+    // 7:19；常态池（w>0）309 条
+    (338, 3, 7, true),  // 暮坛对酌（醉道人 Npc(3) 第八卡，mr7 善）
+    (339, 3, 6, true),  // 岁暮并账（伴随白名单第 30 条，mr6 有伴第 4 条）
+    (340, 3, 4, true),  // 雾里听剑（雾门 weather==3，宁清霜 Npc(2) 第八卡，mr4）
+    (341, 1, 5, true),  // 砚底星痕（稀有 mr5 w1，散件）
+    (342, 3, 4, true),  // 灯花并盏（老年×伴双门控 mr4 换层第 10 条）
+    (343, 3, 6, false), // 老炉现纹（mr6 恶，恶缘 66→67 条）
 ];
 
 const fn pack_ev(r: (u16, u8, u8, bool)) -> u16 {
@@ -2532,50 +2649,60 @@ pub fn ev_good(p: u16) -> bool {
 // 往返断言 + game.rs event_names_match_card_titles 运行期全 id 对账——双源漂移防线
 // 由「静态两表」改「运行期比较」）；display-only 不进存档，零存档面。N 追加不变号
 // → 基址稳定；重跑 pack_text.py 幂等（基址回读自上次产出的 .inc）。
+// v1.16.32 单1：EvTable 字段 usize→u16 窄化（static 两实例 rdata 224B→56B，
+// 纯数据位宽等价——段界常量差口径照旧；段长/基址现值与可预见未来均 < 65535，
+// TXT_DELTA u16 同款位宽口径）
 pub struct EvTable {
-    base: usize,
-    len: usize,
+    base: u16,
+    len: u16,
     // v1.16.27 扩池起：段一（v1.16.26 末态 291 条）满员后，新批名/简连号追加为
     // 段二（textpack N 段二基址 TXT_NAME2_BASE/TXT_BRIEF2_BASE 由 pack_text.py
     // 登记与产出，append-only 旧 N 不变号）；get/len/iter/Index 四面对多段连寻
     //（v1.16.28 起扩三段）
-    base2: usize,
-    len2: usize,
+    base2: u16,
+    len2: u16,
     // v1.16.28 扩池起：段二（v1.16.27 末态 8 条）满员后，新批连号追加为段三
     //（TXT_NAME3_BASE/TXT_BRIEF3_BASE 同款登记与产出）；四面同步扩三段连寻。
     // len2/len3 一律取段界常量差（EV_SEG2−EV_SEG1 / EV_SEG3−EV_SEG2）——
     // len2 写 N_EVENTS−EV_SEG1 会随 N_EVENTS 增长静默错位（见 EV_SEG2 注）
-    base3: usize,
-    len3: usize,
+    base3: u16,
+    len3: u16,
     // v1.16.29 扩池起：段三（v1.16.28 末态 10 条）满员后，新批连号追加为段四
     //（TXT_NAME4_BASE/TXT_BRIEF4_BASE 同款登记与产出；单1/单2 已用 N1492..1824，
     // 段四基址顺延 1825/1833）；连寻面数随段同步（v1.16.29 当时四面，v1.16.30
     // 起五面）。len4 取段界常量差
     // EV_SEG4−EV_SEG3（勿写 N_EVENTS−EV_SEG3——N_EVENTS 增长会静默吞掉段五
     // 行，见 EV_SEG4 注）
-    base4: usize,
-    len4: usize,
+    base4: u16,
+    len4: u16,
     // v1.16.30 扩池起：段四（v1.16.29 末态 8 条）满员后，新批连号追加为段五
     //（TXT_NAME5_BASE/TXT_BRIEF5_BASE 同款登记与产出；单2 改写后下一 N=1865，
     // 段五基址 1865/1873）；五面同步扩五段连寻。len5 取段界常量差
     // EV_SEG5−EV_SEG4（勿写 N_EVENTS−EV_SEG4——N_EVENTS 增长会静默吞掉段六
     // 行，见 EV_SEG5 注）
-    base5: usize,
-    len5: usize,
+    base5: u16,
+    len5: u16,
     // v1.16.31 扩池起：段五（v1.16.30 末态 8 条）满员后，新批连号追加为段六
     //（TXT_NAME6_BASE/TXT_BRIEF6_BASE 同款登记与产出；单2 后下一 N=1905，
     // 段六基址 1905/1915）；六面同步扩六段连寻。len6 取段界常量差
     // EV_SEG6−EV_SEG5（勿写 N_EVENTS−EV_SEG5——N_EVENTS 增长会静默吞掉段七
     // 行，见 EV_SEG6 注）
-    base6: usize,
-    len6: usize,
+    base6: u16,
+    len6: u16,
     // v1.16.31 新功能 3 条起：段六（10 条 N1905..1914/N1915..1924 紧连封死）
     // 满员后新批连号追加为段七（TXT_NAME7_BASE/TXT_BRIEF7_BASE 同款登记与
     // 产出；段六后下一空 N=1954，段七基址 1954/1957）；七面同步扩七段连寻。
     // len7 取段界常量差 N_EVENTS−EV_SEG6（末段写法同 len5/len6 原注：段界差
     // 是唯一正确写法，下批扩池续段八时须同步改差）
-    base7: usize,
-    len7: usize,
+    base7: u16,
+    len7: u16,
+    // v1.16.32 单3 扩池起：段七（3 条）满员后新批连号追加为段八（TXT_NAME8_
+    // BASE/TXT_BRIEF8_BASE=2338/2344 同款登记与产出；段七后下一空 N=2338，
+    // 段八基址 2338/2344）；八面同步扩八段连寻（单1 segs 表驱动化——扩段只加
+    // 一行 segs）。len8 取段界常量差 N_EVENTS−EV_SEG7（末段写法同 len5/len6/
+    // len7 原注：段界差是唯一正确写法，下批扩池续段九时须同步改差）
+    base8: u16,
+    len8: u16,
 }
 
 impl EvTable {
@@ -2583,83 +2710,49 @@ impl EvTable {
     /// i < len 走段一，len..len+len2 走段二，len+len2..len+len2+len3 走段三，
     /// len+len2+len3..len+len2+len3+len4 走段四，len+len2+len3+len4..len5 止走
     /// 段五，len5 之末..len6 之末走段六，len6 之末..总长走段七
+    // v1.16.32 单1：七段 if 链改 segs 局部 (base,len) 表 + 循环累减——逐值等价
+    //（k 跨段累减、总长越界返 None），扩段八只加一行 segs（免五面手改）。
+    // ev_tables_section_bounds / batch_tables_aligned 逐段首尾钉测现成兜底。
     #[inline]
     pub fn get(&self, i: usize) -> Option<&'static str> {
-        if i < self.len {
-            return Some(evtx(self.base + i));
-        }
-        if i < self.len + self.len2 {
-            return Some(evtx(self.base2 + i - self.len));
-        }
-        if i < self.len + self.len2 + self.len3 {
-            return Some(evtx(self.base3 + i - self.len - self.len2));
-        }
-        if i < self.len + self.len2 + self.len3 + self.len4 {
-            return Some(evtx(self.base4 + i - self.len - self.len2 - self.len3));
-        }
-        if i < self.len + self.len2 + self.len3 + self.len4 + self.len5 {
-            return Some(evtx(
-                self.base5 + i - self.len - self.len2 - self.len3 - self.len4,
-            ));
-        }
-        if i < self.len + self.len2 + self.len3 + self.len4 + self.len5 + self.len6 {
-            return Some(evtx(
-                self.base6 + i - self.len - self.len2 - self.len3 - self.len4 - self.len5,
-            ));
-        }
-        if i
-            < self.len
-                + self.len2
-                + self.len3
-                + self.len4
-                + self.len5
-                + self.len6
-                + self.len7
-        {
-            return Some(evtx(
-                self.base7
-                    + i
-                    - self.len
-                    - self.len2
-                    - self.len3
-                    - self.len4
-                    - self.len5
-                    - self.len6,
-            ));
+        let segs = [
+            (self.base, self.len),
+            (self.base2, self.len2),
+            (self.base3, self.len3),
+            (self.base4, self.len4),
+            (self.base5, self.len5),
+            (self.base6, self.len6),
+            (self.base7, self.len7),
+            (self.base8, self.len8),
+        ];
+        let mut k = i;
+        for seg_k in segs.iter() {
+            if k < seg_k.1 as usize {
+                return Some(evtx(seg_k.0 as usize + k));
+            }
+            k -= seg_k.1 as usize;
         }
         None
     }
+    // v1.16.32 单1：总长和单点（is_empty/iter/Index 收敛本口，免五处重复展开）
     #[inline]
     pub fn len(&self) -> usize {
-        self.len
-            + self.len2
-            + self.len3
-            + self.len4
-            + self.len5
-            + self.len6
-            + self.len7
+        self.len as usize
+            + self.len2 as usize
+            + self.len3 as usize
+            + self.len4 as usize
+            + self.len5 as usize
+            + self.len6 as usize
+            + self.len7 as usize
+            + self.len8 as usize
     }
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.len
-            + self.len2
-            + self.len3
-            + self.len4
-            + self.len5
-            + self.len6
-            + self.len7
-            == 0
+        self.len() == 0
     }
     /// 全表迭代（旧 [&str; N].iter() 等价：Item 为 &'static str，行序即 id 序）
     pub fn iter(&self) -> impl Iterator<Item = &'static str> + '_ {
-        (0..self.len
-            + self.len2
-            + self.len3
-            + self.len4
-            + self.len5
-            + self.len6
-            + self.len7)
-            .map(move |i| self.get(i).unwrap_or(""))
+        (0..self.len()).map(move |i| self.get(i).unwrap_or(""))
     }
 }
 
@@ -2669,15 +2762,7 @@ impl core::ops::Index<usize> for EvTable {
     /// 直下标仅测试可达，测试恒界内）
     #[inline]
     fn index(&self, i: usize) -> &str {
-        if i
-            >= self.len
-                + self.len2
-                + self.len3
-                + self.len4
-                + self.len5
-                + self.len6
-                + self.len7
-        {
+        if i >= self.len() {
             return "";
         }
         self.get(i).unwrap_or("")
@@ -2685,53 +2770,60 @@ impl core::ops::Index<usize> for EvTable {
 }
 
 pub static EVENT_NAMES: EvTable = EvTable {
-    base: TXT_NAME_BASE as usize,
-    len: EV_SEG1,
-    base2: TXT_NAME2_BASE as usize,
+    base: TXT_NAME_BASE as u16,
+    len: EV_SEG1 as u16,
+    base2: TXT_NAME2_BASE as u16,
     // 段界常量差（勿写 N_EVENTS−EV_SEG1——N_EVENTS=309 时静默变 18、段二简行错位）
-    len2: EV_SEG2 - EV_SEG1,
-    base3: TXT_NAME3_BASE as usize,
+    len2: (EV_SEG2 - EV_SEG1) as u16,
+    base3: TXT_NAME3_BASE as u16,
     // 段界常量差（勿写 N_EVENTS−EV_SEG2——N_EVENTS 增长时静默吞掉段四行，见
     // EV_SEG3 注）
-    len3: EV_SEG3 - EV_SEG2,
-    base4: TXT_NAME4_BASE as usize,
+    len3: (EV_SEG3 - EV_SEG2) as u16,
+    base4: TXT_NAME4_BASE as u16,
     // 段界常量差（勿写 N_EVENTS−EV_SEG3——N_EVENTS 增长时静默吞掉段五行，见
     // EV_SEG4 注）
-    len4: EV_SEG4 - EV_SEG3,
-    base5: TXT_NAME5_BASE as usize,
+    len4: (EV_SEG4 - EV_SEG3) as u16,
+    base5: TXT_NAME5_BASE as u16,
     // v1.16.31 扩池起改段界常量差（原 N_EVENTS−EV_SEG4 是「末段」写法，扩段六
     // 后会随 N_EVENTS 静默吞掉段六首行——见 EV_SEG5 注）
-    len5: EV_SEG5 - EV_SEG4,
-    base6: TXT_NAME6_BASE as usize,
+    len5: (EV_SEG5 - EV_SEG4) as u16,
+    base6: TXT_NAME6_BASE as u16,
     // v1.16.31 新功能批起改段界常量差（原 N_EVENTS−EV_SEG5 是「末段」写法，扩
     // 段七后会随 N_EVENTS 静默吞掉段七首行——见 EV_SEG6 注）
-    len6: EV_SEG6 - EV_SEG5,
-    base7: TXT_NAME7_BASE as usize,
-    len7: N_EVENTS - EV_SEG6,
+    len6: (EV_SEG6 - EV_SEG5) as u16,
+    base7: TXT_NAME7_BASE as u16,
+    // v1.16.32 单3 扩段八起改段界常量差（原 N_EVENTS−EV_SEG6 是「末段」写法，
+    // 扩段八后会随 N_EVENTS 静默吞掉段八首行——见 EV_SEG7 注）
+    len7: (EV_SEG7 - EV_SEG6) as u16,
+    base8: TXT_NAME8_BASE as u16,
+    len8: (N_EVENTS - EV_SEG7) as u16,
 };
 
 
 // v1.16.19 前段简随前期高频卡画面化同批改（id 0/1/3/4/5/6/12）：简仍「一行 ≤18 字」
 // 预算（表注见上），由「场景+结果」记账体改画面半句——玩家开局必读的一页不再最平
 pub static EVENT_BRIEF: EvTable = EvTable {
-    base: TXT_BRIEF_BASE as usize,
-    len: EV_SEG1,
-    base2: TXT_BRIEF2_BASE as usize,
-    len2: EV_SEG2 - EV_SEG1,
-    base3: TXT_BRIEF3_BASE as usize,
+    base: TXT_BRIEF_BASE as u16,
+    len: EV_SEG1 as u16,
+    base2: TXT_BRIEF2_BASE as u16,
+    len2: (EV_SEG2 - EV_SEG1) as u16,
+    base3: TXT_BRIEF3_BASE as u16,
     // 段界常量差（同 EVENT_NAMES len3 注）
-    len3: EV_SEG3 - EV_SEG2,
-    base4: TXT_BRIEF4_BASE as usize,
+    len3: (EV_SEG3 - EV_SEG2) as u16,
+    base4: TXT_BRIEF4_BASE as u16,
     // 段界常量差（同 EVENT_NAMES len4 注）
-    len4: EV_SEG4 - EV_SEG3,
-    base5: TXT_BRIEF5_BASE as usize,
+    len4: (EV_SEG4 - EV_SEG3) as u16,
+    base5: TXT_BRIEF5_BASE as u16,
     // v1.16.31 扩池起改段界常量差（同 EVENT_NAMES len5 注）
-    len5: EV_SEG5 - EV_SEG4,
-    base6: TXT_BRIEF6_BASE as usize,
+    len5: (EV_SEG5 - EV_SEG4) as u16,
+    base6: TXT_BRIEF6_BASE as u16,
     // v1.16.31 新功能批起改段界常量差（同 EVENT_NAMES len6 注）
-    len6: EV_SEG6 - EV_SEG5,
-    base7: TXT_BRIEF7_BASE as usize,
-    len7: N_EVENTS - EV_SEG6,
+    len6: (EV_SEG6 - EV_SEG5) as u16,
+    base7: TXT_BRIEF7_BASE as u16,
+    // v1.16.32 单3 扩段八起改段界常量差（同 EVENT_NAMES len7 注）
+    len7: (EV_SEG7 - EV_SEG6) as u16,
+    base8: TXT_BRIEF8_BASE as u16,
+    len8: (N_EVENTS - EV_SEG7) as u16,
 };
 
 
@@ -2764,20 +2856,13 @@ pub fn realm_title(max_realm: usize) -> &'static str {
     }
 }
 
-pub const MINOR_LINES: [&str; 10] = [
-    "灵雾漫过膝弯，你吐纳一夜，起身时袖口凝着露水。",
-    // v1.16.20 画面化 2 条（模拟日志 8%/年高频杂事线，只改字不加条不加段）：
-    // 结论词「悟道/有感触」改动作与画面，书稿母题收尾
-    "瀑布落在肩头，水声里听出功法的调子。",
-    "月圆之夜，星子排成一行未写的稿。",
-    "一只灵雀落在你肩头，叽喳半日方去。",
-    "你抄录道经一卷，字字入心。",
-    "山下雨了，你于檐下煮茶论道。",
-    "你梦中见青山万重，醒来隐约有所悟。",
-    "你采药归来，路上救了一只受伤的灵狐。",
-    "夜里剑鸣不止，你起身舞剑一回。",
-    "你在崖边远眺，云海翻涌如潮。",
-];
+// v1.16.32 单1 小表批：表体收编 textpack（TXT_MINOR_BASE 起 10 条连号）。长度
+// 常量供 gen_range 上界（原 MINOR_LINES.len() 调用点等价换名）；查表 fn 越界
+// min 钳制（panic=abort 纪律）。
+pub const MINOR_LINES_LEN: usize = 10;
+pub fn minor_line(k: usize) -> &'static str {
+    evtx(TXT_MINOR_BASE as usize + k.min(MINOR_LINES_LEN - 1))
+}
 
 // ---------------- 同页人十名（原创定稿 §11） ----------------
 pub const COMPANION_NAMES: [&str; 10] = [
@@ -2890,98 +2975,114 @@ pub enum SectGoodKind {
 }
 
 pub struct SectGood {
-    pub name: &'static str,
-    pub desc: &'static str,
+    pub name_n: u16, // v1.16.32 单1 主刀第三批：name/desc 收编 textpack
+    pub desc_n: u16,
     pub cost: u32,
     pub kind: SectGoodKind,
 }
 
+impl SectGood {
+    pub fn name(&self) -> &'static str {
+        evtx(self.name_n as usize)
+    }
+    pub fn desc(&self) -> &'static str {
+        evtx(self.desc_n as usize)
+    }
+}
+
 pub const SECT_GOODS: [SectGood; 6] = [
     SectGood {
-        name: "凝元丹",
-        desc: "宗门秘制，服之修为+当前层15%",
+        name_n: 2229,
+        desc_n: 2235,
         cost: 60,
         kind: SectGoodKind::Qi15,
     },
     SectGood {
-        name: "洗心丹",
-        desc: "涤荡心尘，道心永久+2",
+        name_n: 2230,
+        desc_n: 2236,
         cost: 90,
         kind: SectGoodKind::Dao2,
     },
     SectGood {
-        name: "铁骨丹",
-        desc: "淬炼筋骨，体魄永久+2",
+        name_n: 2231,
+        desc_n: 2237,
         cost: 90,
         kind: SectGoodKind::Body2,
     },
     SectGood {
-        name: "延寿丹",
-        desc: "以灵物炼制，寿元+8载",
+        name_n: 2232,
+        desc_n: 2238,
         cost: 140,
         kind: SectGoodKind::Life8,
     },
     SectGood {
-        name: "闲章",
-        desc: "镇派之宝拓影，战力+60%（需立骨境）",
+        name_n: 2233,
+        desc_n: 2239,
         cost: 260,
         kind: SectGoodKind::Relic(5),
     },
     SectGood {
-        name: "天笔遗墨",
-        desc: "镇派无上功法（需立骨境）",
+        name_n: 2234,
+        desc_n: 2240,
         cost: 420,
         kind: SectGoodKind::Tech(7),
     },
 ];
 
 // 远征步骤：kind 0战 1药 2宝 3奇
+// v1.16.32 单1 主刀第三批补收：text 收编 textpack（text_n 显式 N）——访问器
+// O(1) 零分配（远征卡构建路径，事件期非帧路径）
 pub struct ExpedStep {
-    pub text: &'static str,
+    pub text_n: u16,
     pub kind: u8,
+}
+
+impl ExpedStep {
+    pub fn text(&self) -> &'static str {
+        evtx(self.text_n as usize)
+    }
 }
 
 pub const EXPED_STEPS: [ExpedStep; 8] = [
     ExpedStep {
-        text: "一群妖狼拦住去路，绿瞳幽幽，獠牙滴涎。",
+        text_n: 2330,
         kind: 0,
     },
     ExpedStep {
-        text: "几名邪修残党盯上了你，杀意毕露。",
+        text_n: 2331,
         kind: 0,
     },
     ExpedStep {
-        text: "谷中灵药遍地，异香扑鼻，时有兽吼隐隐。",
+        text_n: 2332,
         kind: 1,
     },
     ExpedStep {
-        text: "一座上古药园废墟，灵株在禁制中自生自灭。",
+        text_n: 2333,
         kind: 1,
     },
     ExpedStep {
-        text: "上古宝库大门半启，禁制流光如网。",
+        text_n: 2334,
         kind: 2,
     },
     ExpedStep {
-        text: "湖底沉船遗藏隐约可见，水寒刺骨。",
+        text_n: 2335,
         kind: 2,
     },
     ExpedStep {
-        text: "一位前辈坐化之地，道韵未散，石刻斑驳。",
+        text_n: 2336,
         kind: 3,
     },
     ExpedStep {
-        text: "一眼灵泉汩汩涌动，泉水中蕴含精纯灵气。",
+        text_n: 2337,
         kind: 3,
     },
 ];
 
-pub const EXPED_CHOICE_LABELS: [[&str; 2]; 4] = [
-    ["正面迎击", "绕道潜行"],
-    ["细致采撷", "速取而返"],
-    ["强破禁制", "小心搜检"],
-    ["静心感悟", "略作参详"],
-];
+// v1.16.32 单1 小表批：表体收编 textpack（TXT_EXPCHO_BASE 起 8 条行主序连号，
+// k*2+j 寻址同旧 [k][j]）；两参各自 min 钳制。
+pub fn exped_choice(k: usize, j: usize) -> &'static str {
+    evtx(TXT_EXPCHO_BASE as usize + k.min(3) * 2 + j.min(1))
+}
 
 pub const EXPED_LEN_BASE: usize = 3; // 链长 = 3 + gen_range(0, 3) → 3..=5
 pub const EXPED_QI_PCT: f64 = 0.10;
@@ -3013,13 +3114,12 @@ pub const WEATHERS: [&str; 5] = ["晴", "云", "雨", "雾", "灵潮"];
 // 五天气各一句画面短句（有场景有实物，静态查表零 format 机制；与场景行
 // 「地名 · 天时」/event_brief_11625 批同画面体纪律）。表长与 WEATHERS 等长
 // 由 game.rs weather_flavor_aligned 单测钉死防漂移
-pub const WEATHER_FLAVOR: [&str; 5] = [
-    "晴空晒暖檐角，纸墨干得快。",
-    "云影过窗，砚池凉了半分。",
-    "雨连下三日，檐水滴成一线。",
-    "雾锁山路，脚步放轻半寸。",
-    "灵潮涨了，泉鸣跟着浪头走。",
-];
+// v1.16.32 单1 小表批：表体收编 textpack（TXT_WFLAV_BASE 起 5 条连号）；等长
+// 对账单测（weather_flavor_aligned）改走 WEATHER_FLAVOR_LEN。
+pub const WEATHER_FLAVOR_LEN: usize = 5;
+pub fn weather_flavor(w: usize) -> &'static str {
+    evtx(TXT_WFLAV_BASE as usize + w.min(WEATHER_FLAVOR_LEN - 1))
+}
 
 // 天气叠色（同上）
 pub const WEATHER_TINT: [(u8, u8, u8, u8); 5] = [
@@ -3088,11 +3188,10 @@ pub fn relic_cult_at(idx: usize, lv: i32) -> f64 {
 
 // 洞府经营：聚灵阵 / 灵田 / 丹房，各 0..=3 级
 pub const DONGFU_FACS: [&str; 3] = ["聚灵阵", "灵田", "丹房"];
-pub const DONGFU_FAC_DESC: [&str; 3] = [
-    "阵纹环洞，灵气奔涌——修炼效率随阵法层级提升。",
-    "洞前开垦灵田，每载自动产出灵石，收成随天气起伏。",
-    "洞中丹炉不熄，坊市购丹价格随炉火层级降低。",
-];
+// v1.16.32 单1 小表批：表体收编 textpack（TXT_DFD_BASE 起 3 条连号）
+pub fn dongfu_fac_desc(i: usize) -> &'static str {
+    evtx(TXT_DFD_BASE as usize + i.min(2))
+}
 pub const JUELING_MULT: [f64; 4] = [1.00, 1.15, 1.30, 1.50];
 pub const LINGTIAN_YIELD: [i64; 4] = [0, 300, 1200, 5000];
 pub const DANFANG_DISC: [f64; 4] = [1.00, 0.90, 0.80, 0.70];
@@ -3107,8 +3206,8 @@ pub const MAP_SEED_DEFAULT: u32 = 20261011;
 
 // 五区主题表：主题 0 与 v1.5.0 现版逐值一致（旧档/未换幕前像素级等价）
 pub struct MapTheme {
-    pub name: &'static str,
-    pub desc: &'static str,
+    pub name_n: u16, // v1.16.32 单1 主刀第三批：name/desc 收编 textpack
+    pub desc_n: u16,
     pub grad_top: (u8, u8, u8),  // 纵向渐变顶色
     pub grad_bot: (u8, u8, u8),  // 纵向渐变底色
     pub moss_a: (u8, u8, u8),    // 苔斑主色基准（实际值 ±随机抖动）
@@ -3124,13 +3223,22 @@ pub struct MapTheme {
     pub jitter: [(f32, f32); 6], // 六节点位置抖动（主题 0 全 0 = 现版坐标）
 }
 
+impl MapTheme {
+    pub fn name(&self) -> &'static str {
+        evtx(self.name_n as usize)
+    }
+    pub fn desc(&self) -> &'static str {
+        evtx(self.desc_n as usize)
+    }
+}
+
 pub const MAP_THEMES: [MapTheme; 5] = [
     // 0 东境（现版逐值：渐变 (24,34,40)→(14,20,26)、苔斑 (30,52,38)/(56,46,36) 600、
     //   山脊 (46,44,58)/(38,36,48)、河 (58,96,110)/(86,130,140)、林 (30,48,36)/(26,42,32) 220、
     //   边框 (122,96,52)、deco 1.0、jitter 全 0）
     MapTheme {
-        name: "东境青云",
-        desc: "灵气氤氲的青云故地，山河如初。",
+        name_n: 2209,
+        desc_n: 2214,
         grad_top: (24, 34, 40),
         grad_bot: (14, 20, 26),
         moss_a: (30, 52, 38),
@@ -3146,8 +3254,8 @@ pub const MAP_THEMES: [MapTheme; 5] = [
         jitter: [(0.0, 0.0); 6],
     },
     MapTheme {
-        name: "西漠黄沙",
-        desc: "大漠孤烟，残卷称此地埋着上古魔宗的埋骨窟。",
+        name_n: 2210,
+        desc_n: 2215,
         grad_top: (50, 40, 26),
         grad_bot: (30, 22, 14),
         moss_a: (70, 58, 36),
@@ -3163,8 +3271,8 @@ pub const MAP_THEMES: [MapTheme; 5] = [
         jitter: [(30.0, -20.0), (-36.0, 14.0), (20.0, 28.0), (-24.0, 26.0), (18.0, 22.0), (-28.0, 14.0)],
     },
     MapTheme {
-        name: "南疆瘴林",
-        desc: "瘴气弥漫的十万大山，蛊修与灵药同生于此。",
+        name_n: 2211,
+        desc_n: 2216,
         grad_top: (18, 40, 26),
         grad_bot: (10, 24, 16),
         moss_a: (36, 66, 42),
@@ -3180,8 +3288,8 @@ pub const MAP_THEMES: [MapTheme; 5] = [
         jitter: [(-26.0, 20.0), (28.0, -18.0), (-18.0, -24.0), (22.0, -26.0), (-16.0, 18.0), (24.0, 20.0)],
     },
     MapTheme {
-        name: "北境冰原",
-        desc: "万里雪封的极北之地，冰河之下镇着未醒的古修。",
+        name_n: 2212,
+        desc_n: 2217,
         grad_top: (42, 48, 60),
         grad_bot: (22, 26, 38),
         moss_a: (118, 126, 140),
@@ -3197,8 +3305,8 @@ pub const MAP_THEMES: [MapTheme; 5] = [
         jitter: [(20.0, 26.0), (-22.0, 24.0), (26.0, -20.0), (-30.0, -16.0), (20.0, -24.0), (-18.0, 26.0)],
     },
     MapTheme {
-        name: "东海仙屿",
-        desc: "沧溟之上的散修岛屿，潮声里有仙宫的传闻。",
+        name_n: 2213,
+        desc_n: 2218,
         grad_top: (16, 42, 58),
         grad_bot: (8, 22, 36),
         moss_a: (42, 72, 82),
@@ -3222,19 +3330,28 @@ pub fn theme_of(region: u32) -> &'static MapTheme {
 // ================= v1.8.0 百炼乾坤：区域专属机制 =================
 // 五域各一机制：顶栏短标 + 一行说明；宗门任务/远征/现实闭关/模拟善缘四处挂钩。
 pub struct RegionMech {
-    pub mech: &'static str, // 机制短名（顶栏标签）
-    pub desc: &'static str, // 一行说明（≤18 字，图鉴/卡片）
+    pub mech_n: u16,        // 机制短名（顶栏标签）——v1.16.32 收编 textpack
+    pub desc_n: u16,        // 一行说明（≤18 字，图鉴/卡片）——v1.16.32 收编 textpack
     pub quest_mult: f64,    // 宗门任务贡献与灵石
     pub exped_mult: f64,    // 远征收益
     pub exped_risk: f32,    // 远征成功率减益（正=更险）
     pub cult_mult: f64,     // 现实闭关效率
     pub event_mult: f64,    // 模拟善缘事件权重
 }
+
+impl RegionMech {
+    pub fn mech(&self) -> &'static str {
+        evtx(self.mech_n as usize)
+    }
+    pub fn desc(&self) -> &'static str {
+        evtx(self.desc_n as usize)
+    }
+}
 pub const REGION_MECH: [RegionMech; 5] = [
     // 0 东境青云：宗门兴望
     RegionMech {
-        mech: "宗门兴望",
-        desc: "宗门兴旺，任务报偿更丰",
+        mech_n: 2219,
+        desc_n: 2224,
         quest_mult: 1.20,
         exped_mult: 1.00,
         exped_risk: 0.0,
@@ -3243,8 +3360,8 @@ pub const REGION_MECH: [RegionMech; 5] = [
     },
     // 1 西漠黄沙：大漠秘藏
     RegionMech {
-        mech: "大漠秘藏",
-        desc: "大漠埋藏上古秘藏，远征收获更丰",
+        mech_n: 2220,
+        desc_n: 2225,
         quest_mult: 1.00,
         exped_mult: 1.25,
         exped_risk: 0.0,
@@ -3253,8 +3370,8 @@ pub const REGION_MECH: [RegionMech; 5] = [
     },
     // 2 南疆瘴林：瘴惑灵芽
     RegionMech {
-        mech: "瘴惑灵芽",
-        desc: "瘴气惑人，远征更险而灵药更丰",
+        mech_n: 2221,
+        desc_n: 2226,
         quest_mult: 1.00,
         exped_mult: 1.20,
         exped_risk: 0.08,
@@ -3263,8 +3380,8 @@ pub const REGION_MECH: [RegionMech; 5] = [
     },
     // 3 北境冰原：冰心澄神
     RegionMech {
-        mech: "冰心澄神",
-        desc: "冰原澄神定魄，现实闭关效率更高",
+        mech_n: 2222,
+        desc_n: 2227,
         quest_mult: 1.00,
         exped_mult: 1.00,
         exped_risk: 0.0,
@@ -3273,8 +3390,8 @@ pub const REGION_MECH: [RegionMech; 5] = [
     },
     // 4 东海仙屿：仙屿潮音
     RegionMech {
-        mech: "仙屿潮音",
-        desc: "潮音涤心，镜像世界善缘奇遇更多",
+        mech_n: 2223,
+        desc_n: 2228,
         quest_mult: 1.00,
         exped_mult: 1.00,
         exped_risk: 0.0,
@@ -3319,12 +3436,10 @@ pub const NPC_DESC: [&str; 4] = [
     "来历不明的散修酒友，醉话里常藏真机。酒逢知己，修炼事半功倍。",
 ];
 // 人物页卡面一行简介（单行 ≤26 字；v1.8.0 D1 新增）
-pub const NPC_BRIEF: [&str; 4] = [
-    "宗门任务的靠山，好感愈深报偿愈丰。",
-    "万宝楼掌柜，购丹价格随交情打折。",
-    "大师姐剑意护持，跨境破境更稳。",
-    "酒友真言入耳，每载修为水涨船高。",
-];
+// v1.16.32 单1 副刀：表体收编 textpack（TXT_NPCBRIEF_BASE 起 4 条连号）
+pub fn npc_brief(i: usize) -> &'static str {
+    evtx(TXT_NPCBRIEF_BASE as usize + i.min(3))
+}
 
 // 好感档次阈值与名称（fav ≥ 阈值即入档）
 pub const NPC_FAV_TIERS: [i32; 5] = [0, 20, 40, 70, 95];
@@ -3348,11 +3463,11 @@ pub fn npc_tale(npc: usize, seg: usize) -> &'static str {
     evtx(TXT_TALES_BASE as usize + npc.min(3) * 3 + seg.min(2))
 }
 // COMP_TALES[seg]：道侣槽共通小传（同页人），段 1 结缘即解（companion_lives≥1 保底）。
-pub const COMP_TALES: [&str; 3] = [
-    "两页残稿缝作同页，墨迹便再分不开彼此。她的名字住进你的行间，你的批注她也读得见——同页之人，同命之笔。",
-    "有人问同页是什么滋味。她说不清，只说像抄书时忽然多了一只手替你压着纸角：风翻不走，雨洇不透，一笔一画都有人作证。",
-    "你们试过在同一页写同一句诗，落笔竟一字不差。天曹的册子对不上这样的账——同页人的字迹，天曹的笔分不出谁是谁。",
-];
+// v1.16.32 单1 小表批：表体收编 textpack（TXT_COMPT_BASE 起 3 条连号）
+pub const COMP_TALES_LEN: usize = 3;
+pub fn comp_tale(seg: usize) -> &'static str {
+    evtx(TXT_COMPT_BASE as usize + seg.min(2))
+}
 
 // 各档增益曲线（下标 = tier_of(fav)）
 pub const ELDER_QUEST_MULT: [f64; 5] = [1.00, 1.05, 1.10, 1.18, 1.25]; // 宗门任务收益
@@ -3389,14 +3504,19 @@ pub const INHERIT_LEGACY_FAV: i32 = 10; // 遗泽承接好感加成
 // O(1) 下标切片，帧路径零分配（性能十戒）；文案内容逐字节等价（脚本往返断言），
 // 字体 cmap 与 charset_diff_check 口径不变；存档只存事件 id，零兼容影响。
 pub static TEXTPACK: &[u8] = include_bytes!("../assets/textpack.bin");
-// 生成件（pack_text.py 产出）：pub static TXT_ANCH: [u32; A]（每 K32=32 条一个绝对
-// 锚，锚数 A=ceil(行数/32)——v1.16.31 复审批末态 1,971 行→62 锚）+
-// pub static TXT_DELTA: [u16; N]（组内 delta，off(i)=ANCH[i>>5]+DELTA[i]，
-// v1.16.28 刀C——旧 [u32;N] 5772B→两级 3174B）+ TXT_NAME_BASE/TXT_BRIEF_BASE/
+// 生成件（pack_text.py 产出）：pub static TXT_ANCH: [u32; A]（每 K32=128 条一个绝对
+// 锚，锚数 A=ceil(行数/128)——v1.16.32 单3 末态 2,368 行→19 锚（K32=128
+// 粗化后锚距；历史注「1,971 行→62 锚」为 32 距口径，已随粗化清账）+
+// pub static TXT_DELTA: [u16; N]（组内 delta，off(i)=ANCH[i>>7]+DELTA[i]——
+// v1.16.28 刀C 两级表，v1.16.32 单1 组距 32→128 粗化后 shift 5→7；旧 [u32;N]
+// 5772B→两级 3174B）+ TXT_NAME_BASE/TXT_BRIEF_BASE/
 // TXT_NAME2_BASE/TXT_BRIEF2_BASE/TXT_NAME3_BASE/TXT_BRIEF3_BASE（段一~三基址）/
 // TXT_NAME4_BASE/TXT_BRIEF4_BASE（v1.16.29 段四基址，因单1/单2 占 N1492..1824
 // 顺延 1825/1833）+ TXT_NAME5_BASE/TXT_BRIEF5_BASE（v1.16.30 段五 1865/1873）+
-// TXT_NAME6_BASE/TXT_BRIEF6_BASE（v1.16.31 段六 1905/1915）十二常量，item 位置
+// TXT_NAME6_BASE/TXT_BRIEF6_BASE（v1.16.31 段六 1905/1915）+
+// TXT_NAME7_BASE/TXT_BRIEF7_BASE（v1.16.31 新功能段七 1954/1957）+
+// TXT_NAME8_BASE/TXT_BRIEF8_BASE（v1.16.32 单3 扩池段八 2338/2344——单1/单2
+// 已用 N1971..2337 故段八顺延）十六常量，item 位置
 // include! 展开（随收编追加
 // 自动重产，勿手改；历史槽数注 577/623/648/671/1403/1443/1492 均已过期清账——
 // 槽数=条数+1，随收编增长：0..=669 事件臂文案 + 670..=819 事件臂 format! 模板
@@ -3425,7 +3545,28 @@ pub static TEXTPACK: &[u8] = include_bytes!("../assets/textpack.bin");
 // 紧连封死后续批开新段照段四→段五先例）+ 1960..=1968 新功能臂文案（3 条
 // ×正文+2msg 全静态=9 evtx，零动态句零 evf）+ 1969..=1970 apply_eff special75
 // slog 2 站（--block-lit 块外 ≥40B 散件通道补收编，≥40B 口径照 v1.16.29 单1
-// 刀C——24..39B 档实测净负不收）；
+// 刀C——24..39B 档实测净负不收）+
+// 1971..=2337 tables2 第三批（v1.16.32 单1 主刀+副刀+小表批 367 行：CHAPTERS
+// num/name/goals.text 36 + TECHS 16/RELICS 16/PILLS 12/TALENTS 66/UPGRADES 20/
+// ACHS 60/ORIGINS 12/MAP_THEMES 10/REGION_MECH 10/SECT_GOODS 12/NPC_EVENTS 8/
+// INHERITS 18/EXPED_STEPS 补收 8 = 字段级 304 + MINOR_LINES/COMP_TALES/
+// NPC_BRIEF/DONGFU_FAC_DESC/WEATHER_FLAVOR/EXPED_CHOICE_LABELS/AD_CREATIVES/
+// DONE_NOTE/CHAIN_NAMES 整表 63；EXPED_STEPS 第二轮补收 2330..=2337 在整表批
+// 2312..=2329 之后连号（首 N=2330，无空洞）；
+// 全行逐字节等价：tools/tables2_verify_once.py 收编前快照 25 面对账 0 失败 +
+// game.rs tables2_pins 首尾钉测）；
+// K32 锚距 32→128 粗化（TXT_ANCH 73→19 锚，txt_off i>>7 逐值等价——组距上限
+// u16 域由 pack_text.py delta assert 固化）；
+// v1.16.32 单2 第十一批改写行直改（N 不变号）：简语 8 行 N1141/1155/1189/1199/
+// 1326/1341/1364/1390（id30/44/78/88/215/230/253/279，−48B，kw 钉
+// event_brief_11632_batch11_within_18——253 锚用「残卷」不用勘察拟的「拓本」，
+// 后者不在新简内）+ 金句B N1588（world.rs 抵达句模板 −9B，原文注释已同步）+
+// N1958 用字对齐 336 臂「迎潮而立」0B；模拟首登金句A 为 wasm 裸串（game.rs
+// slog，不入真相源）−6B；
+// v1.16.32 单3 扩池段八：名段八 N2338..=2343（TXT_NAME8_BASE=2338）+ 简段八
+// N2344..=2349（TXT_BRIEF8_BASE=2344）真相源手写连号段先于正文 + 六臂正文
+// 收编 N2350 起（EV_SEG7=338 段界登记，len7 改段界差 EV_SEG7−EV_SEG6、
+// len8=N_EVENTS−EV_SEG7——下批扩池续段九时 len8 同步改段界差，见 EV_SEG7 注）；
 // N 追加不变号，段基址稳定）
 include!("text_offsets.inc");
 
@@ -3433,7 +3574,7 @@ static TEXT_BLOB: std::sync::OnceLock<&'static [u8]> = std::sync::OnceLock::new(
 
 /// 解包单源（get_or_init 的初始化闭包）：成功返回 leak 后的 blob，失败/校验不
 /// 过返回 EMPTY 哨兵——INIT_TRIED 钉死「只试一次」，失败后不再重试（防帧路径
-/// 反复 inflate）。EMPTY 即失败态（真实 blob 恒非空：1,971 条非空文案串接，
+/// 反复 inflate）。EMPTY 即失败态（真实 blob 恒非空：2,368 条非空文案串接，
 /// 随收编增长勿当硬断言——v1.16.26 注 647/v1.16.29 注 1,492/1,865/
 /// v1.16.30 注 1,905/v1.16.31 注 1,954/1,969 均已过期清账）。
 static TEXT_INIT_TRIED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -3470,7 +3611,8 @@ pub fn init_text() {
 /// get_or_init 的 once 语义保证并发查池者阻塞至完成（多线程测试不竞态空串）；
 /// 正常路径（boot 已装）等价一次原子 load，帧路径零影响。
 ///
-/// v1.16.28 减包刀C：off(i) = TXT_ANCH[i>>5] + TXT_DELTA[i]（每 K32=32 条一个
+/// v1.16.28 减包刀C：off(i) = TXT_ANCH[i>>5] + TXT_DELTA[i]（v1.16.32 单1 组距
+/// 32→128 粗化：off(i) = TXT_ANCH[i>>7] + TXT_DELTA[i]，逐值等价——每 K32=128 条一个
 /// u32 绝对锚 + u16 组内 delta，产物侧 5772B→3174B）——O(1) 纯算术零分配，
 /// 输出与旧 [u32;N] 逐值等价（pack_text.py 产侧 assert + 本文件钉测双兜底）
 pub fn evtx(i: usize) -> &'static str {
@@ -3493,12 +3635,14 @@ pub fn evtx(i: usize) -> &'static str {
     }
 }
 
-/// v1.16.28 刀C 两级 offset 解码单口：off(i) = ANCH[i>>5] + DELTA[i]。
-/// K32=32 与 pack_text.py 产侧同源（delta 域 u16 由产侧 assert 固化）；
+/// v1.16.28 刀C 两级 offset 解码单口：off(i) = ANCH[i>>7] + DELTA[i]（单1 组距
+/// 32→128 粗化后 shift 7——原注 i>>5 已随粗化清账）。
+/// K32=128 与 pack_text.py 产侧同源（delta 域 u16 由产侧 assert 固化——组距
+/// 128 行现实行宽 ~9KB « 65535）；
 /// #[inline] 供 evtx 两次取界零开销（纯算术零分配——帧路径纪律）
 #[inline]
 fn txt_off(i: usize) -> usize {
-    TXT_ANCH[i >> 5] as usize + TXT_DELTA[i] as usize
+    TXT_ANCH[i >> 7] as usize + TXT_DELTA[i] as usize
 }
 
 /// v1.16.27 减包刀①：format! 模板收编——`evf(N, &[&a, &b])` ≡ `format!(<N 号模板>, a, b)`。
@@ -3552,7 +3696,8 @@ mod text_tests {
         );
         assert_eq!(evtx(2), "你于台下观摩他人过招，亦有所得。修为+5%");
         // 全表界内：v1.16.28 刀C 两级表——重建 offs 逐条单调且末界 == blob 长
-        //（off(i) = ANCH[i>>5] + DELTA[i]，与产侧 assert 双兜底）
+        //（off(i) = ANCH[i>>7] + DELTA[i]，与产侧 assert 双兜底——单1 粗化后
+        // shift 7，原注 i>>5 已清账）
         assert!(TXT_DELTA.len() >= 2);
         let off = |i: usize| txt_off(i);
         for k in 0..TXT_DELTA.len() - 1 {
@@ -3617,8 +3762,9 @@ mod text_tests {
         init_text();
         // v1.16.30 扩池：len = 段一 291 + 段二 8 + 段三 10 + 段四 8 + 段五 8 = 325
         // v1.16.31 扩池：+ 段六 10 = 335；v1.16.31 新功能：+ 段七 3 = 338
-        assert_eq!(EVENT_NAMES.len(), 338);
-        assert_eq!(EVENT_BRIEF.len(), 338);
+        // v1.16.32 单3 扩池：+ 段八 6 = 344
+        assert_eq!(EVENT_NAMES.len(), 344);
+        assert_eq!(EVENT_BRIEF.len(), 344);
         assert_eq!(EVENT_NAMES.get(0), Some("灵草满坡"));
         assert_eq!(EVENT_NAMES.get(290), Some("误入猎套"));
         assert_eq!(EVENT_BRIEF.get(0), Some("满坡灵草露水未干，采满一筐"));
@@ -3663,9 +3809,17 @@ mod text_tests {
         assert_eq!(EVENT_NAMES.get(337), Some("三脉同焕"));
         assert_eq!(EVENT_BRIEF.get(335), Some("连雨护书，雨停分文不取"));
         assert_eq!(EVENT_BRIEF.get(337), Some("三设施全满，长老登山观府"));
-        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=338）
-        assert_eq!(EVENT_NAMES.get(338), None);
-        assert_eq!(EVENT_BRIEF.get(338), None);
+        // 段八（v1.16.32 单3 扩池 6 条，TXT_NAME8_BASE=2338/TXT_BRIEF8_BASE=
+        // 2344，手写名/简连号段先于正文收编——单1/单2 已用 N1971..2337 故段八
+        // 顺延）：len7 漂移唯一内容级防线——首尾逐字钉，len7 写 N_EVENTS−
+        // EV_SEG6 静默吞段八时在此必红
+        assert_eq!(EVENT_NAMES.get(338), Some("暮坛对酌"));
+        assert_eq!(EVENT_NAMES.get(343), Some("老炉现纹"));
+        assert_eq!(EVENT_BRIEF.get(338), Some("泥封启处，醉话入稿"));
+        assert_eq!(EVENT_BRIEF.get(343), Some("老炉细纹，岁晚难补"));
+        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=344）
+        assert_eq!(EVENT_NAMES.get(344), None);
+        assert_eq!(EVENT_BRIEF.get(344), None);
         assert_eq!(EVENT_NAMES.get(usize::MAX), None);
     }
 
@@ -3684,7 +3838,8 @@ mod text_tests {
             evf(1587, &[&"玄诚长老", &2]),
             "你备下一份厚礼赠予玄诚长老，交情更进一分。（好感+2）"
         );
-        assert_eq!(evf(1588, &[&"青云宗"]), "你收拾行装赶路，此番抵达青云宗。");
+        // v1.16.32 单2 金句B：N1588 行直改后断言同步
+        assert_eq!(evf(1588, &[&"青云宗"]), "行囊在肩，此番抵达青云宗。");
         // v1.16.29 单2 故事润色改写钉（N1574 真相源行直改后唯一无简钉的文本
         // 改写——此处补齐；原文注释同步见 game.rs 寻仇胜句站）
         assert_eq!(

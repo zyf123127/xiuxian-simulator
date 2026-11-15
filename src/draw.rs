@@ -847,8 +847,8 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         let curch = crate::game::Game::chapter_current(&g.meta);
         if g.guide_chap_last != Some(curch) {
             let chc = &crate::data::CHAPTERS[curch];
-            prewarm_text(chc.num, &[14]);
-            prewarm_text(chc.name, &[14]);
+            prewarm_text(chc.num(), &[14]);
+            prewarm_text(chc.name(), &[14]);
             g.guide_chap_last = Some(curch);
         }
         let hint = &crate::guide::HINTS[idx as usize];
@@ -865,8 +865,8 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         // 右段章签：num+name 两静态分片直绘（禁 format!——横带稳态帧零分配红线；
         // 章名全表 4 字，992/1042 双锚定宽布局）
         let chc = &crate::data::CHAPTERS[curch];
-        txt(chc.num, 992.0, 96.0, 14, C_GOLD_D);
-        txt(chc.name, 1042.0, 96.0, 14, C_DIM);
+        txt(chc.num(), 992.0, 96.0, 14, C_GOLD_D);
+        txt(chc.name(), 1042.0, 96.0, 14, C_DIM);
         // 跳转按钮复用 draw::button()（继承去抖/悬停/描边语言）；纯提示叶不画
         if let Some(b) = hint.btn {
             if button(1112.0, 92.0, 144.0, 28.0, b, None, true) {
@@ -1319,7 +1319,7 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
         C_TEXT,
     );
     y = row("功法", y);
-    txt(TECHS[l.tech].name, 100.0, y - 21.0, 14, C_GOLD);
+    txt(TECHS[l.tech].name(), 100.0, y - 21.0, 14, C_GOLD);
     y = row("法宝", y);
     // v1.5.0：只留计数摘要（详情见角色面板·法宝页）
     if l.relics.is_empty() {
@@ -1380,7 +1380,7 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
         C_DIM,
     );
     // 已选
-    let names: Vec<&str> = g.picked.iter().map(|&t| TALENTS[t].name).collect();
+    let names: Vec<&str> = g.picked.iter().map(|&t| TALENTS[t].name()).collect();
     txt_c(
         &format!(
             "已选：{}",
@@ -1468,8 +1468,8 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
             16,
             Color::from_rgba(tr, tg, tb, 255),
         );
-        txt_c(card.name, x + cw * 0.5, y + 84.0, 24, C_TEXT);
-        wrap_draw(card.desc, x + 24.0, y + 120.0, 16, cw - 48.0, 28.0, C_DIM);
+        txt_c(card.name(), x + cw * 0.5, y + 84.0, 24, C_TEXT);
+        wrap_draw(card.desc(), x + 24.0, y + 120.0, 16, cw - 48.0, 28.0, C_DIM);
         // 小图标占位：修士
         draw_cultivator(
             art,
@@ -2342,8 +2342,8 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
             },
         );
         draw_rectangle_lines(520.0, y, 680.0, 62.0, 1.5, C_GOLD_D);
-        txt(&format!("【{}】", card.name), 536.0, y + 10.0, 18, C_GOLD);
-        txt(card.desc, 700.0, y + 12.0, 14, C_TEXT);
+        txt(&format!("【{}】", card.name()), 536.0, y + 10.0, 18, C_GOLD);
+        txt(card.desc(), 700.0, y + 12.0, 14, C_TEXT);
         txt_c("选此项", 1160.0, y + 12.0, 14, C_CYAN);
         if hot && is_mouse_button_pressed(MouseButton::Left) {
             g.play(crate::sounds::Which::Ascend);
@@ -2442,13 +2442,13 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
         let cur = crate::game::Game::chapter_current(&g.meta);
         let ch = &crate::data::CHAPTERS[cur];
         txt("下一章", 250.0, 524.0, 14, C_DIM);
-        txt(ch.num, 314.0, 524.0, 14, C_GOLD_D);
-        txt(ch.name, 376.0, 522.0, 16, C_GOLD);
+        txt(ch.num(), 314.0, 524.0, 14, C_GOLD_D);
+        txt(ch.name(), 376.0, 522.0, 16, C_GOLD);
         let goal = ch
             .goals
             .iter()
             .find(|gl| !crate::game::Game::chapter_goal_met(&g.meta, gl.pid))
-            .map(|gl| gl.text)
+            .map(|gl| gl.text())
             .unwrap_or("主线已了——十万稿废纸，终有一册");
         txt(goal, 470.0, 524.0, 14, C_TEXT);
         if ch
@@ -2601,8 +2601,8 @@ fn draw_shop(g: &mut Game) {
             let p = &PILLS[i];
             let price = g.pill_price(i);
             draw_texture(&crate::art::art().icon_pill, 160.0, y - 6.0, WHITE);
-            txt(p.name, 184.0, y + 4.0, 18, C_GOLD);
-            txt(p.desc, 320.0, y + 4.0, 14, C_TEXT);
+            txt(p.name(), 184.0, y + 4.0, 18, C_GOLD);
+            txt(p.desc(), 320.0, y + 4.0, 14, C_TEXT);
             let stock = g.life.as_ref().map_or(0, |x| x.pills[i]);
             txt(&format!("存量 {}", stock), 320.0, y + 26.0, 14, C_DIM);
             txt_r(
@@ -2650,7 +2650,7 @@ fn draw_shop(g: &mut Game) {
                     Color::from_rgba(36, 28, 58, 180)
                 },
             );
-            txt(&format!("《{}》", t.name), 180.0, y + 4.0, 18, C_GOLD);
+            txt(&format!("《{}》", t.name()), 180.0, y + 4.0, 18, C_GOLD);
             txt(
                 &format!("修炼×{:.1}  战力×{:.1}", t.mult, t.pow),
                 420.0,
@@ -2658,7 +2658,7 @@ fn draw_shop(g: &mut Game) {
                 14,
                 C_TEXT,
             );
-            txt(t.desc, 420.0, y + 26.0, 14, C_DIM);
+            txt(t.desc(), 420.0, y + 26.0, 14, C_DIM);
             if owned {
                 if cur {
                     txt_c("当前修习", 1058.0, y + 6.0, 14, C_GREEN);
@@ -2709,7 +2709,7 @@ fn draw_ad_overlay(g: &mut Game) {
     txt_c("轮 回 商 阁", 640.0, 196.0, 28, C_GOLD);
     draw_rectangle(360.0, 216.0, 560.0, 1.5, Color::from_rgba(96, 76, 130, 160));
     // 创意区：按已看次数轮换的假广告
-    let creative = crate::data::AD_CREATIVES[(g.meta.ad_watched.max(0) as usize) % 3];
+    let creative = crate::data::ad_creative((g.meta.ad_watched.max(0) as usize) % 3);
     txt_c(creative, 640.0, 288.0, 24, C_TEXT);
     txt_c("—— 山穷水尽？镜灵为你接引一段商途幻境 ——", 640.0, 326.0, 14, C_DIM);
     // 倒计时条
@@ -2785,9 +2785,9 @@ fn draw_bag(g: &mut Game) {
             let p = &PILLS[i];
             // v1.16.5 顺带补图（照法宝行节奏：图标 172、名 196，丹药 6 种共用 icon_pill）
             draw_texture(&crate::art::art().icon_pill, 172.0, y + 3.0, WHITE);
-            txt(p.name, 196.0, y + 4.0, 18, C_GOLD);
+            txt(p.name(), 196.0, y + 4.0, 18, C_GOLD);
             txt(&format!("×{}", pills[i]), 300.0, y + 4.0, 16, C_TEXT);
-            txt(p.desc, 360.0, y + 4.0, 14, C_TEXT);
+            txt(p.desc(), 360.0, y + 4.0, 14, C_TEXT);
             if button(
                 1040.0,
                 y - 8.0,
@@ -2810,7 +2810,7 @@ fn draw_bag(g: &mut Game) {
             txt(
                 &format!(
                     "炼化中：为【{}】选一件法宝作材料（再点「炼化」取消）",
-                    RELICS[t.min(RELICS.len() - 1)].name
+                    RELICS[t.min(RELICS.len() - 1)].name()
                 ),
                 180.0,
                 158.0,
@@ -2840,7 +2840,7 @@ fn draw_bag(g: &mut Game) {
             );
             draw_texture(&crate::art::art().relic_icons[k], 172.0, y - 2.0, WHITE); // v1.16.5 专属像素画替代共用剑图标
             txt(
-                &format!("【{}】", rl.name),
+                &format!("【{}】", rl.name()),
                 196.0,
                 y + 2.0,
                 16,
@@ -2851,7 +2851,7 @@ fn draw_bag(g: &mut Game) {
                 txt(&format!("+{}", lv), 318.0, y + 2.0, 14, C_PURPLE);
             }
             txt(
-                rl.desc,
+                rl.desc(),
                 360.0,
                 y + 4.0,
                 14,
@@ -2935,7 +2935,7 @@ fn draw_bag(g: &mut Game) {
         // 行装：功法 / 法宝摘要 / 宗门 / 称号
         txt("功法", 180.0, 164.0, 16, C_DIM);
         txt(
-            &format!("《{}》 {}", TECHS[tech].name, TECHS[tech].desc),
+            &format!("《{}》 {}", TECHS[tech].name(), TECHS[tech].desc()),
             250.0,
             164.0,
             16,
@@ -3066,9 +3066,9 @@ fn draw_upgrade_panel(g: &mut Game) {
         let lv = g.meta.upg[i];
         let maxed = lv >= u.max;
         let cost = upg_cost(i, lv);
-        txt(u.name, 230.0, y + 12.0, 16, C_GOLD);
+        txt(u.name(), 230.0, y + 12.0, 16, C_GOLD);
         txt(&format!("{}/{}", lv, u.max), 350.0, y + 14.0, 14, C_TEXT);
-        txt(u.desc, 420.0, y + 14.0, 14, C_TEXT);
+        txt(u.desc(), 420.0, y + 14.0, 14, C_TEXT);
         if maxed {
             txt("圆满", 950.0, y + 14.0, 14, C_DIM);
         } else {
@@ -3202,15 +3202,15 @@ pub fn prewarm_chapter_view(g: &Game) {
         }
     }
     for ch in crate::data::CHAPTERS.iter() {
-        prewarm_text(ch.num, &[14]);
-        prewarm_text(ch.name, &[14, 16, 20]);
+        prewarm_text(ch.num(), &[14]);
+        prewarm_text(ch.name(), &[14, 16, 20]);
         prewarm_text(ch.intro(), &[16]);
         prewarm_text(ch.reward_note(), &[14]); // 章成之礼行（含「道韵 +N」数字）
         for lk in 0..ch.lore_len() {
             prewarm_text(ch.lore(lk), &[14]); // 章间记事全段预热（可见性是纯显示推导）
         }
         for gl in ch.goals.iter() {
-            prewarm_text(gl.text, &[16]);
+            prewarm_text(gl.text(), &[16]);
         }
     }
     if let Some(st) = g.meta.hist.last().and_then(|r| r.story.as_deref()) {
@@ -3398,8 +3398,8 @@ fn draw_chapter_view(g: &mut Game) {
         } else {
             ("未启", C_DIM)
         };
-        txt(ch.num, 178.0, y, 14, c);
-        txt(ch.name, 238.0, y - 2.0, 16, c);
+        txt(ch.num(), 178.0, y, 14, c);
+        txt(ch.name(), 238.0, y - 2.0, 16, c);
         txt_r(st, 442.0, y, 14, c);
         if i == cur {
             draw_rectangle(170.0, y + 20.0, 286.0, 2.0, C_GOLD);
@@ -3408,8 +3408,8 @@ fn draw_chapter_view(g: &mut Game) {
     // 右栏：本章引入 + 目标清单（当前目标=首未了行金字，行右 x/y 进度）+ 章成之礼
     // + 章间记事 + 前情提要
     let ch = &crate::data::CHAPTERS[cur];
-    txt(ch.num, 490.0, 188.0, 14, C_GOLD_D);
-    txt(ch.name, 552.0, 184.0, 20, C_GOLD);
+    txt(ch.num(), 490.0, 188.0, 14, C_GOLD_D);
+    txt(ch.name(), 552.0, 184.0, 20, C_GOLD);
     // v1.16.28 章回联句：章名行右侧同行尾挂（@14 dim——章名 4 字 20px 至 ~640，
     // 联句 ≤14 字约 170px 收在卡内右缘前，同行零版式位移零碰撞；结算屏「下一章」
     // 行已被 goal/礼行/进度三段占满不加挤，单点显示维持宁缺毋滥）。字形经结算屏
@@ -3431,7 +3431,7 @@ fn draw_chapter_view(g: &mut Game) {
             ("待办", C_TEXT)
         };
         txt(st, 490.0, y + 2.0, 14, c);
-        wrap_draw(gl.text, 540.0, y, 16, 500.0, 24.0, c);
+        wrap_draw(gl.text(), 540.0, y, 16, 500.0, 24.0, c);
         // 行右 x/y 进度（数值化目标才有值；静态查表串零分配，空串防御隐藏）
         if let Some((x, n)) = crate::game::Game::chapter_goal_prog(&g.meta, gl.pid) {
             let s = prog_txt(x, n);
@@ -3640,7 +3640,7 @@ fn draw_book_record(g: &mut Game) {
         txt(
             &format!(
                 "主线 {}/{} · 现进行：{}",
-                done_ch, n_ch, crate::data::CHAPTERS[cur.min(n_ch - 1)].name
+                done_ch, n_ch, crate::data::CHAPTERS[cur.min(n_ch - 1)].name()
             ),
             170.0, 554.0, 14, C_TEXT,
         );
@@ -3709,7 +3709,7 @@ pub fn prewarm_book_record(g: &Game) {
         prewarm_text(s, &[14]);
     }
     for ch in crate::data::CHAPTERS.iter() {
-        prewarm_text(ch.name, &[14]);
+        prewarm_text(ch.name(), &[14]);
     }
     prewarm_text(&g.worn_title_of(), &[14]);
 }

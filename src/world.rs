@@ -111,7 +111,7 @@ pub fn travel(g: &mut Game, to: usize) {
         let l = g.life.as_mut().unwrap();
         l.loc = to;
     }
-    g.log(evf(1588, &[&(name)])/* 原文：你收拾行装赶路，此番抵达{}。 */, C_TEXT);
+    g.log(evf(1588, &[&(name)])/* 原文：行囊在肩，此番抵达{}。 *//* v1.16.32 单2 金句B：真相源 N1588 行直改 −9B，注释同步照 evf(1574) 漂移红线 */, C_TEXT);
     // v1.16.11 洞府经营初见闩（sy= bit5）：旅行抵达洞府口（单口自带 loc 守卫与位闩，
     // 非洞府抵达为幂等空转；覆盖离府再归路径——出生即洞府路径由 open_world 口覆盖）
     g.sys_hint_dongfu();
@@ -229,7 +229,7 @@ pub fn sect_buy(g: &mut Game, i: usize) {
     if !sect_good_ok(g, i) {
         return;
     }
-    let (name, cost) = (SECT_GOODS[i].name, SECT_GOODS[i].cost);
+    let (name, cost) = (SECT_GOODS[i].name(), SECT_GOODS[i].cost);
     g.meta.sect_contrib -= cost;
     let msg = {
         let l = g.life.as_mut().unwrap();
@@ -253,11 +253,11 @@ pub fn sect_buy(g: &mut Game, i: usize) {
             }
             SectGoodKind::Relic(r) => {
                 l.relics.push(*r);
-                evf(1590, &[&(RELICS[*r].name)])/* 原文：请得镇派法宝【{}】 */
+                evf(1590, &[&(RELICS[*r].name())])/* 原文：请得镇派法宝【{}】 */
             }
             SectGoodKind::Tech(t) => {
                 l.tech = *t;
-                format!("请得《{}》真传", TECHS[*t].name)
+                format!("请得《{}》真传", TECHS[*t].name())
             }
         }
     };
@@ -397,7 +397,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
                             let l = g.life.as_mut().unwrap();
                             l.relics.push(r);
                         }
-                        msg += &evf(1593, &[&(RELICS[r].name)])/* 原文：，并寻得法宝【{}】 */;
+                        msg += &evf(1593, &[&(RELICS[r].name())])/* 原文：，并寻得法宝【{}】 */;
                     } else {
                         {
                             let l = g.life.as_mut().unwrap();
@@ -462,7 +462,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
         e.cur += 1;
     }
     g.log(
-        evf(1599, &[&(cur + 1), &(EXPED_STEPS[step_idx].text)])/* 原文：秘境远征·第{}步：{} */,
+        evf(1599, &[&(cur + 1), &(EXPED_STEPS[step_idx].text())])/* 原文：秘境远征·第{}步：{} */,
         C_TEXT,
     );
     g.sync_save();
@@ -753,14 +753,14 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     txt("—— 山河图志 ——", 16.0, 15.0, 20, C_GOLD);
     // v1.6.0：顶栏追加当前地区名（时段/天气、「所在」相应右移让位）
     txt(
-        &format!("· {}", theme_of(g.meta.map_region).name),
+        &format!("· {}", theme_of(g.meta.map_region).name()),
         216.0,
         17.0, 14,
         C_GOLD_D,
     );
     // v1.8.0 C4：顶栏追加区域机制短标（时段/天气、「所在」相应右移让位）
     txt(
-        region_mech(g.meta.map_region).mech,
+        region_mech(g.meta.map_region).mech(),
         320.0,
         17.0,
         14,
@@ -803,7 +803,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     {
         let mech = region_mech(g.meta.map_region);
         txt_r(
-            &format!("{} · {}", mech.mech, mech.desc),
+            &format!("{} · {}", mech.mech(), mech.desc()),
             900.0,
             566.0,
             14,
@@ -1063,8 +1063,8 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                 }
                 _ => 0.0,
             };
-            txt(good.name, 276.0 + icon_dx, y + 10.0, 18, C_GOLD);
-            txt(good.desc, 410.0 + icon_dx, y + 10.0, 14, C_TEXT);
+            txt(good.name(), 276.0 + icon_dx, y + 10.0, 18, C_GOLD);
+            txt(good.desc(), 410.0 + icon_dx, y + 10.0, 14, C_TEXT);
             txt_r(
                 &format!("{} 贡献", good.cost),
                 930.0,
@@ -1119,7 +1119,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                 16,
                 if lv >= 3 { C_GOLD } else { C_TEXT },
             );
-            txt(DONGFU_FAC_DESC[i], 300.0, y + 34.0, 14, C_DIM);
+            txt(dongfu_fac_desc(i), 300.0, y + 34.0, 14, C_DIM);
             let eff = match i {
                 0 => format!("当前：修炼效率 ×{:.2}", JUELING_MULT[lv]),
                 1 => evf(1602, &[&(LINGTIAN_YIELD[lv])])/* 原文：当前：每载产灵石 {} */,
@@ -1172,7 +1172,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             let (cur, len, step_text, kind) = {
                 let e = g.world.exp.as_ref().unwrap();
                 let st = &EXPED_STEPS[e.steps[e.cur]];
-                (e.cur, e.steps.len(), st.text, st.kind as usize)
+                (e.cur, e.steps.len(), st.text(), st.kind as usize)
             };
             // 步进点
             for k in 0..len {
@@ -1213,14 +1213,15 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                     format!("稳妥 ×0.6 · 胜算约{:.0}%", p1 * 100.0),
                 ));
             }
-            let labels = EXPED_CHOICE_LABELS[kind.min(3)];
+            let label0 = exped_choice(kind.min(3), 0);
+            let label1 = exped_choice(kind.min(3), 1);
             // 副标借用随各钮条件求值即还（NLL）——缓存串稳态零分配，兜底旧静态文案
             let sub0 = g
                 .exp_p_cache
                 .as_ref()
                 .map(|(_, a, _)| a.as_str())
                 .unwrap_or("收获 ×1.5 · 风险 +10%");
-            if button(290.0, 396.0, 620.0, 52.0, labels[0], Some(sub0), true) {
+            if button(290.0, 396.0, 620.0, 52.0, label0, Some(sub0), true) {
                 g.play(crate::sounds::Which::Click);
                 exp_choose(g, 0);
             }
@@ -1229,7 +1230,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                 .as_ref()
                 .map(|(_, _, b)| b.as_str())
                 .unwrap_or("稳妥 ×0.6 · 风险 -10%");
-            if button(290.0, 456.0, 620.0, 52.0, labels[1], Some(sub1), true) {
+            if button(290.0, 456.0, 620.0, 52.0, label1, Some(sub1), true) {
                 g.play(crate::sounds::Which::Click);
                 exp_choose(g, 1);
             }
