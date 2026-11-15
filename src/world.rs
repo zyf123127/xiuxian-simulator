@@ -371,7 +371,7 @@ pub fn exp_choose(g: &mut Game, i: usize) {
             l.injured = l.injured.saturating_add(gen_range(2i32, 5i32) as u16);
         }
         g.log(
-            evf(1591, &[&(cur + 1)])/* 原文：远征第{}步受挫，仓皇而退，身受重伤！ */,
+            evf(1591, &[&(cur + 1)])/* 原文：第{}步受挫，霞光深处受了重伤 */,
             C_RED,
         );
         g.play(crate::sounds::Which::BreakFail);

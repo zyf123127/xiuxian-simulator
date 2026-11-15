@@ -8,7 +8,10 @@ data::evtx，避让 ui.rs::txt 绘制函数重名），并产出：
   - assets/textpack.bin    raw-deflate(wbits=-15, level 9) 的串接 blob
   - src/text_offsets.inc   pub static TXT_ANCH: [u32; A]（每 K32=32 条一个绝对锚）
                            + TXT_DELTA: [u16; N]（组内 delta，v1.16.28 刀C 两级表）
-                           + 双表六段基址十常量（data.rs include！）
+                           + 双表基址常量（data.rs include!；v1.16.31 新功能末态
+                           七对十四常量：TXT_NAME6/TXT_BRIEF6 后增 TXT_NAME7/
+                           TXT_BRIEF7——历史注「六段基址十常量」与全角 include！
+                           均为笔误，v1.16.31 已两批随段清账）
 运行期 data.rs::init_text() boot 一次 miniz_oxide::inflate::decompress_to_vec
 （与 ui.rs 字体同款通路），txt(i) O(1) 切片零分配。
 
@@ -81,6 +84,16 @@ BRIEF4_BASE_MANIFEST = 1833
 # 与 data.rs EV_SEG4=317 同批登记）
 NAME5_BASE_MANIFEST = 1865
 BRIEF5_BASE_MANIFEST = 1873
+# v1.16.31 扩池起：段五（8 条）满员后新批连号追加为段六（10 条：名 1905..=1914/
+# 简 1915..=1924，真相源手写连号段先于正文；v1.16.30 末态下一 N=1905——
+# 与 data.rs EV_SEG5=325 同批登记）
+NAME6_BASE_MANIFEST = 1905
+BRIEF6_BASE_MANIFEST = 1915
+# v1.16.31 新功能 3 条起：段六（10 条 N1905..1914/N1915..1924 紧连封死）满员后
+# 新批连号追加为段七（3 条：名 1954..=1956/简 1957..=1959，真相源手写连号段
+# 先于正文；第十批改写后下一空 N=1954——与 data.rs EV_SEG6=335 同批登记）
+NAME7_BASE_MANIFEST = 1954
+BRIEF7_BASE_MANIFEST = 1957
 
 dry = '--dry-run' in sys.argv
 collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测用；表收编后自动幂等）
@@ -705,7 +718,8 @@ def table_bases_from_inc():
         for key in (('TXT_NAME_BASE', 'TXT_BRIEF_BASE', 'TXT_NAME2_BASE',
                      'TXT_BRIEF2_BASE', 'TXT_NAME3_BASE', 'TXT_BRIEF3_BASE',
                      'TXT_NAME4_BASE', 'TXT_BRIEF4_BASE', 'TXT_NAME5_BASE',
-                     'TXT_BRIEF5_BASE')
+                     'TXT_BRIEF5_BASE', 'TXT_NAME6_BASE', 'TXT_BRIEF6_BASE',
+                     'TXT_NAME7_BASE', 'TXT_BRIEF7_BASE')
                     + BASE_KEYS_TABLES2):
             mm = re.search(r'pub static %s: u32 = (\d+);' % key, txt)
             if mm:
@@ -1018,6 +1032,20 @@ if name_base is not None:
 if brief_base is not None:
     inc += emit_base('TXT_BRIEF5_BASE',
                      inc_bases.get('TXT_BRIEF5_BASE', BRIEF5_BASE_MANIFEST))
+# v1.16.31 段六基址（首轮 emit 取 manifest 手分值；此后回读 .inc 幂等）
+if name_base is not None:
+    inc += emit_base('TXT_NAME6_BASE',
+                     inc_bases.get('TXT_NAME6_BASE', NAME6_BASE_MANIFEST))
+if brief_base is not None:
+    inc += emit_base('TXT_BRIEF6_BASE',
+                     inc_bases.get('TXT_BRIEF6_BASE', BRIEF6_BASE_MANIFEST))
+# v1.16.31 段七基址（首轮 emit 取 manifest 手分值；此后回读 .inc 幂等）
+if name_base is not None:
+    inc += emit_base('TXT_NAME7_BASE',
+                     inc_bases.get('TXT_NAME7_BASE', NAME7_BASE_MANIFEST))
+if brief_base is not None:
+    inc += emit_base('TXT_BRIEF7_BASE',
+                     inc_bases.get('TXT_BRIEF7_BASE', BRIEF7_BASE_MANIFEST))
 # v1.16.29 刀B 整表基址（首轮 emit 收编 N 段基址；此后每次运行从 .inc 回读重发，
 # 与段一/二/三同款幂等——非 --tables2 运行也不许丢基址，否则 include! 断链）
 for bk2 in BASE_KEYS_TABLES2:

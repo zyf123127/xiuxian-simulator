@@ -8,8 +8,13 @@
 # v1.16.29 扩池起四段连号——段四基址 TXT_NAME4_BASE/TXT_BRIEF4_BASE=1825/1833，
 # 单1/单2 已用 N1492..1824 故段四顺延；
 # v1.16.30 扩池起五段连号——段五基址 TXT_NAME5_BASE/TXT_BRIEF5_BASE=1865/1873，
-# 单2 改写即减字后下一 N=1865 故段五起于 1865），
-# 对账：段行数 == EVENTS 行数 == 325、NAMES 去「·续」后互异、基址段界内。只读。
+# 单2 改写即减字后下一 N=1865 故段五起于 1865；
+# v1.16.31 扩池起六段连号——段六基址 TXT_NAME6_BASE/TXT_BRIEF6_BASE=1905/1915，
+# 与 data.rs EV_SEG5=325 同批登记，故段六起于 1905；
+# v1.16.31 新功能批起七段连号——段七基址 TXT_NAME7_BASE/TXT_BRIEF7_BASE=
+# 1954/1957，与 data.rs EV_SEG6=335 同批登记（段六名/简紧连封死，续批开新段
+# 照段四→段五先例），故段七起于 1954），
+# 对账：段行数 == EVENTS 行数 == 338、NAMES 去「·续」后互异、基址段界内。只读。
 import io
 import re
 import sys
@@ -63,6 +68,8 @@ _SEG1 = 291
 _SEG2 = 299
 _SEG3 = 309
 _SEG4 = 317
+_SEG5 = 325
+_SEG6 = 335
 _name2 = re.search(r"pub static TXT_NAME2_BASE: u32 = (\d+);", inc)
 _brief2 = re.search(r"pub static TXT_BRIEF2_BASE: u32 = (\d+);", inc)
 _name3 = re.search(r"pub static TXT_NAME3_BASE: u32 = (\d+);", inc)
@@ -71,6 +78,10 @@ _name4 = re.search(r"pub static TXT_NAME4_BASE: u32 = (\d+);", inc)
 _brief4 = re.search(r"pub static TXT_BRIEF4_BASE: u32 = (\d+);", inc)
 _name5 = re.search(r"pub static TXT_NAME5_BASE: u32 = (\d+);", inc)
 _brief5 = re.search(r"pub static TXT_BRIEF5_BASE: u32 = (\d+);", inc)
+_name6 = re.search(r"pub static TXT_NAME6_BASE: u32 = (\d+);", inc)
+_brief6 = re.search(r"pub static TXT_BRIEF6_BASE: u32 = (\d+);", inc)
+_name7 = re.search(r"pub static TXT_NAME7_BASE: u32 = (\d+);", inc)
+_brief7 = re.search(r"pub static TXT_BRIEF7_BASE: u32 = (\d+);", inc)
 name2_base = int(_name2.group(1)) if _name2 else None
 brief2_base = int(_brief2.group(1)) if _brief2 else None
 name3_base = int(_name3.group(1)) if _name3 else None
@@ -79,10 +90,14 @@ name4_base = int(_name4.group(1)) if _name4 else None
 brief4_base = int(_brief4.group(1)) if _brief4 else None
 name5_base = int(_name5.group(1)) if _name5 else None
 brief5_base = int(_brief5.group(1)) if _brief5 else None
+name6_base = int(_name6.group(1)) if _name6 else None
+brief6_base = int(_brief6.group(1)) if _brief6 else None
+name7_base = int(_name7.group(1)) if _name7 else None
+brief7_base = int(_brief7.group(1)) if _brief7 else None
 
 
-def _seg_rows(base, base2, base3, base4, base5, n):
-    """段一 0..min(n,291) + 段二/三/四/五续号（扩池批）；返回行号列表"""
+def _seg_rows(base, base2, base3, base4, base5, base6, base7, n):
+    """段一 0..min(n,291) + 段二..段七续号（扩池批）；返回行号列表"""
     out = [base + i for i in range(min(n, _SEG1))]
     if n > _SEG1:
         assert base2 is not None, "扩池后段二基址缺失（pack_text.py 未登记）"
@@ -95,24 +110,30 @@ def _seg_rows(base, base2, base3, base4, base5, n):
         out += [base4 + i for i in range(min(n, _SEG4) - _SEG3)]
     if n > _SEG4:
         assert base5 is not None, "扩池后段五基址缺失（pack_text.py 未登记）"
-        out += [base5 + i for i in range(n - _SEG4)]
+        out += [base5 + i for i in range(min(n, _SEG5) - _SEG4)]
+    if n > _SEG5:
+        assert base6 is not None, "扩池后段六基址缺失（pack_text.py 未登记）"
+        out += [base6 + i for i in range(min(n, _SEG6) - _SEG5)]
+    if n > _SEG6:
+        assert base7 is not None, "扩池后段七基址缺失（pack_text.py 未登记）"
+        out += [base7 + i for i in range(n - _SEG6)]
     return out
 brief_base = int(re.search(r"pub static TXT_BRIEF_BASE: u32 = (\d+);", inc).group(1))
 
 tables = {}
-for tname, base, base2, base3, base4, base5 in (
-        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base),
-        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base)):
+for tname, base, base2, base3, base4, base5, base6, base7 in (
+        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base, name6_base, name7_base),
+        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base, brief6_base, brief7_base)):
     entries = []
-    for n in _seg_rows(base, base2, base3, base4, base5, n_events):
+    for n in _seg_rows(base, base2, base3, base4, base5, base6, base7, n_events):
         assert n in rows, f"{tname} 段缺行 N={n}（基址漂移/收编段不齐）"
         val = decode_raw(rows[n])
         assert val is not None, f"{tname} N={n} 不可解码"
         entries.append(val)
     tables[tname] = entries
     print(tname, "base", base, "base2", base2, "base3", base3, "base4", base4,
-          "base5", base5, "rows", len(entries),
-          "aligned:", len(entries) == n_events == 325)
+          "base5", base5, "base6", base6, "base7", base7, "rows", len(entries),
+          "aligned:", len(entries) == n_events == 338)
 
 names = tables["EVENT_NAMES"]
 seen = set()
@@ -124,8 +145,9 @@ for e in names:
     seen.add(base)
 print("NAMES distinct bases:", len(seen), "dup:", dup if dup else "none")
 
-# EvTable 静态声明与段长一致（len 五段：len2..len5 段界常量差——len 写
-# N_EVENTS−EV_SEGx 会随扩池静默错位，正则钉段界常量形态；字段间容忍行注释）
+# EvTable 静态声明与段长一致（len 七段：len2..len6 段界常量差、len7 末段
+# N_EVENTS−EV_SEG6——len 写 N_EVENTS−EV_SEGx 会随扩池静默错位，正则钉段界
+# 常量形态；字段间容忍行注释）
 _C = r"(?:\s*//[^\n]*)*"
 for tname in ("EVENT_NAMES", "EVENT_BRIEF"):
     pat = (
@@ -134,11 +156,13 @@ for tname in ("EVENT_NAMES", "EVENT_BRIEF"):
         r"\s*base2: \w+ as usize," + _C + r"\s*len2: \w+ - \w+," + _C +
         r"\s*base3: \w+ as usize," + _C + r"\s*len3: \w+ - \w+," + _C +
         r"\s*base4: \w+ as usize," + _C + r"\s*len4: \w+ - \w+," + _C +
-        r"\s*base5: \w+ as usize," + _C + r"\s*len5: \w+ - \w+,\s*\};"
+        r"\s*base5: \w+ as usize," + _C + r"\s*len5: \w+ - \w+," + _C +
+        r"\s*base6: \w+ as usize," + _C + r"\s*len6: \w+ - \w+," + _C +
+        r"\s*base7: \w+ as usize," + _C + r"\s*len7: \w+ - \w+,\s*\};"
     )
     m = re.search(pat, src)
     assert m, f"{tname} EvTable 声明缺失"
-print("EvTable statics 五段声明在位，len() == n_events:", n_events)
+print("EvTable statics 七段声明在位，len() == n_events:", n_events)
 
 # ---------------- v1.16.29 单1刀B：表通道扩容登记 ----------------
 # 新三段连号整表（NPC_TALES/HELP_LINES/HINTS text）：基址在 .inc，行数钉死，

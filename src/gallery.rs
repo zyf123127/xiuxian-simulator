@@ -193,10 +193,13 @@ pub fn event_badge(id: usize) -> (&'static str, Color) {
         // v1.16.30 老年徽标扩 322（树下尝果，双门控第 8 条——同 299 口径不入
         // COMPANION 白名单，老年臂先命中出「老年」徽标）；321 同封新茶入
         // COMPANION 白名单走上方伴随臂，勿挂本臂。
+        // v1.16.31 老年徽标扩 328（册间拜帖，双门控第 9 条——同 322 口径不入
+        // COMPANION 白名单，老年臂先命中出「老年」徽标）；327 灯下拼卷入
+        // COMPANION 白名单走上方伴随臂，勿挂本臂。
         // 212 相扶看雪同为老年×有伴双门控，但在 COMPANION_EVENTS 白名单内，
         // 上方 COMPANION 臂先命中恒出「伴随」徽标——不入本臂（死模式勿挂）
         88 | 89 | 170 | 171 | 189 | 198 | 199 | 204 | 215 | 216 | 227 | 239 | 268 | 288
-        | 291 | 297 | 299 | 309 | 310 | 322 => {
+        | 291 | 297 | 299 | 309 | 310 | 322 | 328 => {
             return ("老年", C_GOLD_D)
         }
         // v1.16.26 宿敌徽标扩 289（同门销踪，宿敌回响——照 110 夺积余波口径，
@@ -476,6 +479,10 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
     // min/clamp 防御（panic=abort 纪律）：id 越界绝不索引
     let id = id.min(EVENTS.len().saturating_sub(1));
     let memo = g.ev_memo.get(id).and_then(|m| m.as_deref());
+    // v1.16.31 回味覆层立绘：actor 快照采样（Copy 值一次取出，不横跨借用；
+    // 与 memo 同源——都是 build_event 尾 ev_memo_set 同点写，历史行 memo=None
+    // 恒 actor=None，脸门两条件语义自洽）
+    let memo_actor = g.ev_memo_actor.get(id).copied().flatten();
     let cnt = g.meta.ev_cnt.get(id).copied().unwrap_or(0);
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(8, 5, 16, 244));
     panel_card(340.0, 100.0, 600.0, 500.0);
@@ -530,6 +537,37 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
                 }
             }
         }
+    }
+    // v1.16.31 回味覆层立绘：卡外右缘零位移脸槽（结算屏谢幕像 draw.rs 卡外槽同款
+    // 语言）。脸门=memo 命中 && actor 快照 Some（与 memo 同源——本会话构建行有
+    // 全文即有脸；历史行 memo=None 恒无脸降级，零绘制零位移）。槽几何按 actor
+    // 快照锁定不读纹理存在性（meeting latched 纪律：wasm XHR 到图只换图零位移）；
+    // 纹理未到/缺失走事件卡同款兜底链（Npc→像素立绘/Comp→书卷剪影，恒 Some 恒
+    // 有图不空槽，不用 12×12 图标冒充人像——v1.14.0 教训）。独占屏（覆层）直查
+    // 纹理 1 槽（结算屏 comp_tex 直查先例 draw.rs:2415 同口径——红线「独占屏
+    // ≤1 槽」，禁走行级 capped 口）。槽位 (964..1134, 150..450)：卡体右缘 940、
+    // 正文右锚 900、计数右锚 900、返回提示居中 566——水平垂直全净空，RECALL_CHROME
+    // 三串与正文 520 版式零改动。
+    if let (Some(_), Some(actor)) = (memo, memo_actor) {
+        let (px, py, pw, ph) = (964.0, 150.0, 170.0, 300.0);
+        let portrait = match actor {
+            crate::game::CardActor::Comp(i) => crate::art::art()
+                .comp_tex(i.min(9))
+                .or_else(crate::art::comp_silhouette_tex),
+            crate::game::CardActor::Npc(i) => crate::art::art()
+                .npc_tex(i.min(3))
+                .or_else(|| crate::art::npc_pixel_tex(i.min(3))),
+        };
+        crate::charpanel::npc_portrait_box_a(
+            portrait.as_ref(),
+            &crate::art::art().icon_yun,
+            px,
+            py,
+            pw,
+            ph,
+            ph, // bottom_off=box_h：底边对齐槽底（draw.rs 结算屏谢幕像同款）
+            1.0,
+        );
     }
     txt_c(RECALL_CHROME[2], V_W * 0.5, 566.0, 14, C_DIM);
     if is_mouse_button_pressed(MouseButton::Left) {
