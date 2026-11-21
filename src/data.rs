@@ -202,7 +202,7 @@ pub const REALMS: [RealmDef; 15] = [
 pub const LAYER4: [f64; 4] = [1.0, 2.2, 4.8, 10.0];
 
 // 死亡结算：达到各境界可得道韵
-pub const MILESTONE: [i64; 15] = [
+pub const MILESTONE: [i32; 15] = [
     0, 8, 25, 70, 180, 450, 1100, 2600, 6000, 14000, 32000, 75000, 170000, 420000, 1_100_000,
 ];
 
@@ -437,7 +437,7 @@ impl PillDef {
         evtx(self.desc_n as usize)
     }
 }
-pub const PILL_PRICES: [i64; 6] = [200, 1500, 2500, 800, 5000, 4000];
+pub const PILL_PRICES: [i32; 6] = [200, 1500, 2500, 800, 5000, 4000];
 pub const PILLS: [PillDef; 6] = [
     PillDef {
         name_n: 2039,
@@ -1792,7 +1792,7 @@ pub const ORIGINS: [OriginDef; 6] = [
 // 轮盘路径纳秒级）；行可读形态与 tools/tables_recheck.py、ledger_recheck.py 的
 // 4 元组解析口径零变（表行仍是 (id,w,mr,good)）；打包无损性由 game.rs
 // events_bitfield_pack_lossless 全表逐行钉测兜底（w>63/mr>7 当场红）。
-pub const N_EVENTS: usize = 349;
+pub const N_EVENTS: usize = 351;
 /// 名/简 textpack 段一条数（v1.16.26 末态；段二自 v1.16.27 扩池起连号追加）
 const EV_SEG1: usize = 291;
 /// 名/简 textpack 段二条数（v1.16.27 末态；段三自 v1.16.28 扩池起连号追加）。
@@ -1840,6 +1840,14 @@ const EV_SEG7: usize = 338;
 /// 钉为内容级防线照 batch_tables_aligned 先例）。v1.16.33 单1 先行引入快照常量
 ///（字节效应 0，扩池段九开工前把末段差写法钉死）
 const EV_SEG8: usize = 344;
+/// 名/简 textpack 段九条数界（v1.16.33 单3 末态 349=N_EVENTS 快照；下批扩池开
+/// 段十时 N_EVENTS 增长，本常量冻结段九上沿——len9 唯一正确写法=EV_SEG9−EV_SEG8
+/// 段界常量差，勿回写 N_EVENTS−EV_SEG8：N_EVENTS 增长时 len9 会静默吞掉段十
+/// 首行、id344..348 名/简读到段十错行非空串，is_empty 防线抓不住——段十 get
+/// 首尾逐字钉为内容级防线照 batch_tables_aligned 先例）。v1.16.34 单1 先行引入
+/// 快照常量（字节效应 0，扩池段十开工前把末段差写法钉死）——v1.16.34 单3 段十
+/// 已开工，差写法兑现（len9=(EV_SEG9−EV_SEG8) 在位）
+const EV_SEG9: usize = 349;
 
 pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (0, 12, 0, true),  // 灵草满坡
@@ -2587,6 +2595,15 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (347, 1, 2, true),  // 梦续残句（稀有 w1：mr2 稀有第 4 条照 72/234/329 层位，散件 special 恒 0）
     (348, 3, 6, true),  // 霜橘分甘（老年×伴双门控第 11 条，mr6 换层——双门控
                         // mr6/mr7 原零覆盖，Comp 立绘不入白名单）
+    // v1.16.34 单3 扩池批 2 条（段十，N_EVENTS 349→351）：按单1+单2 减包后余量
+    // 19,440B 落 18~20KB 带取 2 条（勘察 A1/A2；A3..A7 备选裁剪序尾向头勿倒）；
+    // 扩池后账本实测复算（tools/ledger_recheck.py）：总基权 1070→1076（本批
+    // +6=2×w3）；稀有 28 条 48 权 ≈4.49% 不变；恶缘 68 条 240 权不变；常态池
+    // （w>0）mr 分布（316 条）0:44/1:63/2:54/3:37/4:38/5:32/6:26/7:22
+    (349, 3, 7, true),  // 结绳记事（老年×伴双门控第 12 条，mr7 补开——双门控
+                        // 首条 mr7，Comp 立绘照 344 模板不入白名单）
+    (350, 3, 6, true),  // 云隙借光（云门 weather==1 第 5 面收官——五天象门控
+                        // 雨/灵潮/雾/晴/云全开，mr6 善散件）
 ];
 
 const fn pack_ev(r: (u16, u8, u8, bool)) -> u16 {
@@ -2725,9 +2742,17 @@ pub struct EvTable {
     // BASE/TXT_BRIEF9_BASE=2576/2581 同款登记与产出；段八后下一空 N=2576——
     // 单1 N 化批已用 N2368..2575 故段九顺延）；九面同步扩九段连寻（扩段只加
     // 一行 segs）。len9 取段界常量差 N_EVENTS−EV_SEG8（EV_SEG8=344 快照常量
-    // 单1 已引入——新「末段写法」，下批扩池续段十时须改差，见 EV_SEG8 注）
+    // 单1 已引入——新「末段写法」，下批扩池续段十时须改差，见 EV_SEG8 注；
+    // v1.16.34 单3 段十已开工，差写法兑现 len9=(EV_SEG9−EV_SEG8)）
     base9: u16,
     len9: u16,
+    // v1.16.34 单3 扩池起：段九（5 条）满员后新批连号追加为段十（TXT_NAME10_
+    // BASE/TXT_BRIEF10_BASE=2647/2649 同款登记与产出；段九后下一空 N=2647——
+    // 单1 精度/臂表批已用 N2601..2646 故段十顺延）；十面同步扩十段连寻（扩段
+    // 只加一行 segs）。len10 取段界常量差 N_EVENTS−EV_SEG9（EV_SEG9=349 快照
+    // 常量单1 已引入——新「末段写法」，下批扩池续段十一时须改差，见 EV_SEG9 注）
+    base10: u16,
+    len10: u16,
 }
 
 impl EvTable {
@@ -2751,6 +2776,8 @@ impl EvTable {
             (self.base8, self.len8),
             // v1.16.33 单3 扩段九：只加一行 segs（base9/len9），累减循环自动续寻
             (self.base9, self.len9),
+            // v1.16.34 单3 扩段十：只加一行 segs（base10/len10），累减循环自动续寻
+            (self.base10, self.len10),
         ];
         let mut k = i;
         for seg_k in segs.iter() {
@@ -2773,6 +2800,7 @@ impl EvTable {
             + self.len7 as usize
             + self.len8 as usize
             + self.len9 as usize
+            + self.len10 as usize
     }
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -2829,9 +2857,17 @@ pub static EVENT_NAMES: EvTable = EvTable {
     // 首行，见 EV_SEG8 注；单3 扩池起 N_EVENTS=349≠EV_SEG8=344，差写法兑现）
     len8: (EV_SEG8 - EV_SEG7) as u16,
     // v1.16.33 单3 扩段九：base9/len9 双段登记——len9 取段界常量差
-    // N_EVENTS−EV_SEG8（新「末段写法」，下批扩段十须改差，照 len7/len8 原注）
+    // N_EVENTS−EV_SEG8（新「末段写法」，下批扩段十须改差，照 len7/len8 原注；
+    // v1.16.34 单3 段十已开工，下两行兑现 len9=(EV_SEG9−EV_SEG8)）
+    // v1.16.34 单1：len9 由 N_EVENTS−EV_SEG8 改段界常量差 EV_SEG9−EV_SEG8
+    //（EV_SEG9=349 快照常量先行引入——扩池开段十时 N_EVENTS 增长不再静默吞段九
+    // 首行，见 EV_SEG9 注）
     base9: TXT_NAME9_BASE as u16,
-    len9: (N_EVENTS - EV_SEG8) as u16,
+    len9: (EV_SEG9 - EV_SEG8) as u16,
+    // v1.16.34 单3 扩段十：base10/len10 双段登记——len10 取段界常量差
+    // N_EVENTS−EV_SEG9（新「末段写法」，下批扩段十一须改差，照 len9 原注）
+    base10: TXT_NAME10_BASE as u16,
+    len10: (N_EVENTS - EV_SEG9) as u16,
 };
 
 
@@ -2861,8 +2897,12 @@ pub static EVENT_BRIEF: EvTable = EvTable {
     // v1.16.33 单1：同 EVENT_NAMES len8 注（EV_SEG8 快照常量差写法）
     len8: (EV_SEG8 - EV_SEG7) as u16,
     // v1.16.33 单3 扩段九：同 EVENT_NAMES base9/len9 注（len9 末段差写法）
+    // v1.16.34 单1：同 EVENT_NAMES len9 注（EV_SEG9 快照常量差写法）
     base9: TXT_BRIEF9_BASE as u16,
-    len9: (N_EVENTS - EV_SEG8) as u16,
+    len9: (EV_SEG9 - EV_SEG8) as u16,
+    // v1.16.34 单3 扩段十：同 EVENT_NAMES base10/len10 注（len10 末段差写法）
+    base10: TXT_BRIEF10_BASE as u16,
+    len10: (N_EVENTS - EV_SEG9) as u16,
 };
 
 
@@ -2872,27 +2912,19 @@ pub static EVENT_BRIEF: EvTable = EvTable {
 pub const RARE_W: i32 = 2;
 
 // ---------------- 功法价格（藏经阁，现实可购） ----------------
-pub const TECH_PRICES: [i64; 8] = [0, 2000, 8000, 30000, 120000, 500000, 2000000, 10000000];
+pub const TECH_PRICES: [i32; 8] = [0, 2000, 8000, 30000, 120000, 500000, 2000000, 10000000];
 
 // ---------------- 称号 ----------------
+// v1.16.34 单1 β刀（--nize=arms）：境界名 15 臂收编 textpack（调用点
+// 均一次性 UI 文案，evtx 零分配）——max_realm.min 钳制落 _ 臂槽逐值等价
+//（v1.16.34 修复：通道初版 span 误吞 fn 签名整行替换——title_recheck 钉B
+// v1.16.33 同型事故红线，本轮亲历；修法=锚只含 match 行，fn 头不进 span）
 pub fn realm_title(max_realm: usize) -> &'static str {
-    match max_realm {
-        0 => "未开笔",
-        1 => "初沁墨",
-        2 => "一行自立",
-        3 => "章成洇然",
-        4 => "骨立不倒",
-        5 => "笔下生花",
-        6 => "锋藏不露",
-        7 => "铁画银钩",
-        8 => "书传人间",
-        9 => "对账之人",
-        10 => "墨行纸背",
-        11 => "一砚之尊",
-        12 => "秉笔者",
-        13 => "执卷者",
-        _ => "琅函天笔",
-    }
+    const REALM_TITLE_NS: [u16; 15] = [
+        2632, 2633, 2634, 2635, 2636, 2637, 2638, 2639,
+        2640, 2641, 2642, 2643, 2644, 2645, 2646,
+    ];
+    evtx(REALM_TITLE_NS[max_realm.min(REALM_TITLE_NS.len() - 1)] as usize)
 }
 
 // v1.16.32 单1 小表批：表体收编 textpack（TXT_MINOR_BASE 起 10 条连号）。长度
@@ -3193,7 +3225,7 @@ pub fn weather_loc_mult(w: usize, loc: usize) -> f64 {
 }
 
 // 立绘分档：0白丁 1道基 2紫府 3墨仙（按最高境界取档）
-pub const PORTRAIT_TIERS: [usize; 4] = [0, 3, 6, 10]; // 各档境界下限
+pub const PORTRAIT_TIERS: [u16; 4] = [0, 3, 6, 10]; // 各档境界下限
 
 // v1.14.0 立绘焕新时刻：四相名（跨档破境 toast『道貌焕然——【X之相】』+ 角色页常显行）
 pub const PORTRAIT_STAGE_NAMES: [&str; 4] = ["白丁之相", "道基之相", "紫府之相", "墨仙之相"];
@@ -3201,7 +3233,7 @@ pub const PORTRAIT_STAGE_NAMES: [&str; 4] = ["白丁之相", "道基之相", "�
 pub fn portrait_tier(realm: usize) -> usize {
     let mut t = 0;
     for (i, &th) in PORTRAIT_TIERS.iter().enumerate() {
-        if realm >= th {
+        if realm >= th as usize {
             t = i;
         }
     }
@@ -3232,10 +3264,10 @@ pub fn dongfu_fac_desc(i: usize) -> &'static str {
     evtx(TXT_DFD_BASE as usize + i.min(2))
 }
 pub const JUELING_MULT: [f64; 4] = [1.00, 1.15, 1.30, 1.50];
-pub const LINGTIAN_YIELD: [i64; 4] = [0, 300, 1200, 5000];
+pub const LINGTIAN_YIELD: [i32; 4] = [0, 300, 1200, 5000];
 pub const DANFANG_DISC: [f64; 4] = [1.00, 0.90, 0.80, 0.70];
 // 升到 L+1 级费用：灵石 DONGFU_UP_STONES[L] + 贡献 DONGFU_UP_CONTRIB[L]
-pub const DONGFU_UP_STONES: [i64; 3] = [2000, 20000, 200000];
+pub const DONGFU_UP_STONES: [i32; 3] = [2000, 20000, 200000];
 pub const DONGFU_UP_CONTRIB: [u32; 3] = [30, 120, 400];
 
 // ================= v1.6.0 山河万象：仇敌突破换地图 =================
@@ -3544,7 +3576,7 @@ pub const INHERIT_LEGACY_FAV: i32 = 10; // 遗泽承接好感加成
 // 字体 cmap 与 charset_diff_check 口径不变；存档只存事件 id，零兼容影响。
 pub static TEXTPACK: &[u8] = include_bytes!("../assets/textpack.bin");
 // 生成件（pack_text.py 产出）：pub static TXT_ANCH: [u32; A]（每 K32=128 条一个绝对
-// 锚，锚数 A=ceil(行数/128)——v1.16.33 单3 末态 2,601 行→21 锚（K32=128
+// 锚，锚数 A=ceil(行数/128)——v1.16.34 单3 末态 2,657 行→21 锚（K32=128
 // 粗化后锚距；历史注「1,971 行→62 锚」为 32 距口径，已随粗化清账）+
 // pub static TXT_DELTA: [u16; N]（组内 delta，off(i)=ANCH[i>>7]+DELTA[i]——
 // v1.16.28 刀C 两级表，v1.16.32 单1 组距 32→128 粗化后 shift 5→7；旧 [u32;N]
@@ -3618,16 +3650,24 @@ pub static TEXTPACK: &[u8] = include_bytes!("../assets/textpack.bin");
 // v1.16.33 单3 扩池段九：名段九 N2576..=2580（TXT_NAME9_BASE=2576）+ 简段九
 // N2581..=2585（TXT_BRIEF9_BASE=2581）真相源手写连号段先于正文 + 五臂正文
 // 收编 N2586..=2600（15 站=11 evtx+4 evf；EV_SEG8=344 快照常量差写法兑现，
-// len8=(EV_SEG8−EV_SEG7)、len9=N_EVENTS−EV_SEG8——下批扩池续段十时 len9
-// 同步改段界差，见 EV_SEG8 注）；末态 2,601 行、TXT_ANCH 21 锚、TXT_DELTA
-// [u16;2602]；N 追加不变号，段基址稳定）
+// len8=(EV_SEG8−EV_SEG7)、len9=N_EVENTS−EV_SEG8——段十预言由 v1.16.34
+// 单3 兑现（len9 改 (EV_SEG9−EV_SEG8) 段界差）；
+// v1.16.34 单1 刀α/β+γ 精度模板+臂表收编 N2601..=2646（27 站精度模板
+// 变换 {} 入 blob + 26 行臂字面量，DualGate::ThisYear 单臂 dedup 共享既有
+// 行 N2453）+ 单2 行直改 10 行 N1175/1198/1327/1334/1380/1456/1458/1460/
+// 1596/1597（第十三批简语 8 行+loot 结论句 2 行，N 不变号，−46B）；
+// v1.16.34 单3 扩池段十：名段十 N2647..=2648（TXT_NAME10_BASE=2647）+ 简
+// 段十 N2649..=2650（TXT_BRIEF10_BASE=2649）真相源手写连号段先于正文 +
+// 两臂正文收编 N2651..=2656（6 站=3 evf+3 evtx；EV_SEG9=349 快照常量差
+// 写法兑现，len9=(EV_SEG9−EV_SEG8)、len10=N_EVENTS−EV_SEG9）；末态 2,657
+// 行、TXT_ANCH 21 锚、TXT_DELTA [u16;2658]；N 追加不变号，段基址稳定）
 include!("text_offsets.inc");
 
 static TEXT_BLOB: std::sync::OnceLock<&'static [u8]> = std::sync::OnceLock::new();
 
 /// 解包单源（get_or_init 的初始化闭包）：成功返回 leak 后的 blob，失败/校验不
 /// 过返回 EMPTY 哨兵——INIT_TRIED 钉死「只试一次」，失败后不再重试（防帧路径
-/// 反复 inflate）。EMPTY 即失败态（真实 blob 恒非空：2,601 条非空文案串接，
+/// 反复 inflate）。EMPTY 即失败态（真实 blob 恒非空：2,657 条非空文案串接，
 /// 随收编增长勿当硬断言——v1.16.26 注 647/v1.16.29 注 1,492/1,865/
 /// v1.16.30 注 1,905/v1.16.31 注 1,954/1,969 均已过期清账）。
 static TEXT_INIT_TRIED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -3733,6 +3773,32 @@ pub fn evf(n: usize, args: &[&dyn core::fmt::Display]) -> String {
     out
 }
 
+// ---------------- v1.16.34 单1 刀α：精度 Display 包装（--block-prec） ----------------
+/// evf 精度模板的实参载体：blob 模板占位统一纯 {}，精度语义（{:.0}/{:.1}/{:.2}）
+/// 由包装类型的 Display impl 承接——write!(f, "{:.N}", self.0) 与原 format!(
+/// "…{:.N}…", v) 走同一 f64 Display Formatter 路径，产物逐字节等价（边界值
+/// 0.5/0.25/0.999 钉测 evf_prec_format_equivalence 验收）。调用点由
+/// pack_text.py --block-prec 通道按占位序生成 `&(FmtN(expr)) as &dyn Display`；
+/// 构造是 Copy 小结构零堆分配，每实参一次 write_fmt（与原 format! 同量）。
+pub struct Fmt0(pub f64);
+impl core::fmt::Display for Fmt0 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:.0}", self.0)
+    }
+}
+pub struct Fmt1(pub f64);
+impl core::fmt::Display for Fmt1 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:.1}", self.0)
+    }
+}
+pub struct Fmt2(pub f64);
+impl core::fmt::Display for Fmt2 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:.2}", self.0)
+    }
+}
+
 #[cfg(test)]
 mod text_tests {
     use super::*;
@@ -3817,8 +3883,9 @@ mod text_tests {
         // v1.16.31 扩池：+ 段六 10 = 335；v1.16.31 新功能：+ 段七 3 = 338
         // v1.16.32 单3 扩池：+ 段八 6 = 344
         // v1.16.33 单3 扩池：+ 段九 5 = 349
-        assert_eq!(EVENT_NAMES.len(), 349);
-        assert_eq!(EVENT_BRIEF.len(), 349);
+        // v1.16.34 单3 扩池：+ 段十 2 = 351
+        assert_eq!(EVENT_NAMES.len(), 351);
+        assert_eq!(EVENT_BRIEF.len(), 351);
         assert_eq!(EVENT_NAMES.get(0), Some("灵草满坡"));
         assert_eq!(EVENT_NAMES.get(290), Some("误入猎套"));
         assert_eq!(EVENT_BRIEF.get(0), Some("满坡灵草露水未干，采满一筐"));
@@ -3885,9 +3952,17 @@ mod text_tests {
         assert_eq!(EVENT_NAMES.get(348), Some("霜橘分甘"));
         assert_eq!(EVENT_BRIEF.get(344), Some("旧稿起皱，同裱成轴"));
         assert_eq!(EVENT_BRIEF.get(348), Some("霜后橘熟，分甘各半"));
-        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=349）
-        assert_eq!(EVENT_NAMES.get(349), None);
-        assert_eq!(EVENT_BRIEF.get(349), None);
+        // 段十（v1.16.34 单3 扩池 2 条，TXT_NAME10_BASE=2647/TXT_BRIEF10_BASE=
+        // 2649，手写名/简连号段先于正文收编——单1 精度/臂表批已用 N2601..2646
+        // 故段十顺延）：len9 漂移唯一内容级防线——首尾逐字钉，len9 写
+        // N_EVENTS−EV_SEG8 静默吞段十时在此必红（EV_SEG9=349 快照兜底）
+        assert_eq!(EVENT_NAMES.get(349), Some("结绳记事"));
+        assert_eq!(EVENT_NAMES.get(350), Some("云隙借光"));
+        assert_eq!(EVENT_BRIEF.get(349), Some("年深忘事，结绳相记"));
+        assert_eq!(EVENT_BRIEF.get(350), Some("云隙漏光，墨迹先干"));
+        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=351）
+        assert_eq!(EVENT_NAMES.get(351), None);
+        assert_eq!(EVENT_BRIEF.get(351), None);
         assert_eq!(EVENT_NAMES.get(usize::MAX), None);
     }
 
@@ -3917,6 +3992,105 @@ mod text_tests {
             evf(1574, &[&"血仇之敌"]),
             "血仇得报——血仇之敌授首，账清了。"
         );
+    }
+
+    // ---------------- v1.16.34 单1 刀α：精度模板通道等价性钉测 ----------------
+
+    /// Fmt0/1/2 包装 Display 语义 == format! 同精规格（走同一 f64 Display
+    /// Formatter 路径的逐字节回归）；边界值覆盖 0.5（round-half-even 进位界）、
+    /// 0.25/0.999（截断位）、2.675/99.995（二进制不可精确表示的假进位点）
+    #[test]
+    fn evf_prec_format_equivalence() {
+        for v in [0.0, 0.25, 0.4999, 0.5, 0.501, 0.999, 1.005, 2.675, 99.995, 12345.678] {
+            assert_eq!(format!("{}", Fmt0(v)), format!("{:.0}", v), "Fmt0 @{}", v);
+            assert_eq!(format!("{}", Fmt1(v)), format!("{:.1}", v), "Fmt1 @{}", v);
+            assert_eq!(format!("{}", Fmt2(v)), format!("{:.2}", v), "Fmt2 @{}", v);
+        }
+        // f32→f64 cast 站语义：f32 值转 f64 精确无损，同精规格产物逐字节一致
+        //（11 站 cast 的等价性依据；0.5f32 边界同样钉死）
+        let f: f32 = 0.5;
+        assert_eq!(format!("{}", Fmt0(f as f64)), format!("{:.0}", f));
+        assert_eq!(format!("{}", Fmt0((62.5f32 * 100.0) as f64)), format!("{:.0}", 62.5f32 * 100.0));
+    }
+
+    /// 精度收编站逐站文本钉（blob 模板纯 {} + 实参包装 → 回拼 == 原 format! 输出）；
+    /// 样例覆盖三种精度档 + 纯{}/精度混排 + 多重共享行（2609 三站共享）
+    #[test]
+    fn evf_prec_station_equivalence() {
+        init_text();
+        // N2601 game.rs:2896 蛰伏句（{:.0}）
+        assert_eq!(
+            evf(2601, &[&(Fmt0(12.34))]),
+            format!("你蛰伏蓄势，气机渐盈（破境率+{:.0}%）。", 12.34f64)
+        );
+        // N2609 坊市丹价（{:.2}，charpanel783/npc59/world1128 三重共享行）
+        assert_eq!(
+            evf(2609, &[&(Fmt2(0.8))]),
+            format!("当前：坊市丹价 ×{:.2}", 0.8f64)
+        );
+        // N2615 修为行（{}/{}/{:.0} 混排，draw.rs:1241）
+        assert_eq!(
+            evf(2615, &[&"123", &"456", &(Fmt0(55.55))]),
+            format!("修为 {}/{}（{:.0}%）", "123", "456", 55.55f64)
+        );
+        // N2604 境之门句（{}/{:.0}/{:.0} 双精度混排，game.rs:3286）
+        assert_eq!(
+            evf(2604, &[&"立骨", &(Fmt0(62.5)), &(Fmt0(3.7))]),
+            format!(
+                "你修为圆满，{}境之门隐现眼前。冲击成功率 {:.0}%，失败有 {:.0}% 身死之危。是孤注一掷，还是蛰伏蓄势？",
+                "立骨", 62.5f64, 3.7f64
+            )
+        );
+        // N2619 结缘起步句（{}/{:.0}/{} 三实参混排，charpanel.rs:970/1409 共享行）
+        assert_eq!(
+            evf(2619, &[&"12", &(Fmt0(50.0)), &"20"]),
+            format!("结缘起步情谊 {}（双修 +{:.0}%），道侣赠礼事件再 +{}。", "12", 50.0f64, "20")
+        );
+        // N2616 修炼×战力（{:.1} 双精度，draw.rs:2629）
+        assert_eq!(
+            evf(2616, &[&(Fmt1(1.25)), &(Fmt1(0.9))]),
+            format!("修炼×{:.1}  战力×{:.1}", 1.25f64, 0.9f64)
+        );
+    }
+
+    // ---------------- v1.16.34 单1 β+γ 刀：match 臂簇收编等价性钉测 ----------------
+
+    /// 四簇 N 表行内容与原臂字面量逐字节等价（N 错行/兜底漂移在此必红；全表
+    /// 逐 slot 静态验收 tools/arms_sweep_check.py，git HEAD 原臂对照）
+    #[test]
+    fn evtx_arms_tables_equivalence() {
+        init_text();
+        // 簇1 sim_demon 破境场景（game.rs:3276 表，target-11 槽映射，_ 臂=槽3）
+        assert_eq!(evtx(2621), "砚池深处无风自皱，墨色里现出一段石阶，阶上墨痕犹润");
+        assert_eq!(evtx(2622), "案头秃笔无风自立，笔锋所指书页哗哗自翻，停在空白一页");
+        assert_eq!(evtx(2623), "书山最高处那卷无字之书自己摊开，纸页里透出暖光");
+        assert_eq!(evtx(2624), "笔冢之上虚悬一支巨笔，笔尖垂落至你面前，墨滴欲坠");
+        // 簇2 退稿收束语三档（game.rs settle_coda，min(14)/5 槽映射）
+        assert_eq!(evtx(2625), "白纸尚厚，慢慢写。");
+        assert_eq!(evtx(2626), "这一稿有筋骨，下一稿更稳。");
+        assert_eq!(evtx(2627), "一砚之尊，也要退稿。");
+        // 簇3 终战副标（draw.rs:1801 表，i 直槽，_ 臂=槽3）
+        assert_eq!(evtx(2628), "永生换的 · 一字不改");
+        assert_eq!(evtx(2629), "推荐 · 后事不详，比永生更宽");
+        assert_eq!(evtx(2630), "描清十万稿的名字");
+        assert_eq!(evtx(2631), "隐藏 · 未完的书自会看见");
+        // 簇4 境界名 15 臂（data.rs realm_title，0..13 直槽 + _ 臂=槽14）
+        assert_eq!(evtx(2632), "未开笔");
+        assert_eq!(evtx(2643), "一砚之尊");
+        assert_eq!(evtx(2646), "琅函天笔");
+    }
+
+    /// realm_title 查表口运行期等价：旧 match 语义（0..13 直映射、≥14 与脏值
+    /// 落 _ 臂「琅函天笔」）逐档回归——.min(len-1) 钳制唯一防线
+    #[test]
+    fn realm_title_table_equivalence() {
+        assert_eq!(realm_title(0), "未开笔");
+        assert_eq!(realm_title(3), "章成洇然");
+        assert_eq!(realm_title(10), "墨行纸背");
+        assert_eq!(realm_title(13), "执卷者");
+        assert_eq!(realm_title(14), "琅函天笔");
+        assert_eq!(realm_title(99), "琅函天笔");
+        assert_eq!(realm_title(usize::MAX), "琅函天笔");
     }
 
     /// 刀B 表通道扩容：字段级 `_n`/`(ns,len)` 连号与整表基址查表，行内容与旧

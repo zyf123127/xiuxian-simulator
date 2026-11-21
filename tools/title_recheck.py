@@ -29,7 +29,8 @@
     TXT_NAME6_BASE+id−EV_SEG5；≥EV_SEG6 →
     TXT_NAME7_BASE+id−EV_SEG6；≥EV_SEG7 → TXT_NAME8_BASE+id−EV_SEG7（段八）；
     ≥EV_SEG8 → TXT_NAME9_BASE+id−EV_SEG8（段九，v1.16.33 随批补全——本注
-    此前滞后只写到段七口径）。段界/基址常量直接从
+    此前滞后只写到段七口径）；≥EV_SEG9 → TXT_NAME10_BASE+id−EV_SEG9
+    （段十，v1.16.34 随批补全）。段界/基址常量直接从
     src/data.rs 与 src/text_offsets.inc 解析，不硬编码。
   - text_source.txt 行号=N（0 基），真相源权威。
 
@@ -109,6 +110,7 @@ def main():
     seg6 = parse_const(data_txt, "EV_SEG6")
     seg7 = parse_const(data_txt, "EV_SEG7")
     seg8 = parse_const(data_txt, "EV_SEG8")
+    seg9 = parse_const(data_txt, "EV_SEG9")
     b1 = parse_inc_base("TXT_NAME_BASE")
     b2 = parse_inc_base("TXT_NAME2_BASE")
     b3 = parse_inc_base("TXT_NAME3_BASE")
@@ -118,6 +120,7 @@ def main():
     b7 = parse_inc_base("TXT_NAME7_BASE")
     b8 = parse_inc_base("TXT_NAME8_BASE")
     b9 = parse_inc_base("TXT_NAME9_BASE")
+    b10 = parse_inc_base("TXT_NAME10_BASE")
 
     # id -> 名段 N 映射（与 data.rs EvTable base8+base9 双段九段连寻同口径）
     def name_n(eid):
@@ -142,7 +145,11 @@ def main():
             # 分支，与 data.rs EvTable base8 段八+base9 段九双段连寻同口径
             return b8 + (eid - seg7)
         # v1.16.33 段九：EV_SEG8=344 快照段界，段九基址 TXT_NAME9_BASE
-        return b9 + (eid - seg8)
+        if eid < seg9:
+            return b9 + (eid - seg8)
+        # v1.16.34 段十：EV_SEG9=349 快照段界，段十基址 TXT_NAME10_BASE
+        #（新增分支勿替换段九 return——v1.16.33 段八分支被整行顶替先例红线）
+        return b10 + (eid - seg9)
 
     # 钉B：名段覆盖断言（真相源逐条可解析、非空、行号=N）
     src_lines = SRC.read_text(encoding="utf-8").splitlines()
@@ -171,11 +178,12 @@ def main():
     # 下不可见（错行非空串与真名段同样过查）——段八/段九首尾逐字钉与
     # data.rs ev_tables_section_bounds get() 内容钉同源，漂移当场红
     for _eid, _want in ((338, "暮坛对酌"), (343, "老炉现纹"),
-                        (344, "同裱旧稿"), (348, "霜橘分甘")):
+                        (344, "同裱旧稿"), (348, "霜橘分甘"),
+                        (349, "结绳记事"), (350, "云隙借光")):
         if names.get(_eid) != _want:
             raise SystemExit("FATAL 钉B-2 名段内容钉失败: id%d → %r (期望 %r)"
                              % (_eid, names.get(_eid), _want))
-    print("OK 钉B-2 段八/段九首尾内容钉 ✓（338/343/344/348）")
+    print("OK 钉B-2 段八/段九/段十首尾内容钉 ✓（338/343/344/348/349/350）")
 
     game_lines = GAME.read_text(encoding="utf-8").splitlines()
     st, en = build_event_span(game_lines)
@@ -253,9 +261,9 @@ def main():
             "每臂恰 1 次赋值" % (len(hits), n_events - 1)
         )
     print(
-        "OK 钉B 名段覆盖 ✓（N_EVENTS=%d 段界 %d/%d/%d/%d/%d/%d/%d/%d 基址 %d/%d/%d/%d/%d/%d/%d/%d/%d）"
-        % (n_events, seg1, seg2, seg3, seg4, seg5, seg6, seg7, seg8, b1, b2, b3,
-           b4, b5, b6, b7, b8, b9)
+        "OK 钉B 名段覆盖 ✓（N_EVENTS=%d 段界 %d/%d/%d/%d/%d/%d/%d/%d/%d 基址 %d/%d/%d/%d/%d/%d/%d/%d/%d/%d）"
+        % (n_events, seg1, seg2, seg3, seg4, seg5, seg6, seg7, seg8, seg9,
+           b1, b2, b3, b4, b5, b6, b7, b8, b9, b10)
     )
     print("title_recheck 全绿")
 

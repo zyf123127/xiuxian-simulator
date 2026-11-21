@@ -237,19 +237,19 @@ pub fn sect_buy(g: &mut Game, i: usize) {
             SectGoodKind::Qi15 => {
                 let v = qi_need(l) * 0.15;
                 gain_qi(l, v);
-                format!("服下{}，修为+{}", name, fmt_num(v))
+                format!("{}入腹，修为+{}", name, fmt_num(v))
             }
             SectGoodKind::Dao2 => {
                 l.dao = (l.dao + 2.0).min(100.0);
-                format!("服下{}，道心+2", name)
+                format!("{}入腹，道心+2", name)
             }
             SectGoodKind::Body2 => {
                 l.body = (l.body + 2.0).min(100.0);
-                format!("服下{}，体魄+2", name)
+                format!("{}入腹，体魄+2", name)
             }
             SectGoodKind::Life8 => {
                 l.lifespan += 8.0;
-                format!("服下{}，寿元+8载", name)
+                format!("{}入腹，寿元+8载", name)
             }
             SectGoodKind::Relic(r) => {
                 l.relics.push(*r);
@@ -435,11 +435,11 @@ pub fn exp_choose(g: &mut Game, i: usize) {
                         let l = g.life.as_mut().unwrap();
                         l.stones += s;
                     }
-                    push_loot(g, evf(1596, &[&(fmt_int(s))])/* 原文：破禁得宝，折算灵石 {} */);
+                    push_loot(g, evf(1596, &[&(fmt_int(s))])/* 原文：破禁得宝，折灵石{} */);
                 } else {
                     let c = (EXPED_CONTRIB as f32 * mult * rm.exped_mult as f32) as u32;
                     g.meta.sect_contrib += c;
-                    push_loot(g, evf(1597, &[&(c)])/* 原文：得宗门信物，贡献+{} */);
+                    push_loot(g, evf(1597, &[&(c)])/* 原文：信物入手，贡献+{} */);
                 }
                 g.play(crate::sounds::Which::Coin);
             }
@@ -482,7 +482,7 @@ pub fn dongfu_up(g: &mut Game, i: usize) {
         g.toast("此设施已臻圆满", C_DIM);
         return;
     }
-    let stones = DONGFU_UP_STONES[lv as usize];
+    let stones = DONGFU_UP_STONES[lv as usize] as i64;
     let contrib = DONGFU_UP_CONTRIB[lv as usize];
     let ok_stones = g.life.as_ref().map_or(false, |l| l.stones >= stones);
     let ok_contrib = g.meta.sect_contrib >= contrib;
@@ -1123,13 +1123,13 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             );
             txt(dongfu_fac_desc(i), 300.0, y + 34.0, 14, C_DIM);
             let eff = match i {
-                0 => format!("当前：修炼效率 ×{:.2}", JUELING_MULT[lv]),
+                0 => evf(2612, &[&(crate::data::Fmt2(JUELING_MULT[lv])) as &dyn core::fmt::Display])/* 原文：当前：修炼效率 ×{} */,
                 1 => evf(1602, &[&(LINGTIAN_YIELD[lv])])/* 原文：当前：每载产灵石 {} */,
-                _ => format!("当前：坊市丹价 ×{:.2}", DANFANG_DISC[lv]),
+                _ => evf(2609, &[&(crate::data::Fmt2(DANFANG_DISC[lv])) as &dyn core::fmt::Display])/* 原文：当前：坊市丹价 ×{} */,
             };
             txt(&eff, 300.0, y + 58.0, 14, C_CYAN);
                 if lv < 3 {
-                    let (cs, cc) = (DONGFU_UP_STONES[lv], DONGFU_UP_CONTRIB[lv]);
+                    let (cs, cc) = (DONGFU_UP_STONES[lv] as i64, DONGFU_UP_CONTRIB[lv]);
                     let ok = l_stones >= cs && g.meta.sect_contrib >= cc;
                     txt(
                         &evf(1603, &[&(lv + 1), &(fmt_int(cs)), &(cc)])/* 原文：升{}级：{} 灵石 + {} 贡献 */,
@@ -1211,8 +1211,8 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                 };
                 g.exp_p_cache = Some((
                     cur,
-                    format!("收获 ×1.5 · 胜算约{:.0}%", p0 * 100.0),
-                    format!("稳妥 ×0.6 · 胜算约{:.0}%", p1 * 100.0),
+                    evf(2613, &[&(crate::data::Fmt0((p0 * 100.0) as f64)) as &dyn core::fmt::Display])/* 原文：收获 ×1.5 · 胜算约{}% */,
+                    evf(2614, &[&(crate::data::Fmt0((p1 * 100.0) as f64)) as &dyn core::fmt::Display])/* 原文：稳妥 ×0.6 · 胜算约{}% */,
                 ));
             }
             let label0 = exped_choice(kind.min(3), 0);

@@ -55,13 +55,10 @@ pub fn drunk_cult_mult(fav: i32) -> f64 {
 // 内联 match 同表同口径——人物页实现按规格保持不动，本口防止未来再抄第三份漂移）
 pub fn eff_line(i: usize, fav: i32) -> String {
     match i {
-        NPC_ELDER => format!("当前：宗门任务收益 ×{:.2}", elder_quest_mult(fav)),
-        NPC_MERCHANT => format!("当前：坊市丹价 ×{:.2}", merchant_disc(fav)),
-        NPC_SENIOR => format!(
-            "当前：跨境破境率 +{:.0}%",
-            senior_break_add(fav) * 100.0
-        ),
-        _ => format!("当前：每载修炼 ×{:.2}", drunk_cult_mult(fav)),
+        NPC_ELDER => evf(2608, &[&(crate::data::Fmt2(elder_quest_mult(fav))) as &dyn core::fmt::Display])/* 原文：当前：宗门任务收益 ×{} */,
+        NPC_MERCHANT => evf(2609, &[&(crate::data::Fmt2(merchant_disc(fav))) as &dyn core::fmt::Display])/* 原文：当前：坊市丹价 ×{} */,
+        NPC_SENIOR => evf(2610, &[&(crate::data::Fmt0((senior_break_add(fav) * 100.0) as f64)) as &dyn core::fmt::Display])/* 原文：当前：跨境破境率 +{}% */,
+        _ => evf(2611, &[&(crate::data::Fmt2(drunk_cult_mult(fav))) as &dyn core::fmt::Display])/* 原文：当前：每载修炼 ×{} */,
     }
 }
 

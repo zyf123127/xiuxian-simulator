@@ -134,7 +134,7 @@ pub fn event_badge(id: usize) -> (&'static str, Color) {
         Some(&p) => ev_w(p), // v1.16.28 刀B：EVENTS 裁 id 列 [u16;N]——下标即 id，get 直解码
         None => return ("遭遇", C_DIM),
     };
-    if COMPANION_EVENTS.contains(&id) {
+    if COMPANION_EVENTS.contains(&(id as u16)) {
         return ("伴随", C_GOLD_D);
     }
     match id {
@@ -176,10 +176,12 @@ pub fn event_badge(id: usize) -> (&'static str, Color) {
         // v1.16.33 单3 老年徽标扩 348（霜橘分甘，双门控第 11 条 mr6——同 342
         // 口径不入 COMPANION 白名单，老年臂先命中出「老年」徽标；复审必修②
         // 补登记——漏挂会落默认臂显「遭遇」，复刻 v1.16.26 已修漏登记类）。
+        // v1.16.34 单3 老年徽标扩 349（结绳记事，双门控第 12 条 mr7——同 348
+        // 口径随批登记勿漏，漏挂落默认臂显「遭遇」）。
         // 212 相扶看雪同为老年×有伴双门控，但在 COMPANION_EVENTS 白名单内，
         // 上方 COMPANION 臂先命中恒出「伴随」徽标——不入本臂（死模式勿挂）
         88 | 89 | 170 | 171 | 189 | 198 | 199 | 204 | 215 | 216 | 227 | 239 | 268 | 288
-        | 291 | 297 | 299 | 309 | 310 | 322 | 328 | 342 | 348 => {
+        | 291 | 297 | 299 | 309 | 310 | 322 | 328 | 342 | 348 | 349 => {
             return ("老年", C_GOLD_D)
         }
         // v1.16.26 宿敌徽标扩 289（同门销踪，宿敌回响——照 110 夺积余波口径，

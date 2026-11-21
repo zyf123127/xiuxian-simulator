@@ -777,19 +777,13 @@ fn draw_npc_card(
     // 增益行（按 NPC 各表取值，口径不变）
     let eff = match i {
         crate::npc::NPC_ELDER => {
-            format!("当前：宗门任务收益 ×{:.2}", crate::npc::elder_quest_mult(fav))
+            evf(2608, &[&(crate::data::Fmt2(crate::npc::elder_quest_mult(fav))) as &dyn core::fmt::Display])/* 原文：当前：宗门任务收益 ×{} */
         }
         crate::npc::NPC_MERCHANT => {
-            format!("当前：坊市丹价 ×{:.2}", crate::npc::merchant_disc(fav))
+            evf(2609, &[&(crate::data::Fmt2(crate::npc::merchant_disc(fav))) as &dyn core::fmt::Display])/* 原文：当前：坊市丹价 ×{} */
         }
-        crate::npc::NPC_SENIOR => format!(
-            "当前：跨境破境率 +{:.0}%",
-            crate::npc::senior_break_add(fav) * 100.0
-        ),
-        _ => format!(
-            "当前：每载修炼 ×{:.2}",
-            crate::npc::drunk_cult_mult(fav)
-        ),
+        crate::npc::NPC_SENIOR => evf(2610, &[&(crate::data::Fmt0((crate::npc::senior_break_add(fav) * 100.0) as f64)) as &dyn core::fmt::Display])/* 原文：当前：跨境破境率 +{}% */,
+        _ => evf(2611, &[&(crate::data::Fmt2(crate::npc::drunk_cult_mult(fav))) as &dyn core::fmt::Display])/* 原文：当前：每载修炼 ×{} */,
     };
     if npc_row_vis(y + 136.0) {
         txt(&eff, col, y + 136.0, 14, C_CYAN);
@@ -902,11 +896,7 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
             }
             if npc_row_vis(y + 136.0) {
                 txt(
-                    &format!(
-                        "当前：双修加成 ×{:.2}（结缘起步+{:.0}%，只升不降）",
-                        crate::npc::comp_cult_mult(cfav),
-                        (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0
-                    ),
+                    &evf(2618, &[&(crate::data::Fmt2(crate::npc::comp_cult_mult(cfav))) as &dyn core::fmt::Display, &(crate::data::Fmt0((crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0)) as &dyn core::fmt::Display])/* 原文：当前：双修加成 ×{}（结缘起步+{}%，只升不降） */,
                     col,
                     y + 136.0, 14,
                     C_CYAN,
@@ -977,12 +967,7 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
             }
             if npc_row_vis(y + 156.0) {
                 txt(
-                    &format!(
-                        "结缘起步情谊 {}（双修 +{:.0}%），道侣赠礼事件再 +{}。",
-                        COMPANION_BOND_FAV,
-                        (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0,
-                        COMPANION_GIFT_FAV
-                    ),
+                    &evf(2619, &[&(COMPANION_BOND_FAV) as &dyn core::fmt::Display, &(crate::data::Fmt0((crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0)) as &dyn core::fmt::Display, &(COMPANION_GIFT_FAV) as &dyn core::fmt::Display])/* 原文：结缘起步情谊 {}（双修 +{}%），道侣赠礼事件再 +{}。 */,
                     col,
                     y + 156.0, 14,
                     C_CYAN,
@@ -1279,11 +1264,7 @@ fn draw_comp_main_card(
             }
             if npc_row_vis(y + 136.0) {
                 txt(
-                    &format!(
-                        "当前：双修加成 ×{:.2}（结缘起步+{:.0}%，只升不降）",
-                        crate::npc::comp_cult_mult(cfav),
-                        (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0
-                    ),
+                    &evf(2618, &[&(crate::data::Fmt2(crate::npc::comp_cult_mult(cfav))) as &dyn core::fmt::Display, &(crate::data::Fmt0((crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0)) as &dyn core::fmt::Display])/* 原文：当前：双修加成 ×{}（结缘起步+{}%，只升不降） */,
                     col,
                     y + 136.0, 14,
                     C_CYAN,
@@ -1364,7 +1345,7 @@ fn draw_comp_main_card(
             // NoCompanion > ThisYear > Stones，照 gate 单源）
             let sub = match gate {
                 DualGate::Ready => evf(2566, &[&(fmt_int(cost)) as &dyn core::fmt::Display])/* 原文：耗灵石 {} · 情谊+5 · 道心+1 气运+1 · 修为+2载 */,
-                DualGate::ThisYear => "本载已双修 · 推岁一载后方可再修".to_string(),
+                DualGate::ThisYear => evtx(2453)/* 原文：本载已双修 · 推岁一载后方可再修 */.to_string(),
                 DualGate::Stones => evf(2567, &[&(fmt_int(cost)) as &dyn core::fmt::Display])/* 原文：灵石不足（需 {}） */,
                 // NoCompanion 本臂（Some(companion) 分支）按 gate 单源不可达，纯防御
                 // 口径；v1.16.18 文案仍随历世账分流保持单口径（comp_nocompanion_sub
@@ -1425,12 +1406,7 @@ fn draw_comp_main_card(
             }
             if npc_row_vis(y + 156.0) {
                 txt(
-                    &format!(
-                        "结缘起步情谊 {}（双修 +{:.0}%），道侣赠礼事件再 +{}。",
-                        COMPANION_BOND_FAV,
-                        (crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0,
-                        COMPANION_GIFT_FAV
-                    ),
+                    &evf(2619, &[&(COMPANION_BOND_FAV) as &dyn core::fmt::Display, &(crate::data::Fmt0((crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0)) as &dyn core::fmt::Display, &(COMPANION_GIFT_FAV) as &dyn core::fmt::Display])/* 原文：结缘起步情谊 {}（双修 +{}%），道侣赠礼事件再 +{}。 */,
                     col,
                     y + 156.0, 14,
                     C_CYAN,
@@ -1970,12 +1946,7 @@ fn draw_relic_page(g: &Game) -> Option<PanelAct> {
         }
     }
     txt(
-        &format!(
-            "已装 {}/{}；未装备的法宝保有 {:.0}% 灵性。",
-            eq_n,
-            RELIC_EQUIP_MAX,
-            RELIC_UNEQUIP_FRAC * 100.0
-        ),
+        &evf(2620, &[&(eq_n) as &dyn core::fmt::Display, &(RELIC_EQUIP_MAX) as &dyn core::fmt::Display, &(crate::data::Fmt0(RELIC_UNEQUIP_FRAC * 100.0)) as &dyn core::fmt::Display])/* 原文：已装 {}/{}；未装备的法宝保有 {}% 灵性。 */,
         180.0,
         446.0, 14,
         C_DIM,

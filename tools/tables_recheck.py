@@ -20,7 +20,10 @@
 # v1.16.33 单3 扩池起九段连号——段九基址 TXT_NAME9_BASE/TXT_BRIEF9_BASE=
 # 2576/2581，与 data.rs EV_SEG8=344 快照常量同批登记（单1 N 化批已用
 # N2368..2575 故段九顺延），故段九起于 2576。
-# 对账：段行数 == EVENTS 行数 == 349、NAMES 去「·续」后互异、基址段界内。只读。
+# v1.16.34 单3 扩池起十段连号——段十基址 TXT_NAME10_BASE/TXT_BRIEF10_BASE=
+# 2647/2649，与 data.rs EV_SEG9=349 快照常量同批登记（单1 精度/臂表批已用
+# N2601..2646 故段十顺延），故段十起于 2647。
+# 对账：段行数 == EVENTS 行数 == 351、NAMES 去「·续」后互异、基址段界内。只读。
 import io
 import re
 import sys
@@ -78,6 +81,7 @@ _SEG5 = 325
 _SEG6 = 335
 _SEG7 = 338
 _SEG8 = 344
+_SEG9 = 349
 _name2 = re.search(r"pub static TXT_NAME2_BASE: u32 = (\d+);", inc)
 _brief2 = re.search(r"pub static TXT_BRIEF2_BASE: u32 = (\d+);", inc)
 _name3 = re.search(r"pub static TXT_NAME3_BASE: u32 = (\d+);", inc)
@@ -110,10 +114,15 @@ _name9 = re.search(r"pub static TXT_NAME9_BASE: u32 = (\d+);", inc)
 _brief9 = re.search(r"pub static TXT_BRIEF9_BASE: u32 = (\d+);", inc)
 name9_base = int(_name9.group(1)) if _name9 else None
 brief9_base = int(_brief9.group(1)) if _brief9 else None
+_name10 = re.search(r"pub static TXT_NAME10_BASE: u32 = (\d+);", inc)
+_brief10 = re.search(r"pub static TXT_BRIEF10_BASE: u32 = (\d+);", inc)
+name10_base = int(_name10.group(1)) if _name10 else None
+brief10_base = int(_brief10.group(1)) if _brief10 else None
 
 
-def _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, base9, n):
-    """段一 0..min(n,291) + 段二..段九续号（扩池批）；返回行号列表"""
+def _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, base9,
+              base10, n):
+    """段一 0..min(n,291) + 段二..段十续号（扩池批）；返回行号列表"""
     out = [base + i for i in range(min(n, _SEG1))]
     if n > _SEG1:
         assert base2 is not None, "扩池后段二基址缺失（pack_text.py 未登记）"
@@ -138,16 +147,22 @@ def _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, base9, n):
         out += [base8 + i for i in range(min(n, _SEG8) - _SEG7)]
     if n > _SEG8:
         assert base9 is not None, "扩池后段九基址缺失（pack_text.py 未登记）"
-        out += [base9 + i for i in range(n - _SEG8)]
+        # v1.16.34 单3：段九块改有界 min(n,_SEG9)−_SEG8（段十开设后段九不再
+        # 是末段——旧行为 n−_SEG8 在扩池后会把段十行错读进段九，红线②口径）
+        out += [base9 + i for i in range(min(n, _SEG9) - _SEG8)]
+    if n > _SEG9:
+        assert base10 is not None, "扩池后段十基址缺失（pack_text.py 未登记）"
+        out += [base10 + i for i in range(n - _SEG9)]
     return out
 brief_base = int(re.search(r"pub static TXT_BRIEF_BASE: u32 = (\d+);", inc).group(1))
 
 tables = {}
-for tname, base, base2, base3, base4, base5, base6, base7, base8, base9 in (
-        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base, name6_base, name7_base, name8_base, name9_base),
-        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base, brief6_base, brief7_base, brief8_base, brief9_base)):
+for tname, base, base2, base3, base4, base5, base6, base7, base8, base9, base10 in (
+        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base, name6_base, name7_base, name8_base, name9_base, name10_base),
+        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base, brief6_base, brief7_base, brief8_base, brief9_base, brief10_base)):
     entries = []
-    for n in _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, base9, n_events):
+    for n in _seg_rows(base, base2, base3, base4, base5, base6, base7, base8,
+                       base9, base10, n_events):
         assert n in rows, f"{tname} 段缺行 N={n}（基址漂移/收编段不齐）"
         val = decode_raw(rows[n])
         assert val is not None, f"{tname} N={n} 不可解码"
@@ -156,7 +171,7 @@ for tname, base, base2, base3, base4, base5, base6, base7, base8, base9 in (
     print(tname, "base", base, "base2", base2, "base3", base3, "base4", base4,
           "base5", base5, "base6", base6, "base7", base7, "base8", base8,
           "base9", base9, "rows", len(entries), "aligned:",
-          len(entries) == n_events == 349)
+          len(entries) == n_events == 351)
 
 names = tables["EVENT_NAMES"]
 seen = set()
@@ -187,11 +202,13 @@ for tname in ("EVENT_NAMES", "EVENT_BRIEF"):
         # v1.16.33 单3 扩段九：base9/len9 双段登记（len9 末段 N_EVENTS−EV_SEG8）
         r"\s*base7: \w+ as u16," + _C + r"\s*len7: \(?\w+ - \w+\)? as u16," + _C +
         r"\s*base8: \w+ as u16," + _C + r"\s*len8: \(?\w+ - \w+\)? as u16," + _C +
-        r"\s*base9: \w+ as u16," + _C + r"\s*len9: \(?\w+ - \w+\)? as u16,\s*\};"
+        r"\s*base9: \w+ as u16," + _C + r"\s*len9: \(?\w+ - \w+\)? as u16," + _C +
+        # v1.16.34 单3 扩段十：base10/len10 双段登记（len10 末段差写法形态）
+        r"\s*base10: \w+ as u16," + _C + r"\s*len10: \(?\w+ - \w+\)? as u16,\s*\};"
     )
     m = re.search(pat, src)
     assert m, f"{tname} EvTable 声明缺失"
-print("EvTable statics 九段声明在位，len() == n_events:", n_events)
+print("EvTable statics 十段声明在位，len() == n_events:", n_events)
 
 # ---------------- v1.16.29 单1刀B：表通道扩容登记 ----------------
 # 新三段连号整表（NPC_TALES/HELP_LINES/HINTS text）：基址在 .inc，行数钉死，
@@ -277,6 +294,12 @@ _NIZE_TABLES = (
     ("RECALL_CHROME_NS", "src/gallery.rs", 3),
     ("GUIDE_PANEL_LINES_NS", "src/draw.rs", 5),
     ("GUIDE_TABS_NS", "src/draw.rs", 2),
+    # v1.16.34 单1 β+γ（--nize=arms）：四簇 match 臂 N 表随批扩槽（槽数钉死
+    # 防半收编；等价性验收 tools/arms_sweep_check.py git HEAD 逐 slot 全等）
+    ("SIM_DEMON_SCENE_NS", "src/game.rs", 4),
+    ("SETTLE_CODA_NS", "src/game.rs", 3),
+    ("FINALE_SUB_NS", "src/draw.rs", 4),
+    ("REALM_TITLE_NS", "src/data.rs", 15),
 )
 for _tname, _tfile, _tcnt in _NIZE_TABLES:
     _tsrc = open(_tfile, encoding="utf-8").read()

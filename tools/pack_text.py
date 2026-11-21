@@ -116,6 +116,11 @@ BRIEF8_BASE_MANIFEST = 2344
 # N2368..2575 故段九顺延 2576/2581——与 data.rs EV_SEG8=344 同批登记）
 NAME9_BASE_MANIFEST = 2576
 BRIEF9_BASE_MANIFEST = 2581
+# v1.16.34 单3 扩池起：段九（5 条）满员后新批连号追加为段十（2 条：名
+# 2647..=2648/简 2649..=2650，真相源手写连号段先于正文；单1 精度/臂表批已
+# 用 N2601..2646 故段十顺延 2647/2649——与 data.rs EV_SEG9=349 同批登记）
+NAME10_BASE_MANIFEST = 2647
+BRIEF10_BASE_MANIFEST = 2649
 
 dry = '--dry-run' in sys.argv
 collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测用；表收编后自动幂等）
@@ -123,6 +128,12 @@ collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测
 do_block_tmpl = '--block-tmpl' in sys.argv  # 刀A：块外（build_event 之外）format! 纯{}模板收编 evf
 do_block_lit = '--block-lit' in sys.argv    # 刀C：块外 ≥40B 散件字面量 evtx 化（24-39B 档勘察实测净负，不做）
 do_tables2 = '--tables2' in sys.argv        # 刀B：表通道扩容（结构体表字段级 `_n` + 整表连号基址）
+# v1.16.34 单1 刀α：精度模板通道（--block-prec）——{:.0}/{:.1}/{:.2} 占位变换
+# {} 入 blob，调用点实参按占位序包 crate::data::Fmt0/1/2 Display 包装。开启后
+# format! 收集域与 --block-tmpl 同域（纯{} 站早已收编完，重跑幂等无新命中）。
+# pack_text.py:139 旧『非纯{}自动跳过不得手改』纪律由本通道正式接替（分类失败的
+# spec 仍保守留原地——通道与 blob 永不脱钩）。
+do_block_prec = '--block-prec' in sys.argv
 # v1.16.33 单1 NIZE 通道开关（special 副标 match 表通道 + const 串表 N 化批）——
 # alloc dedup 共享行、重跑幂等（域已换出即跳过），子域可单刀量测。
 # 注意用 startswith 前缀判（--nize=special 是单元素，in 列表判定必漏）
@@ -479,6 +490,58 @@ def split_args(blk: str, p_open: int, close: int):
     parts.append(body_t[last:].strip())
     return parts, len(parts)
 
+# ---- v1.16.34 单1 刀α：精度模板分类（--block-prec）----
+# {:.0}/{:.1}/{:.2} 精度占位变换 {} 入 blob（blob 纪律保持纯 {}——data.rs evf
+# split("{}") 机制零改动），调用点按占位序把对应实参包进 data.rs Fmt0/Fmt1/Fmt2
+# Display 包装（impl 内 write!(f,"{:.N}",self.0) 与原 format!("{:.N}") 走同一
+# f64 Display Formatter 路径，产物逐字节等价）。其余形态（{{}} 转义、{:>8}、
+# {:#x}、{:.3}…）一律返回 None 保守留原地——『非纯{}自动跳过不得手改』纪律由
+# 本通道接替后依然成立：通道收编的每一站都经过同一分类器，blob 与调用点永不
+# 脱钩漂移。
+PREC_RE = re.compile(r'\{:\.([012])\}')
+
+def prec_classify(raw: str):
+    """左→右扫占位。返回 (变换后 raw, kind 列表) 或 None。
+    kind：None=纯 {}（实参原样）；'Fmt0'/'Fmt1'/'Fmt2'=包同名 wrapper。
+    占位序==隐式位置实参序（Rust format! 语义）；扫描到的 '}'（}} 转义或孤立）
+    与未识别的 '{' 形态都判 None。"""
+    out = []
+    kinds = []
+    k = 0
+    n = len(raw)
+    while k < n:
+        c = raw[k]
+        if c == '{':
+            if raw.startswith('{}', k):
+                out.append('{}')
+                kinds.append(None)
+                k += 2
+                continue
+            mm = PREC_RE.match(raw, k)
+            if mm:
+                out.append('{}')
+                kinds.append('Fmt' + mm.group(1))
+                k = mm.end()
+                continue
+            return None
+        if c == '}':
+            return None
+        out.append(c)
+        k += 1
+    return ''.join(out), kinds
+
+def fmt_arg(a: str, kind):
+    """evf 实参列表元素：纯{}实参原样 unsize；精度实参包 FmtN 构造
+    （crate::data:: 全限定——不依赖各文件 glob 导入，防分叉）。
+    精度实参统一 `(expr) as f64` 收敛到包装域：f32→f64 转换精确无损（同精确
+    二进制值同精规格产物逐字节一致——Rust 浮点精度格式化按精确值正确舍入），
+    f64→f64 恒等零开销（trivial_casts 默认 allow）；首轮 27 站实证 11 站 f32
+    （charpanel785/draw1241/draw2706/game2896/3243/3281/3286×2/npc60/world1214/
+    1215），已生成站由施工方补 cast 对齐规范形。"""
+    if kind is None:
+        return '&(%s) as &dyn core::fmt::Display' % a
+    return '&(crate::data::%s((%s) as f64)) as &dyn core::fmt::Display' % (kind, a)
+
 # ---- 收集块内合格串（evtx 通道 + evf 模板通道）----
 LIT = re.compile(r'"((?:[^"\\]|\\.)*)"')
 lit_items = []    # (pos_raw首, raw, val_bytes, N)          —— evtx 通道
@@ -500,10 +563,13 @@ for m2 in LIT.finditer(block):
         continue
     name, m_start, p_open = macro_before(block, m2.start(1))
     if name == 'format!':
-        # ---- 刀①模板通道 ----
+        # ---- 刀①模板通道（v1.16.34 刀α 起精度占位经 --block-prec 接替）----
         ph = raw.count('{}')
         residue = raw.replace('{}', '')
-        if ph < 1 or '{' in residue or '}' in residue:
+        # prec 非 None 时占位形态已由分类器判定合法（纯{} 或 {:.0/1/2} 混排）；
+        # 未开旗/分类失败维持旧纪律：非纯{}跳过不得手改
+        prec = prec_classify(raw) if do_block_prec else None
+        if prec is None and (ph < 1 or '{' in residue or '}' in residue):
             tmpl_skips.append((m2.start(1), raw[:40], '占位非纯{}'))
             continue
         val = decode_raw(raw)
@@ -521,11 +587,25 @@ for m2 in LIT.finditer(block):
         if nargs == -1:
             tmpl_skips.append((m2.start(1), raw[:40], '实参解析失败'))
             continue
-        if nargs != ph:
-            tmpl_skips.append((m2.start(1), raw[:40], '占位%d≠实参%d' % (ph, nargs)))
+        # 占位数对账：精度混排时占位总数=kinds 长度（{} 与 {:.N} 都各耗一实参）
+        nph = len(prec[1]) if prec is not None else ph
+        if nargs != nph:
+            tmpl_skips.append((m2.start(1), raw[:40], '占位%d≠实参%d' % (nph, nargs)))
             continue
-        n = alloc(raw)
-        tmpl_items.append((m_start, close, raw, val.encode('utf-8'), n, args))
+        if prec is not None and prec[0] != raw:
+            # 精度行：blob 存变换后 raw（纯 {} 纪律不变），alloc 同样按变换后值
+            # 去重（charpanel==npc/world 多重共享行由此合并）；原文注释与旧 evf
+            # 行同款取 blob 行内容（= N 解码值，防漂移钉测口径一致）
+            prow, pkinds = prec
+            pval = decode_raw(prow)
+            assert pval is not None and encode_val(pval) == prow, \
+                '精度变换 raw 往返失败: %r' % prow[:40]
+            n = alloc(prow)
+            tmpl_items.append((m_start, close, prow, pval.encode('utf-8'), n, args, pkinds))
+        else:
+            kinds0 = prec[1] if prec is not None else [None] * ph
+            n = alloc(raw)
+            tmpl_items.append((m_start, close, raw, val.encode('utf-8'), n, args, kinds0))
         continue
     if name is not None and name.endswith('!'):
         tmpl_skips.append((m2.start(1), raw[:40], '宏 %s 后字面量不收编' % name))
@@ -541,11 +621,16 @@ for m2 in LIT.finditer(block):
 
 # ---- 重叠消解：被外层模板 span 包住的内层收编（嵌套 format! / 实参内字面量）
 #       只留内层——外层 format! 留原地（内层替换后照样编译），位置算术不被破坏 ----
+# v1.16.34 刀α：实参按占位序包 Fmt 包装（fmt_arg）；kinds 与 args 等长由
+# 『占位≠实参』跳过纪律保证，此处再 assert 防 zip 静默截断
+tmpl_edits = []
+for ms2, cl2, r2, _vb2, n2, args2, kinds2 in tmpl_items:
+    assert len(args2) == len(kinds2), 'tmpl kinds/args 长度失配 @N=%d' % n2
+    joined2 = ', '.join(fmt_arg(a2, kd2) for a2, kd2 in zip(args2, kinds2))
+    tmpl_edits.append((ms2, cl2 + 1, 'evf(%d, &[%s])/* 原文：%s */' % (n2, joined2, r2)))
 all_edits = (
     [(p - 1, p + len(r) + 1, 'evtx(%d)/* 原文：%s */' % (n, r)) for p, r, _vb, n in lit_items]
-    + [(ms, cl + 1, 'evf(%d, &[%s])/* 原文：%s */'
-       % (n, ', '.join('&(%s) as &dyn core::fmt::Display' % a for a in args), r))
-       for ms, cl, r, _vb, n, args in tmpl_items]
+    + tmpl_edits
 )
 kept = []
 for e in all_edits:
@@ -722,8 +807,9 @@ def apply_edits(text, edits):
 
 out_edits = {}    # fname -> [(s, e, repl)]（全文件坐标；game.rs 块内账稍后并入）
 FTXT = {'game.rs': src}
-out_tmpl_cnt = out_lit_cnt = out_tmpl_b = out_lit_b = 0
-if do_block_tmpl or do_block_lit:
+out_tmpl_cnt = out_lit_cnt = out_tmpl_b = out_lit_b = out_prec_cnt = 0
+# v1.16.34 刀α：--block-prec 与 tmpl/lit 同域扫描（纯{}站已收编完，重跑幂等）
+if do_block_tmpl or do_block_lit or do_block_prec:
     for fname2 in BLOCK_SCAN_FILES:
         if fname2 not in FTXT:
             FTXT[fname2] = (SRC_DIR / fname2).read_text(encoding='utf-8')
@@ -744,11 +830,14 @@ if do_block_tmpl or do_block_lit:
             b7 = len(raw7.encode('utf-8'))
             name7, ms7, po7 = macro_before(ftext, p7)
             if name7 == 'format!':
-                if not do_block_tmpl or b7 < MIN_B:
+                if not (do_block_tmpl or do_block_prec) or b7 < MIN_B:
                     continue
                 ph7 = raw7.count('{}')
                 res7 = raw7.replace('{}', '')
-                if ph7 < 1 or '{' in res7 or '}' in res7:
+                # v1.16.34 刀α：--block-prec 开时精度占位走 prec_classify；
+                # 未开旗/分类失败维持旧『非纯{}自动跳过』纪律
+                prec7 = prec_classify(raw7) if do_block_prec else None
+                if prec7 is None and (ph7 < 1 or '{' in res7 or '}' in res7):
                     continue
                 val7 = decode_raw(raw7)
                 if (val7 is None or encode_val(val7) != raw7
@@ -760,17 +849,34 @@ if do_block_tmpl or do_block_lit:
                 if cl7 == -1:
                     continue
                 args7, nargs7 = split_args(ftext, po7, cl7)
-                if nargs7 == -1 or nargs7 != ph7:
+                nph7 = len(prec7[1]) if prec7 is not None else ph7
+                if nargs7 == -1 or nargs7 != nph7:
                     continue
-                n7 = alloc(raw7)
                 # 实参逐位显式 unsize：&[&dyn Display] 元素型一统，不吃推断顺序运气
                 #（v1.16.29 main.rs 自检行 i32/u32 混排实证：隐式依赖首元素定型，
                 #  异型即 E0308——新收编站一律显式，codegen 等价零字节差）
-                edits_f.append((ms7, cl7 + 1,
-                                'evf(%d, &[%s])/* 原文：%s */'
-                                % (n7, ', '.join('&(%s) as &dyn core::fmt::Display' % a
-                                                 for a in args7), raw7),
-                                fname2))
+                if prec7 is not None and prec7[0] != raw7:
+                    # 精度行：blob 存变换后 raw（纯 {} 纪律），alloc 按变换后值
+                    # 去重（charpanel==npc/world 共享行合并）；实参按占位序包 Fmt
+                    prow7, pk7 = prec7
+                    pval7 = decode_raw(prow7)
+                    assert pval7 is not None and encode_val(pval7) == prow7, \
+                        '精度变换 raw 往返失败: %r' % prow7[:40]
+                    n7 = alloc(prow7)
+                    assert len(args7) == len(pk7), '块外精度 kinds/args 失配'
+                    edits_f.append((ms7, cl7 + 1,
+                                    'evf(%d, &[%s])/* 原文：%s */'
+                                    % (n7, ', '.join(fmt_arg(a7, kd7) for a7, kd7
+                                                     in zip(args7, pk7)), prow7),
+                                    fname2))
+                    out_prec_cnt += 1
+                else:
+                    n7 = alloc(raw7)
+                    edits_f.append((ms7, cl7 + 1,
+                                    'evf(%d, &[%s])/* 原文：%s */'
+                                    % (n7, ', '.join('&(%s) as &dyn core::fmt::Display' % a
+                                                     for a in args7), raw7),
+                                    fname2))
                 out_tmpl_cnt += 1
                 out_tmpl_b += b7
                 continue
@@ -793,9 +899,9 @@ if do_block_tmpl or do_block_lit:
             out_lit_b += b7
         for ed7 in edits_f:
             out_edits.setdefault(ed7[3], []).append((ed7[0], ed7[1], ed7[2]))
-if do_block_tmpl or do_block_lit:
-    print('block-out scan: %d evf templates (%d B) + %d evtx lits >=40B (%d B)'
-          % (out_tmpl_cnt, out_tmpl_b, out_lit_cnt, out_lit_b))
+if do_block_tmpl or do_block_lit or do_block_prec:
+    print('block-out scan: %d evf templates (%d B, %d precision) + %d evtx lits >=40B (%d B)'
+          % (out_tmpl_cnt, out_tmpl_b, out_prec_cnt, out_lit_cnt, out_lit_b))
 
 # ---- data.rs 双表收编（刀②/③）----
 PAT_TABLE = r'pub const %s: \[&str; (\d+)\] = \[(.*?)\n\];'
@@ -813,15 +919,20 @@ def collect_table(dsrc, tname):
 def table_bases_from_inc():
     """回读上次 .inc 里的双表基址（N 追加不变号 → 基址幂等稳定）。"""
     out = {}
-    if OFFS.exists():
-        txt = OFFS.read_text(encoding='utf-8')
+    if not OFFS.exists():
+        # v1.16.34 单1 low 清账（v1.16.33 留档：循环原在 if OFFS.exists() 体外，
+        # OFFS 缺失时 txt 未绑定 NameError）——无 .inc 时直接返回空表，键读取
+        # 走调用方「基址缺失」分支（首轮收集语义不变）
+        return out
+    txt = OFFS.read_text(encoding='utf-8')
     for key in (('TXT_NAME_BASE', 'TXT_BRIEF_BASE', 'TXT_NAME2_BASE',
                  'TXT_BRIEF2_BASE', 'TXT_NAME3_BASE', 'TXT_BRIEF3_BASE',
                  'TXT_NAME4_BASE', 'TXT_BRIEF4_BASE', 'TXT_NAME5_BASE',
                  'TXT_BRIEF5_BASE', 'TXT_NAME6_BASE', 'TXT_BRIEF6_BASE',
                  'TXT_NAME7_BASE', 'TXT_BRIEF7_BASE',
                  'TXT_NAME8_BASE', 'TXT_BRIEF8_BASE',
-                 'TXT_NAME9_BASE', 'TXT_BRIEF9_BASE')
+                 'TXT_NAME9_BASE', 'TXT_BRIEF9_BASE',
+                 'TXT_NAME10_BASE', 'TXT_BRIEF10_BASE')
                 + BASE_KEYS_TABLES2):
             mm = re.search(r'pub static %s: u32 = (\d+);' % key, txt)
             if mm:
@@ -1176,6 +1287,405 @@ if do_nize:
             out_edits.setdefault('game.rs', []).append((nsp1.start(), nsemi1 + 1, nrepl1))
             nize_report.append('special: %d 臂 + 兜底「机缘」，表 [u16;%d]，臂 raw %dB'
                                % (len(narms1), nsize1, nize_raw_b))
+    # ---- 子域 A2（v1.16.34 单1 β+γ）：match 臂簇 N 表通道（--nize=arms）----
+    # 每簇照 v1.16.33 SPECIAL_SUB 口径：臂字面量 alloc dedup → fn 内 const
+    # [u16;K] N 表 + evtx 查表 + .min(len-1) 钳制（兜底臂=末槽，逐值等价）；
+    # 索引表达式按簇源语义手写（表内单行注释留档映射推导）；等价性验收
+    # special_sweep_gen.py 同型扩面（git HEAD 原臂字面量对照 N 表+真相源逐
+    # slot 全等）。域已换出（const 名在文件中）即幂等跳过。
+    # 纪律：循环变量一律带后缀——模块级 i/j 是 build_event 定位索引与括号游标。
+    def nize_arm_mask(nm_span):
+        """注释掩码（保位）：臂解析只在代码位；臂间注释行原样上移保留。
+        字符串字面量原样保留（元素值来源）——照 special 子域 mask 同款。"""
+        nm_list = list(nm_span)
+        nm_k = 0
+        while nm_k < len(nm_span):
+            nm_c = nm_span[nm_k]
+            if nm_c == '"':
+                nm_k = skip_str(nm_span, nm_k, '"')
+                continue
+            if nm_c == "'":
+                nm_m = CHAR_LIT.match(nm_span, nm_k)
+                if nm_m:
+                    nm_k = nm_m.end()
+                    continue
+            if nm_c == '/' and nm_span[nm_k:nm_k + 2] == '//':
+                nm_e = nm_span.find('\n', nm_k)
+                if nm_e == -1:
+                    nm_e = len(nm_span)
+                for nm_f in range(nm_k, nm_e):
+                    nm_list[nm_f] = ' '
+                nm_k = nm_e
+                continue
+            if nm_c == '/' and nm_span[nm_k:nm_k + 2] == '/*':
+                nm_e = nm_span.find('*/', nm_k + 2)
+                if nm_e == -1:
+                    break
+                for nm_f in range(nm_k, nm_e + 2):
+                    nm_list[nm_f] = ' '
+                nm_k = nm_e + 2
+                continue
+            nm_k += 1
+        return ''.join(nm_list)
+
+    def nize_arm_alloc(nm_raw, nm_tag):
+        """臂字面量入池：decode/往返/注释界 assert + alloc dedup，返回 N。"""
+        nm_val = decode_raw(nm_raw)
+        assert nm_val is not None and encode_val(nm_val) == nm_raw, \
+            '%s 臂往返失败: %r' % (nm_tag, nm_raw[:20])
+        assert '*/' not in nm_raw and '/*' not in nm_raw, '%s 臂含注释界' % nm_tag
+        return alloc(nm_raw)
+
+    def nize_indent(nm_text, nm_pos):
+        """锚所在行 行首→锚起点段（=行首缩进）。anchor 匹配起点在行中、
+        span 自锚起——span.lstrip 前缀法拿不到行首缩进（v1.16.34 初版事故注）。"""
+        return nm_text[nm_text.rfind('\n', 0, nm_pos) + 1:nm_pos]
+
+    if nize_scope in ('all', 'arms'):
+        ARM_NUM = r'(\d+)\s*=>\s*"((?:[^"\\]|\\.)*)"'
+        ARM_RNG = r'(\d+\.\.=\d+)\s*=>\s*"((?:[^"\\]|\\.)*)"'
+        ARM_FB = r'_\s*=>\s*"((?:[^"\\]|\\.)*)"'
+        # --- 簇1：sim_demon 破境场景四臂（game.rs build_event 内）---
+        if 'const SIM_DEMON_SCENE_NS' in src:
+            nize_report.append('SIM_DEMON_SCENE_NS: 已换 N 表（幂等跳过）')
+        else:
+            nm_a = re.search(r'let scene = match target \{', src)
+            assert nm_a, 'arms 簇1: let scene match 锚缺失'
+            nm_b = src.index('{', nm_a.start())
+            nm_dep = 0
+            nm_k = nm_b
+            nm_close = None
+            while nm_k < len(src):
+                nm_c = src[nm_k]
+                if nm_c == '"':
+                    nm_k = skip_str(src, nm_k, '"')
+                    continue
+                if nm_c == "'":
+                    nm_m = CHAR_LIT.match(src, nm_k)
+                    if nm_m:
+                        nm_k = nm_m.end()
+                        continue
+                if nm_c == '/' and src[nm_k:nm_k + 2] == '//':
+                    nm_e = src.find('\n', nm_k)
+                    if nm_e == -1:
+                        break
+                    nm_k = nm_e
+                    continue
+                if nm_c == '/' and src[nm_k:nm_k + 2] == '/*':
+                    nm_e = src.find('*/', nm_k + 2)
+                    if nm_e == -1:
+                        break
+                    nm_k = nm_e + 2
+                    continue
+                if nm_c == '{':
+                    nm_dep += 1
+                elif nm_c == '}':
+                    nm_dep -= 1
+                    if nm_dep == 0:
+                        nm_close = nm_k
+                        break
+                nm_k += 1
+            assert nm_close is not None, 'arms 簇1: match 配平失败'
+            nm_semi = src.index(';', nm_close)
+            nm_span = src[nm_a.start():nm_semi + 1]
+            # （行首定位已内聚进 nize_indent，span_start 登记行作废）
+            nm_clean = nize_arm_mask(nm_span)
+            nm_arms = {int(am.group(1)): am.group(2)
+                       for am in re.finditer(ARM_NUM, nm_clean)}
+            nm_fb = re.search(ARM_FB, nm_clean)
+            assert nm_fb is not None, 'arms 簇1: 无 _ 兜底臂'
+            assert set(nm_arms) == {11, 12, 13}, \
+                'arms 簇1: 数字臂 %s != {11,12,13}' % sorted(nm_arms)
+            assert nm_clean.count('=>') == len(nm_arms) + 1, \
+                'arms 簇1: 臂数不配（注释残留模式位？）'
+            nm_ns = [nize_arm_alloc(nm_arms[11], '簇1/11'),
+                     nize_arm_alloc(nm_arms[12], '簇1/12'),
+                     nize_arm_alloc(nm_arms[13], '簇1/13'),
+                     nize_arm_alloc(nm_fb.group(1), '簇1/_')]
+            nize_elem_cnt += 4
+            nize_raw_b += sum(len(decode_raw(r).encode('utf-8'))
+                              for r in [nm_arms[11], nm_arms[12], nm_arms[13],
+                                        nm_fb.group(1)])
+            # v1.16.34 修复注：nm_ind 走 nize_indent（锚行首→锚起点段；初版
+            # span.lstrip 前缀法恒空串，替换体被压到列 0，语义等价版式尽毁）
+            nm_ind = nize_indent(src, nm_a.start())
+            nm_repl = (
+                nm_ind
+                + '// v1.16.34 单1 β刀（--nize=arms）：破境场景四臂收编 textpack——\n'
+                + nm_ind
+                + '// 卫语句 if target>=11 前提下 saturating_sub(11)+min 钳制，槽3=\n'
+                + nm_ind
+                + '// 原 _ 臂（target=14 逐值等价；usize 防御照 panic=abort 纪律）\n'
+                + nm_ind + 'const SIM_DEMON_SCENE_NS: [u16; 4] = [%d, %d, %d, %d];\n'
+                % tuple(nm_ns)
+                + nm_ind
+                + 'let scene = evtx(SIM_DEMON_SCENE_NS[(target.saturating_sub(11))\n'
+                + nm_ind + '    .min(SIM_DEMON_SCENE_NS.len() - 1)] as usize);'
+            )
+            out_edits.setdefault('game.rs', []).append(
+                (nm_a.start(), nm_semi + 1, nm_repl))
+            nize_report.append('SIM_DEMON_SCENE_NS: 4 臂（target-11 槽映射），臂 raw %dB'
+                               % nize_raw_b)
+        # --- 簇2：退稿收束语三档（game.rs settle_coda）---
+        if 'const SETTLE_CODA_NS' in src:
+            nize_report.append('SETTLE_CODA_NS: 已换 N 表（幂等跳过）')
+        else:
+            nm_a = re.search(r'match max_realm\.min\(14\) \{', src)
+            assert nm_a, 'arms 簇2: settle_coda match 锚缺失'
+            nm_b = src.index('{', nm_a.start())
+            nm_dep = 0
+            nm_k = nm_b
+            nm_close = None
+            while nm_k < len(src):
+                nm_c = src[nm_k]
+                if nm_c == '"':
+                    nm_k = skip_str(src, nm_k, '"')
+                    continue
+                if nm_c == "'":
+                    nm_m = CHAR_LIT.match(src, nm_k)
+                    if nm_m:
+                        nm_k = nm_m.end()
+                        continue
+                if nm_c == '/' and src[nm_k:nm_k + 2] == '//':
+                    nm_e = src.find('\n', nm_k)
+                    if nm_e == -1:
+                        break
+                    nm_k = nm_e
+                    continue
+                if nm_c == '/' and src[nm_k:nm_k + 2] == '/*':
+                    nm_e = src.find('*/', nm_k + 2)
+                    if nm_e == -1:
+                        break
+                    nm_k = nm_e + 2
+                    continue
+                if nm_c == '{':
+                    nm_dep += 1
+                elif nm_c == '}':
+                    nm_dep -= 1
+                    if nm_dep == 0:
+                        nm_close = nm_k
+                        break
+                nm_k += 1
+            assert nm_close is not None, 'arms 簇2: match 配平失败'
+            nm_span = src[nm_a.start():nm_close + 1]
+            # （行首定位已内聚进 nize_indent，span_start 登记行作废）
+            nm_clean = nize_arm_mask(nm_span)
+            nm_rngs = {am.group(1): am.group(2)
+                       for am in re.finditer(ARM_RNG, nm_clean)}
+            nm_fb = re.search(ARM_FB, nm_clean)
+            assert nm_fb is not None, 'arms 簇2: 无 _ 兜底臂'
+            assert set(nm_rngs) == {'0..=4', '5..=9'}, \
+                'arms 簇2: 区间臂 %s != {0..=4, 5..=9}' % sorted(nm_rngs)
+            assert nm_clean.count('=>') == 3, 'arms 簇2: 臂数不配'
+            nm_ns = [nize_arm_alloc(nm_rngs['0..=4'], '簇2/0..=4'),
+                     nize_arm_alloc(nm_rngs['5..=9'], '簇2/5..=9'),
+                     nize_arm_alloc(nm_fb.group(1), '簇2/_')]
+            nize_elem_cnt += 3
+            nize_raw_b += sum(len(decode_raw(r).encode('utf-8'))
+                              for r in [nm_rngs['0..=4'], nm_rngs['5..=9'],
+                                        nm_fb.group(1)])
+            # v1.16.34 修复注：nm_ind 走 nize_indent（锚行首→锚起点段；初版
+            # span.lstrip 前缀法恒空串，替换体被压到列 0，语义等价版式尽毁）
+            nm_ind = nize_indent(src, nm_a.start())
+            nm_repl = (
+                nm_ind
+                + '// v1.16.34 单1 β刀（--nize=arms）：退稿收束语三档收编 textpack——\n'
+                + nm_ind
+                + '// 原 0..=4/5..=9/_ 三臂，min(14)/5 降槽 .min 钳制逐值等价\n'
+                + nm_ind + 'const SETTLE_CODA_NS: [u16; 3] = [%d, %d, %d];\n'
+                % tuple(nm_ns)
+                + nm_ind
+                + 'evtx(SETTLE_CODA_NS[(max_realm.min(14) / 5)\n'
+                + nm_ind + '    .min(SETTLE_CODA_NS.len() - 1)] as usize)'
+            )
+            out_edits.setdefault('game.rs', []).append(
+                (nm_a.start(), nm_close + 1, nm_repl))
+            nize_report.append('SETTLE_CODA_NS: 3 档（min(14)/5 槽映射），臂 raw %dB'
+                               % sum(len(decode_raw(r).encode('utf-8'))
+                                     for r in [nm_rngs['0..=4'], nm_rngs['5..=9'],
+                                               nm_fb.group(1)]))
+        # --- 簇3：终战副标四臂（draw.rs draw_sim Finale 分支）---
+        if 'const FINALE_SUB_NS' in FTXT.get('draw.rs', ''):
+            nize_report.append('FINALE_SUB_NS: 已换 N 表（幂等跳过）')
+        else:
+            if 'draw.rs' not in FTXT:
+                FTXT['draw.rs'] = (SRC_DIR / 'draw.rs').read_text(encoding='utf-8')
+            nm_dtxt = FTXT['draw.rs']
+            nm_a = re.search(r'match i \{', nm_dtxt)
+            assert nm_a, 'arms 簇3: draw.rs match i 锚缺失'
+            nm_b = nm_dtxt.index('{', nm_a.start())
+            nm_dep = 0
+            nm_k = nm_b
+            nm_close = None
+            while nm_k < len(nm_dtxt):
+                nm_c = nm_dtxt[nm_k]
+                if nm_c == '"':
+                    nm_k = skip_str(nm_dtxt, nm_k, '"')
+                    continue
+                if nm_c == "'":
+                    nm_m = CHAR_LIT.match(nm_dtxt, nm_k)
+                    if nm_m:
+                        nm_k = nm_m.end()
+                        continue
+                if nm_c == '/' and nm_dtxt[nm_k:nm_k + 2] == '//':
+                    nm_e = nm_dtxt.find('\n', nm_k)
+                    if nm_e == -1:
+                        break
+                    nm_k = nm_e
+                    continue
+                if nm_c == '/' and nm_dtxt[nm_k:nm_k + 2] == '/*':
+                    nm_e = nm_dtxt.find('*/', nm_k + 2)
+                    if nm_e == -1:
+                        break
+                    nm_k = nm_e + 2
+                    continue
+                if nm_c == '{':
+                    nm_dep += 1
+                elif nm_c == '}':
+                    nm_dep -= 1
+                    if nm_dep == 0:
+                        nm_close = nm_k
+                        break
+                nm_k += 1
+            assert nm_close is not None, 'arms 簇3: match 配平失败'
+            nm_span = nm_dtxt[nm_a.start():nm_close + 1]
+            # （行首定位已内聚进 nize_indent，span_start 登记行作废）
+            nm_clean = nize_arm_mask(nm_span)
+            nm_arms = {int(am.group(1)): am.group(2)
+                       for am in re.finditer(ARM_NUM, nm_clean)}
+            nm_fb = re.search(ARM_FB, nm_clean)
+            assert nm_fb is not None, 'arms 簇3: 无 _ 兜底臂'
+            assert set(nm_arms) == {0, 1, 2}, \
+                'arms 簇3: 数字臂 %s != {0,1,2}' % sorted(nm_arms)
+            assert nm_clean.count('=>') == 4, 'arms 簇3: 臂数不配'
+            nm_ns = [nize_arm_alloc(nm_arms[0], '簇3/0'),
+                     nize_arm_alloc(nm_arms[1], '簇3/1'),
+                     nize_arm_alloc(nm_arms[2], '簇3/2'),
+                     nize_arm_alloc(nm_fb.group(1), '簇3/_')]
+            nize_elem_cnt += 4
+            nize_raw_b += sum(len(decode_raw(r).encode('utf-8'))
+                              for r in [nm_arms[0], nm_arms[1], nm_arms[2],
+                                        nm_fb.group(1)])
+            # v1.16.34 修复注：nm_ind 走 nize_indent（锚行首→锚起点段；初版
+            # span.lstrip 前缀法恒空串，替换体被压到列 0，语义等价版式尽毁）
+            nm_ind = nize_indent(nm_dtxt, nm_a.start())
+            nm_repl = (
+                nm_ind
+                + '// v1.16.34 单1 β刀（--nize=arms）：终战副标四臂收编 textpack——\n'
+                + nm_ind
+                + '// i.min 钳制落 _ 臂槽，逐值等价（.to_string() 调用位不变）\n'
+                + nm_ind + 'const FINALE_SUB_NS: [u16; 4] = [%d, %d, %d, %d];\n'
+                % tuple(nm_ns)
+                + nm_ind
+                + 'evtx(FINALE_SUB_NS[i.min(FINALE_SUB_NS.len() - 1)] as usize)'
+            )
+            out_edits.setdefault('draw.rs', []).append(
+                (nm_a.start(), nm_close + 1, nm_repl))
+            nize_report.append('FINALE_SUB_NS: 4 臂（i 槽映射），臂 raw %dB'
+                               % sum(len(decode_raw(r).encode('utf-8'))
+                                     for r in [nm_arms[0], nm_arms[1], nm_arms[2],
+                                               nm_fb.group(1)]))
+        # --- 簇4：境界名 15 臂（data.rs realm_title）---
+        if 'const REALM_TITLE_NS' in data_src:
+            nize_report.append('REALM_TITLE_NS: 已换 N 表（幂等跳过）')
+        else:
+            # v1.16.34 修复注：锚只含 match 行——初版锚含 fn 签名，span 整行
+            # 吞掉 `pub fn realm_title…`（title_recheck 钉B v1.16.33 同型事故
+            # 红线，本轮亲历后修）；match max_realm { 在 data.rs 唯一可独立锚定
+            nm_a = re.search(r'match max_realm \{', data_src)
+            assert nm_a, 'arms 簇4: realm_title match 锚缺失'
+            nm_b = data_src.index('{', nm_a.end() - 1)
+            nm_dep = 0
+            nm_k = nm_b
+            nm_close = None
+            while nm_k < len(data_src):
+                nm_c = data_src[nm_k]
+                if nm_c == '"':
+                    nm_k = skip_str(data_src, nm_k, '"')
+                    continue
+                if nm_c == "'":
+                    nm_m = CHAR_LIT.match(data_src, nm_k)
+                    if nm_m:
+                        nm_k = nm_m.end()
+                        continue
+                if nm_c == '/' and data_src[nm_k:nm_k + 2] == '//':
+                    nm_e = data_src.find('\n', nm_k)
+                    if nm_e == -1:
+                        break
+                    nm_k = nm_e
+                    continue
+                if nm_c == '/' and data_src[nm_k:nm_k + 2] == '/*':
+                    nm_e = data_src.find('*/', nm_k + 2)
+                    if nm_e == -1:
+                        break
+                    nm_k = nm_e + 2
+                    continue
+                if nm_c == '{':
+                    nm_dep += 1
+                elif nm_c == '}':
+                    nm_dep -= 1
+                    if nm_dep == 0:
+                        nm_close = nm_k
+                        break
+                nm_k += 1
+            assert nm_close is not None, 'arms 簇4: match 配平失败'
+            nm_span = data_src[nm_a.start():nm_close + 1]
+            # （行首定位已内聚进 nize_indent，span_start 登记行作废）
+            nm_clean = nize_arm_mask(nm_span)
+            nm_arms = {int(am.group(1)): am.group(2)
+                       for am in re.finditer(ARM_NUM, nm_clean)}
+            nm_fb = re.search(ARM_FB, nm_clean)
+            assert nm_fb is not None, 'arms 簇4: 无 _ 兜底臂'
+            assert set(nm_arms) == set(range(14)), \
+                'arms 簇4: 数字臂 %s != 0..13' % sorted(nm_arms)
+            assert nm_clean.count('=>') == 15, 'arms 簇4: 臂数不配'
+            nm_lit = [nm_arms[k] for k in range(14)] + [nm_fb.group(1)]
+            nm_ns = [nize_arm_alloc(r, '簇4/%d' % q if q < 14 else '簇4/_')
+                     for q, r in enumerate(nm_lit)]
+            nize_elem_cnt += 15
+            nize_raw_b += sum(len(decode_raw(r).encode('utf-8')) for r in nm_lit)
+            # v1.16.34 修复注：nm_ind 走 nize_indent（锚行首→锚起点段；初版
+            # span.lstrip 前缀法恒空串，替换体被压到列 0，语义等价版式尽毁）
+            nm_ind = nize_indent(data_src, nm_a.start())
+            nm_rows = []
+            for nm_r0 in range(0, 15, 8):
+                nm_rows.append(nm_ind + '    '
+                               + ', '.join(str(x) for x in nm_ns[nm_r0:nm_r0 + 8])
+                               + (',' if nm_r0 + 8 < 15 else ','))
+            nm_repl = (
+                nm_ind
+                + '// v1.16.34 单1 β刀（--nize=arms）：境界名 15 臂收编 textpack（调用点\n'
+                + nm_ind
+                + '// 均一次性 UI 文案，evtx 零分配）——max_realm.min 钳制落 _ 臂槽逐值等价\n'
+                + nm_ind + 'const REALM_TITLE_NS: [u16; 15] = [\n'
+                + '\n'.join(nm_rows) + '\n'
+                + nm_ind + '];\n'
+                + nm_ind
+                + 'evtx(REALM_TITLE_NS[max_realm.min(REALM_TITLE_NS.len() - 1)] as usize)'
+            )
+            out_edits.setdefault('data.rs', []).append(
+                (nm_a.start(), nm_close + 1, nm_repl))
+            nize_report.append('REALM_TITLE_NS: 15 臂（0..13 直映射+_ 末槽），臂 raw %dB'
+                               % sum(len(decode_raw(r).encode('utf-8')) for r in nm_lit))
+        # --- 簇5：双修门控单臂（charpanel.rs DualGate::ThisYear，裸字面量 evtx）---
+        if 'charpanel.rs' not in FTXT:
+            FTXT['charpanel.rs'] = (SRC_DIR / 'charpanel.rs').read_text(encoding='utf-8')
+        nm_ctxt = FTXT['charpanel.rs']
+        nm_a = re.search(r'DualGate::ThisYear => "((?:[^"\\]|\\.)*)"\.to_string\(\),',
+                         nm_ctxt)
+        if nm_a is None:
+            nize_report.append('DualGate::ThisYear 单臂: 已换 evtx（幂等跳过）')
+        else:
+            nm_raw = nm_a.group(1)
+            nm_n = nize_arm_alloc(nm_raw, '簇5/单臂')
+            nize_elem_cnt += 1
+            nize_raw_b += len(decode_raw(nm_raw).encode('utf-8'))
+            nm_repl = ('DualGate::ThisYear => evtx(%d)/* 原文：%s */.to_string(),'
+                       % (nm_n, nm_raw))
+            out_edits.setdefault('charpanel.rs', []).append(
+                (nm_a.start(), nm_a.end(), nm_repl))
+            nize_report.append('DualGate::ThisYear 单臂: N=%d（%dB raw，evtx 后 .to_string() 位不变）'
+                               % (nm_n, len(decode_raw(nm_raw).encode('utf-8'))))
     # ---- 子域 B：const 串表 N 化批（charpanel/gallery/draw）----
     if nize_scope in ('all', 'tables'):
         # 先单串 const（表内 ident 引用依赖其 N）
@@ -1338,7 +1848,7 @@ for di, o in enumerate(offs):
 # ---- 等价性纪律 2：blob 切片逐条 == 原串解码值 ----
 for pos, raw, vb, n in lit_items:
     assert blob[offs[n]:offs[n + 1]] == vb, 'blob slice mismatch at N=%d' % n
-for _ms, _cl, raw, vb, n, _a in tmpl_items:
+for _ms, _cl, raw, vb, n, _a, _kinds in tmpl_items:
     assert blob[offs[n]:offs[n + 1]] == vb, 'blob slice mismatch at N=%d (tmpl)' % n
 
 comp = zlib.compressobj(9, zlib.DEFLATED, -15)
@@ -1381,8 +1891,11 @@ for n in refs:
     assert decode_raw(table[n]) is not None, 'ref N=%d bad row' % n
 
 replaced_bytes = sum(len(vb) for _, _, vb, _ in lit_items)
-replaced_bytes += sum(len(vb) for _, _, _, vb, _, _a in tmpl_items)
-tmpl_bytes = sum(len(vb) for _, _, _, vb, _, _a in tmpl_items)
+# v1.16.34 刀α：tmpl_items 7 元组（+kinds）；精度站单列统计
+replaced_bytes += sum(len(vb) for _, _, _, vb, _, _a, _k in tmpl_items)
+tmpl_bytes = sum(len(vb) for _, _, _, vb, _, _a, _k in tmpl_items)
+prec_sites = sum(1 for _ms, _cl, _r, _vb, _n, _a, kinds in tmpl_items
+                 if any(kd is not None for kd in kinds))
 print('block scan: %d evtx lits + %d format! templates collected'
       % (len(lit_items), len(tmpl_items)))
 if tmpl_skips:
@@ -1469,6 +1982,13 @@ if name_base is not None:
 if brief_base is not None:
     inc += emit_base('TXT_BRIEF9_BASE',
                      inc_bases.get('TXT_BRIEF9_BASE', BRIEF9_BASE_MANIFEST))
+# v1.16.34 单3 段十基址（同段九款：首轮 emit manifest 手分、此后回读 .inc 幂等）
+if name_base is not None:
+    inc += emit_base('TXT_NAME10_BASE',
+                     inc_bases.get('TXT_NAME10_BASE', NAME10_BASE_MANIFEST))
+if brief_base is not None:
+    inc += emit_base('TXT_BRIEF10_BASE',
+                     inc_bases.get('TXT_BRIEF10_BASE', BRIEF10_BASE_MANIFEST))
 # v1.16.29 刀B 整表基址（首轮 emit 收编 N 段基址；此后每次运行从 .inc 回读重发，
 # 与段一/二/三同款幂等——非 --tables2 运行也不许丢基址，否则 include! 断链）
 for bk2 in BASE_KEYS_TABLES2:

@@ -1238,12 +1238,7 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
     let need = qi_need(l);
     let frac = (l.qi / need) as f32;
     bar_glow(28.0, 274.0, LEFT_W - 40.0, 20.0, frac, C_CYAN, g.time);
-    let qlabel = format!(
-        "修为 {}/{}（{:.0}%）",
-        fmt_num(l.qi),
-        fmt_num(need),
-        frac * 100.0
-    );
+    let qlabel = evf(2615, &[&(fmt_num(l.qi)) as &dyn core::fmt::Display, &(fmt_num(need)) as &dyn core::fmt::Display, &(crate::data::Fmt0((frac * 100.0) as f64)) as &dyn core::fmt::Display])/* 原文：修为 {}/{}（{}%） */;
     txt_c(
         &qlabel,
         cx + 1.0,
@@ -1801,12 +1796,10 @@ pub fn draw_modal_card(g: &mut Game) {
                         let d = if card.kind == crate::game::CardKind::Path {
                             "择定终身，不可改道".to_string()
                         } else if card.kind == crate::game::CardKind::Finale {
-                            match i {
-                                0 => "永生换的 · 一字不改",
-                                1 => "推荐 · 后事不详，比永生更宽",
-                                2 => "描清十万稿的名字",
-                                _ => "隐藏 · 未完的书自会看见",
-                            }
+                            // v1.16.34 单1 β刀（--nize=arms）：终战副标四臂收编 textpack——
+                            // i.min 钳制落 _ 臂槽，逐值等价（.to_string() 调用位不变）
+                            const FINALE_SUB_NS: [u16; 4] = [2628, 2629, 2630, 2631];
+                            evtx(FINALE_SUB_NS[i.min(FINALE_SUB_NS.len() - 1)] as usize)
                             .to_string()
                         } else {
                             e.eff_desc()
@@ -2631,7 +2624,7 @@ fn draw_shop(g: &mut Game) {
             );
             txt(&format!("《{}》", t.name()), 180.0, y + 4.0, 18, C_GOLD);
             txt(
-                &format!("修炼×{:.1}  战力×{:.1}", t.mult, t.pow),
+                &evf(2616, &[&(crate::data::Fmt1(t.mult)) as &dyn core::fmt::Display, &(crate::data::Fmt1(t.pow)) as &dyn core::fmt::Display])/* 原文：修炼×{}  战力×{} */,
                 420.0,
                 y + 4.0,
                 14,
@@ -2708,7 +2701,7 @@ fn draw_ad_overlay(g: &mut Game) {
         }
     } else {
         txt_c(
-            &format!("幻境播送中… {:.0} 秒", t.ceil()),
+            &evf(2617, &[&(crate::data::Fmt0((t.ceil()) as f64)) as &dyn core::fmt::Display])/* 原文：幻境播送中… {} 秒 */,
             640.0,
             470.0,
             18,

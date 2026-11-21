@@ -134,14 +134,14 @@ fn build_bgm() -> Vec<u8> {
     let a3 = 220.0;
     let notes = [a3, 261.63, 293.66, 329.63, 392.0, 440.0, 523.25];
     // 旋律表（索引，9=休止）
-    let mel: [usize; 26] = [
+    let mel: [u8; 26] = [
         5, 4, 2, 3, 4, 9, 5, 4, 2, 0, 1, 9, 4, 5, 6, 5, 4, 9, 2, 3, 4, 2, 1, 0, 9, 9,
     ];
     let step = 0.62;
     let mut t = 0.15;
     for &mi in mel.iter() {
         if mi != 9 {
-            let f = notes[mi];
+            let f = notes[mi as usize];
             mix_at(&mut buf, &pluck(f, 1.9, 0.16), t);
             if mi <= 3 {
                 mix_at(&mut buf, &pluck(f * 2.0, 1.4, 0.05), t + 0.31);
@@ -178,11 +178,11 @@ fn build_battle_bgm() -> Vec<u8> {
     let dur = 8.0;
     let mut buf = vec![0.0f32; (dur * SR as f32) as usize];
     let notes = [220.0f32, 261.63, 293.66, 329.63, 392.0, 440.0];
-    let mel: [usize; 14] = [5, 3, 4, 2, 4, 1, 5, 3, 4, 0, 3, 2, 4, 5];
+    let mel: [u8; 14] = [5, 3, 4, 2, 4, 1, 5, 3, 4, 0, 3, 2, 4, 5];
     let step = 0.28;
     let mut t = 0.05;
     for &mi in mel.iter() {
-        mix_at(&mut buf, &pluck(notes[mi], 0.5, 0.15), t);
+        mix_at(&mut buf, &pluck(notes[mi as usize], 0.5, 0.15), t);
         t += step;
         if t > dur - 0.6 {
             break;
