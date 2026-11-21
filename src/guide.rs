@@ -232,7 +232,7 @@ pub fn guide_index(g: &Game) -> u8 {
                 let lv = g.meta.dongfu[i].clamp(0, 3) as usize;
                 lv < 3
                     && stones >= DONGFU_UP_STONES[lv] as i64
-                    && g.meta.sect_contrib >= DONGFU_UP_CONTRIB[lv]
+                    && g.meta.sect_contrib >= DONGFU_UP_CONTRIB[lv] as u32
             })
         {
             return 9;

@@ -746,12 +746,15 @@ pub const PATH_QI: u8 = 2;    // 气修：每载修为 ×1.25、破境率 +0.06
 pub const PATH_PILL: u8 = 3;  // 丹修：服丹效果 ×1.35、灵田岁入 ×1.6
 
 pub fn path_name(p: u8) -> &'static str {
-    match p {
-        PATH_SWORD => "剑修",
-        PATH_QI => "气修",
-        PATH_PILL => "丹修",
-        _ => "未择道途",
-    }
+    // v1.16.39 遗留清账②：4 臂 N 表收编（SPECIAL_SUB 口径：fn 内 const N 表 +
+    // evtx 查表 + .min 钳制）。槽位映射：0=未择道途（原 p=0 落 `_` 兜底同文案）/
+    // 1=PATH_SWORD/2=PATH_QI/3=PATH_PILL；PATH_* 常量自 1 起（:744-746）故兜底臂
+    // ≠末槽——末槽 4 重复兜底文案「未择道途」（真相源尾行新增 dedup 独立行
+    // N2719 与槽 0 各占一行，无同池共享），p≥4 与原 `_` 臂逐值等价；
+    // N2716..2719 真相源尾行新增（v1.16.39 遗留清账批），钉测
+    // arms_nize_v11639_pins 逐槽 evtx + 全值域映射断言兜底
+    const PATH_NAME_NS: [u16; 5] = [2719, 2716, 2717, 2718, 2719];
+    evtx(PATH_NAME_NS[(p as usize).min(4)] as usize)
 }
 
 // v1.16.17 双修共进门控态（dual_cult_gate 单源；按钮置灰文案与执行口共以此判定）
@@ -14122,15 +14125,13 @@ impl Game {
 
     /// v1.9.12 菜单自检面板用的场景短名（中文，仅 wasm 诊断显示）
     pub fn scene_xx_name(&self) -> &'static str {
-        match self.scene {
-            Scene::Menu => "菜单",
-            Scene::Reality => "现实",
-            Scene::Draft => "选天赋",
-            Scene::Sim => "模拟",
-            Scene::Inherit => "继承",
-            Scene::Settle => "结算",
-            Scene::World => "地图",
-        }
+        // v1.16.39 遗留清账③：7 臂 N 表收编（SPECIAL_SUB 口径）——槽位=Scene 枚举
+        // 声明序（Menu=0/Reality/Draft/Sim/Inherit/Settle/World=6，与原 match 臂序
+        // 逐一对应；枚举无显式判别值，变体重排/插位即钉测红——
+        // arms_nize_v11639_pins 全变体断言兜底）；N2720..2726 真相源尾行新增
+        // （v1.16.39 遗留清账批）
+        const SCENE_NAME_NS: [u16; 7] = [2720, 2721, 2722, 2723, 2724, 2725, 2726];
+        evtx(SCENE_NAME_NS[(self.scene as usize).min(6)] as usize)
     }
 
     /// 每帧推进广告倒计时（真实秒；归 0 后钳住，等待领取）
@@ -14992,7 +14993,9 @@ impl Game {
 // 500；勿与 ACHS 成就奖励 10..3000 序列混淆）取整 200——
 // 问笔终战门槛=讨牒 6/6+九重雷劫+封卷吏，单结局 200 与章成之礼量级持平；
 // 全收集不发额外道韵（四结局之礼已足额），礼遇走称号『执笔人』授权
-pub const ENDING_DY: [i32; 4] = [200, 200, 200, 200];
+// v1.16.39 整数表第三轮⑤：i32→u16（值域 200；读点 game.rs:2463/测试 :19670 `as i64`
+// 天然兼容；理论 −8B）
+pub const ENDING_DY: [u16; 4] = [200, 200, 200, 200];
 
 // v1.16.29 刀B：四字段全收编 textpack（name/alias/body/gain 各 4 行连号，
 // pack_text.py --tables2 产侧原位写 N）——访问器 O(1) 零分配（演出页帧路径安全）；
@@ -16106,7 +16109,7 @@ mod guide_tests {
             g.life
                 .as_ref()
                 .map_or(false, |x| x.stones >= crate::data::DONGFU_UP_STONES[0] as i64)
-                && g.meta.sect_contrib >= crate::data::DONGFU_UP_CONTRIB[0],
+                && g.meta.sect_contrib >= crate::data::DONGFU_UP_CONTRIB[0] as u32, // v1.16.39 表③窄化 u16 读点扩位
             "前置：灵石+贡献双足"
         );
         assert_eq!(guide_index(&g), 9);
@@ -24883,5 +24886,81 @@ mod tables2_pins {
                 (260, 80000),
             ]
         );
+    }
+}
+
+// v1.16.39 遗留清账：整数表第三轮窄化值钉（值不变型变，五表逐值断言）+
+// path_name/scene_xx_name N 表收编逐槽 evtx 断言与全值域映射等价。
+#[cfg(test)]
+mod v11639_ledger_tests {
+    use super::*;
+
+    use super::revenge_tests::game_with; // 免音频/存档 IO 的最小 Game 构造（:15981 等先例同款借用）
+
+    // 每模组私有夹具（仓内 23 份 sim_game 同款惯例：模组自含不跨模组借用）
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    #[test]
+    fn narrow_round3_value_pins() {
+        assert_eq!(crate::data::PILL_PRICES, [200i16, 1500, 2500, 800, 5000, 4000]);
+        assert_eq!(crate::data::LINGTIAN_YIELD, [0i16, 300, 1200, 5000]);
+        assert_eq!(crate::data::DONGFU_UP_CONTRIB, [30u16, 120, 400]);
+        assert_eq!(crate::data::NPC_FAV_TIERS, [0i8, 20, 40, 70, 95]);
+        assert_eq!(ENDING_DY, [200u16, 200, 200, 200]);
+    }
+
+    #[test]
+    fn arms_nize_v11639_pins() {
+        crate::data::init_text();
+        // 逐槽内容钉（真相源 N2716..2726 尾行新增——错行/漂移当场红）
+        assert_eq!(crate::data::evtx(2716), "剑修");
+        assert_eq!(crate::data::evtx(2717), "气修");
+        assert_eq!(crate::data::evtx(2718), "丹修");
+        assert_eq!(crate::data::evtx(2719), "未择道途");
+        assert_eq!(crate::data::evtx(2720), "菜单");
+        assert_eq!(crate::data::evtx(2721), "现实");
+        assert_eq!(crate::data::evtx(2722), "选天赋");
+        assert_eq!(crate::data::evtx(2723), "模拟");
+        assert_eq!(crate::data::evtx(2724), "继承");
+        assert_eq!(crate::data::evtx(2725), "结算");
+        assert_eq!(crate::data::evtx(2726), "地图");
+        // path_name 全值域映射等价（PATH_* 自 1 起兜底臂≠末槽：末槽重复兜底文案）
+        assert_eq!(path_name(0), "未择道途");
+        assert_eq!(path_name(PATH_SWORD), "剑修");
+        assert_eq!(path_name(PATH_QI), "气修");
+        assert_eq!(path_name(PATH_PILL), "丹修");
+        assert_eq!(path_name(4), "未择道途");
+        assert_eq!(path_name(255), "未择道途");
+        // Scene 枚举声明序=槽序钉（变体重排/插位即红）
+        assert_eq!(Scene::Menu as usize, 0);
+        assert_eq!(Scene::Reality as usize, 1);
+        assert_eq!(Scene::Draft as usize, 2);
+        assert_eq!(Scene::Sim as usize, 3);
+        assert_eq!(Scene::Inherit as usize, 4);
+        assert_eq!(Scene::Settle as usize, 5);
+        assert_eq!(Scene::World as usize, 6);
+        // scene_xx_name 全变体行为等价（sim_game 夹具逐变体）
+        let mut g = sim_game(0, 40.0);
+        g.scene = Scene::Menu;
+        assert_eq!(g.scene_xx_name(), "菜单");
+        g.scene = Scene::Reality;
+        assert_eq!(g.scene_xx_name(), "现实");
+        g.scene = Scene::Draft;
+        assert_eq!(g.scene_xx_name(), "选天赋");
+        g.scene = Scene::Sim;
+        assert_eq!(g.scene_xx_name(), "模拟");
+        g.scene = Scene::Inherit;
+        assert_eq!(g.scene_xx_name(), "继承");
+        g.scene = Scene::Settle;
+        assert_eq!(g.scene_xx_name(), "结算");
+        g.scene = Scene::World;
+        assert_eq!(g.scene_xx_name(), "地图");
     }
 }

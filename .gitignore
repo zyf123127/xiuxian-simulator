@@ -8,3 +8,6 @@ xiuxian_save.txt
 
 __pycache__/
 *.pyc
+
+# v1.16.39：.mumu 运行残留/本地工具目录入忽略（109 件历史误追踪解除，盘上文件零改动）
+/.mumu/

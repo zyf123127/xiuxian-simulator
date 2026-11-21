@@ -17,7 +17,8 @@ pub const NPC_COUNT: usize = 4;
 pub fn tier_of(fav: i32) -> usize {
     let mut t = 0;
     for (i, &th) in NPC_FAV_TIERS.iter().enumerate() {
-        if fav >= th {
+        if fav >= th as i32 {
+            // v1.16.39 表④窄化 i8 读点扩位
             t = i;
         }
     }

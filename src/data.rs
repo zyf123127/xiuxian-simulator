@@ -437,7 +437,9 @@ impl PillDef {
         evtx(self.desc_n as usize)
     }
 }
-pub const PILL_PRICES: [i32; 6] = [200, 1500, 2500, 800, 5000, 4000];
+// v1.16.39 整数表第三轮①：i32→i16（值域 200..=5000 ≤ i16::MAX=32767；唯一读点
+// game.rs pill_price 已是 `as f64` 扩位天然兼容；理论 −12B 以打包实测为准）
+pub const PILL_PRICES: [i16; 6] = [200, 1500, 2500, 800, 5000, 4000];
 pub const PILLS: [PillDef; 6] = [
     PillDef {
         name_n: 2039,
@@ -3479,11 +3481,15 @@ pub fn dongfu_fac_desc(i: usize) -> &'static str {
     evtx(TXT_DFD_BASE as usize + i.min(2))
 }
 pub const JUELING_MULT: [f64; 4] = [1.00, 1.15, 1.30, 1.50];
-pub const LINGTIAN_YIELD: [i32; 4] = [0, 300, 1200, 5000];
+// v1.16.39 整数表第三轮②：i32→i16（值域 0..=5000；读点 game.rs:2319/:13608 `as f64`
+// 与 world.rs evf Display 模板均天然兼容；理论 −8B 以打包实测为准）
+pub const LINGTIAN_YIELD: [i16; 4] = [0, 300, 1200, 5000];
 pub const DANFANG_DISC: [f64; 4] = [1.00, 0.90, 0.80, 0.70];
 // 升到 L+1 级费用：灵石 DONGFU_UP_STONES[L] + 贡献 DONGFU_UP_CONTRIB[L]
 pub const DONGFU_UP_STONES: [i32; 3] = [2000, 20000, 200000];
-pub const DONGFU_UP_CONTRIB: [u32; 3] = [30, 120, 400];
+// v1.16.39 整数表第三轮③：u32→u16（值域 30..=400；读点四处与 meta.sect_contrib(u32)
+// 比较已同批 `as u32` 扩位——guide.rs/world.rs×2/game.rs 测试区；理论 −6B）
+pub const DONGFU_UP_CONTRIB: [u16; 3] = [30, 120, 400];
 
 // ================= v1.6.0 山河万象：仇敌突破换地图 =================
 
@@ -3730,7 +3736,10 @@ pub fn npc_brief(i: usize) -> &'static str {
 }
 
 // 好感档次阈值与名称（fav ≥ 阈值即入档）
-pub const NPC_FAV_TIERS: [i32; 5] = [0, 20, 40, 70, 95];
+// v1.16.39 整数表第三轮④：i32→i8（值域 0..=95 ≤ i8::MAX=127；读点 npc.rs tier_of
+// 与 fav(i32) 比较已同批 `as i32` 扩位，charpanel/gallery 三处刻度 `as f32` 天然兼容；
+// 理论 −15B）
+pub const NPC_FAV_TIERS: [i8; 5] = [0, 20, 40, 70, 95];
 pub const NPC_TIER_NAMES: [&str; 5] = [
     "素不相识",
     "点头之交",

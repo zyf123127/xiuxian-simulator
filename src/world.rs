@@ -487,7 +487,7 @@ pub fn dongfu_up(g: &mut Game, i: usize) {
         return;
     }
     let stones = DONGFU_UP_STONES[lv as usize] as i64;
-    let contrib = DONGFU_UP_CONTRIB[lv as usize];
+    let contrib = DONGFU_UP_CONTRIB[lv as usize] as u32; // v1.16.39 表③窄化 u16 读点扩位
     let ok_stones = g.life.as_ref().map_or(false, |l| l.stones >= stones);
     let ok_contrib = g.meta.sect_contrib >= contrib;
     if !ok_stones || !ok_contrib {
@@ -1133,7 +1133,7 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             };
             txt(&eff, 300.0, y + 58.0, 14, C_CYAN);
                 if lv < 3 {
-                    let (cs, cc) = (DONGFU_UP_STONES[lv] as i64, DONGFU_UP_CONTRIB[lv]);
+                    let (cs, cc) = (DONGFU_UP_STONES[lv] as i64, DONGFU_UP_CONTRIB[lv] as u32); // v1.16.39 表③窄化 u16 读点扩位
                     let ok = l_stones >= cs && g.meta.sect_contrib >= cc;
                     txt(
                         &evf(1603, &[&(lv + 1), &(fmt_int(cs)), &(cc)])/* 原文：升{}级：{} 灵石 + {} 贡献 */,
