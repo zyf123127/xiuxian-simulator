@@ -133,6 +133,10 @@ pub fn save_text_with_ts(m: &Meta, ts: u64) -> String {
     // saturating 封顶 255；缺键 → 0 零迁移；独立成行紧随 evc=、置于 h= 旧稿块
     // 之前——勿插 h=/hq= 之间，文件序约定同 ch=/sy=/evc=）
     s.push_str(&format!("fa={}\n", m.fame));
+    // v1.16.40 长老委托 cm=（sel/prog/done 空格分隔三值照 Lstat= 先例；缺键 →
+    // (255,0,0) 零迁移；独立成行紧随 fa=、置于 h= 旧稿块之前——勿插 h=/hq= 之间，
+    // 文件序约定同 ch=/sy=/evc=/fa=）
+    s.push_str(&format!("cm={} {} {}\n", m.comm_sel, m.comm_prog, m.comm_done));
     // v1.16.5 旧稿档案：近 5 次模拟结算快照，每条一行 h=（前 8 段空格分隔照 Lstat=
     // 先例，cause 取第 9 段整段余量照 note= 自由文本先例——死因含空格不能全切；
     // 缺键 → 空表 = 默认值，零迁移）
@@ -437,6 +441,19 @@ fn parse_save(text: &str) -> Meta {
             // v1.16.28 江湖声望（缺键 → 0 零迁移；负值/坏值 parse 失败归 0、
             // >255 顶格截断照 evc= 逐值 min 口径）
             "fa" => m.fame = (v.trim().parse::<u64>().unwrap_or(0)).min(255) as u8,
+            // v1.16.40 长老委托（缺键 → (255,0,0) 零迁移；sel 越界归 255=未初始化
+            // 惰性派生、prog/done 坏值/负值归 0 照 fa= 口径；短行缺段补默认）
+            "cm" => {
+                let a = nums(v);
+                let sel = a.first().copied().unwrap_or(-1.0);
+                m.comm_sel = if sel >= 0.0 && (sel as usize) < crate::data::COMMISSIONS.len() {
+                    sel as u8
+                } else {
+                    255
+                };
+                m.comm_prog = a.get(1).copied().unwrap_or(0.0).max(0.0) as u8;
+                m.comm_done = a.get(2).copied().unwrap_or(0.0).max(0.0) as u32;
+            }
             // v1.16.5 旧稿档案：h=<life> <run> <realm> <age> <years> <dy> <stones> <comp> <cause…>
             // splitn(9,' ') 取余量（cause 含空格照 note= 先例不能全切；值内 '=' 安全——
             // split_once 只切首对）。数字坏值 unwrap_or 回退；realm clamp 0..=14、
@@ -1375,6 +1392,63 @@ h=1 2 3 50.0 40 100 800 255 乙
     fn fame_missing_default() {
         let m = parse_save(OLD_BASE);
         assert_eq!(m.fame, 0);
+    }
+
+    // ---------------- v1.16.40 长老委托 cm= 键（回环/文件序/缺键/越值） ----------------
+    // 照 fa= 四件套先例：cm= 独立成行紧随 fa=、置于 h= 旧稿块之前（文件序约定
+    // 同 ch=/sy=/evc=/fa=）；缺键 → (255,0,0) 零迁移；sel 越界归 255（惰性派生）、
+    // prog/done 坏值/负值归 0
+    #[test]
+    fn comm_roundtrip_file_order_and_bounds() {
+        let mut m = Meta::default();
+        m.comm_sel = 3;
+        m.comm_prog = 2;
+        m.comm_done = 7;
+        let text = save_text(&m);
+        assert!(text.contains("cm="));
+        // cm= 行必须先于 h= 旧稿块且紧随 fa=（文件序约定；按行首匹配防子串误中）
+        let cm_pos = text
+            .lines()
+            .position(|l| l.starts_with("cm="))
+            .expect("cm= 行缺失");
+        let fa_pos = text
+            .lines()
+            .position(|l| l.starts_with("fa="))
+            .expect("fa= 行缺失");
+        let h_pos = text
+            .lines()
+            .position(|l| l.starts_with("h="))
+            .map(|p| p as isize)
+            .unwrap_or(isize::MAX);
+        assert!(fa_pos < cm_pos, "cm= 必须紧随 fa=");
+        assert!(cm_pos < h_pos as usize, "cm= 必须在 h= 旧稿块之前");
+        let back = parse_save(&text);
+        assert_eq!(back.comm_sel, 3);
+        assert_eq!(back.comm_prog, 2);
+        assert_eq!(back.comm_done, 7);
+        // 越值口径：sel 越界归 255（未初始化惰性派生）、prog 负值归 0、done 负值归 0
+        let m2 = parse_save(&format!("{}cm=99 5 11\n", OLD_BASE));
+        assert_eq!(m2.comm_sel, 255, "sel 越界归 255");
+        assert_eq!(m2.comm_prog, 5, "prog 合法值原样");
+        assert_eq!(m2.comm_done, 11, "done 合法值原样");
+        let m3 = parse_save(&format!("{}cm=-2 -1 -3\n", OLD_BASE));
+        assert_eq!(m3.comm_sel, 255, "sel 负值归 255");
+        assert_eq!(m3.comm_prog, 0, "prog 负值归 0");
+        assert_eq!(m3.comm_done, 0, "done 负值归 0");
+        // 短行缺段补默认
+        let m4 = parse_save(&format!("{}cm=1\n", OLD_BASE));
+        assert_eq!(m4.comm_sel, 1);
+        assert_eq!(m4.comm_prog, 0);
+        assert_eq!(m4.comm_done, 0);
+    }
+
+    // 旧档缺 cm= → (255,0,0)（零迁移；显示走 comm_current 纯派生不误触）
+    #[test]
+    fn comm_missing_default() {
+        let m = parse_save(OLD_BASE);
+        assert_eq!(m.comm_sel, 255);
+        assert_eq!(m.comm_prog, 0);
+        assert_eq!(m.comm_done, 0);
     }
 }
 

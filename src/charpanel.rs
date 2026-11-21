@@ -131,6 +131,13 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             if i == 0 {
                 prewarm_text("声望", &[14]);
             }
+            // v1.16.40 长老委托：人物页（char_tab=3）长老卡尾挂「差事：」与当前
+            // 差事名首开帧预热（照声望行先例——委托名随轮换，comm_current 纯推导
+            // 一次灌当前值；复命帧 comm_claim 内另有预热口）
+            if i == 3 {
+                prewarm_text("差事：", &[14]);
+                prewarm_text(crate::data::comm_title(g.meta.comm_current()), &[14]);
+            }
             g.char_tab = i;
             g.play(crate::sounds::Which::Page);
         }
@@ -787,6 +794,19 @@ fn draw_npc_card(
     };
     if npc_row_vis(y + 136.0) {
         txt(&eff, col, y + 136.0, 14, C_CYAN);
+    }
+    // v1.16.40 长老委托：长老卡（仅 NPC_ELDER）eff 行右侧同行尾挂当前差事名——照
+    // draw.rs 章回联句「同行尾挂零版式位移零碰撞」先例；两段 txt 拼接禁 format!
+    //（帧路径零分配红线）。eff 文本恒 ~10 汉字≈180px，尾挂 x=col+260 起、名 4 字
+    // 止于 col+372，均在好感条 560px 右缘内
+    if i == crate::npc::NPC_ELDER && npc_row_vis(y + 136.0) {
+        txt("差事：", col + 260.0, y + 136.0, 14, C_DIM);
+        txt(
+            crate::data::comm_title(g.meta.comm_current()),
+            col + 316.0,
+            y + 136.0, 14,
+            C_GOLD_D,
+        );
     }
     if npc_row_vis(y + 168.0) {
         wrap_draw(npc_brief(i), col, y + 168.0, 14, 660.0, 22.0, C_DIM);

@@ -65,9 +65,11 @@ mr0_nocomp = [(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 an
 # 后六批未落最陈薄层）——白名单 32→33，与 game.rs COMPANION_EVENTS 同批同步
 # v1.16.38 伴随 +1：359 移竹当窗（mr7 有伴第 4 条——mr7 伴随 241/300/344 三条
 # 后四批未落最陈薄层）——白名单 33→34，与 game.rs COMPANION_EVENTS 同批同步
+# v1.16.40 伴随 +1：362 芦絮暖枕（mr6 有伴第 4 条——mr6 伴随 225/293/339 三条
+# 后八批未落最陈薄层）——白名单 34→35，与 game.rs COMPANION_EVENTS 同批同步
 COMPANION = {53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185, 203,
              210, 211, 212, 225, 226, 240, 241, 257, 262, 272, 283, 293, 300,
-             321, 327, 339, 344, 351, 357, 359}
+             321, 327, 339, 344, 351, 357, 359, 362}
 mr0_nocomp = sorted([(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 and i not in COMPANION], key=lambda t: -t[1])
 top4_nc = sum(w for _, w in mr0_nocomp[:4])
 tot_nc = sum(w for _, w in mr0_nocomp)

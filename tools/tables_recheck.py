@@ -99,9 +99,12 @@ _SEG11 = 353
 _SEG12 = 356
 # v1.16.38 单2 扩段十四：EV_SEG13=359 快照段界（v1.16.37 单2 预建本批引用）
 _SEG13 = 359
-# v1.16.36 单5 low 清账：对账段数常量（段一..段十四）——标签行随此动态写，
-# 下批扩段十五时随批 +1（勘察建议「随段数常量动态改写」款）
-SEGS_COUNT = 14
+# v1.16.40 单3 扩段十五：EV_SEG14=362 快照段界（v1.16.38 单2 预建本批引用）
+_SEG14 = 362
+# v1.16.36 单5 low 清账：对账段数常量（段一..段十五）——标签行随此动态写，
+# 下批扩段十六时随批 +1（勘察建议「随段数常量动态改写」款）
+# v1.16.40 单3 扩段十五：SEGS_COUNT 14→15 随批
+SEGS_COUNT = 15
 _name2 = re.search(r"pub static TXT_NAME2_BASE: u32 = (\d+);", inc)
 _brief2 = re.search(r"pub static TXT_BRIEF2_BASE: u32 = (\d+);", inc)
 _name3 = re.search(r"pub static TXT_NAME3_BASE: u32 = (\d+);", inc)
@@ -158,9 +161,15 @@ _brief14 = re.search(r"pub static TXT_BRIEF14_BASE: u32 = (\d+);", inc)
 name14_base = int(_name14.group(1)) if _name14 else None
 brief14_base = int(_brief14.group(1)) if _brief14 else None
 
+# v1.16.40 单3 扩段十五：段十五基址（.inc 回读同款）
+_name15 = re.search(r"pub static TXT_NAME15_BASE: u32 = (\d+);", inc)
+_brief15 = re.search(r"pub static TXT_BRIEF15_BASE: u32 = (\d+);", inc)
+name15_base = int(_name15.group(1)) if _name15 else None
+brief15_base = int(_brief15.group(1)) if _brief15 else None
+
 
 def _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, base9,
-              base10, base11, base12, base13, base14, n):
+              base10, base11, base12, base13, base14, base15, n):
     """段一 0..min(n,291) + 段二..段十四续号（扩池批）；返回行号列表"""
     out = [base + i for i in range(min(n, _SEG1))]
     if n > _SEG1:
@@ -211,17 +220,22 @@ def _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, base9,
         out += [base13 + i for i in range(min(n, _SEG13) - _SEG12)]
     if n > _SEG13:
         assert base14 is not None, "扩池后段十四基址缺失（pack_text.py 未登记）"
-        out += [base14 + i for i in range(n - _SEG13)]
+        # v1.16.40 单3 红线②：段十四由无界末段改有界（段十五开设后段十四
+        # 不再是末段——旧行为 n−_SEG13 在扩池后会把段十五行错读进段十四）
+        out += [base14 + i for i in range(min(n, _SEG14) - _SEG13)]
+    if n > _SEG14:
+        assert base15 is not None, "扩池后段十五基址缺失（pack_text.py 未登记）"
+        out += [base15 + i for i in range(n - _SEG14)]
     return out
 brief_base = int(re.search(r"pub static TXT_BRIEF_BASE: u32 = (\d+);", inc).group(1))
 
 tables = {}
-for tname, base, base2, base3, base4, base5, base6, base7, base8, base9, base10, base11, base12, base13, base14 in (
-        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base, name6_base, name7_base, name8_base, name9_base, name10_base, name11_base, name12_base, name13_base, name14_base),
-        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base, brief6_base, brief7_base, brief8_base, brief9_base, brief10_base, brief11_base, brief12_base, brief13_base, brief14_base)):
+for tname, base, base2, base3, base4, base5, base6, base7, base8, base9, base10, base11, base12, base13, base14, base15 in (
+        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base, name6_base, name7_base, name8_base, name9_base, name10_base, name11_base, name12_base, name13_base, name14_base, name15_base),
+        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base, brief6_base, brief7_base, brief8_base, brief9_base, brief10_base, brief11_base, brief12_base, brief13_base, brief14_base, brief15_base)):
     entries = []
     for n in _seg_rows(base, base2, base3, base4, base5, base6, base7, base8,
-                       base9, base10, base11, base12, base13, base14, n_events):
+                       base9, base10, base11, base12, base13, base14, base15, n_events):
         assert n in rows, f"{tname} 段缺行 N={n}（基址漂移/收编段不齐）"
         val = decode_raw(rows[n])
         assert val is not None, f"{tname} N={n} 不可解码"
@@ -233,9 +247,9 @@ for tname, base, base2, base3, base4, base5, base6, base7, base8, base9, base10,
     print(tname, "base", base, "base2", base2, "base3", base3, "base4", base4,
           "base5", base5, "base6", base6, "base7", base7, "base8", base8,
           "base9", base9, "base10", base10, "base11", base11, "base12", base12,
-          "base13", base13, "base14", base14,
+          "base13", base13, "base14", base14, "base15", base15,
           "rows", len(entries), "aligned:",
-          len(entries) == n_events == 362)
+          len(entries) == n_events == 365)
 
 names = tables["EVENT_NAMES"]
 seen = set()
@@ -276,7 +290,9 @@ for tname in ("EVENT_NAMES", "EVENT_BRIEF"):
         # v1.16.37 单2 扩段十三：base13/len13 双段登记（len13 末段差写法形态）
         r"\s*base13: \w+ as u16," + _C + r"\s*len13: \(?\w+ - \w+\)? as u16," + _C +
         # v1.16.38 单2 扩段十四：base14/len14 双段登记（len14 末段差写法形态）
-        r"\s*base14: \w+ as u16," + _C + r"\s*len14: \(?\w+ - \w+\)? as u16,\s*\};"
+        # v1.16.40 单3 扩段十五：base15/len15 双段登记（len15 末段差写法形态）
+        r"\s*base14: \w+ as u16," + _C + r"\s*len14: \(?\w+ - \w+\)? as u16," + _C +
+        r"\s*base15: \w+ as u16," + _C + r"\s*len15: \(?\w+ - \w+\)? as u16,\s*\};"
     )
     m = re.search(pat, src)
     assert m, f"{tname} EvTable 声明缺失"
@@ -322,6 +338,9 @@ for _tname, _base, _cnt in (("NPC_TALES", _TALES_BASE, 12),
 # reward_note/couplet 36 + num 9 + name 134 + desc 136 + ENDINGS alias/body/gain
 # 12；text 40 = CHAPTERS goals 18 + EXPED_STEPS 8 + HINTS 14 + NPC_EVENTS 4；
 # mech 5 = REGION_MECH；title 4 = NPC_EVENTS）
+# v1.16.40 长老委托：字段级面扩至 392（title 4→12 = NPC_EVENTS 4 + data.rs
+# CommDef title_n 8；desc 136→144 = CommDef desc_n 8——title_n 扫描面同步
+# data_txt 使 8 条委托名同走界内可解码校验）
 data_txt = src  # data.rs（上文已读）
 game_src = open("src/game.rs", encoding="utf-8").read()
 npc_src = open("src/npc.rs", encoding="utf-8").read()
@@ -329,10 +348,10 @@ guide_src = open("src/guide.rs", encoding="utf-8").read()
 _field_ns = [int(x) for x in re.findall(r"\b(?:intro_n|open_n|reward_note_n|couplet_n|desc_n|name_n|alias_n|body_n|gain_n|num_n): (\d+)", data_txt + game_src)]
 _field_ns += [int(x) for x in re.findall(r"\btext_n: (\d+)", guide_src + data_txt + npc_src)]
 _field_ns += [int(x) for x in re.findall(r"\bmech_n: (\d+)", data_txt)]
-_field_ns += [int(x) for x in re.findall(r"\btitle_n: (\d+)", npc_src)]
+_field_ns += [int(x) for x in re.findall(r"\btitle_n: (\d+)", npc_src + data_txt)]
 _lore_starts = [int(x) for x in re.findall(r"\blore_ns: (\d+)", data_txt)]
-assert len(_field_ns) == 327 + 40 + 5 + 4, \
-    f"字段级 N 总数 {len(_field_ns)} != 376（v1.16.32 单1 第三批口径，见上注）"
+assert len(_field_ns) == 327 + 40 + 5 + 12 + 8, \
+    f"字段级 N 总数 {len(_field_ns)} != 392（v1.16.32 单1 376 + v1.16.40 CommDef title 8 + desc 8，见上注）"
 for _n in _field_ns + _lore_starts:
     assert _n in rows, f"结构体表字段 N={_n} 缺行"
     _v = decode_raw(rows[_n])
@@ -377,7 +396,7 @@ _NIZE_TABLES = (
     ("EV_NOTE_PREWARM_NS", "src/gallery.rs", 24),
     ("RECALL_CHROME_NS", "src/gallery.rs", 3),
     ("GUIDE_PANEL_LINES_NS", "src/draw.rs", 5),
-    ("GUIDE_TABS_NS", "src/draw.rs", 2),
+    ("GUIDE_TABS_NS", "src/draw.rs", 3),  # v1.16.40 长老委托扩第三签「门中差事」（N2727）
     # v1.16.34 单1 β+γ（--nize=arms）：四簇 match 臂 N 表随批扩槽（槽数钉死
     # 防半收编；等价性验收 tools/arms_sweep_check.py git HEAD 逐 slot 全等）
     ("SIM_DEMON_SCENE_NS", "src/game.rs", 4),

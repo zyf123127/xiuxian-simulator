@@ -497,6 +497,25 @@ pub fn draw_banner(g: &Game) {
         );
         draw_rectangle(bx, 236.0, bw, 2.0, Color::new(c.r, c.g, c.b, 0.5 * a));
         draw_rectangle(bx, 320.0, bw, 2.0, Color::new(c.r, c.g, c.b, 0.5 * a));
+        // 剧情演出包⑪ 底带流光扫过：外带 w=60 α=0.05a + 内芯 w=44 α=0.06a 两矩形叠出
+        // 削边光带（中心合成 α≈0.107a，勘察口径 ≈0.10a）。x 沿 k*1.2 sawtooth 左→右扫
+        // 过、扫完回卷（2.4s 内恰回卷一次：k=0.8333 即 t 余 0.4s 时归零重来）；复用既有
+        // k（k=(1−t/2.4) 收敛）与 a 包络，零新状态零分配零新字形（v1.9.25 字号档位纪律
+        // :480-484 与 measure 原样未触碰）。置于描边字层之下不盖字。稳态自证：banner
+        // 为 2.4s 一次性演出自灭（show_banner game.rs:2104 置 2.4 → update 计时归 None
+        // game.rs:2756-2760），本段在 `if let Some(..) = &g.banner` 之内——无 banner 帧
+        // （稳态）不落任何像素，与旧实现逐像素一致；动画期仅底带区域内 +2 矩形，
+        // 描边/正文字仍由后绘覆盖其上。几何/α 常量抽纯函数+常量钉测消费
+        //（v1.16.40 单4 补面照 weather_veil_alpha 先例——见文件尾 banner_sweep_tests）
+        let sx = bx + banner_sweep_phase(k) * (bw - 60.0);
+        draw_rectangle(sx, 236.0, 60.0, 86.0, Color::new(c.r, c.g, c.b, SWEEP_HALO_A * a));
+        draw_rectangle(
+            sx + 8.0,
+            236.0,
+            44.0,
+            86.0,
+            Color::new(c.r, c.g, c.b, SWEEP_CORE_A * a),
+        );
         // 描边底（v1.8.0 R1 修：txt_c 为中心定位，原 `V_W*0.5 - w*0.5` 再被 txt_c 减半宽，
         // w/2 被双重应用——横幅整体左移 w/2，长标题首字被裁出左缘（既有缺陷，A7 收窄后显形）。
         // measure 与实际墨宽一致（shot_007 实测 512 ≈ w=518），直接以屏幕中心为锚）
@@ -572,6 +591,175 @@ pub fn draw_motes(g: &Game) {
             Color::new(0.6, 0.9, 1.0, a)
         };
         draw_circle(s.x, s.y, 2.6, c);
+    }
+}
+
+// 剧情演出包⑫ 天气变动过渡氛围层：advance_time weather_changed 帧置 weather_anim=0.8
+//（game.rs 唯一 weather 写点与触发口同体 self.life），主循环递减，本助手在触发场景
+// 消费——现实页主路径（手点/自动吐纳 act_cultivate → advance_time，game.rs:13320）与
+// 世界图（赶路/远征 spend_year world.rs:92 + 洞府闭关 world.rs:909 act_cultivate）
+// 各 1 行调用，共 1 个助手。
+// 勘察原案 draw_sim 一址经复核判死码弃用：g.sim 天时是入镜快照（game.rs:4089 注，
+// sim_year/sim_year_tail 全文无 roll，launch_sim game.rs:2641 克隆后不再演化），模拟
+// 播放期现实侧推岁又被 tick_auto 场景闸（game.rs:13419 首行 scene!=Reality 即 return）
+// 冻结——触发口与显示口永不重叠，且显示色取的会是冻结快照而非刚变值。
+// 稳态自证：weather_anim==0（会话态默认/旧档载入/0.8s 包络走完）或表值 α=0（晴）时
+// 早退不落任何像素——两场景稳态画面与旧实现逐像素一致；动画期在 bg 之上、面板/云雾
+// 之下叠 1 个矩形（现实页全屏=面板后绘覆盖仅背板缝隙透光；世界图取地图画布区
+// (8,60,1264,480) 与既有 WEATHER_TINT 通道同域），0.8s 自灭归零。tribbing 不设门控：
+// 本层先绘，问笔暗幕等后绘覆层天然盖于其上。
+pub fn draw_weather_veil(g: &Game, x: f32, y: f32, w: f32, h: f32) {
+    let Some(l) = g.life.as_ref() else {
+        return;
+    };
+    let (wr, wg, wb, wa) = crate::data::WEATHER_TINT[l.weather.min(4) as usize];
+    let a = weather_veil_alpha(g.weather_anim, wa);
+    if a <= 0.0 {
+        return; // 照 world.rs:584 既有叠色先例：a>0 才画
+    }
+    draw_rectangle(
+        x,
+        y,
+        w,
+        h,
+        Color::new(wr as f32 / 255.0, wg as f32 / 255.0, wb as f32 / 255.0, a),
+    );
+}
+
+// 剧情演出包⑪ 流光扫过几何/α 常量（cfg(test) 钉测消费，照 weather_veil_alpha
+// 先例）——draw_banner 消费；稳态自证见 draw_banner 内批注（banner 自灭后
+// if-let 外不落像素）。
+/// 流光相位：k∈[0,1]（k=(1−t/2.4) spawn 时 0、自灭时 1）→ sawtooth 相位 [0,1)，
+/// 2.4s 内恰回卷一次（k≈0.8333 处归零重来）；流光 x = bx + 相位×(bw−60)。
+#[inline]
+fn banner_sweep_phase(k: f32) -> f32 {
+    (k * 1.2) % 1.0
+}
+
+/// 外带 α 系数（×a 包络；中心与内芯叠加合成 ≈0.107a，勘察口径 ≈0.10a）
+const SWEEP_HALO_A: f32 = 0.05;
+/// 内芯 α 系数（×a 包络）
+const SWEEP_CORE_A: f32 = 0.06;
+
+// 剧情演出包⑫ 包络纯函数（cfg(test) 钉测消费，照 menu_danger_btn_hit 先例）：
+// anim 剩余秒 0.8→0（k=anim/0.8 随时间 1→0），前半程渐显后半程渐隐 env∈[0,1]，
+// 合成 α=WEATHER_TINT 表值/255×env；≤0 表示不画。
+fn weather_veil_alpha(anim: f32, wa: u8) -> f32 {
+    if anim <= 0.0 || wa == 0 {
+        return 0.0;
+    }
+    let k = (anim / 0.8).clamp(0.0, 1.0);
+    let env = if k > 0.5 { (1.0 - k) / 0.5 } else { k / 0.5 };
+    (wa as f32 / 255.0) * env
+}
+
+// 剧情演出包⑫ 包络钉测：稳态归零/表值上限/三角对称/两段单调
+#[cfg(test)]
+mod weather_veil_tests {
+    use super::weather_veil_alpha;
+
+    #[test]
+    fn veil_alpha_steady_peak_symmetry() {
+        // 稳态两臂：无动画 / 表值 α=0（晴）——任一命中即不落像素（稳态逐像素口径）
+        assert_eq!(weather_veil_alpha(0.0, 34), 0.0, "无动画不画（稳态口径）");
+        assert_eq!(weather_veil_alpha(0.8, 0), 0.0, "晴表值 α=0 恒不画");
+        // 峰值恰表值/255（k=0.5 → env=1）：雨 wa=34 铁例
+        let peak = 34.0f32 / 255.0;
+        assert!(
+            (weather_veil_alpha(0.4, 34) - peak).abs() < 1e-6,
+            "k=0.5 峰值应恰表值/255，实得 {}",
+            weather_veil_alpha(0.4, 34)
+        );
+        // 开帧（k=1）env 恰 0——包络两端归零、渐显起步
+        assert_eq!(weather_veil_alpha(0.8, 34), 0.0, "开帧渐显起点应为 0");
+        // 收尾趋零（anim=0.04 → k=0.05 → env=0.1，不到峰值两成）
+        assert!(
+            weather_veil_alpha(0.04, 34) < peak * 0.2,
+            "收尾渐隐应接近归零，实得 {}",
+            weather_veil_alpha(0.04, 34)
+        );
+        // 三角对称：k 与 1−k 同 α（anim 0.16↔0.64、0.28↔0.52）
+        assert!(
+            (weather_veil_alpha(0.16, 34) - weather_veil_alpha(0.64, 34)).abs() < 1e-6,
+            "包络应关于 k=0.5 对称"
+        );
+        assert!(
+            (weather_veil_alpha(0.28, 34) - weather_veil_alpha(0.52, 34)).abs() < 1e-6,
+            "包络应关于 k=0.5 对称"
+        );
+        // 两段单调：渐显段随时间升（0.7→0.6 α 增）、渐隐段随时间降（0.3→0.2 α 减）
+        assert!(weather_veil_alpha(0.7, 34) < weather_veil_alpha(0.6, 34));
+        assert!(weather_veil_alpha(0.3, 34) > weather_veil_alpha(0.2, 34));
+    }
+}
+
+// 剧情演出包⑪ 流光钉测（v1.16.40 单4 补面，照 weather_veil_tests 同款纯函数钉
+// 样式）：相位 sawtooth（端点/值域/首圈单调/恰回卷一次）+ α 常量中心合成≈0.107
+//（勘察口径≈0.10a）。几何/α 为纯常量表达式；稳态（无 banner 帧）零像素由
+// draw_banner 的 if-let 结构保证（横幅 2.4s 自灭，game.rs show_banner/update 口），
+// 本模组钉动画期常量口径。
+#[cfg(test)]
+mod banner_sweep_tests {
+    use super::{banner_sweep_phase, SWEEP_CORE_A, SWEEP_HALO_A};
+
+    // 相位端点与值域：k=0 起扫左缘；k∈[0,1] 全域相位 [0,1)
+    #[test]
+    fn sweep_phase_domain_and_ends() {
+        assert_eq!(banner_sweep_phase(0.0), 0.0, "spawn 相位 0（左缘起扫）");
+        let ks = [0.0f32, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0];
+        for k in ks {
+            let p = banner_sweep_phase(k);
+            assert!(
+                (0.0..1.0).contains(&p),
+                "k={} 相位 {} 越域 [0,1)",
+                k,
+                p
+            );
+        }
+    }
+
+    // 回卷恰一次：60 步采样 k∈[0,1] 相位序列恰一个下降沿；首圈（k≤5/6）严格
+    // 递增（左→右扫）；k=1（自灭帧）相位=0.2（第二圈 20%）
+    #[test]
+    fn sweep_phase_wrap_and_monotonic() {
+        let steps = 60usize;
+        let mut wraps = 0usize;
+        let mut prev = 0.0f32;
+        for idx in 1..=steps {
+            let k = idx as f32 / steps as f32;
+            let p = banner_sweep_phase(k);
+            assert!((0.0..1.0).contains(&p), "k={} 相位越域", k);
+            if p < prev {
+                wraps += 1;
+            } else if k <= 5.0 / 6.0 + 1e-6 {
+                assert!(p > prev, "首圈相位应严格递增：k={} p={} prev={}", k, p, prev);
+            }
+            prev = p;
+        }
+        assert_eq!(wraps, 1, "2.4s 内恰回卷一次，实得 {} 次", wraps);
+        let p1 = banner_sweep_phase(1.0);
+        assert!(
+            (p1 - 0.2).abs() < 1e-4,
+            "k=1 相位应 0.2（回卷后 20%），实得 {}",
+            p1
+        );
+    }
+
+    // α 常量钉：中心合成 1−(1−0.05)(1−0.06)≈0.107（勘察口径 ≈0.10a）
+    #[test]
+    fn sweep_alpha_constants() {
+        assert_eq!(SWEEP_HALO_A, 0.05);
+        assert_eq!(SWEEP_CORE_A, 0.06);
+        let comp = 1.0 - (1.0 - SWEEP_HALO_A) * (1.0 - SWEEP_CORE_A);
+        assert!(
+            (comp - 0.107).abs() < 1e-3,
+            "中心合成 α 应≈0.107，实得 {}",
+            comp
+        );
+        assert!(
+            comp > 0.10 && comp < 0.115,
+            "合成 α 守勘察口径带 (0.10,0.115)"
+        );
     }
 }
 
@@ -807,6 +995,11 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     // 借 life 不可变引用，借用随最后使用自然归还（NLL），后续行动栏 &mut 交互照旧
     let Some(l) = g.life.as_ref() else { return };
     draw_bg(art);
+    // 剧情演出包⑫ 天气过渡氛围层（现实页消费口：手点/自动吐纳 act_cultivate →
+    // advance_time weather_changed 触发）。矩形在 bg 之上、render_top/render_left
+    // 等面板之前——面板后绘覆盖，仅背板缝隙透光，不扰任何 UI 像素；anim<=0 或晴
+    // （表值 α=0）早退不落像素，稳态逐像素不变
+    draw_weather_veil(g, 0.0, 0.0, V_W, V_H);
     draw_sky_life(g);
     draw_motes(g);
     render_top(g, l);
@@ -3223,8 +3416,10 @@ fn guide_tab_label(k: usize) -> &'static str {
 const GUIDE_PANEL_NOTE_N: u16 = 2435;
 // v1.16.33 单1 NIZE 通道：GUIDE_TABS 收编 textpack（2 元素，同值共享
 // N——引用位 evtx(GUIDE_TABS_NS[k] as usize)，访问器/循环由施工方手改）
-const GUIDE_TABS_NS: [u16; 2] = [
-    2521, 2522,
+// v1.16.40 长老委托：扩第三签「门中差事」（N2727 真相源尾段追加，独立 N 非
+// 同值共享），guide_tab 钳制/第三签分支/预热同批扩
+const GUIDE_TABS_NS: [u16; 3] = [
+    2521, 2522, 2727,
 ];
 
 // 章节书全量字形预热（开启面板/切签事件帧一次；九章文案+状态词+奖励行+章间记事
@@ -3283,6 +3478,16 @@ pub fn prewarm_guide_panel(g: &Game) {
     for k in 0..GUIDE_TABS_NS.len() {
         prewarm_text(guide_tab_label(k), &[16]);
     }
+    // v1.16.40 长老委托第三签：委托名/描述/达标句/钮文案随 comm_sel 轮换——开
+    // 面板帧一次灌齐当前委托全字形（comm_current 纯推导只读）；进度串 prog_txt
+    // 组合已由 prewarm_chapter_view 分母 1..=4 全量预热。「进度」为 <24B 原位
+    // 字面量（NIZE 阈值纪律），预热照灌防冷栅格化
+    let ck = g.meta.comm_current();
+    prewarm_text(crate::data::comm_title(ck), &[20]);
+    prewarm_text(crate::data::comm_desc(ck), &[14]);
+    prewarm_text(crate::data::evtx(crate::data::COMM_DONE_N as usize), &[16]);
+    prewarm_text("交差", &[20]);
+    prewarm_text("进度", &[14]);
     prewarm_chapter_view(g);
 }
 
@@ -3369,7 +3574,8 @@ fn draw_guide_panel(g: &mut Game) {
         return;
     }
     // 页签（照 draw_help_panel 语言；guide_tab 会话态 min 钳制，panic=abort 纪律）
-    g.guide_tab = g.guide_tab.min(1);
+    // v1.16.40 长老委托第三签「门中差事」：钳制上沿 1→2（页签循环体逐位不变）
+    g.guide_tab = g.guide_tab.min(2);
     for (i, &n) in GUIDE_TABS_NS.iter().enumerate() {
         let t = evtx(n as usize);
         let x = 170.0 + i as f32 * 200.0;
@@ -3398,6 +3604,10 @@ fn draw_guide_panel(g: &mut Game) {
         14,
         C_DIM,
     );
+    if g.guide_tab == 2 {
+        draw_comm_view(g);
+        return;
+    }
     if g.guide_tab == 1 {
         draw_chapter_view(g);
         return;
@@ -3422,6 +3632,51 @@ fn draw_guide_panel(g: &mut Game) {
         txt(evtx(n as usize), 170.0, 388.0 + i as f32 * 30.0, 14, C_TEXT);
     }
     txt(guide_panel_note(), 170.0, 560.0, 14, C_DIM);
+}
+
+// v1.16.40 长老委托视图（第三签「门中差事」）：当前委托名/描述 + 进度（未达标
+// prog_txt 静态查表——分母 1..=4 组合已由 prewarm_chapter_view 全量预热；达标换
+// 金句 N2744）+「交差」钮（达标才可点，claim 内部再校验照 gift_npc「按钮仅 UI 门」
+// 先例，复命后面板保持开显示轮换后的新委托）。全静态查表零 format!（帧路径零分配
+// 红线）；委托名/描述随轮换变化，字形由 prewarm_guide_panel（开面板帧）与
+// comm_claim（复命帧）双口事件级预热。
+fn draw_comm_view(g: &mut Game) {
+    let ck = g.meta.comm_current();
+    let c = crate::data::COMMISSIONS[ck];
+    txt(guide_tab_label(2), 170.0, 184.0, 16, C_GOLD_D);
+    txt(crate::data::comm_title(ck), 170.0, 214.0, 20, C_GOLD);
+    wrap_draw(
+        crate::data::comm_desc(ck),
+        170.0,
+        262.0,
+        14,
+        900.0,
+        30.0,
+        C_TEXT,
+    );
+    let done = g.meta.comm_prog >= c.target;
+    if done {
+        txt(
+            crate::data::evtx(crate::data::COMM_DONE_N as usize),
+            170.0,
+            320.0, 16,
+            C_GOLD,
+        );
+    } else {
+        txt("进度", 170.0, 320.0, 14, C_DIM);
+        txt(
+            prog_txt(
+                (g.meta.comm_prog as u32).min(c.target as u32),
+                c.target as u32,
+            ),
+            230.0,
+            320.0, 16,
+            C_CYAN,
+        );
+    }
+    if button(170.0, 360.0, 240.0, 54.0, "交差", None, done) {
+        g.comm_claim();
+    }
 }
 
 // v1.16.8 章节书视图：左列章目目录（v1.16.10 起九行，状态词右上）+ 右栏本章引入/目标清单/前情提要。
@@ -3822,6 +4077,8 @@ mod draw_tests {
     fn nize_guide_tables_pinned() {
         assert_eq!(super::guide_tab_label(0), "当前目标");
         assert_eq!(super::guide_tab_label(1), "章节书");
+        // v1.16.40 长老委托第三签（真相源尾段追加 N2727，独立 N 非同值共享）
+        assert_eq!(super::guide_tab_label(2), "门中差事");
         assert_eq!(
             super::guide_panel_line(0),
             "· 闭关修炼长修为，修为圆满可冲击破境，境境登高。"
@@ -3834,7 +4091,8 @@ mod draw_tests {
             super::guide_panel_note(),
             "主界面顶部金框横带常驻显示当前目标（现实界面）。"
         );
-        // 越界 min 钳制（panic=abort 纪律防御臂）
-        assert_eq!(super::guide_tab_label(usize::MAX), super::guide_tab_label(1));
+        // 越界 min 钳制（panic=abort 纪律防御臂）——v1.16.40 扩第三签后末签=2，
+        // 钳制上沿随签数走（断言本意=越界恒等于末签）
+        assert_eq!(super::guide_tab_label(usize::MAX), super::guide_tab_label(2));
     }
 }

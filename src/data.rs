@@ -1798,7 +1798,7 @@ pub const ORIGINS: [OriginDef; 6] = [
 // 轮盘路径纳秒级）；行可读形态与 tools/tables_recheck.py、ledger_recheck.py 的
 // 4 元组解析口径零变（表行仍是 (id,w,mr,good)）；打包无损性由 game.rs
 // events_bitfield_pack_lossless 全表逐行钉测兜底（w>63/mr>7 当场红）。
-pub const N_EVENTS: usize = 362;
+pub const N_EVENTS: usize = 365;
 /// 名/简 textpack 段一条数（v1.16.26 末态；段二自 v1.16.27 扩池起连号追加）
 const EV_SEG1: usize = 291;
 /// 名/简 textpack 段二条数（v1.16.27 末态；段三自 v1.16.28 扩池起连号追加）。
@@ -1892,10 +1892,22 @@ const EV_SEG13: usize = 359;
 /// 吞掉段十五首行、id359..361 名/简读到段十五错行非空串，is_empty 防线抓不住——
 /// 段十五 get 首尾逐字钉为内容级防线照 batch_tables_aligned 先例，由扩池单随批
 /// 补钉）。v1.16.38 单2 先行引入快照常量（字节效应 0，扩池段十五开工前把末段差
-/// 写法钉死）——段十五未开工：len14 末段写法 N_EVENTS−EV_SEG13 暂在位，扩池单
-/// 兑现改差 len14=(EV_SEG14−EV_SEG13) 后本常量即被引用；dead_code 警告按
-/// v1.16.36 EV_SEG12 先例**预期持续到段十五开工**，非本轮缺陷，勿消
+/// 写法钉死）——v1.16.40 单3 扩池段十五已开工：len14 末段写法兑现改差
+/// len14=(EV_SEG14−EV_SEG13)（EVENT_NAMES/EVENT_BRIEF 同批），本常量自此被引用；
+/// EV_SEG15=365 快照常量本批预建，下批扩段十六时 len15 改差 (EV_SEG15−EV_SEG14)、
+/// len16 写 N_EVENTS−EV_SEG15——dead_code 警告按 v1.16.36 EV_SEG12 先例预期
+/// 持续到段十六开工，非本轮缺陷，勿消
 const EV_SEG14: usize = 362;
+
+/// 名/简 textpack 段十五条数界（v1.16.40 单3 末态 365=N_EVENTS 快照；下批扩池开
+/// 段十六时 N_EVENTS 增长，本常量冻结段十五上沿——len15 唯一正确写法=EV_SEG15−
+/// EV_SEG14 段界常量差，勿回写 N_EVENTS−EV_SEG14：N_EVENTS 增长时 len15 会静默
+/// 吞掉段十六首行、id362..364 名/简读到段十六错行非空串，is_empty 防线抓不住——
+/// 段十六 get 首尾逐字钉为内容级防线照 batch_tables_aligned 先例，由扩池单随批
+/// 补钉）。v1.16.40 单3 先行引入快照常量（字节效应 0，扩池段十六开工前把末段差
+/// 写法钉死）——本批 len15 末段写法 N_EVENTS−EV_SEG14 在位；dead_code 警告按
+/// v1.16.36 EV_SEG12 先例**预期持续到段十六开工**，非本轮缺陷，勿消
+const EV_SEG15: usize = 365;
 
 pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (0, 12, 0, true),  // 灵草满坡
@@ -2725,6 +2737,36 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
                         // 模板、徽标走老年臂 gallery 同批登记；题材避 358 灶膛
                         // 煨薯：熏笼是香道器物暖面，灶膛煨薯是灰里煨食面不同
                         // 义；熏/笼池内仅 70/250/354 臂 incidental 引用不撞）
+    // v1.16.40 单3 扩池批 3 条（段十五，N_EVENTS 362→365）：余量 96,921B 落
+    // ≥40KB 带取 3 条全做（勘察四 3 主提名：362 伴随白名单第 35 条/363 双门控
+    // 第 16 条/364 恶缘第 71 条，2 备未启用）；扩池后账本实测复算
+    //（tools/ledger_recheck.py）：总基权 1105→1114（本批 +9=3×w3）；稀有 30 条
+    // 50 权不变 50/1114≈4.49%（v1.16.33 4.485%/v1.16.34 4.46% 先例可容，勘察四
+    // 风险 7 留档）；恶缘 70→71 条 246→249 权；常态池（w>0）mr 分布（330 条）
+    // 0:45/1:63/2:56/3:38/4:40/5:34/6:29/7:25
+    (362, 3, 6, true),  // 芦絮暖枕（伴随白名单 34→35 条 mr6——mr6 伴随 225/293/
+                        // 339 三条后八批未落最陈薄层（339 v1.16.32 后未落），
+                        // mr6 常态池 28→29 条同批摊薄；Comp 立绘照 351/357/359
+                        // 模板；第三副本 tools/ledger_recheck.py 同批；题材避
+                        // 359 移竹当窗（竹≠芦、移栽≠絮枕）/297 重缝冬衣（絮枕
+                        // 非缝衣）/226 霜晨共伞/210 雨檐听铃：芦絮暖枕是滩头
+                        // 芦花采絮缝枕的秋声面，题面「芦」全池 0 卡——简语原
+                        // 拟「霜洲」洲=cmap 外字改「秋声」，缝字 cmap 实证在字
+                        // 与 297 题材面不同义）
+    (363, 3, 2, true),  // 同修暖榻（老年×伴双门控第 16 条，mr2——双门控 mr2 层
+                        // 仅 299 一条（v1.16.28 后十三批未落）并列最薄且最陈；
+                        // 不入白名单，Comp 立绘照 355/358 模板、徽标走老年臂
+                        // gallery 同批登记；题材避 297 重缝冬衣（挪榻共修非缝
+                        // 补）/358 灶膛煨薯（炉边是暖处面非灰里煨食面）/361 熏
+                        // 笼共暖（暖字共用器物不同义）/299 合誊旧稿（同修摊稿
+                        // 非誊合为一卷））
+    (364, 3, 7, false), // 山摇地动（mr7 恶散件 w3——恶缘 70→71 条 246→249 权
+                        // 照 360 模板，mr7 恶 345 后七批未落（mr7 层 5 条全池
+                        // 最薄）、mr7 常态池 24→25 条同批摊薄；题材避 354 器铺
+                        // 走水（火毁）/360 灵仓亏空（账面）/345 井绳朽断（物故
+                        // 小件）/43 沙暴藏窟（mr2 洞窟机遇）：山摇地动是地动
+                        // 毁路灾后面不同义；散件不挂脸；简语原拟「簌簌/纷纷」
+                        // cmap 外字改「梁尘落案」）
 ];
 
 const fn pack_ev(r: (u16, u8, u8, bool)) -> u16 {
@@ -2912,6 +2954,10 @@ pub struct EvTable {
     len13: u16,
     base14: u16,
     len14: u16,
+    // v1.16.40 单3 扩段十五：base15/len15 双段登记（len15 末段差写法 N_EVENTS−
+    // EV_SEG14——EV_SEG15=365 快照预建，下批扩段十六时改差）
+    base15: u16,
+    len15: u16,
 }
 
 impl EvTable {
@@ -2945,6 +2991,8 @@ impl EvTable {
             (self.base13, self.len13),
             // v1.16.38 单2 扩段十四：只加一行 segs（base14/len14），累减循环自动续寻
             (self.base14, self.len14),
+            // v1.16.40 单3 扩段十五：只加一行 segs（base15/len15），累减循环自动续寻
+            (self.base15, self.len15),
         ];
         let mut k = i;
         for seg_k in segs.iter() {
@@ -2975,6 +3023,8 @@ impl EvTable {
             + self.len13 as usize
             // v1.16.38 单2 扩段十四：len() 总长和随段扩一行
             + self.len14 as usize
+            // v1.16.40 单3 扩段十五：len() 总长和随段扩一行
+            + self.len15 as usize
     }
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -3069,8 +3119,14 @@ pub static EVENT_NAMES: EvTable = EvTable {
     len12: (EV_SEG12 - EV_SEG11) as u16,
     base13: TXT_NAME13_BASE as u16,
     len13: (EV_SEG13 - EV_SEG12) as u16,
+    // v1.16.40 单3：len14 由 N_EVENTS−EV_SEG13 改段界常量差 EV_SEG14−EV_SEG13
+    //（EV_SEG14=362 快照常量先行引入——扩池开段十六时 N_EVENTS 增长不再静默
+    // 吞段十四首行，见 EV_SEG14 注）；base15/len15 双段登记照款——len15 取
+    // 段界常量差 N_EVENTS−EV_SEG14（新「末段写法」，下批扩段十六须改差）
     base14: TXT_NAME14_BASE as u16,
-    len14: (N_EVENTS - EV_SEG13) as u16,
+    len14: (EV_SEG14 - EV_SEG13) as u16,
+    base15: TXT_NAME15_BASE as u16,
+    len15: (N_EVENTS - EV_SEG14) as u16,
 };
 
 
@@ -3120,8 +3176,12 @@ pub static EVENT_BRIEF: EvTable = EvTable {
     len12: (EV_SEG12 - EV_SEG11) as u16,
     base13: TXT_BRIEF13_BASE as u16,
     len13: (EV_SEG13 - EV_SEG12) as u16,
+    // v1.16.40 单3：同 EVENT_NAMES len14 注（EV_SEG14 快照差写法兑现）+
+    // base15/len15 双段登记（len15 末段差写法 N_EVENTS−EV_SEG14）
     base14: TXT_BRIEF14_BASE as u16,
-    len14: (N_EVENTS - EV_SEG13) as u16,
+    len14: (EV_SEG14 - EV_SEG13) as u16,
+    base15: TXT_BRIEF15_BASE as u16,
+    len15: (N_EVENTS - EV_SEG14) as u16,
 };
 
 
@@ -3790,6 +3850,126 @@ pub const COMPANION_BOND_FAV: i32 = 25; // 结缘起步好感
 pub const COMPANION_GIFT_FAV: i32 = 5; // 道侣赠礼事件好感
 pub const INHERIT_LEGACY_FAV: i32 = 10; // 遗泽承接好感加成
 
+// ---------------- v1.16.40 长老委托：现实侧轮换小目标层 ----------------
+// 恒有 1 条进行中委托，从本表轮换（轮换序数=累计复命数 comm_done+map_seed 确定性
+// 派生，零 RNG 态）；达标后任务面板「交差」领奖并轮换下一条。奖励刻意不含道韵
+// ——全仓唯一道韵去化点是 buy_upgrade，烙印全满≈1.0 万 vs 里程碑供给 180 万+，
+// 供需已倒挂，发道韵加剧后期「点不动」（勘察二红线）；走贡献（喂洞府/宗门商店）
+// +灵石（喂点数兑换）+模拟点数（喂核心轮回）三层回到既有循环。
+// 文案收编真相源：title_n=名（N2728..2735）/ desc_n=描述（N2736..2743）逐条连号，
+// 页签「门中差事」N2727；达标句 N2744、复命发奖模板 N2745。
+// 【挂点语义一句话写死】「斩除宿敌」进度：现实寻仇胜利（revenge_win）与模拟反杀
+// （sim 侧阵斩宿敌）两挂点均计——宿敌授首语义统一（fame 挂点②同款双臂口径）；
+// 「扩建洞府」= 三设施任一升 1 级均计；「供奉丹火」= 现实坊市购丹（buy_pill），
+// 服丹/模拟侧不计；「破境而上」= 现实破境成功臂（act_break ok 臂），模拟侧破境不计。
+pub const COMM_QUEST: u8 = 0; // 宗门任务（sect_quest 成功）
+pub const COMM_PILL: u8 = 1; // 坊市购丹（buy_pill 成功）
+pub const COMM_EXP: u8 = 2; // 秘境远征战获（push_loot 单口）
+pub const COMM_DONGFU: u8 = 3; // 洞府设施扩建（dongfu_up 成功）
+pub const COMM_NEME: u8 = 4; // 斩杀宿敌（revenge_win + 模拟反杀双挂点）
+pub const COMM_BREAK: u8 = 5; // 现实破境（act_break ok 臂）
+pub const COMM_GIFT: u8 = 6; // 赠礼故人（gift_npc 成功）
+
+#[derive(Clone, Copy)]
+pub struct CommDef {
+    pub title_n: u16,    // 委托名（真相源 N）
+    pub desc_n: u16,     // 委托描述（真相源 N）
+    pub kind: u8,        // 目标类别（上方 COMM_* 常量，挂点一一对应）
+    pub target: u8,      // 目标次数（≥1；进度 prog saturating 封顶）
+    pub rw_contrib: u32, // 复命奖励：宗门贡献（meta.sect_contrib）
+    pub rw_stones: i32,  // 复命奖励：灵石（life.stones；0=不发）
+    pub rw_pts: u8,      // 复命奖励：模拟点数（meta.sim_points）
+}
+
+pub const COMMISSIONS: [CommDef; 8] = [
+    CommDef {
+        title_n: 2728,
+        desc_n: 2736,
+        kind: COMM_QUEST,
+        target: 2,
+        rw_contrib: 30,
+        rw_stones: 400,
+        rw_pts: 1,
+    },
+    CommDef {
+        title_n: 2729,
+        desc_n: 2737,
+        kind: COMM_QUEST,
+        target: 4,
+        rw_contrib: 50,
+        rw_stones: 800,
+        rw_pts: 1,
+    },
+    CommDef {
+        title_n: 2730,
+        desc_n: 2738,
+        kind: COMM_PILL,
+        target: 3,
+        rw_contrib: 20,
+        rw_stones: 600,
+        rw_pts: 1,
+    },
+    CommDef {
+        title_n: 2731,
+        desc_n: 2739,
+        kind: COMM_EXP,
+        target: 1,
+        rw_contrib: 60,
+        rw_stones: 1200,
+        rw_pts: 1,
+    },
+    CommDef {
+        title_n: 2732,
+        desc_n: 2740,
+        kind: COMM_DONGFU,
+        target: 1,
+        rw_contrib: 80,
+        rw_stones: 0,
+        rw_pts: 1,
+    },
+    CommDef {
+        title_n: 2733,
+        desc_n: 2741,
+        kind: COMM_NEME,
+        target: 1,
+        rw_contrib: 0,
+        rw_stones: 2000,
+        rw_pts: 2,
+    },
+    CommDef {
+        title_n: 2734,
+        desc_n: 2742,
+        kind: COMM_BREAK,
+        target: 1,
+        rw_contrib: 0,
+        rw_stones: 1500,
+        rw_pts: 2,
+    },
+    CommDef {
+        title_n: 2735,
+        desc_n: 2743,
+        kind: COMM_GIFT,
+        target: 2,
+        rw_contrib: 40,
+        rw_stones: 800,
+        rw_pts: 1,
+    },
+];
+
+// 长老委托独立文案 N（真相源尾段追加，N 永不变号）：
+pub const COMM_DONE_N: u16 = 2744; // 达标句「差事已成，可去复命」（toast+金行 log 同句）
+pub const COMM_CLAIM_N: u16 = 2745; // 复命发奖模板「复命：贡献+{}，灵石+{}，模拟点数+{}」
+
+// 长老委托文案查表口（真相源 N 直查；越界 min 钳制照 guide_tab_label 先例——
+// panic=abort 纪律）
+pub fn comm_title(i: usize) -> &'static str {
+    evtx(COMMISSIONS[i.min(COMMISSIONS.len() - 1)].title_n as usize)
+}
+
+pub fn comm_desc(i: usize) -> &'static str {
+    evtx(COMMISSIONS[i.min(COMMISSIONS.len() - 1)].desc_n as usize)
+}
+
 // ---------------- v1.16.23 减包刀②：事件臂文案资产化（textpack）----------------
 // build_event 臂内 >=24B 中文常量串由 tools/pack_text.py 收编进 assets/textpack.bin
 // （raw-deflate，与 assets/font.ttf.deflate 同款通路），源码侧为 evtx(N)/* 原文：… */
@@ -4174,8 +4354,9 @@ mod text_tests {
         // v1.16.36 单3 扩池：+ 段十二 3 = 356
         // v1.16.37 单2 扩池：+ 段十三 3 = 359
         // v1.16.38 单2 扩池：+ 段十四 3 = 362
-        assert_eq!(EVENT_NAMES.len(), 362);
-        assert_eq!(EVENT_BRIEF.len(), 362);
+        // v1.16.40 单3 扩池：+ 段十五 3 = 365
+        assert_eq!(EVENT_NAMES.len(), 365);
+        assert_eq!(EVENT_BRIEF.len(), 365);
         assert_eq!(EVENT_NAMES.get(0), Some("灵草满坡"));
         assert_eq!(EVENT_NAMES.get(290), Some("误入猎套"));
         assert_eq!(EVENT_BRIEF.get(0), Some("满坡灵草露水未干，采满一筐"));
@@ -4283,8 +4464,18 @@ mod text_tests {
         assert_eq!(EVENT_BRIEF.get(359), Some("竹影当窗，绿上窗纸"));
         assert_eq!(EVENT_BRIEF.get(361), Some("熏香一笼，暖到天明"));
         // 越界 None（旧 [&str; N].get 同款语义；扩池后界=362）
-        assert_eq!(EVENT_NAMES.get(362), None);
-        assert_eq!(EVENT_BRIEF.get(362), None);
+        // 段十五（v1.16.40 单3 扩池 3 条，TXT_NAME15_BASE=2746/TXT_BRIEF15_BASE=
+        // 2749，手写名/简连号段先于正文收编——v1.16.39 臂表收编至 N2726、
+        // v1.16.40 长老委托文案 N2727..2745 故段十五顺延）：len14 漂移唯一内容
+        // 级防线——首尾逐字钉，len14 写 N_EVENTS−EV_SEG13 静默吞段十五时在此
+        // 必红（EV_SEG14=362 快照兜底）
+        assert_eq!(EVENT_NAMES.get(362), Some("芦絮暖枕"));
+        assert_eq!(EVENT_NAMES.get(364), Some("山摇地动"));
+        assert_eq!(EVENT_BRIEF.get(362), Some("芦絮新枕，枕着秋声"));
+        assert_eq!(EVENT_BRIEF.get(364), Some("山摇地动，梁尘落案"));
+        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=365）
+        assert_eq!(EVENT_NAMES.get(365), None);
+        assert_eq!(EVENT_BRIEF.get(365), None);
         assert_eq!(EVENT_NAMES.get(usize::MAX), None);
     }
 

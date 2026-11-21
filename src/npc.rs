@@ -341,6 +341,7 @@ pub fn gift_npc(g: &mut Game, i: usize) {
         l.stones -= cost;
     }
     add_fav(g, i, NPC_GIFT_FAV);
+    g.comm_bump(crate::data::COMM_GIFT); // v1.16.40 长老委托：赠礼故人 +1
     g.log(
         evf(1587, &[&(NPC_NAMES[i]), &(NPC_GIFT_FAV)])/* 原文：你备下一份厚礼赠予{}，交情更进一分。（好感+{}） */,
         C_GOLD,

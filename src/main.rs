@@ -701,6 +701,12 @@ async fn main() {
         if g.ending_anim > 0.0 {
             g.ending_anim = (g.ending_anim - dt).max(0.0);
         }
+        // 剧情演出包⑫ 天气过渡氛围层计时递减（会话态，draw_weather_veil 三角包络
+        // 消费），照 modal_anim 主循环先例——modal 开启期 update_sim 冻结，触发口
+        //（推岁）在冻结期不会发生，无同帧竞争
+        if g.weather_anim > 0.0 {
+            g.weather_anim = (g.weather_anim - dt).max(0.0);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if debug {
             autopilot(&mut g, frame, &mut shots);
@@ -781,6 +787,27 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
         // 修炼弹层入镜（shot_029：闭关苦修/冲击破境/返回）
         if *shots == 29 {
             g.submenu = Some(crate::menu::Sub::Cult);
+        }
+        // 冒烟专用（GF_DEBUG）：剧情演出包⑪⑫ 演出帧入镜（正式玩法不由此入账，照上方
+        // 道侣/法宝注入先例）——勘察风险3：shots 目检口径新增「banner 流光帧/天气过渡
+        // 帧」两类动画帧，注入使其每轮冒烟可复认。触发帧错开截图帧（%120==90，截图在
+        // %120==30），下次截图恰落动画中期：横幅龄 1.0s（t=1.4→k≈0.42 流光中带、a=1、
+        // pop 收敛完）；weather_anim=1.4−1.0s≈0.4（k=0.5 三角包络峰值 α=表值/255）。
+        // 各只活一个截图窗：横幅 2.4s 自灭于下下张截图前，veil 0.4s 包络余量同此
+        if *shots == 27 && frame % 120 == 90 {
+            // 文本走生产同款格式（game.rs:3492 模式）取 REALMS 表名——横幅文本
+            // 逐字必须已在字库（font_cover_scan 红线），禁写表外词（曾试「筑基境」
+            // 即字库外字「筑」渲染跳字，已纠正）
+            g.show_banner(
+                format!("突破 · {}境", crate::data::REALMS[2].name),
+                crate::game::C_GOLD,
+            );
+        }
+        if *shots == 30 && frame % 120 == 90 {
+            if let Some(l) = g.life.as_mut() {
+                l.weather = 2; // 雨：WEATHER_TINT[2] 表值 α=34，保证非晴可画
+            }
+            g.weather_anim = 1.4; // 冒烟注入超设计上限（正式路径恒 ≤0.8），只为截图对准包络峰
         }
         return;
     }

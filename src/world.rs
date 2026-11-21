@@ -183,6 +183,7 @@ pub fn sect_quest(g: &mut Game) {
         l.stones += stones;
     }
     g.meta.sect_contrib += contrib;
+    g.comm_bump(crate::data::COMM_QUEST); // v1.16.40 长老委托：宗门任务 +1
     // v1.6.0 D：为长老办差，积攒交情
     crate::npc::add_fav(g, crate::npc::NPC_ELDER, ELDER_QUEST_FAV);
     g.log(
@@ -310,6 +311,7 @@ pub fn exp_done(g: &Game) -> bool {
 fn push_loot(g: &mut Game, s: String) {
     if let Some(e) = g.world.exp.as_mut() {
         e.loot.push(s);
+        g.comm_bump(crate::data::COMM_EXP); // v1.16.40 长老委托：远征战获 +1（战获单口，全 loot 臂覆盖）
     }
 }
 
@@ -500,6 +502,7 @@ pub fn dongfu_up(g: &mut Game, i: usize) {
     }
     g.meta.sect_contrib -= contrib;
     g.meta.dongfu[i] = lv + 1;
+    g.comm_bump(crate::data::COMM_DONGFU); // v1.16.40 长老委托：洞府设施扩建 +1
     g.log(
         evf(1600, &[&(DONGFU_FACS[i]), &(lv + 1), &(fmt_int(stones)), &(contrib)])/* 原文：洞府{}扩建至{}级。（灵石-{}，贡献-{}） */,
         C_GOLD,
@@ -585,6 +588,11 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             draw_rectangle(8.0, 60.0, 1264.0, 480.0, Color::from_rgba(wr, wg, wb, wa));
         }
     }
+    // 剧情演出包⑫ 天气过渡氛围层（世界图消费口：赶路/远征 spend_year world.rs:92 与
+    // 洞府闭关本文件 act_cultivate 推岁经 advance_time weather_changed 触发）。矩形取
+    // 地图画布区与上行既有 WEATHER_TINT 通道同域——脉冲=新天气叠色「落定」的回声；
+    // anim<=0 或晴（表值 α=0）早退不落像素，稳态逐像素不变
+    crate::draw::draw_weather_veil(g, 8.0, 60.0, 1264.0, 480.0);
     // v1.5.0 水面波光：河面流光 5 点（map_river_y 取图像系坐标，屏幕 x 需 -8 校正）
     for k in 0..5 {
         let sx = ((g.time * 46.0 + k as f32 * 253.0) % 1264.0) + 8.0;
