@@ -757,6 +757,15 @@ pub fn path_name(p: u8) -> &'static str {
     evtx(PATH_NAME_NS[(p as usize).min(4)] as usize)
 }
 
+// v1.16.40 测试债清偿：灵田岁入共享助手——原「离闭归来静态项」与 advance_time
+// 推岁口两处同式重复提取合并（双写即测试债根源）。丹修（path=PATH_PILL）灵田
+// 岁入 ×1.6：同一载在线/离线口径一致（漏乘则丹修离闭收益少 60%）；v1.16.40
+// 手测自认缺口（game.rs 钩子注释）补自动化，钉测 v11640_hook_tests。
+fn lingtian_year_gain(lv: usize, weather: usize, loc: usize, path: u8) -> i64 {
+    let path_pill = if path == PATH_PILL { 1.6 } else { 1.0 };
+    (LINGTIAN_YIELD[lv.min(3)] as f64 * weather_loc_mult(weather, loc) * path_pill).round() as i64
+}
+
 // v1.16.17 双修共进门控态（dual_cult_gate 单源；按钮置灰文案与执行口共以此判定）
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DualGate {
@@ -2317,12 +2326,8 @@ impl Game {
         let gain = self.cult_gain_per_year();
         let lv = self.meta.dongfu[1].clamp(0, 3) as usize;
         // v1.10.2 复审③：丹修（path=3）灵田岁入 ×1.6——与唯一推岁口 advance_time 的
-        // 静态项同式，同一载在线/离线口径一致（漏乘则丹修离闭收益少 60%）
-        let path_pill = if l.path == PATH_PILL { 1.6 } else { 1.0 };
-        let lingtian = (LINGTIAN_YIELD[lv.min(3)] as f64
-            * weather_loc_mult(l.weather as usize, l.loc)
-            * path_pill)
-        .round() as i64;
+        // 静态项同式；v1.16.40 两处提取共享助手 lingtian_year_gain（测试债清偿）
+        let lingtian = lingtian_year_gain(lv, l.weather as usize, l.loc, l.path);
         let Some((n, qi, stones)) =
             offline_settle_calc(self.meta.last_ts, now, gain, lingtian)
         else {
@@ -13605,13 +13610,10 @@ impl Game {
             weather_changed = next != l.weather.min(4) as usize;
             l.weather = next as u8;
             // 灵田：按层级产出，收成随天气与所在地起伏
-            // v1.10.2 成行择道：丹修（path=3）灵田岁入 ×1.6（静态乘区，随唯一推岁口）
-            let path_pill = if l.path == PATH_PILL { 1.6 } else { 1.0 };
+            // v1.10.2 成行择道：丹修（path=3）灵田岁入 ×1.6；v1.16.40 提取共享助手
+            // lingtian_year_gain（测试债清偿）
             let lv = self.meta.dongfu[1].clamp(0, 3) as usize;
-            let y = (LINGTIAN_YIELD[lv.min(3)] as f64
-                * weather_loc_mult(l.weather as usize, l.loc)
-                * path_pill)
-            .round() as i64;
+            let y = lingtian_year_gain(lv, l.weather as usize, l.loc, l.path);
             if y > 0 {
                 l.stones += y;
                 lingtian = y;
@@ -24962,5 +24964,79 @@ mod v11639_ledger_tests {
         assert_eq!(g.scene_xx_name(), "结算");
         g.scene = Scene::World;
         assert_eq!(g.scene_xx_name(), "地图");
+    }
+}
+
+// v1.16.40 测试债清偿：game.rs 钩子注释（原 :15577）手测自认两钩子补自动化——
+// 丹修灵田 ×1.6（lingtian_year_gain 提取后直测）与丹修服丹 ×1.35（eat_pill
+// 双路径同基线比值）。两消费点均确定性（无 gen_range），夹具免音频/存档 IO。
+#[cfg(test)]
+mod v11640_hook_tests {
+    use super::*;
+
+    use super::revenge_tests::game_with;
+
+    // 每模组私有夹具（仓内 sim_game 同款惯例）
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // 丹修灵田 ×1.6：晴（WEATHER_LOC_MULT[0] 恒 1.00）下全层级比率恰 1.6，
+    // 另取雨×loc3 非 1.0 乘区组合验公式一致性
+    #[test]
+    fn lingtian_pill_hook_x16() {
+        let bases = [(0usize, 0i64), (1, 300), (2, 1200), (3, 5000)];
+        for (lv, base) in bases {
+            let got = lingtian_year_gain(lv, 0, 0, PATH_SWORD);
+            assert_eq!(got, base, "lv{} 剑修灵田基线（晴恒 1.0 乘区）", lv);
+            let pill = lingtian_year_gain(lv, 0, 0, PATH_PILL);
+            assert_eq!(pill, (base as f64 * 1.6).round() as i64, "lv{} 丹修 ×1.6", lv);
+        }
+        // 丹修 300→480 铁例
+        assert_eq!(lingtian_year_gain(1, 0, 0, PATH_PILL), 480);
+        // 非 1.0 乘区（雨 w=2 / loc=3=1.10）：仍恰按公式 ×1.6
+        let base = LINGTIAN_YIELD[1] as f64 * weather_loc_mult(2, 3);
+        assert_eq!(
+            lingtian_year_gain(1, 2, 3, PATH_PILL),
+            (base * 1.6).round() as i64
+        );
+    }
+
+    // 丹修服丹 ×1.35：聚气丹（id0）修为增益双路径同基线比值恰 1.35（teff 基座
+    // pill_mult=0→max(1.0) 两路一致，唯一差异即 eat_pill 单点 ×1.35）；库存恰减 1
+    #[test]
+    fn eat_pill_pill_hook_x135() {
+        let mut g1 = sim_game(2, 100.0);
+        {
+            let l = g1.life.as_mut().unwrap();
+            l.path = PATH_QI;
+            l.pills[0] = 1;
+        }
+        let before1 = g1.life.as_ref().unwrap().qi;
+        g1.eat_pill(0);
+        let d1 = g1.life.as_ref().unwrap().qi - before1;
+
+        let mut g2 = sim_game(2, 100.0);
+        {
+            let l = g2.life.as_mut().unwrap();
+            l.path = PATH_PILL;
+            l.pills[0] = 1;
+        }
+        let before2 = g2.life.as_ref().unwrap().qi;
+        g2.eat_pill(0);
+        let d2 = g2.life.as_ref().unwrap().qi - before2;
+
+        assert!(d1 > 0.0, "基线增益须为正，实得 {}", d1);
+        assert!(
+            (d2 / d1 - 1.35).abs() < 1e-9,
+            "丹修服丹应恰 ×1.35，实得 {}",
+            d2 / d1
+        );
+        assert_eq!(g2.life.as_ref().unwrap().pills[0], 0, "库存恰减 1");
     }
 }

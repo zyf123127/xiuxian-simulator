@@ -1,6 +1,10 @@
 // 数据表：境界、功法、法宝、丹药、天赋、轮回升级、成就、出身、事件权重
 // 全部数值集中在此，便于平衡调整。
 
+// v1.16.40 f64→f32 留档组盘点判定：不执行，永久关闭——本表/Eff 全系 f64 数据模型
+// 深根（data.rs 57 + game.rs 86 处字段与算链），path_hooks_exact_multipliers 钉
+// 1e-9 容差 f32 必破；重标精度契约需 150+ 处手术，而理论 ~556B 已被 v1.16.39
+// 整数表/臂表实测（+153B）证伪同口径——亚 KB 收益 < 手术风险，判定不动作。
 pub struct RealmDef {
     pub name: &'static str,
     pub layers: &'static [&'static str],
