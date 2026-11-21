@@ -77,7 +77,7 @@ pub const CHAIN_TTL: u8 = 8;
 // mr0 摊薄开局头部先例）——白名单 28→29。Comp 立绘反查照 262/257 模式。
 // 第三处硬编码副本 tools/ledger_recheck.py COMPANION 集合同批同步（漏一处
 // 账本 mr0 无伴口径对不上）
-pub const COMPANION_EVENTS: [u16; 31] = [
+pub const COMPANION_EVENTS: [u16; 32] = [
     53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185, 203, 210, 211, 212,
     225, 226, 240, 241, 257, // v1.16.23 扩池 +1：257 灯市挑灯（mr4 第 3 条）
     262, // v1.16.24 扩池 +1：262 同研一笺（mr1 第 10 条）
@@ -92,6 +92,8 @@ pub const COMPANION_EVENTS: [u16; 31] = [
          // 293 注；第三副本 tools/ledger_recheck.py 同批）
     344, // v1.16.33 单3 扩池 +1：344 同裱旧稿（mr7 有伴第 3 条——mr7/mr5 各 2
          // 条最薄层，mr7 换层摊薄；Comp 立绘照 339 模板；白名单 30→31）
+    351, // v1.16.35 单3 扩池 +1：351 共拓崖铭（mr5 有伴第 3 条——白名单 mr5 仅
+         // 211/283 两条最薄层摊薄；Comp 立绘照 283/344 模板；白名单 31→32）
 ];
 
 // v1.16.7 置链臂 special 槽位段：20..=31（apply_eff 链裁决据此区分「重写链态」
@@ -170,7 +172,9 @@ pub const CHAIN18_SPECIAL_HI: u8 = 72;
 // v1.16.16 链首段 id → 链 id 查表（缘了闩用；与 gallery event_badge「链起」
 // 名单同域注记，双表各依其口——徽标表带匹配臂语义、本表带 id 映射语义）。
 // 新增链须同批登记两处
-pub const CHAIN_FIRSTS: [(usize, u8); 18] = [
+// v1.16.35 单1 刀3：usize→u16 窄化（事件 id 值域 44..=250 容于 u16），读点
+// 显式扩位 as usize（recent_events 收集面）；数值语义零变化（tables2_pins 窄化钉测随批）
+pub const CHAIN_FIRSTS: [(u16, u8); 18] = [
     (44, 1),
     (47, 2),
     (50, 3),
@@ -2933,7 +2937,9 @@ impl Game {
 
                 s.washed += 1;
 
-                logs.push(("服下洗髓丹，灵根+2。".to_string(), C_GOLD));
+                // v1.16.35 单4：丹药日志「{}入腹」成族（sect_buy 四连同族，字节
+                // 中性——服下↔入腹同 6B；叙事候选一，裸字面量无 /* 原文 */ 义务）
+                logs.push(("洗髓丹入腹，灵根+2。".to_string(), C_GOLD));
             }
 
             if s.injured > 0 && s.pills[3] > 0 {
@@ -2943,7 +2949,9 @@ impl Game {
 
                 s.lifespan += 15.0;
 
-                logs.push((evtx(1738)/* 原文：服下培元丹，伤势尽复，寿元+15。 */.to_string(), C_GREEN));
+                // v1.16.35 单4：同上成族（收编行，真相源 N1738 行直改，/* 原文 */
+                // 注释逐字同步——v1.16.33 evf(1595) 漂移先例红线）
+                logs.push((evtx(1738)/* 原文：培元丹入腹，伤势尽复，寿元+15。 */.to_string(), C_GREEN));
             }
 
             if s.pills[0] > 0 && s.qi < need {
@@ -2951,7 +2959,7 @@ impl Game {
 
                 gain_qi(s, need * 0.06 * boost);
 
-                logs.push(("服下聚气丹，修为大进。".to_string(), C_CYAN));
+                logs.push(("聚气丹入腹，修为大进。".to_string(), C_CYAN));
             }
 
             logs
@@ -3718,14 +3726,14 @@ impl Game {
         let tname = theme_of(self.meta.map_region).name();
         if grant {
             let (dy, stones) = REGION_VISIT_REWARD[t];
-            self.meta.dao_yun += dy;
+            self.meta.dao_yun += dy as i64;
             {
                 if let Some(l) = self.life.as_mut() {
-                    l.stones += stones;
+                    l.stones += stones as i64;
                 }
             }
             self.log(
-                evf(1512, &[&(tname), &(fmt_int(dy)), &(fmt_int(stones))])/* 原文：初至【{}】，山河图志录下你的足迹：道韵+{}，灵石+{}。 */,
+                evf(1512, &[&(tname), &(fmt_int(dy as i64)), &(fmt_int(stones as i64))])/* 原文：初至【{}】，山河图志录下你的足迹：道韵+{}，灵石+{}。 */,
                 C_GOLD,
             );
             self.toast(evf(1513, &[&(tname)])/* 原文：初至 {} · 图鉴有赏 */, C_GOLD);
@@ -3849,7 +3857,8 @@ impl Game {
 
             // v1.16.7 道侣同行事件：无伴不入池（白名单门控，与 sect/lingmai 同点）
             // v1.16.23 收窄读点：表元 id u16（v1.16.34 ε 窄化白名单 [usize;31]
-            // →[u16;31] 同型，转换仍在读点完成——id<349 u16 域内精确）
+            // →[u16;31] 同型，转换仍在读点完成——id<349 u16 域内精确；
+            // v1.16.35 单3 扩池 31→32）
             if !comp && COMPANION_EVENTS.contains(&(id as u16)) {
                 ww = 0.0;
             }
@@ -4014,7 +4023,7 @@ impl Game {
             // v1.16.16 链缘了闩：本世已缘了的链，其首段不再入池（CHAIN_FIRSTS
             // 查表 id→链 id，bit 位读 chain_latch；chain6_closed 会话态先例的
             // 全线推广——长寿世同链复走封堵；中段弃链不置位，同世仍可重走）
-            if let Some(&(_, cid)) = CHAIN_FIRSTS.iter().find(|&&(eid, _)| eid == id as usize) {
+            if let Some(&(_, cid)) = CHAIN_FIRSTS.iter().find(|&&(eid, _)| eid == id as u16) {
                 if self.chain_latch >> (cid as u32 - 1) & 1 == 1 {
                     ww = 0.0;
                 }
@@ -10773,6 +10782,54 @@ impl Game {
                 ];
                 card.opts.push(("不追云去".into(), e2));
             }
+            351 => {
+                // v1.16.35 单3 扩池：伴随白名单第 32 条（mr5 有伴第 3 条摊薄——
+                // 白名单 mr5 仅 211 云上放灯/283 纵马霜原两条最薄，照 283/344
+                // Comp 立绘反查模式；无伴不入池门控在 sim_event_weights；题材避
+                // 211 云上放灯/283 纵马霜原/344 同裱旧稿：崖铭同拓是共成一事面）
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = evf(2661, &[&(cn) as &dyn core::fmt::Display])/* 原文：崖上旧铭经年磨浅了。你与{}铺纸同拓，墨匀处两个名字并排显出来——像早约好的一对。 */;
+                let mut e1 = Eff::new();
+                e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
+                e1.dao = 1.0;
+                e1.msg = vec![evf(2662, &[&(cn) as &dyn core::fmt::Display, &(crate::data::COMPANION_GIFT_FAV) as &dyn core::fmt::Display])/* 原文：{}说，铭文缺的从来不是字，是肯一起上山的人。道心+1（好感+{}） */];
+                card.opts.push(("同拓全铭".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(2663)/* 原文：拓完下山，山风把纸边吹得哗哗响——像铭文也在翻自己的页。气运+1 */.to_string(),
+                ];
+                card.opts.push(("留半给山".into(), e2));
+            }
+            352 => {
+                // v1.16.35 单3 扩池：稀有 mr6 w1（稀有 28→29 条 48→49 权——稀有
+                // mr6 仅 213 仙池映世/324 旧卷新墨两条最薄，w1 照 324/341/347 先例；
+                // special 恒 0——76 余窗仅强检定叙事联动才启用，本条纯散件不占；
+                // 题材避 213 池映前世/324 旧卷认字：苔阶履痕是旧路认人面，散件不挂脸）
+                card.text = evtx(2664)/* 原文：石阶缝里的青苔长了许多年。今晨苔上现出一行浅浅履痕——深浅起落，与你少年时留在阶上的脚印分毫不差。 */.to_string();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(2665)/* 原文：你把脚放进去试——一步不差。旧路还在等你，路认得人。道心+2 */.to_string(),
+                ];
+                card.opts.push(("试步认痕".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(2666)/* 原文：你不动苔痕，只在阶边新凿一级——旧痕留给从前，新阶给往后。气运+1 */.to_string(),
+                ];
+                card.opts.push(("添级留旧".into(), e2));
+            }
 
             _ => {}
         }
@@ -15510,7 +15567,7 @@ pub(crate) mod revenge_tests {
         let rv = REGION_VISIT_REWARD[0].1;
         let mut g = game_with(Life::default(), None);
         g.begin_mortal();
-        assert_eq!(g.life.as_ref().unwrap().stones, 100 + rv, "无缘 baseline");
+        assert_eq!(g.life.as_ref().unwrap().stones, 100 + rv as i64, "无缘 baseline");
         g.meta.feng_blv = 2;
         g.begin_mortal();
         assert_eq!(g.life.as_ref().unwrap().stones, 130, "缘二开局基数 ×1.3");
@@ -16895,7 +16952,7 @@ mod chain_event_tests {
         // silently 先例）——弃链后落正常轮盘，掷中任一未排除首段即弹卡即置链
         // 令下方 chain 断言偶发假红；旧硬编码 vec![44,47,50] 漏 112/115..=231
         // 共 14 段，本轮门禁并行 RNG 交错实测触发
-        g.recent_events = CHAIN_FIRSTS.iter().map(|&(eid, _)| eid).collect();
+        g.recent_events = CHAIN_FIRSTS.iter().map(|&(eid, _)| eid as usize).collect();
         g.sim_event(); // 不应抽出链内段（权重 0）
         let card = g.modal.as_ref().unwrap();
         assert_ne!(card.title, "拓印风波·续");
@@ -16938,7 +16995,7 @@ mod chain_event_tests {
         // 13 段在 realm5 池内）即 build_event 建链令 chain 断言偶发红（v1.16.20
         // 扩池 219 入池后命中面增大、门禁轮实测触发）；contains 判定不依赖
         // RECENT_EVENT_K 截断，超 K 长度清单对本测试语义无副作用
-        g.recent_events = CHAIN_FIRSTS.iter().map(|&(eid, _)| eid).collect();
+        g.recent_events = CHAIN_FIRSTS.iter().map(|&(eid, _)| eid as usize).collect();
         g.sim_event();
         assert!(g.chain.is_none(), "预算耗尽弃链");
         assert!(g.modal.is_some(), "弃链后落正常轮盘");
@@ -16978,7 +17035,7 @@ mod chain_event_tests {
         // 排除全部链首段（CHAIN_FIRSTS 表派生，照 chain_ttl_expires_silently
         // 同型门禁修复先例）：弃链后落正常轮盘，掷中任一未排除首段即弹卡即置
         // 链令下方 chain 断言偶发假红（本轮门禁并行 RNG 交错实测触发）
-        g.recent_events = CHAIN_FIRSTS.iter().map(|&(eid, _)| eid).collect();
+        g.recent_events = CHAIN_FIRSTS.iter().map(|&(eid, _)| eid as usize).collect();
         g.sim_event();
         assert!(g.chain.is_none(), "保险丝：next=0 弃链");
         // 弃链后本轮照常退化抽卡（modal 出卡属正常语义，不再断言白抽）
@@ -17376,6 +17433,10 @@ mod chain_event_tests {
             // stage 恒 None——散件+双门控均不进链段/检定窗）
             (349, false, None),
             (350, false, None),
+            // v1.16.35 单3 扩池批 2 条（351 伴随 w3 非稀有；352 稀有 w1 入稀有
+            // 区——散件 special 恒 0 stage 恒 None）
+            (351, false, None),
+            (352, true, None),
         ] {
             g.modal = None;
             g.build_event(id);
@@ -18463,7 +18524,7 @@ mod event_batch_v1169_tests {
         // 先例）——链首弹卡即建链，会污染「此刻链应空」的断言；旧硬编码
         // vec![85,86,44,47,50,76,79,112,115] 漏 118/121/137/140/151/175/205/
         // 219/231 共 9 段，本轮门禁并行 RNG 交错实测触发
-        g.recent_events = CHAIN_FIRSTS.iter().map(|&(eid, _)| eid).collect();
+        g.recent_events = CHAIN_FIRSTS.iter().map(|&(eid, _)| eid as usize).collect();
         g.sim_event(); // 不应抽出链内段 87（权重 0）
         assert_ne!(g.modal.as_ref().unwrap().title, "乘虚夺积·续");
         assert!(g.chain.is_none());
@@ -18793,7 +18854,8 @@ mod event_batch_v1168_tests {
         // v1.16.33 单3 扩池 5（344 同裱旧稿/345 井绳朽断/346 晴日晒药/347 梦续
         // 残句/348 霜橘分甘）→ 349 条
         // v1.16.34 单3 扩池 2（349 结绳记事/350 云隙借光）→ 351 条
-        assert_eq!(EVENTS.len(), 351);
+        // v1.16.35 单3 扩池 2（351 共拓崖铭/352 苔阶履痕）→ 353 条
+        assert_eq!(EVENTS.len(), 353);
     }
 }
 
@@ -19373,19 +19435,23 @@ mod v11615_reward_and_pool_tests {
     // 双门控首条 mr7 与 344 同层互补，Comp 立绘不入白名单）/云隙借光 350 w3
     // mr6（云门 weather==1 第 5 面收官——五天象门控全开，善散件），共 2 条
     // 零新键零资产；总基权 1070→1076（2×w3）
+    // v1.16.35 单3 扩池批 +4：共拓崖铭 351 w3 mr5（伴随白名单第 32 条——
+    // 白名单 mr5 仅 211/283 两条最薄层摊薄，Comp 立绘入白名单）/苔阶履痕
+    // 352 w1 mr6（稀有 28→29 条 48→49 权，散件 special 恒 0），共 2 条零新键
+    // 零资产；总基权 1076→1080（1×w3+1×w1）；稀有占比复算 49/1080≈4.54%
     #[test]
     fn pool_ledger_recheck() {
         let total: i32 = EVENTS.iter().map(|&p| ev_w(p)).sum();
-        assert_eq!(total, 1076, "总基权漂移——照 data.rs v1.16.34 单3 扩池批注重算");
+        assert_eq!(total, 1080, "总基权漂移——照 data.rs v1.16.35 单3 扩池批注重算");
         let rare: Vec<(usize, i32)> = EVENTS
             .iter()
             .filter(|&&p| ev_w(p) > 0 && ev_w(p) <= crate::data::RARE_W)
             .enumerate()
             .map(|(id, &p)| (id, ev_w(p)))
             .collect();
-        assert_eq!(rare.len(), 28, "稀有条数漂移");
+        assert_eq!(rare.len(), 29, "稀有条数漂移");
         let rare_w: i32 = rare.iter().map(|&(_, w)| w).sum();
-        assert_eq!(rare_w, 48, "稀有基权漂移");
+        assert_eq!(rare_w, 49, "稀有基权漂移");
     }
 
     // 链14 全程：175 首段建链待分支 → special53 → 直取 176 → special54 → 直取
@@ -19850,9 +19916,10 @@ mod v11617_pool_tests {
         // v1.16.32 单3 扩池 6 条（338..=343）同批随批注口径 338→344
         // v1.16.33 单3 扩池 5 条（344..=348）同批随批注口径 344→349
         // v1.16.34 单3 扩池 2 条（349..=350）同批随批注口径 349→351
-        assert_eq!(EVENTS.len(), 351);
-        assert_eq!(EVENT_NAMES.len(), 351);
-        assert_eq!(EVENT_BRIEF.len(), 351);
+        // v1.16.35 单3 扩池 2 条（351..=352）同批随批注口径 351→353
+        assert_eq!(EVENTS.len(), 353);
+        assert_eq!(EVENT_NAMES.len(), 353);
+        assert_eq!(EVENT_BRIEF.len(), 353);
         for id in 183..=204usize {
             assert_eq!(EVENTS_ROWS[id].0 as usize, id, "新增段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
@@ -19972,6 +20039,15 @@ mod v11617_pool_tests {
         // 防线；名/简第十段连号 N2647..2648/N2649..2650）
         for id in 349..=350usize {
             assert_eq!(EVENTS_ROWS[id].0 as usize, id, "v1.16.34 段十 id 连续");
+            assert!(!EVENT_NAMES[id].is_empty());
+            assert!(!EVENT_BRIEF[id].is_empty());
+        }
+        // v1.16.35 单3 扩池 2 条段十一批段补钉（照段十款新增勿替换——351..=352
+        // 两条 id==下标连续与名/简非空，批尾 352 封口勿写 ..=353 照 batch14/15
+        // 复审注；段十一首尾逐字钉另在 data.rs ev_tables_section_bounds 内容级
+        // 防线；名/简第十一段连号 N2657..2658/N2659..2660）
+        for id in 351..=352usize {
+            assert_eq!(EVENTS_ROWS[id].0 as usize, id, "v1.16.35 段十一 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
             assert!(!EVENT_BRIEF[id].is_empty());
         }
@@ -20316,7 +20392,7 @@ mod v11620_pool_batch_tests {
         // 同型门禁修复先例）：弃链后落正常轮盘，掷中任一首段即弹卡即置链
         //（弃链不置闩、同世可重走的正当语义），并行 RNG 交错下偶发令下方
         // 断言假红——本轮门禁实测触发
-        g.recent_events = CHAIN_FIRSTS.iter().map(|&(eid, _)| eid).collect();
+        g.recent_events = CHAIN_FIRSTS.iter().map(|&(eid, _)| eid as usize).collect();
         g.sim_event(); // next==0 → 弃链落正常轮盘
         assert!(g.chain.is_none(), "下次 sim_event 弃链");
         assert_eq!(g.chain_latch, 0, "中段断链不置缘了闩——同世仍可重走");
@@ -21161,7 +21237,8 @@ mod v11623_pool_tests {
         // →27（v1.16.28 批 300 入列）→28（v1.16.30 批 321 入列）
         // →29（v1.16.31 批 327 灯下拼卷入列）
         // →30（v1.16.32 单3 批 339 岁暮并账入列）
-        assert_eq!(COMPANION_EVENTS.len(), 31, "伴随白名单 30→31");
+        // →31（v1.16.33 批 344 同裱旧稿入列）→32（v1.16.35 单3 批 351 共拓崖铭入列）
+        assert_eq!(COMPANION_EVENTS.len(), 32, "伴随白名单 31→32");
     }
 }
 
@@ -21745,7 +21822,9 @@ mod v11626_pool_tests {
         assert!(COMPANION_EVENTS.contains(&327u16), "327 应入伴随白名单");
         // 白名单成员：339 入 COMPANION_EVENTS（v1.16.32 单3 批第 30 条）
         assert!(COMPANION_EVENTS.contains(&339u16), "339 应入伴随白名单");
-        assert_eq!(COMPANION_EVENTS.len(), 31, "伴随白名单 30→31");
+        // 白名单成员：351 入 COMPANION_EVENTS（v1.16.35 单3 批第 32 条）
+        assert!(COMPANION_EVENTS.contains(&351u16), "351 应入伴随白名单");
+        assert_eq!(COMPANION_EVENTS.len(), 32, "伴随白名单 31→32");
     }
 
     // v1.16.30 伴随 321 门控收口（照 companion_gate_283 模式）：无伴不入池/
@@ -22038,6 +22117,45 @@ mod v11626_story_tests {
         assert_eq!(evf(1597, &[&"12"]), "信物入手，贡献+12");
     }
 
+    // v1.16.35 单4 第十四批简语画面化 3 条改写即减字（N1363/1202/1342 真相源行
+    // 直改 −18B raw，N 不变号——照 batch13 模式 kw 取词自对应臂原文 verbatim：
+    // 252 手谈输半子（臂 N576 输了半子/N577 能复盘）/91 论道三日注押十万废稿
+    // （臂 N186 论道三日/十万废稿）/231 星槎再泊问路可曾有名（臂 N529 又见星槎）
+    // ——三行改写前无任何简-臂同源钉，本钉随批补上防漂移；267 名册补名 −3B
+    // 候选按复审取舍跳过（节奏促，见当轮 skipped）
+    #[test]
+    fn event_brief_11635_batch14_within_18() {
+        for (id, kw) in [
+            (252usize, "半子"), // N1363「手谈输半子，她请你复盘」
+            (91, "论道"),       // N1202「论道三日，注押十万废稿」
+            (231, "星槎"),      // N1342「星槎再泊，问路可曾有名」
+        ] {
+            let b = &EVENT_BRIEF[id];
+            let n = b.chars().count();
+            assert!(
+                !b.is_empty() && n <= 18,
+                "事件 {} 简越 18 字预算: {} ({}字)",
+                id,
+                b,
+                n
+            );
+            assert!(b.contains(kw), "事件 {} 简画面化改写漂移: {}", id, b);
+        }
+        // 培元丹 N1738 同族化逐字钉（收编行真相源直改，/* 原文 */ 注释已同步）
+        assert_eq!(evf(1738, &[]), "培元丹入腹，伤势尽复，寿元+15。");
+    }
+
+    // v1.16.35 单4 丹药日志「{}入腹」成族钉：叙事候选一/二（洗髓丹/聚气丹裸
+    // 字面量 game.rs apply 区 + 培元丹收编行 N1738）与 sect_buy 四连（world.rs
+    // 240 区 format!）+ 霜橘 N167/灵乳 N1537 同族——族锚「入腹」逐值钉防散腔
+    // 复发（服下/服用旧腔回潮即红；字节中性 29B/33B 不变已核）
+    #[test]
+    fn pill_log_family_11635() {
+        assert!(evtx(167).contains("入腹"), "霜橘 N167 族锚漂移");
+        assert!(evf(1537, &[&"甲"]).contains("入腹"), "灵乳 N1537 族锚漂移");
+        assert_eq!(evf(1738, &[]), "培元丹入腹，伤势尽复，寿元+15。");
+    }
+
     // 直引号统一防复发钉：三张静态文案表（简/名/天气句）禁弯引号 “ ”——
     // v1.16.22 直引号统一 + v1.16.26 引导页补漏后的守卫
     #[test]
@@ -22079,7 +22197,9 @@ mod v11626_story_tests {
         // v1.16.34 单1/单2/单3 随批续延：2600→2656（单1 精度/臂表批 N2601..2646
         // + 单2 行直改 10 行 + 单3 段十名简 N2647..2650 与正文 N2651..2656——
         // 现真相源末行 2656，evtx 越界自兜底空串）
-        for n in 1606usize..=2656 {
+        // v1.16.35 单3/单4 随批续延：2656→2666（单3 段十一名简 N2657..2660 与
+        // 正文 N2661..2666——单3 批漏续延本轮补上；现真相源末行 2666）
+        for n in 1606usize..=2666 {
             let t = crate::data::evtx(n);
             assert!(
                 !t.contains('“') && !t.contains('”'),
@@ -23166,6 +23286,58 @@ mod v11628_pool_tests {
         }
     }
 
+    // v1.16.35 单3 扩池批 2 条段十一良构+门控抽检（照 batch16 模板：白名单
+    // 351 无伴归零/有伴 mr5 入池；稀有 352 无门控 mr6 直入（w1）；卡面 title
+    // 双源/正文非空/两选项/special 恒 0/351 Comp 卡正文钉名（文-脸同源照
+    // named_cards_11634 款）/抉择 apply_eff 全链不 panic；批尾 352 封口勿
+    // ..=353 照 batch14/15 注）
+    #[test]
+    fn batch17_cards_well_formed() {
+        // 门控抽检：351 伴随白名单（mr5）
+        let mut g = sim_game(5, 40.0);
+        g.recent_events.clear();
+        let (ws, _) = g.sim_event_weights(40.0, 5, false, false, false);
+        assert_eq!(ws[351], 0.0, "无伴 351 不入池");
+        g.sim.as_mut().unwrap().companion = Some(COMPANION_NAMES[0].to_string());
+        let (ws, _) = g.sim_event_weights(40.0, 5, false, false, true);
+        assert!(ws[351] > 0.0, "有伴 351 入池");
+        // 门控抽检：352 稀有散件无门控（mr6 直入）
+        let mut g2 = sim_game(6, 40.0);
+        g2.recent_events.clear();
+        let (ws2, _) = g2.sim_event_weights(40.0, 6, false, false, false);
+        assert!(ws2[352] > 0.0, "352 稀有无门控直入池");
+        // 卡面良构（351 以有伴进卡；352 直进）
+        for id in [351usize, 352] {
+            let mut g = sim_game(if id == 351 { 5 } else { 6 }, 40.0);
+            g.meta.chap_done = 0x1FF;
+            if id == 351 {
+                g.sim
+                    .as_mut()
+                    .unwrap()
+                    .companion = Some(COMPANION_NAMES[0].to_string());
+            }
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
+            assert_eq!(card.title, EVENT_NAMES[id], "标题双源 id {}", id);
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两选项", id);
+            if id == 351 {
+                assert!(
+                    card.text.contains(COMPANION_NAMES[0]),
+                    "351 正文须具名道侣（文-脸同源）"
+                );
+            }
+            for (label, e) in &card.opts {
+                assert_eq!(e.special, 0, "事件 {} 选项「{}」special 非零", id, label);
+            }
+            g.choose_option(0); // apply_eff 全链不 panic（sync_save 仅置脏不落盘）
+        }
+    }
+
     // v1.16.34 单2 low 清账：344/348 Comp 卡「正文钉名」文本半边钉（照
     // named_cards_11631 模式——Comp 卡 299/321/322 早有而 327/328/339/342/344/348
     // 按批次惯例均无；本钉补 contains(道侣名)⟺Comp(actor) 双向，与
@@ -23373,10 +23545,11 @@ mod v11628_pool_tests {
     // 白名单 27 收口 + 300 入列（照 companion_gate_283 收口模式）
     // v1.16.30 扩池：白名单 27→28（321 同封新茶入列）——本测转历史收口点续读
     // 现值，断言随批更新；v1.16.31 扩池：白名单 28→29（327 灯下拼卷入列）；
-    // v1.16.32 单3 扩池：白名单 29→30（339 岁暮并账入列）
+    // v1.16.32 单3 扩池：白名单 29→30（339 岁暮并账入列）；
+    // v1.16.35 单3 扩池：白名单 31→32（351 共拓崖铭入列）
     #[test]
     fn companion_whitelist_27() {
-        assert_eq!(COMPANION_EVENTS.len(), 31, "伴随白名单 30→31");
+        assert_eq!(COMPANION_EVENTS.len(), 32, "伴随白名单 31→32");
         assert!(COMPANION_EVENTS.contains(&300u16), "300 应入伴随白名单");
         assert!(COMPANION_EVENTS.contains(&321u16), "321 应入伴随白名单");
         assert!(COMPANION_EVENTS.contains(&339u16), "339 应入伴随白名单");
@@ -23754,5 +23927,49 @@ mod tables2_pins {
     assert_eq!(chain_name(1), "货郎奇缘");
     assert_eq!(chain_name(18), "云窟归卷");
 
+    }
+
+    // v1.16.35 单1 刀3：整数表窄化第二轮数值等价钉测——三表窄化前后逐值全等
+    //（MAP_PATHS usize→u8 / CHAIN_FIRSTS usize→u16 / REGION_VISIT_REWARD i64→i32；
+    // 读点扩位见 data.rs:3028/world.rs:619/menu.rs:196/game.rs:4017 各注）
+    #[test]
+    fn narrow_round2_value_pins() {
+        assert_eq!(
+            MAP_PATHS,
+            [(0u8, 3u8), (0, 1), (1, 2), (1, 4), (4, 5), (2, 5)]
+        );
+        assert_eq!(
+            CHAIN_FIRSTS,
+            [
+                (44u16, 1u8),
+                (47, 2),
+                (50, 3),
+                (76, 4),
+                (79, 5),
+                (85, 6),
+                (112, 7),
+                (115, 8),
+                (118, 9),
+                (121, 10),
+                (137, 11),
+                (140, 12),
+                (151, 13),
+                (175, 14),
+                (205, 15),
+                (219, 16),
+                (231, 17),
+                (250, 18),
+            ]
+        );
+        assert_eq!(
+            REGION_VISIT_REWARD,
+            [
+                (30i32, 2000i32),
+                (60, 5000),
+                (100, 12000),
+                (160, 30000),
+                (260, 80000),
+            ]
+        );
     }
 }

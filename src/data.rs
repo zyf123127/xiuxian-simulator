@@ -1792,7 +1792,7 @@ pub const ORIGINS: [OriginDef; 6] = [
 // 轮盘路径纳秒级）；行可读形态与 tools/tables_recheck.py、ledger_recheck.py 的
 // 4 元组解析口径零变（表行仍是 (id,w,mr,good)）；打包无损性由 game.rs
 // events_bitfield_pack_lossless 全表逐行钉测兜底（w>63/mr>7 当场红）。
-pub const N_EVENTS: usize = 351;
+pub const N_EVENTS: usize = 353;
 /// 名/简 textpack 段一条数（v1.16.26 末态；段二自 v1.16.27 扩池起连号追加）
 const EV_SEG1: usize = 291;
 /// 名/简 textpack 段二条数（v1.16.27 末态；段三自 v1.16.28 扩池起连号追加）。
@@ -1848,6 +1848,14 @@ const EV_SEG8: usize = 344;
 /// 快照常量（字节效应 0，扩池段十开工前把末段差写法钉死）——v1.16.34 单3 段十
 /// 已开工，差写法兑现（len9=(EV_SEG9−EV_SEG8) 在位）
 const EV_SEG9: usize = 349;
+/// 名/简 textpack 段十条数界（v1.16.34 单3 末态 351=N_EVENTS 快照；下批扩池开
+/// 段十一时 N_EVENTS 增长，本常量冻结段十上沿——len10 唯一正确写法=EV_SEG10−EV_SEG9
+/// 段界常量差，勿回写 N_EVENTS−EV_SEG9：N_EVENTS 增长时 len10 会静默吞掉段十一
+/// 首行、id349..350 名/简读到段十一错行非空串，is_empty 防线抓不住——段十一 get
+/// 首尾逐字钉为内容级防线照 batch_tables_aligned 先例）。v1.16.35 单1 先行引入
+/// 快照常量（字节效应 0，扩池段十一开工前把末段差写法钉死）——v1.16.35 单3 段
+/// 十一已开工，差写法兑现（len10=(EV_SEG10−EV_SEG9) 在位）
+const EV_SEG10: usize = 351;
 
 pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (0, 12, 0, true),  // 灵草满坡
@@ -2598,12 +2606,23 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     // v1.16.34 单3 扩池批 2 条（段十，N_EVENTS 349→351）：按单1+单2 减包后余量
     // 19,440B 落 18~20KB 带取 2 条（勘察 A1/A2；A3..A7 备选裁剪序尾向头勿倒）；
     // 扩池后账本实测复算（tools/ledger_recheck.py）：总基权 1070→1076（本批
-    // +6=2×w3）；稀有 28 条 48 权 ≈4.49% 不变；恶缘 68 条 240 权不变；常态池
+    // +6=2×w3）；稀有 28 条 48 权 ≈4.46%（原注 4.49% 系未复算 stale，本轮
+    // low 清账——48/1076=4.46%）；恶缘 68 条 240 权不变；常态池
     // （w>0）mr 分布（316 条）0:44/1:63/2:54/3:37/4:38/5:32/6:26/7:22
     (349, 3, 7, true),  // 结绳记事（老年×伴双门控第 12 条，mr7 补开——双门控
                         // 首条 mr7，Comp 立绘照 344 模板不入白名单）
     (350, 3, 6, true),  // 云隙借光（云门 weather==1 第 5 面收官——五天象门控
                         // 雨/灵潮/雾/晴/云全开，mr6 善散件）
+    // v1.16.35 单3 扩池批 2 条（段十一，N_EVENTS 351→353）：按单1 减包后余量
+    // 27,030B 落 ≥20KB 带取 2 条（勘察 A1/A2；A3..A7 备选裁剪序尾向头勿倒）；
+    // 扩池后账本实测复算（tools/ledger_recheck.py）：总基权 1076→1080（本批
+    // +4=1×w3+1×w1）；稀有 29 条 49 权 ≈4.54%（v1.16.34 批注 4.49% 系未复算
+    // stale——48/1076=4.46%，本批 w1 入池后 49/1080=4.54% 如实记账）；恶缘
+    // 68 条 240 权不变；常态池（w>0）mr 分布（318 条）
+    // 0:44/1:63/2:54/3:37/4:38/5:33/6:27/7:22
+    (351, 3, 5, true),  // 共拓崖铭（伴随白名单第 32 条，mr5 有伴第 3 条——白名单
+                        // mr5 仅 211/283 两条最薄层摊薄，Comp 立绘照 283/344 模板）
+    (352, 1, 6, true),  // 苔阶履痕（稀有 w1：mr6 稀有第 3 条照 213/324 层位，散件 special 恒 0）
 ];
 
 const fn pack_ev(r: (u16, u8, u8, bool)) -> u16 {
@@ -2751,8 +2770,15 @@ pub struct EvTable {
     // 单1 精度/臂表批已用 N2601..2646 故段十顺延）；十面同步扩十段连寻（扩段
     // 只加一行 segs）。len10 取段界常量差 N_EVENTS−EV_SEG9（EV_SEG9=349 快照
     // 常量单1 已引入——新「末段写法」，下批扩池续段十一时须改差，见 EV_SEG9 注）
+    // v1.16.35 单3 扩池起：段十（2 条）满员后新批连号追加为段十一（TXT_NAME11_
+    // BASE/TXT_BRIEF11_BASE=2657/2659 同款登记与产出；段十后下一空 N=2657——
+    // 单2 加载链批未用正文 N 故段十一顺延）；十一面同步扩十一段连寻（扩段
+    // 只加一行 segs）。len11 取段界常量差 N_EVENTS−EV_SEG10（EV_SEG10=351 快照
+    // 常量单1 已引入——新「末段写法」，下批扩池续段十二时须改差，见 EV_SEG10 注）
     base10: u16,
     len10: u16,
+    base11: u16,
+    len11: u16,
 }
 
 impl EvTable {
@@ -2778,6 +2804,8 @@ impl EvTable {
             (self.base9, self.len9),
             // v1.16.34 单3 扩段十：只加一行 segs（base10/len10），累减循环自动续寻
             (self.base10, self.len10),
+            // v1.16.35 单3 扩段十一：只加一行 segs（base11/len11），累减循环自动续寻
+            (self.base11, self.len11),
         ];
         let mut k = i;
         for seg_k in segs.iter() {
@@ -2801,6 +2829,7 @@ impl EvTable {
             + self.len8 as usize
             + self.len9 as usize
             + self.len10 as usize
+            + self.len11 as usize
     }
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -2866,8 +2895,15 @@ pub static EVENT_NAMES: EvTable = EvTable {
     len9: (EV_SEG9 - EV_SEG8) as u16,
     // v1.16.34 单3 扩段十：base10/len10 双段登记——len10 取段界常量差
     // N_EVENTS−EV_SEG9（新「末段写法」，下批扩段十一须改差，照 len9 原注）
+    // v1.16.35 单1：len10 由 N_EVENTS−EV_SEG9 改段界常量差 EV_SEG10−EV_SEG9
+    //（EV_SEG10=351 快照常量先行引入——扩池开段十一时 N_EVENTS 增长不再静默
+    // 吞段十首行，见 EV_SEG10 注）
     base10: TXT_NAME10_BASE as u16,
-    len10: (N_EVENTS - EV_SEG9) as u16,
+    len10: (EV_SEG10 - EV_SEG9) as u16,
+    // v1.16.35 单3 扩段十一：base11/len11 双段登记——len11 取段界常量差
+    // N_EVENTS−EV_SEG10（新「末段写法」，下批扩段十二须改差，照 len10 原注）
+    base11: TXT_NAME11_BASE as u16,
+    len11: (N_EVENTS - EV_SEG10) as u16,
 };
 
 
@@ -2901,8 +2937,12 @@ pub static EVENT_BRIEF: EvTable = EvTable {
     base9: TXT_BRIEF9_BASE as u16,
     len9: (EV_SEG9 - EV_SEG8) as u16,
     // v1.16.34 单3 扩段十：同 EVENT_NAMES base10/len10 注（len10 末段差写法）
+    // v1.16.35 单1：同 EVENT_NAMES len10 注（EV_SEG10 快照常量差写法）
     base10: TXT_BRIEF10_BASE as u16,
-    len10: (N_EVENTS - EV_SEG9) as u16,
+    len10: (EV_SEG10 - EV_SEG9) as u16,
+    // v1.16.35 单3 扩段十一：同 EVENT_NAMES base11/len11 注（len11 末段差写法）
+    base11: TXT_BRIEF11_BASE as u16,
+    len11: (N_EVENTS - EV_SEG10) as u16,
 };
 
 
@@ -3025,7 +3065,9 @@ pub const LOCATIONS: [NodeDef; 6] = [
 ];
 
 // 纯视觉连线；赶路支持任意两地直达
-pub const MAP_PATHS: [(usize, usize); 6] = [(0, 3), (0, 1), (1, 2), (1, 4), (4, 5), (2, 5)];
+// v1.16.35 单1 刀3：usize→u8 窄化（值域 0..=5，LOCATIONS 6 节点索引），
+// 读点 world.rs 显式扩位；数值语义零变化（tables2_pins 窄化钉测随批）
+pub const MAP_PATHS: [(u8, u8); 6] = [(0, 3), (0, 1), (1, 2), (1, 4), (4, 5), (2, 5)];
 
 // 宗门经济：quest_contrib(r)=20+8r → 沁墨28 / 洇章44 / 问笔92 / 天笔132
 pub fn quest_contrib(realm: usize) -> u32 {
@@ -3474,7 +3516,9 @@ pub fn region_mech(region: u32) -> &'static RegionMech {
     &REGION_MECH[(region as usize) % REGION_MECH.len()]
 }
 // 初至奖励表（道韵, 灵石）——visit_region 按 (map_region % 5) 索引
-pub const REGION_VISIT_REWARD: [(i64, i64); 5] = [
+// v1.16.35 单1 刀3：i64→i32 窄化（值域 30..=80000，容于 i32），读点
+// menu.rs/game.rs 显式扩位 as i64；数值语义零变化（tables2_pins 窄化钉测随批）
+pub const REGION_VISIT_REWARD: [(i32, i32); 5] = [
     (30, 2000),
     (60, 5000),
     (100, 12000),
@@ -3659,8 +3703,12 @@ pub static TEXTPACK: &[u8] = include_bytes!("../assets/textpack.bin");
 // v1.16.34 单3 扩池段十：名段十 N2647..=2648（TXT_NAME10_BASE=2647）+ 简
 // 段十 N2649..=2650（TXT_BRIEF10_BASE=2649）真相源手写连号段先于正文 +
 // 两臂正文收编 N2651..=2656（6 站=3 evf+3 evtx；EV_SEG9=349 快照常量差
-// 写法兑现，len9=(EV_SEG9−EV_SEG8)、len10=N_EVENTS−EV_SEG9）；末态 2,657
-// 行、TXT_ANCH 21 锚、TXT_DELTA [u16;2658]；N 追加不变号，段基址稳定）
+// 写法兑现，len9=(EV_SEG9−EV_SEG8)、len10=N_EVENTS−EV_SEG9）；
+// v1.16.35 单3 扩池段十一：名段十一 N2657..=2658（TXT_NAME11_BASE=2657）+
+// 简段十一 N2659..=2660（TXT_BRIEF11_BASE=2659）真相源手写连号段先于正文 +
+// 两臂正文收编 N2661..=2666（6 站=2 evf+4 evtx；EV_SEG10=351 快照常量差
+// 写法兑现，len10=(EV_SEG10−EV_SEG9)、len11=N_EVENTS−EV_SEG10）；末态 2,667
+// 行、TXT_ANCH 21 锚、TXT_DELTA [u16;2668]；N 追加不变号，段基址稳定）
 include!("text_offsets.inc");
 
 static TEXT_BLOB: std::sync::OnceLock<&'static [u8]> = std::sync::OnceLock::new();
@@ -3884,8 +3932,9 @@ mod text_tests {
         // v1.16.32 单3 扩池：+ 段八 6 = 344
         // v1.16.33 单3 扩池：+ 段九 5 = 349
         // v1.16.34 单3 扩池：+ 段十 2 = 351
-        assert_eq!(EVENT_NAMES.len(), 351);
-        assert_eq!(EVENT_BRIEF.len(), 351);
+        // v1.16.35 单3 扩池：+ 段十一 2 = 353
+        assert_eq!(EVENT_NAMES.len(), 353);
+        assert_eq!(EVENT_BRIEF.len(), 353);
         assert_eq!(EVENT_NAMES.get(0), Some("灵草满坡"));
         assert_eq!(EVENT_NAMES.get(290), Some("误入猎套"));
         assert_eq!(EVENT_BRIEF.get(0), Some("满坡灵草露水未干，采满一筐"));
@@ -3960,9 +4009,17 @@ mod text_tests {
         assert_eq!(EVENT_NAMES.get(350), Some("云隙借光"));
         assert_eq!(EVENT_BRIEF.get(349), Some("年深忘事，结绳相记"));
         assert_eq!(EVENT_BRIEF.get(350), Some("云隙漏光，墨迹先干"));
-        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=351）
-        assert_eq!(EVENT_NAMES.get(351), None);
-        assert_eq!(EVENT_BRIEF.get(351), None);
+        // 段十一（v1.16.35 单3 扩池 2 条，TXT_NAME11_BASE=2657/TXT_BRIEF11_BASE=
+        // 2659，手写名/简连号段先于正文收编——单2 加载链批未用正文 N 故段十一
+        // 顺延）：len10 漂移唯一内容级防线——首尾逐字钉，len10 写 N_EVENTS−
+        // EV_SEG9 静默吞段十一时在此必红（EV_SEG10=351 快照兜底）
+        assert_eq!(EVENT_NAMES.get(351), Some("共拓崖铭"));
+        assert_eq!(EVENT_NAMES.get(352), Some("苔阶履痕"));
+        assert_eq!(EVENT_BRIEF.get(351), Some("旧铭磨浅，同拓成幅"));
+        assert_eq!(EVENT_BRIEF.get(352), Some("苔上履痕，与旧年重叠"));
+        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=353）
+        assert_eq!(EVENT_NAMES.get(353), None);
+        assert_eq!(EVENT_BRIEF.get(353), None);
         assert_eq!(EVENT_NAMES.get(usize::MAX), None);
     }
 

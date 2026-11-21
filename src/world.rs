@@ -225,6 +225,10 @@ fn sect_good_ok(g: &Game, i: usize) -> bool {
     }
 }
 
+// v1.16.35 单4 落钉（v1.16.34 复审提请确认项）：下方四连「{}入腹，…」为有意
+// 改写——与霜橘 N167/灵乳 N1537/丹药日志三句（game.rs apply 区，洗髓/聚气裸
+// 字面量+培元丹 N1738 收编行）同族成「服丹服膳」叙事腔，非教程腔残留；
+// game.rs pill_log_family_11635 钉测防漂移
 pub fn sect_buy(g: &mut Game, i: usize) {
     if !sect_good_ok(g, i) {
         return;
@@ -618,11 +622,11 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     // 路径虚线（半透明金，每 18px 留空；v1.6.0 坐标经 node_xy 含主题抖动）
     for (a, b) in MAP_PATHS {
         let (x0, y0) = {
-            let (ax, ay) = node_xy(a, g.meta.map_region);
+            let (ax, ay) = node_xy(a as usize, g.meta.map_region);
             (ax + 8.0, ay + 60.0)
         };
         let (x1, y1) = {
-            let (bx, by) = node_xy(b, g.meta.map_region);
+            let (bx, by) = node_xy(b as usize, g.meta.map_region);
             (bx + 8.0, by + 60.0)
         };
         let (dx, dy) = (x1 - x0, y1 - y0);
@@ -645,13 +649,13 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     {
         let sel = g.world.sel.min(LOCATIONS.len() - 1);
         for (a, b) in MAP_PATHS {
-            if a == sel || b == sel {
+            if a as usize == sel || b as usize == sel {
                 let (x0, y0) = {
-                    let (ax, ay) = node_xy(a, g.meta.map_region);
+                    let (ax, ay) = node_xy(a as usize, g.meta.map_region);
                     (ax + 8.0, ay + 60.0)
                 };
                 let (x1, y1) = {
-                    let (bx, by) = node_xy(b, g.meta.map_region);
+                    let (bx, by) = node_xy(b as usize, g.meta.map_region);
                     (bx + 8.0, by + 60.0)
                 };
                 draw_line(x0, y0, x1, y1, 2.5, Color::new(1.0, 0.85, 0.5, 0.55));

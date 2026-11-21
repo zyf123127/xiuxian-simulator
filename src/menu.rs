@@ -195,7 +195,7 @@ pub fn draw_atlas(g: &mut Game) {
         txt(REGION_MECH[i].desc(), 386.0, y + 34.0, 14, C_TEXT);
         let (dy, st) = REGION_VISIT_REWARD[i % REGION_VISIT_REWARD.len()];
         txt(
-            &evf(1584, &[&(fmt_int(dy)), &(fmt_int(st))])/* 原文：初至：道韵+{} · 灵石+{} */,
+            &evf(1584, &[&(fmt_int(dy as i64)), &(fmt_int(st as i64))])/* 原文：初至：道韵+{} · 灵石+{} */,
             386.0,
             y + 52.0,
             14,

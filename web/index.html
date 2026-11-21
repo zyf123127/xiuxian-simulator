@@ -78,7 +78,7 @@
 </head>
 <body>
     <div id="loading">
-        <div id="ld_msg">凡人模拟 · 加载中…</div>
+        <div id="ld_msg">凡人模拟 · 灵机汇聚…</div>
         <div class="bar"><i></i></div>
         <div style="font-size:12px;color:#b8a8e0;">首次加载约需 10~40 秒，二次进入将快很多</div>
     </div>
@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.16.34";</script>
+    <script>var GAME_VER = "1.16.35";</script>
     <!-- v1.16.10 字体外置：font.ttf.deflate 与 wasm 下载全并行预取（唯一能赢的时序
          ——env 导入回传方案 vs wasm 内 load_file await：后者把字体下载排到实例化
          之后串行，反而更慢）。就绪态存 __xxFont（state 0=下载中 1=就绪 -1=失败），
@@ -104,7 +104,7 @@
                 } catch (e1) {}
                 try {
                     if (!window.wasm_exports) {
-                        if (typeof xx_stage === "function") xx_stage("资源加载失败（字体），点击重试");
+                        if (typeof xx_stage === "function") xx_stage("字体未至，点击重试");
                         var ld = document.getElementById("loading");
                         if (ld) {
                             ld.style.pointerEvents = "auto";
@@ -298,10 +298,19 @@
     <!-- 加载提速④：compileStreaming MIME 兜底。bundle 的 load() 流式分支在
          compileStreaming 拒绝时只 console.error 即死（老 Chromium 强制
          application/wasm MIME，宿主静态服务器配错即黑屏无回退）。这里在该
-         分支外面包一层：失败时从 Response.url 重新 fetch 走 arrayBuffer +
-         compile（与其老内核分支同路径），bundle 本体零改动。仅当内核具备
-         compileStreaming 时才包装（没有则 bundle 本就走 arrayBuffer 分支）；
-         重拉走同一 URL，被下方 fetch 进度包装再次拦截，进度照常显示。 -->
+         分支外面包一层，v1.16.35 起 retry 两态全覆盖：
+         状态一（主收益）——MIME 校验发生在响应头阶段，拒绝时原 Response 的
+         body 通常一字未读，直接 res.arrayBuffer() 复用原 body 走 compile，
+         省一次 ~1MB 全量重下（旧实现无条件 fetch(url) 重拉整包）；
+         状态二——原 body 已被消费/锁定（读出抛错）或拿不到 Response 时，
+         按 URL 全量重拉走旧路径（与 bundle 老内核分支同路）。URL 来源
+         res.url 优先、window.__xxWasmUrl（下方 fetch 进度包装捕获的实请求
+         URL）兜底——tee 路径交付的是构造 Response（new Response(br[1]) 无
+         url），旧实现只读 res.url 在该路径结构性拿不到地址，本态补齐。
+         仅当内核具备 compileStreaming 时才包装（没有则 bundle 本就走
+         arrayBuffer 分支）；重拉走同一 URL，被下方 fetch 进度包装再次拦截，
+         进度照常显示；复用 body 编译失败=字节本身坏，重拉同字节无益，
+         照旧终局报错交看门狗。 -->
     <script>
         (function () {
             try {
@@ -309,10 +318,10 @@
                     typeof WebAssembly.compileStreaming !== "function") return;
                 var _cs = WebAssembly.compileStreaming;
                 WebAssembly.compileStreaming = function (src) {
-                    var retry = function (err) {
+                    var refetch = function (err) {
                         try {
                             return Promise.resolve(src).then(function (res) {
-                                var url = (res && res.url) || "";
+                                var url = (res && res.url) || window.__xxWasmUrl || "";
                                 if (!url) throw err;
                                 return fetch(url).then(function (r2) {
                                     return r2.arrayBuffer();
@@ -320,6 +329,24 @@
                                     return WebAssembly.compile(buf);
                                 });
                             });
+                        } catch (e2) {
+                            return Promise.reject(err);
+                        }
+                    };
+                    var retry = function (err) {
+                        try {
+                            return Promise.resolve(src).then(function (res) {
+                                var reuse = (res && typeof res.arrayBuffer === "function")
+                                    ? res.arrayBuffer() : null;
+                                if (reuse) {
+                                    return reuse.then(function (buf) {
+                                        return WebAssembly.compile(buf);
+                                    }, function (e3) {
+                                        return refetch(err);
+                                    });
+                                }
+                                return refetch(err);
+                            }, function (e4) { throw err; });
                         } catch (e2) {
                             return Promise.reject(err);
                         }
@@ -333,7 +360,7 @@
             } catch (e) { /* 包装失败维持原状：流式可用则用，不可用走旧分支 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.16.34"></script>
+    <script src="mq_js_bundle.js?v=1.16.35"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -531,7 +558,7 @@
                     // 加载提速⑤：启动分段（main.rs st90-93）透出到加载层，消除
                     // 「启动中…」黑箱期。与 Rust 阶段一一对应：exports 挂载→st90
                     // 之间 = init_font+init_art（重头，见 instantiate 钩子的
-                    // 「初始化字体与场景…」）；st90→st92 = Game::new 含读档；
+                    // 「凝神开卷，布置洞府…」）；st90→st92 = Game::new 含读档；
                     // st92→st93 = 收尾；st93 后下一帧即上报场景码 0-6（首帧已
                     // 渲染，加载层由 pollFirstFrame 的场景码判据揭幕）。场景码
                     // 0-6 不改文案（运行期高频上报，加载层此时多已隐藏）。
@@ -540,11 +567,11 @@
                     // 依赖，缺它必有第一帧。加载层转失败文案 + 可点重试（与 wasm
                     // 拉取失败同级；45s 看门狗/D1D2 自动重载仍兜底）。
                     try {
-                        if (code === 90) xx_stage("读取存档，构建世界…");
-                        else if (code === 92) xx_stage("准备就绪…");
-                        else if (code === 93) xx_stage("进入游戏…");
+                        if (code === 90) xx_stage("前尘入卷，山河重展…");
+                        else if (code === 92) xx_stage("万事俱备…");
+                        else if (code === 93) xx_stage("推演开始…");
                         else if (code === 95) {
-                            xx_stage("资源加载失败（字体），点击重试");
+                            xx_stage("字体未至，点击重试");
                             var ld95 = document.getElementById("loading");
                             if (ld95) {
                                 ld95.style.pointerEvents = "auto";
@@ -661,21 +688,22 @@
                     for (var wi = 0; wi < arguments.length; wi++) xxWrapImports(arguments[wi]);
                 } catch (we) {}
                 // v1.14.0 阶段感知：本钩子在 bundle 的 compileStreaming 完成、
-                // instantiate 开始时同步触发——「下载游戏包 N%」在此交棒「编译中…」；
+                // instantiate 开始时同步触发——「摄取仙机 N%」在此交棒「炼化仙机…」；
                 // exports 就绪（bundle 的 main() 初始化前一刻）再交棒「启动中…」，
                 // 终结"下载 10~40 秒全挂编译名头"的口径错位。
-                try { if (typeof xx_stage === "function") xx_stage("编译中…"); } catch (e) {}
+                try { if (typeof xx_stage === "function") xx_stage("炼化仙机…"); } catch (e) {}
                 return _inst.apply(this, arguments).then(function (res) {
                     // 兼容两种就绪形态：规范 WebView 为 {module, instance}；个别内嵌
                     // 环境直接回裸 Instance（res.exports）——统一取 exports，取到即
                     // 画阶段文案并先行挂载（v1.8.2 修复语义在两种形态下都保持）。
                     // 加载提速⑤：此点到 Rust st90 上报之间恰是 init_font+init_art
                     //（~450KB 字体解析 + 640×360 背景降采样生成，真机数秒），
-                    // 旧文案「启动中…」口径含糊，改为如实的「初始化字体与场景…」
+                    // 旧文案「启动中…」口径含糊，改为如实标注 init_font+init_art
+                    // 阶段（v1.16.35 修仙风统一改写：「凝神开卷，布置洞府…」，口径不变）
                     var ex = res && (res.instance ? res.instance.exports : res.exports);
                     if (ex) {
                         window.wasm_exports = ex;
-                        try { if (typeof xx_stage === "function") xx_stage("初始化字体与场景…"); } catch (e) {}
+                        try { if (typeof xx_stage === "function") xx_stage("凝神开卷，布置洞府…"); } catch (e) {}
                     }
                     return res;
                 });
@@ -722,10 +750,11 @@
         var xxLoading = document.getElementById("loading");
         var xxMsg = document.getElementById("ld_msg");
         // v1.14.0 预期管理：r2 双加载页（首载 >1.5s 后带 r2=1 热缓存重进，见下方
-        // pollFirstFrame）秒开，初始文案口径与体验一致；首开页保持中性「加载中…」，
-        // 到 load() 处再分「下载游戏包…」（v1.14.0 下载进度感知）
+        // pollFirstFrame）秒开，初始文案口径与体验一致；首开页保持中性「灵机汇聚，
+        // 推演轮回…」（v1.16.35 修仙风统一改写），到 load() 处再分「摄取仙机…」
+        //（v1.14.0 下载进度感知）
         var XX_R2 = /[?&]r2=1/.test(location.search);
-        var xxStageMsg = XX_R2 ? "缓存热身中，马上就好…" : "加载中…";
+        var xxStageMsg = XX_R2 ? "旧地重游，片刻即至…" : "灵机汇聚，推演轮回…";
         var xxLoadStart = performance.now();
         function xx_paint_stage() {
             if (xxMsg && xxLoading && !xxLoading.classList.contains("hidden")) {
@@ -1117,7 +1146,7 @@
                 }, 500);
             })();
             // v1.14.0 下载进度感知：包装 fetch 拦截 xiuxian.wasm——body.tee() 一支
-            // 计数刷「下载游戏包 N%（x.x/2.1MB）」（~200ms 节流）并把进度条从假动画
+            // 计数刷「摄取仙机 N%（x.x/2.1MB）」（~200ms 节流）并把进度条从假动画
             // 切真宽度，一支原样包回 Response 交给 bundle（compileStreaming 主分支与
             // 老内核 arrayBuffer() 回退分支均按 Response 消费，已核 mq_js_bundle.js
             // load()：`var t=fetch(e)` 调用时解析全局 fetch，包装必被拾取）。
@@ -1134,6 +1163,10 @@
                         url = typeof input === "string" ? input : (input && input.url) || "";
                     } catch (e) {}
                     if (url.indexOf("xiuxian.wasm") < 0) return _fetch.apply(this, arguments);
+                    // v1.16.35 单2：捕获实请求 URL——compileStreaming MIME 兜底
+                    // 状态二的重拉地址源（tee 路径交付的是构造 Response，
+                    // new Response(br[1]) 无 url，res.url 兜不到地址时用它）
+                    try { window.__xxWasmUrl = url; } catch (eU) {}
                     // v1.16.24 加载提速⑤：命中头部预取（__xxWasmP）直接消费防双下载
                     //——Promise 取走即置空；预取失败回退原 _fetch 重拉（行为与无预取
                     // 时一致），tee 进度逻辑与 MIME 兜底重拉路径不变
@@ -1159,7 +1192,7 @@
                                 lastPaint = now;
                                 if (total > 0) {
                                     var pct = Math.min(100, Math.round((done / total) * 100));
-                                    xx_stage("下载游戏包 " + pct + "%（" +
+                                    xx_stage("摄取仙机 " + pct + "%（" +
                                         (done / 1048576).toFixed(1) + "/" +
                                         (total / 1048576).toFixed(1) + "MB）");
                                     if (bar) { // 假动画 → 真宽度（无 content-length 保动画）
@@ -1168,7 +1201,7 @@
                                         bar.style.width = pct + "%";
                                     }
                                 } else {
-                                    xx_stage("已下载 " + (done / 1048576).toFixed(1) + "MB…");
+                                    xx_stage("已纳仙机 " + (done / 1048576).toFixed(1) + "MB…");
                                 }
                             };
                             var pump = function () {
@@ -1178,7 +1211,7 @@
                                         window.__xxDlAt = performance.now();
                                         paint(true);
                                         // 字节尽≠编译尽：末端文案与 instantiate 钩子衔接
-                                        xx_stage("下载完成，编译中…");
+                                        xx_stage("仙机已至，炼化中…");
                                         if (bar && total > 0) bar.style.width = "100%";
                                         return;
                                     }
@@ -1206,7 +1239,7 @@
                     });
                 };
             })();
-            xx_stage(XX_R2 ? "缓存热身中，马上就好…" : "下载游戏包…");
+            xx_stage(XX_R2 ? "旧地重游，片刻即至…" : "摄取仙机…");
             try {
                 load("xiuxian.wasm?v=" + GAME_VER);
             } catch (e) {

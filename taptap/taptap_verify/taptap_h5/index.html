@@ -78,13 +78,13 @@ display: none;
 </head>
 <body>
 <div id="loading">
-<div id="ld_msg">凡人模拟 · 加载中…</div>
+<div id="ld_msg">凡人模拟 · 灵机汇聚…</div>
 <div class="bar"><i></i></div>
 <div style="font-size:12px;color:#b8a8e0;">首次加载约需 10~40 秒，二次进入将快很多</div>
 </div>
 <div id="errlog"></div>
 <canvas id="glcanvas" tabindex='1'></canvas>
-<script>var GAME_VER = "1.16.34";</script>
+<script>var GAME_VER = "1.16.35";</script>
 <script>
 window.__xxFont = { state: 0, bytes: null };
 (function () {
@@ -96,7 +96,7 @@ if (el) el.textContent += "[ERR] 字体资源加载失败（font.ttf.deflate）\
 } catch (e1) {}
 try {
 if (!window.wasm_exports) {
-if (typeof xx_stage === "function") xx_stage("资源加载失败（字体），点击重试");
+if (typeof xx_stage === "function") xx_stage("字体未至，点击重试");
 var ld = document.getElementById("loading");
 if (ld) {
 ld.style.pointerEvents = "auto";
@@ -252,10 +252,10 @@ if (!window.WebAssembly ||
 typeof WebAssembly.compileStreaming !== "function") return;
 var _cs = WebAssembly.compileStreaming;
 WebAssembly.compileStreaming = function (src) {
-var retry = function (err) {
+var refetch = function (err) {
 try {
 return Promise.resolve(src).then(function (res) {
-var url = (res && res.url) || "";
+var url = (res && res.url) || window.__xxWasmUrl || "";
 if (!url) throw err;
 return fetch(url).then(function (r2) {
 return r2.arrayBuffer();
@@ -263,6 +263,24 @@ return r2.arrayBuffer();
 return WebAssembly.compile(buf);
 });
 });
+} catch (e2) {
+return Promise.reject(err);
+}
+};
+var retry = function (err) {
+try {
+return Promise.resolve(src).then(function (res) {
+var reuse = (res && typeof res.arrayBuffer === "function")
+? res.arrayBuffer() : null;
+if (reuse) {
+return reuse.then(function (buf) {
+return WebAssembly.compile(buf);
+}, function (e3) {
+return refetch(err);
+});
+}
+return refetch(err);
+}, function (e4) { throw err; });
 } catch (e2) {
 return Promise.reject(err);
 }
@@ -438,11 +456,11 @@ try { document.title = "PANIC " + msg.slice(0, 60); } catch (e2) {}
 importObject.env.xx_state = function (code) {
 window.__xxState = code | 0;
 try {
-if (code === 90) xx_stage("读取存档，构建世界…");
-else if (code === 92) xx_stage("准备就绪…");
-else if (code === 93) xx_stage("进入游戏…");
+if (code === 90) xx_stage("前尘入卷，山河重展…");
+else if (code === 92) xx_stage("万事俱备…");
+else if (code === 93) xx_stage("推演开始…");
 else if (code === 95) {
-xx_stage("资源加载失败（字体），点击重试");
+xx_stage("字体未至，点击重试");
 var ld95 = document.getElementById("loading");
 if (ld95) {
 ld95.style.pointerEvents = "auto";
@@ -527,12 +545,12 @@ WebAssembly.instantiate = function () {
 try {
 for (var wi = 0; wi < arguments.length; wi++) xxWrapImports(arguments[wi]);
 } catch (we) {}
-try { if (typeof xx_stage === "function") xx_stage("编译中…"); } catch (e) {}
+try { if (typeof xx_stage === "function") xx_stage("炼化仙机…"); } catch (e) {}
 return _inst.apply(this, arguments).then(function (res) {
 var ex = res && (res.instance ? res.instance.exports : res.exports);
 if (ex) {
 window.wasm_exports = ex;
-try { if (typeof xx_stage === "function") xx_stage("初始化字体与场景…"); } catch (e) {}
+try { if (typeof xx_stage === "function") xx_stage("凝神开卷，布置洞府…"); } catch (e) {}
 }
 return res;
 });
@@ -571,7 +589,7 @@ var errlog = document.getElementById("errlog");
 var xxLoading = document.getElementById("loading");
 var xxMsg = document.getElementById("ld_msg");
 var XX_R2 = /[?&]r2=1/.test(location.search);
-var xxStageMsg = XX_R2 ? "缓存热身中，马上就好…" : "加载中…";
+var xxStageMsg = XX_R2 ? "旧地重游，片刻即至…" : "灵机汇聚，推演轮回…";
 var xxLoadStart = performance.now();
 function xx_paint_stage() {
 if (xxMsg && xxLoading && !xxLoading.classList.contains("hidden")) {
@@ -874,6 +892,7 @@ try {
 url = typeof input === "string" ? input : (input && input.url) || "";
 } catch (e) {}
 if (url.indexOf("xiuxian.wasm") < 0) return _fetch.apply(this, arguments);
+try { window.__xxWasmUrl = url; } catch (eU) {}
 var p = window.__xxWasmP;
 window.__xxWasmP = null;
 var args = arguments;
@@ -896,7 +915,7 @@ if (!force && now - lastPaint < 200) return;
 lastPaint = now;
 if (total > 0) {
 var pct = Math.min(100, Math.round((done / total) * 100));
-xx_stage("下载游戏包 " + pct + "%（" +
+xx_stage("摄取仙机 " + pct + "%（" +
 (done / 1048576).toFixed(1) + "/" +
 (total / 1048576).toFixed(1) + "MB）");
 if (bar) { // 假动画 → 真宽度（无 content-length 保动画）
@@ -905,7 +924,7 @@ bar.style.marginLeft = "0";
 bar.style.width = pct + "%";
 }
 } else {
-xx_stage("已下载 " + (done / 1048576).toFixed(1) + "MB…");
+xx_stage("已纳仙机 " + (done / 1048576).toFixed(1) + "MB…");
 }
 };
 var pump = function () {
@@ -914,7 +933,7 @@ if (r.done) {
 window.__xxDlActive = false;
 window.__xxDlAt = performance.now();
 paint(true);
-xx_stage("下载完成，编译中…");
+xx_stage("仙机已至，炼化中…");
 if (bar && total > 0) bar.style.width = "100%";
 return;
 }
@@ -938,7 +957,7 @@ return res;
 });
 };
 })();
-xx_stage(XX_R2 ? "缓存热身中，马上就好…" : "下载游戏包…");
+xx_stage(XX_R2 ? "旧地重游，片刻即至…" : "摄取仙机…");
 try {
 load("xiuxian.wasm?v=" + GAME_VER);
 } catch (e) {

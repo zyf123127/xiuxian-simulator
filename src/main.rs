@@ -239,11 +239,21 @@ async fn main() {
     macroquad::window::request_new_screen_size(1280.0, 720.0);
     // v1.15.0：BGM 随懒加载收货时补开（此处 s 尚为 None，start_bgm 是 no-op）
     g.audio.sfx_on = g.meta.sfx;
+    // v1.16.35 单1 刀1：GF_DEBUG 冒烟截图链桌面专属化——wasm 运行时永不可达
+    //（env 恒 Err）却拖住 get_screen_data→glReadPixels import 与 export_png→
+    // png encoder→flate2/miniz 压缩侧整条死链（基线 wasm 字节搜索实存：
+    // 'shots/shot_' 1 命中、glReadPixels import 1 命中）。cfg 剪除后引用归零
+    // 整链出 wasm；桌面冒烟链（smoke_desktop.py 依赖）原样保留。
+    #[cfg(not(target_arch = "wasm32"))]
     let debug = std::env::var("GF_DEBUG").is_ok();
+    #[cfg(not(target_arch = "wasm32"))]
     if debug {
         let _ = std::fs::create_dir_all("shots");
     }
+    // shots 仅喂 autopilot（主循环内无其他消费点），随链同剪；frame 另被 wasm
+    // 侧 xx_dbg HUD 心跳消费（main.rs alive/frame%8/HUD 行），保持无条件
     let mut frame = 0u32;
+    #[cfg(not(target_arch = "wasm32"))]
     let mut shots = 0u32;
     #[cfg(target_arch = "wasm32")]
     xx_dbg::state(93);
@@ -622,9 +632,12 @@ async fn main() {
         if g.ending_anim > 0.0 {
             g.ending_anim = (g.ending_anim - dt).max(0.0);
         }
+        #[cfg(not(target_arch = "wasm32"))]
         if debug {
             autopilot(&mut g, frame, &mut shots);
         }
+        // 自增无条件：wasm HUD 心跳（alive/frame%8）消费 frame 值；
+        // 赋值表达式语句挂 #[cfg] 属 E0658 实验特性，勿挂
         frame += 1;
         next_frame().await
     }
@@ -632,6 +645,12 @@ async fn main() {
 
 // 自动驾驶：自动玩几个轮回并截图，用于无人冒烟验收
 // v1.16.0：截图门与退出阈值 63→67（新增道途一念扩镜 063/064）
+// v1.16.35 单1 刀1：wasm 剪除——链上 get_screen_data→miniquad read_pixels→
+// glReadPixels import 与 export_png→image::save_buffer→png encoder→flate2
+// ZlibEncoder→miniz_oxide 压缩侧整条为桌面冒烟独占（vendor lib.rs:429 的
+// 第二处 get_screen_data 在 #[cfg(one_screenshot)] 内，feature 未开）；
+// 桌面侧代码零改动，冒烟链照旧。
+#[cfg(not(target_arch = "wasm32"))]
 fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
     if frame % 120 == 30 && *shots < 67 {
         let img = get_screen_data();

@@ -59,9 +59,11 @@ mr0_nocomp = [(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 an
 # ——白名单 29→30（v1.16.32 批漏更，本轮补账），与 game.rs COMPANION_EVENTS 同批同步
 # v1.16.33 伴随 +1：344 同裱旧稿（mr7 有伴第 3 条——mr7/mr5 各 2 条最薄层，
 # 241 首条/300 第 2 条/344 第 3 条）——白名单 30→31，与 game.rs 同批同步
+# v1.16.35 伴随 +1：351 共拓崖铭（mr5 有伴第 3 条——白名单 mr5 仅 211/283
+# 两条最薄层摊薄）——白名单 31→32，与 game.rs COMPANION_EVENTS 同批同步
 COMPANION = {53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185, 203,
              210, 211, 212, 225, 226, 240, 241, 257, 262, 272, 283, 293, 300,
-             321, 327, 339, 344}
+             321, 327, 339, 344, 351}
 mr0_nocomp = sorted([(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 and i not in COMPANION], key=lambda t: -t[1])
 top4_nc = sum(w for _, w in mr0_nocomp[:4])
 tot_nc = sum(w for _, w in mr0_nocomp)

@@ -1,15 +1,23 @@
 # -*- coding: utf-8 -*-
-"""v1.16.34 单1 β+γ 刀等价性验收（只读）：git HEAD 的四簇 match 原臂字面量
-（SIM_DEMON_SCENE/SETTLE_CODA/FINALE_SUB/REALM_TITLE）+ DualGate::ThisYear 单臂
-对照 当前 N 表 + text_source 真相源行 —— 逐 slot 全等校验（special_sweep_gen.py
-v1.16.33 同型扩面）。索引映射随簇钉死：sim_demon=target-11 槽（_ 臂落槽 3）、
-settle_coda=min(14)/5 槽、finale=i 直槽（_ 落槽 3）、realm_title=0..13 直槽
-（_ 落槽 14）。本脚本只读仓库、只打印，不写任何文件。
+"""v1.16.34 单1 β+γ 刀等价性验收（只读）：对照基准 commit BASE_REF=4d7d024
+（v1.16.33）的四簇 match 原臂字面量（SIM_DEMON_SCENE/SETTLE_CODA/FINALE_SUB/
+REALM_TITLE）+ DualGate::ThisYear 单臂 对照 当前 N 表 + text_source 真相源行
+—— 逐 slot 全等校验（special_sweep_gen.py v1.16.33 同型扩面）。
+索引映射随簇钉死：sim_demon=target-11 槽（_ 臂落槽 3）、settle_coda=min(14)/5
+槽、finale=i 直槽（_ 落槽 3）、realm_title=0..13 直槽（_ 落槽 14）。
+本脚本只读仓库、只打印，不写任何文件。
+v1.16.35 复审必修修复：原基准 HEAD 自 v1.16.34 收编起锚串 grep=0（工具永久
+红），钉死 BASE_REF 至原臂所在轮恢复验收语义；四簇 N 表自收编未再变，27/27
+恢复可复现。若未来四簇再收编新臂，更新 BASE_REF 至新原臂所在轮，勿回 HEAD。
 纪律：循环变量带后缀。"""
 import io
 import re
 import subprocess
 import sys
+
+# v1.16.35 复审必修：对照基准 commit（= v1.16.33，四簇原臂字面量所在轮）。
+# v1.16.34 起四簇已收编入 HEAD，HEAD 锚串 grep=0——基准必须钉死该轮。
+BASE_REF = '4d7d024'
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
@@ -42,8 +50,15 @@ def decode_raw(raw):
 
 
 def head_file(path):
-    return subprocess.run(['git', 'show', 'HEAD:' + path], capture_output=True,
-                          encoding='utf-8').stdout
+    # v1.16.35 复审必修修复：基准从 HEAD 钉死到 BASE_REF——v1.16.34（f50750d）
+    # 已把四簇 match 收编为查表，HEAD:src/{game,draw,data}.rs 锚串 grep=0（复审
+    # 实测 HEAD~1/v1.16.33 三锚全=1），本工具自 v1.16.34 提交起在任何新 HEAD 上
+    # 永久红。BASE_REF 钉死 4d7d024=v1.16.33（四簇原臂字面量所在轮）：四簇 N 表
+    # 自收编后未再变（v1.16.35 单1/单3/单4 均未动 arms 域），对照语义恢复
+    # 「原臂字面量 vs 当前 N 表+真相源 逐 slot 全等」。若未来四簇再收编新臂，
+    # 须把 BASE_REF 更新到新原臂所在轮，勿回 HEAD。
+    return subprocess.run(['git', 'show', BASE_REF + ':' + path],
+                          capture_output=True, encoding='utf-8').stdout
 
 
 def brace_span(text, m_open):
@@ -187,4 +202,4 @@ if fail:
     for f in fail:
         print('MISMATCH', f)
     raise SystemExit('等价性校验失败: %d 处' % len(fail))
-print('β+γ 全部通过 —— git HEAD 原臂 ↔ N 表 ↔ 真相源逐 slot 全等')
+print('β+γ 全部通过 —— BASE_REF(4d7d024/v1.16.33) 原臂 ↔ N 表 ↔ 真相源逐 slot 全等')

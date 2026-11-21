@@ -1,10 +1,21 @@
 [package]
 name = "xiuxian"
-version = "1.16.34"
+version = "1.16.35"
 edition = "2021"
 
 [dependencies]
-macroquad = { version = "0.4", features = ["audio"] }
+# v1.16.35 单1 刀2：macroquad audio 桌面专属化。wasm 侧不编 quad-snd：
+# v1.15.2 起 wasm 音频全量停用（main.rs 224 注释、start_async_load 调用点已
+# cfg 出，运行时 s 恒 None），但 quad-snd web 后端仍被四方法活引用拖在 wasm
+# 里（audio_init/audio_play_buffer/audio_source_stop/audio_source_delete 4 个
+# JS import 基线实测在链）。wasm 转 dummy_audio 空实现（vendor/macroquad
+# audio.rs 既有分支，公开 API 面逐一对得上：Sound/PlaySoundParams/
+# play_sound/stop_sound/load_sound_from_bytes(_bounded)），sounds.rs 零改动
+# 照编、wasm 行为零变化；桌面依赖面（features=["audio"]）不变。
+# 注意：[target...] 表头必须放本 [dependencies] 表所有键之后——TOML 表头会
+# 吞掉其后直到下一个表头的全部键（首刀误插 macroquad 与 miniz_oxide 之间，
+# miniz_oxide 被并进桌面段，wasm 编译报 unresolved crate，已修正位置）。
+macroquad = { version = "0.4" }
 
 # v1.16.8 加载小刀③：字体以 raw-deflate 承载（assets/font.ttf.deflate，
 # make_font.py 产出并回环自检），boot 头 ui.rs init_font_from_bytes 内同步 inflate。
@@ -14,6 +25,11 @@ macroquad = { version = "0.4", features = ["audio"] }
 miniz_oxide = { version = "0.9", default-features = false, features = [
     "with-alloc",
 ] }
+
+# 音频 feature 仅桌面：与 [dependencies] 同包名合并特征，桌面 = default ∪ audio
+#（与旧单条目完全等价），wasm32 只见基础表 = 无 audio。
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+macroquad = { version = "0.4", features = ["audio"] }
 
 # v1.16.23 减包验收测试专用（不进 wasm release 产物）；版本与 macroquad 内部
 # 依赖一致，Cargo 解析为同一实例——测试即验证 vendor patch 后的 png→flate2→

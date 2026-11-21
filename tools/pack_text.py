@@ -121,6 +121,12 @@ BRIEF9_BASE_MANIFEST = 2581
 # 用 N2601..2646 故段十顺延 2647/2649——与 data.rs EV_SEG9=349 同批登记）
 NAME10_BASE_MANIFEST = 2647
 BRIEF10_BASE_MANIFEST = 2649
+# v1.16.35 单3 扩池起：段十（2 条）满员后新批连号追加为段十一（2 条：名
+# 2657..=2658/简 2659..=2660，真相源手写连号段先于正文；单1 精度/臂表批已
+# 用 N2601..2646+段十名/简 2647..2650、单2 加载链批未用正文 N 故段十一顺延
+# 2657/2659——与 data.rs EV_SEG10=351 快照常量同批登记）
+NAME11_BASE_MANIFEST = 2657
+BRIEF11_BASE_MANIFEST = 2659
 
 dry = '--dry-run' in sys.argv
 collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测用；表收编后自动幂等）
@@ -932,7 +938,8 @@ def table_bases_from_inc():
                  'TXT_NAME7_BASE', 'TXT_BRIEF7_BASE',
                  'TXT_NAME8_BASE', 'TXT_BRIEF8_BASE',
                  'TXT_NAME9_BASE', 'TXT_BRIEF9_BASE',
-                 'TXT_NAME10_BASE', 'TXT_BRIEF10_BASE')
+                 'TXT_NAME10_BASE', 'TXT_BRIEF10_BASE',
+                 'TXT_NAME11_BASE', 'TXT_BRIEF11_BASE')
                 + BASE_KEYS_TABLES2):
             mm = re.search(r'pub static %s: u32 = (\d+);' % key, txt)
             if mm:
@@ -1505,14 +1512,33 @@ if do_nize:
                                      for r in [nm_rngs['0..=4'], nm_rngs['5..=9'],
                                                nm_fb.group(1)]))
         # --- 簇3：终战副标四臂（draw.rs draw_sim Finale 分支）---
-        if 'const FINALE_SUB_NS' in FTXT.get('draw.rs', ''):
+        # v1.16.35 单5 清账修复：原跳过条件 FTXT.get('draw.rs','') 恒 False——
+        # FTXT 仅预载 game.rs（:815），draw.rs 惰性加载在下方 else 内，跳过查
+        # 永远查不到键 → 已收编态永远进 else → 锚串（v1.16.34 收编时 match 已
+        # 换 FINALE_SUB_NS 查表，grep 'match i {' 0 命中）assert 红，--nize=arms
+        # 显式重跑自收编起必红（幂等跳过语义从未兑现）。改直读文件判跳过。
+        if 'const FINALE_SUB_NS' in (SRC_DIR / 'draw.rs').read_text(encoding='utf-8'):
             nize_report.append('FINALE_SUB_NS: 已换 N 表（幂等跳过）')
         else:
             if 'draw.rs' not in FTXT:
                 FTXT['draw.rs'] = (SRC_DIR / 'draw.rs').read_text(encoding='utf-8')
             nm_dtxt = FTXT['draw.rs']
-            nm_a = re.search(r'match i \{', nm_dtxt)
-            assert nm_a, 'arms 簇3: draw.rs match i 锚缺失'
+            # v1.16.35 单3 low② 清账：锚收窄——旧 re.search(r'match i \{') 全文件
+            # 过宽（draw.rs 多处 match i，首个命中未必是 draw_sim 副标臂，幸运
+            # 命中属运气不属契约）。先定位 draw_sim 函数 span（fn 行到下一同级
+            # fn 行）再在 span 界内 search（pos/endpos 界定，.start() 保全文件
+            # 坐标，下游 nm_a.start() 两处引用零改动）。
+            # v1.16.35 单5 清账注：已收编态锚串随收编消失（v1.16.34 收编把 match
+            # 换成 FINALE_SUB_NS 查表，draw.rs 全文件 grep 'match i {' 实测 0 命中）
+            # ——本块由上方幂等跳过保护不可达；未收编态（回滚重收编）锚在
+            # draw_sim span 内命中，收窄口径在此态下生效。
+            nm_fn = re.search(r'^pub fn draw_sim\(', nm_dtxt, re.M)
+            assert nm_fn, 'arms 簇3: draw.rs draw_sim 函数锚缺失'
+            nm_next = re.search(r'^(?:pub )?fn \w+', nm_dtxt[nm_fn.end():], re.M)
+            nm_span_end = (nm_fn.end() + nm_next.start()) if nm_next else len(nm_dtxt)
+            nm_a = re.compile(r'match i \{').search(
+                nm_dtxt, nm_fn.end(), nm_span_end)
+            assert nm_a, 'arms 簇3: draw_sim span 内 match i 锚缺失'
             nm_b = nm_dtxt.index('{', nm_a.start())
             nm_dep = 0
             nm_k = nm_b
@@ -1989,6 +2015,13 @@ if name_base is not None:
 if brief_base is not None:
     inc += emit_base('TXT_BRIEF10_BASE',
                      inc_bases.get('TXT_BRIEF10_BASE', BRIEF10_BASE_MANIFEST))
+# v1.16.35 单3 段十一基址（同段十款：首轮 emit manifest 手分、此后回读 .inc 幂等）
+if name_base is not None:
+    inc += emit_base('TXT_NAME11_BASE',
+                     inc_bases.get('TXT_NAME11_BASE', NAME11_BASE_MANIFEST))
+if brief_base is not None:
+    inc += emit_base('TXT_BRIEF11_BASE',
+                     inc_bases.get('TXT_BRIEF11_BASE', BRIEF11_BASE_MANIFEST))
 # v1.16.29 刀B 整表基址（首轮 emit 收编 N 段基址；此后每次运行从 .inc 回读重发，
 # 与段一/二/三同款幂等——非 --tables2 运行也不许丢基址，否则 include! 断链）
 for bk2 in BASE_KEYS_TABLES2:
