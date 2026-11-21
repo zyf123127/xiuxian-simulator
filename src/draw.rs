@@ -608,7 +608,7 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
     );
     txt_c("· 轮 回 模 拟 器 ·", V_W * 0.5, 190.0, 28, C_GOLD);
     txt_c(
-        "天道写你的书，写了十万年，写废了十万稿——这一稿，不肯退",
+        evtx(2523)/* 原文：天道写你的书，写了十万年，写废了十万稿——这一稿，不肯退 */,
         V_W * 0.5,
         240.0,
         18,
@@ -694,13 +694,7 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
     }
     let best = REALMS[g.meta.best_realm.min(14)].name;
     txt_c(
-        &format!(
-            "已历 {} 世 · 最高境界 {}境 · 斩杀宿敌 {} · 道韵 {}",
-            g.meta.lives,
-            best,
-            g.meta.neme_slain,
-            fmt_int(g.meta.dao_yun)
-        ),
+        &evf(2524, &[&(g.meta.lives) as &dyn core::fmt::Display, &(best) as &dyn core::fmt::Display, &(g.meta.neme_slain) as &dyn core::fmt::Display, &(fmt_int(g.meta.dao_yun)) as &dyn core::fmt::Display])/* 原文：已历 {} 世 · 最高境界 {}境 · 斩杀宿敌 {} · 道韵 {} */,
         V_W * 0.5,
         676.0,
         16,
@@ -896,7 +890,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         g.play(crate::sounds::Which::Page);
         // v1.16.16 帮助页新增行事件帧预热（照横带/任务钮事件帧预热先例；整页既有
         // 行为首开冷栅格化一次的既定行为，本行随新增先行灌字形防首次展开重传尖峰）
-        prewarm_text("【章节书】任务钮→章节书签：主线九章目标、进度与章间记事。", &[16]);
+        prewarm_text(evtx(1717)/* 原文：【章节书】任务钮→章节书签：主线九章目标、进度与章间记事。 */, &[16]);
     }
     // v1.9.23：返回开始界面（存档已落盘，菜单「承接前缘」可恢复）
     if button(1222.0, 8.0, 58.0, 36.0, "主页", None, true) {
@@ -1128,7 +1122,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         if !auto_on && g.meta.sys_seen & 0b0001 == 0 {
             g.meta.sys_seen |= 0b0001;
             g.log(
-                "周天既开，吐纳自转——从此闭关不必亲守，岁月自替你修行。",
+                evtx(2525)/* 原文：周天既开，吐纳自转——从此闭关不必亲守，岁月自替你修行。 */,
                 C_GOLD,
             );
             g.toast("周天吐纳 · 初启", C_GOLD);
@@ -1326,12 +1320,7 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
         txt("无", 100.0, y - 21.0, 14, C_DIM);
     } else {
         txt(
-            &format!(
-                "已装 {}/{} · 包内 {}",
-                l.equipped.len().min(RELIC_EQUIP_MAX),
-                RELIC_EQUIP_MAX,
-                l.relics.len()
-            ),
+            &evf(2526, &[&(l.equipped.len().min(RELIC_EQUIP_MAX)) as &dyn core::fmt::Display, &(RELIC_EQUIP_MAX) as &dyn core::fmt::Display, &(l.relics.len()) as &dyn core::fmt::Display])/* 原文：已装 {}/{} · 包内 {} */,
             100.0,
             y - 21.0,
             14,
@@ -1355,10 +1344,7 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
             // v1.9.25 宿敌追缉：静态行改动态警示——宿敌随推岁成长（advance_time 6%/载），
             // 标注其当前境界提醒玩家趁早动手
             txt(
-                &format!(
-                    "宿敌亦在修行，寻仇宜早（已{}境）！",
-                    REALMS[n.realm.min(14)].name
-                ),
+                &evf(2527, &[&(REALMS[n.realm.min(14)].name) as &dyn core::fmt::Display])/* 原文：宿敌亦在修行，寻仇宜早（已{}境）！ */,
                 36.0,
                 ny + 32.0, 14,
                 C_RED,
@@ -1374,7 +1360,7 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
     txt_c("轮 回 镜 · 天 机 演 演", V_W * 0.5, 70.0, 28, C_GOLD);
     let max = 1 + g.meta.upg[5].min(1) as usize;
     txt_c(
-        &format!("天赍 {} 选 {}——仅此一梦生效", g.draft.len(), max),
+        &evf(2528, &[&(g.draft.len()) as &dyn core::fmt::Display, &(max) as &dyn core::fmt::Display])/* 原文：天赍 {} 选 {}——仅此一梦生效 */,
         V_W * 0.5,
         108.0, 16,
         C_DIM,
@@ -1398,7 +1384,7 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
     // v1.12.0 留行批注：随身批注提示（开卷浮现后清空；置于落笔按钮下方空白带，避开卡片区）
     if let Some(note) = &g.meta.note_line {
         txt_c(
-            &format!("朱批随身：「{}」——开卷自现，本稿气运+2", note),
+            &evf(2529, &[&(note) as &dyn core::fmt::Display])/* 原文：朱批随身：「{}」——开卷自现，本稿气运+2 */,
             V_W * 0.5,
             604.0,
             14,
@@ -1733,7 +1719,7 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
         }
         txt(COMPANION_NAMES[ci], cx + 42.0, cy + 3.0, 16, C_PURPLE);
         let fav = g.sim.as_ref().map_or(0, |x| x.comp_fav);
-        txt(&format!("情谊 {}/100 · 点看立绘", fav), cx + 42.0, cy + 22.0, 14, C_DIM);
+        txt(&evf(2530, &[&(fav) as &dyn core::fmt::Display])/* 原文：情谊 {}/100 · 点看立绘 */, cx + 42.0, cy + 22.0, 14, C_DIM);
         let (mx, my) = crate::cam::mouse();
         if is_mouse_button_pressed(MouseButton::Left)
             && mx >= cx
@@ -2220,11 +2206,7 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     }
     wrap_draw(&sr.cause, 84.0, 146.0, 16, 372.0, 25.0, C_RED);
     txt(
-        &format!(
-            "享年 {} 载（历 {} 年）",
-            fmt_num(sr.age),
-            fmt_num(sr.years as f64)
-        ),
+        &evf(2531, &[&(fmt_num(sr.age)) as &dyn core::fmt::Display, &(fmt_num(sr.years as f64)) as &dyn core::fmt::Display])/* 原文：享年 {} 载（历 {} 年） */,
         84.0,
         240.0,
         16,
@@ -2259,7 +2241,7 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     }
     // v1.12.0 留行批注：大事记点一行带走（下一稿开卷浮现后清空；定稿 §5.2 留行）。
     // 先收成 owned 再进点击循环（sr 为 &g.sim_result 借用，&mut g 须待其终结——照打稿屏 draft.clone() 先例）
-    txt("—— 大事记 · 点一行留作朱批 ——", 84.0, 336.0, 14, C_DIM);
+    txt(evtx(2532)/* 原文：—— 大事记 · 点一行留作朱批 —— */, 84.0, 336.0, 14, C_DIM);
     let note_lines: Vec<String> = sr.highlights.iter().rev().take(7).cloned().collect();
     // v1.16.13 承上：open_story 落点（sr 借用已终结，&mut 照旧；覆层下帧经函数头
     // 早退独占接管，终局页不离场——继承选项/合页钮原位保留）
@@ -2311,14 +2293,14 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     let _n = g.inherit_opts.len();
     let left = g.inherit_max().saturating_sub(g.inherit_picked);
     txt(
-        "退稿前，留一样东西。反正下一稿的你，也不知道你是谁。",
+        evtx(2533)/* 原文：退稿前，留一样东西。反正下一稿的你，也不知道你是谁。 */,
         524.0,
         116.0,
         20,
         C_PURPLE,
     );
     txt(
-        &format!("还可择 {} 项 · 所选将随神魂带回现实", left),
+        &evf(2534, &[&(left) as &dyn core::fmt::Display])/* 原文：还可择 {} 项 · 所选将随神魂带回现实 */,
         524.0,
         142.0,
         14,
@@ -2449,7 +2431,7 @@ pub fn draw_settle(g: &mut Game, art: &Art) {
             .iter()
             .find(|gl| !crate::game::Game::chapter_goal_met(&g.meta, gl.pid))
             .map(|gl| gl.text())
-            .unwrap_or("主线已了——十万稿废纸，终有一册");
+            .unwrap_or(evtx(1799)/* 原文：主线已了——十万稿废纸，终有一册 */);
         txt(goal, 470.0, 524.0, 14, C_TEXT);
         if ch
             .goals
@@ -2547,7 +2529,7 @@ fn draw_shop(g: &mut Game) {
             C_PURPLE,
         );
         txt_r(
-            &format!("当前价 {} 灵石 / 1 点", fmt_int(cost)),
+            &evf(2535, &[&(fmt_int(cost)) as &dyn core::fmt::Display])/* 原文：当前价 {} 灵石 / 1 点 */,
             840.0,
             170.0, 14,
             C_CYAN,
@@ -2567,29 +2549,26 @@ fn draw_shop(g: &mut Game) {
             return;
         }
         txt(
-            "轮回镜以灵石为引——点数推演一世，死后造化归身，可无限轮回。",
+            evtx(2536)/* 原文：轮回镜以灵石为引——点数推演一世，死后造化归身，可无限轮回。 */,
             176.0,
             260.0, 14,
             C_TEXT,
         );
         txt(
-            "兑换价随境界水涨船高；模拟中反杀宿敌亦可白得点数。",
+            evtx(2537)/* 原文：兑换价随境界水涨船高；模拟中反杀宿敌亦可白得点数。 */,
             176.0,
             294.0, 14,
             C_TEXT,
         );
         txt(
-            &format!(
-                "山穷水尽（无点无石无法宝）时，「开始模拟」将引你观看幻境，看完得 {} 点。",
-                crate::data::AD_REWARD
-            ),
+            &evf(2538, &[&(crate::data::AD_REWARD) as &dyn core::fmt::Display])/* 原文：山穷水尽（无点无石无法宝）时，「开始模拟」将引你观看幻境，看完得 {} 点。 */,
             176.0,
             328.0, 14,
             C_TEXT,
         );
         draw_rectangle(176.0, 380.0, 928.0, 1.5, Color::from_rgba(96, 76, 130, 160));
         txt(
-            "点数跨世持久（随轮回烙印存档），身死不清零——攒点推演，方是长生正途。",
+            evtx(2539)/* 原文：点数跨世持久（随轮回烙印存档），身死不清零——攒点推演，方是长生正途。 */,
             176.0,
             398.0,
             14,
@@ -2619,7 +2598,7 @@ fn draw_shop(g: &mut Game) {
             }
         }
         txt(
-            "（成行丹/破境丹/护神丹在突破与问笔时自动生效）",
+            evtx(2540)/* 原文：（成行丹/破境丹/护神丹在突破与问笔时自动生效） */,
             180.0,
             636.0,
             14,
@@ -2627,7 +2606,7 @@ fn draw_shop(g: &mut Game) {
         );
     } else {
         txt(
-            "藏经阁——功法一经习得，现实与模拟通用",
+            evtx(2541)/* 原文：藏经阁——功法一经习得，现实与模拟通用 */,
             180.0,
             124.0, 14,
             C_DIM,
@@ -2711,13 +2690,13 @@ fn draw_ad_overlay(g: &mut Game) {
     // 创意区：按已看次数轮换的假广告
     let creative = crate::data::ad_creative((g.meta.ad_watched.max(0) as usize) % 3);
     txt_c(creative, 640.0, 288.0, 24, C_TEXT);
-    txt_c("—— 山穷水尽？镜灵为你接引一段商途幻境 ——", 640.0, 326.0, 14, C_DIM);
+    txt_c(evtx(2542)/* 原文：—— 山穷水尽？镜灵为你接引一段商途幻境 —— */, 640.0, 326.0, 14, C_DIM);
     // 倒计时条
     let frac = (t / secs).clamp(0.0, 1.0);
     draw_rectangle(440.0, 360.0, 400.0, 14.0, Color::new(0.0, 0.0, 0.0, 0.5));
     draw_rectangle(440.0, 360.0, 400.0 * frac, 14.0, C_CYAN);
     txt_c(
-        &format!("看完可得 {} 枚模拟点数", crate::data::AD_REWARD),
+        &evf(2543, &[&(crate::data::AD_REWARD) as &dyn core::fmt::Display])/* 原文：看完可得 {} 枚模拟点数 */,
         640.0,
         408.0,
         16,
@@ -2808,17 +2787,14 @@ fn draw_bag(g: &mut Game) {
         let refining = g.refine_pending;
         if let Some(t) = refining {
             txt(
-                &format!(
-                    "炼化中：为【{}】选一件法宝作材料（再点「炼化」取消）",
-                    RELICS[t.min(RELICS.len() - 1)].name()
-                ),
+                &evf(2544, &[&(RELICS[t.min(RELICS.len() - 1)].name()) as &dyn core::fmt::Display])/* 原文：炼化中：为【{}】选一件法宝作材料（再点「炼化」取消） */,
                 180.0,
                 158.0,
                 16,
                 C_PURPLE,
             );
         } else {
-            txt("法宝（未装备仍保有 30% 灵性）", 180.0, 158.0, 16, C_DIM);
+            txt(evtx(2545)/* 原文：法宝（未装备仍保有 30% 灵性） */, 180.0, 158.0, 16, C_DIM);
         }
         for (k, rl) in RELICS.iter().enumerate() {
             let y = 190.0 + k as f32 * 54.0;
@@ -2946,14 +2922,9 @@ fn draw_bag(g: &mut Game) {
             txt("尚无法宝，模拟奇遇可寻。", 250.0, 200.0, 14, C_DIM);
         } else {
             txt(
-                &format!(
-                    "已装 {}/{} · 包内 {}（详情与装卸见「法宝」页签）",
-                    g.life
+                &evf(2546, &[&(g.life
                         .as_ref()
-                        .map_or(0, |x| x.equipped.len().min(RELIC_EQUIP_MAX)),
-                    RELIC_EQUIP_MAX,
-                    g.life.as_ref().map_or(0, |x| x.relics.len())
-                ),
+                        .map_or(0, |x| x.equipped.len().min(RELIC_EQUIP_MAX))) as &dyn core::fmt::Display, &(RELIC_EQUIP_MAX) as &dyn core::fmt::Display, &(g.life.as_ref().map_or(0, |x| x.relics.len())) as &dyn core::fmt::Display])/* 原文：已装 {}/{} · 包内 {}（详情与装卸见「法宝」页签） */,
                 250.0,
                 200.0, 14,
                 C_CYAN,
@@ -2969,7 +2940,7 @@ fn draw_bag(g: &mut Game) {
         txt("称号", 180.0, 264.0, 16, C_DIM);
         txt(&format!("『{}』", g.worn_title_of()), 250.0, 264.0, 14, C_GOLD);
         txt(
-            "—— 随身行装一览；丹药服用见「丹药」页签，法宝装卸见「法宝」页签 ——",
+            evtx(2547)/* 原文：—— 随身行装一览；丹药服用见「丹药」页签，法宝装卸见「法宝」页签 —— */,
             180.0,
             320.0,
             14,
@@ -2992,7 +2963,7 @@ fn draw_offline_card(g: &mut Game) {
     draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
     // v1.16.12 免烧寿元：原文「现实人间已悄然流逝 N 载」与 age 不动自相矛盾，改口
     txt(
-        &format!("离闭吐纳 {} 载功行，未曾间断。", r.years),
+        &evf(2548, &[&(r.years) as &dyn core::fmt::Display])/* 原文：离闭吐纳 {} 载功行，未曾间断。 */,
         380.0,
         226.0, 16,
         C_TEXT,
@@ -3001,19 +2972,19 @@ fn draw_offline_card(g: &mut Game) {
     // 每字独立栅格化+首开图集 dirty）——收敛回 16（与 2788 行同档；本卡无预热口，
     // 静态后仍随面板通用字形命中）。行距 28px 容 16px 无溢出（面板内宽 ~520）。
     txt(
-        &format!("闭关吐纳（五折）：修为 +{}", fmt_num(r.qi)),
+        &evf(2549, &[&(fmt_num(r.qi)) as &dyn core::fmt::Display])/* 原文：闭关吐纳（五折）：修为 +{} */,
         380.0,
         260.0, 16,
         C_CYAN,
     );
     txt(
-        &format!("洞府灵田岁入：灵石 +{}", fmt_int(r.stones)),
+        &evf(2550, &[&(fmt_int(r.stones)) as &dyn core::fmt::Display])/* 原文：洞府灵田岁入：灵石 +{} */,
         380.0,
         288.0, 16,
         C_CYAN,
     );
     txt(
-        "收益已入账；修为满不破境，周天吐纳可续——点击收功归于现实。",
+        evtx(2551)/* 原文：收益已入账；修为满不破境，周天吐纳可续——点击收功归于现实。 */,
         380.0,
         320.0, 14,
         C_DIM,
@@ -3021,7 +2992,7 @@ fn draw_offline_card(g: &mut Game) {
     if button(490.0, 420.0, 300.0, 64.0, "收功", Some("归于现实 · 落盘"), true) {
         g.offline_card = None;
         g.play(crate::sounds::Which::Gain);
-        g.log("你收功出关，将离闭所攒尽数归于己身。", C_GOLD);
+        g.log(evtx(2552)/* 原文：你收功出关，将离闭所攒尽数归于己身。 */, C_GOLD);
         g.sync_save();
     }
 }
@@ -3096,20 +3067,14 @@ fn draw_upgrade_panel(g: &mut Game) {
     }
     // 页脚（原头部说明收编：motto 归位 + 轮回总计）
     txt(
-        "道韵：上一稿的你，留给这一稿的批注——稿退人亡，批注仍在。",
+        evtx(2553)/* 原文：道韵：上一稿的你，留给这一稿的批注——稿退人亡，批注仍在。 */,
         230.0,
         592.0,
         14,
         C_DIM,
     );
     txt(
-        &format!(
-            "轮回总计：历世 {} · 模拟 {} 次 · 斩杀宿敌 {} · 最长享年 {} 载",
-            g.meta.lives,
-            g.meta.total_sims,
-            g.meta.neme_slain,
-            fmt_num(g.meta.best_age)
-        ),
+        &evf(2554, &[&(g.meta.lives) as &dyn core::fmt::Display, &(g.meta.total_sims) as &dyn core::fmt::Display, &(g.meta.neme_slain) as &dyn core::fmt::Display, &(fmt_num(g.meta.best_age)) as &dyn core::fmt::Display])/* 原文：轮回总计：历世 {} · 模拟 {} 次 · 斩杀宿敌 {} · 最长享年 {} 载 */,
         230.0,
         614.0,
         14,
@@ -3172,15 +3137,38 @@ fn draw_help_panel(g: &mut Game) {
 // 布局照 draw_help_panel 语言；开启/切签帧字形由 prewarm_chapter_view 事件帧预热。
 // ⚠panel=6 在 Menu 场景是书志页（draw.rs 顶部 dispatch）——两处场景隔离，本面板
 // 只在 Reality 分发（draw_reality match g.panel），会话态 guide_tab 不跨场景共写。
-const GUIDE_PANEL_LINES: [&str; 5] = [
-    "· 闭关修炼长修为，修为圆满可冲击破境，境境登高。",
-    "· 模拟点足额时「开始模拟」，推演新一生得传承与道韵。",
-    "· 灵石可于坊市兑换模拟点，多余法宝可献祭折算。",
-    "· 山河图·洞府经营：扩建设施提升每载修炼收益。",
-    "· 与长老、掌柜、宁清霜、醉道人赠礼交好，增益长久生效。",
+// v1.16.33 单1 NIZE 通道：GUIDE_PANEL_LINES 收编 textpack（5 元素，同值共享
+// N——引用位 evtx(GUIDE_PANEL_LINES_NS[k] as usize)，访问器/循环由施工方手改）
+const GUIDE_PANEL_LINES_NS: [u16; 5] = [
+    2516, 2517, 2518, 2519, 2520,
 ];
-const GUIDE_PANEL_NOTE: &str = "主界面顶部金框横带常驻显示当前目标（现实界面）。";
-const GUIDE_TABS: [&str; 2] = ["当前目标", "章节书"];
+
+/// 指引面板「修行之道」行查表口（v1.16.33 单1 NIZE 通道访问器；越界 min 钳制
+/// ——panic=abort 纪律；evtx 零分配 &'static str，帧路径零分配口径不变）
+#[inline]
+fn guide_panel_line(k: usize) -> &'static str {
+    evtx(GUIDE_PANEL_LINES_NS[k.min(GUIDE_PANEL_LINES_NS.len() - 1)] as usize)
+}
+
+/// 指引面板底注查表口（v1.16.33 单1；同款钳制）
+#[inline]
+fn guide_panel_note() -> &'static str {
+    evtx(GUIDE_PANEL_NOTE_N as usize)
+}
+
+/// 指引面板页签查表口（v1.16.33 单1；同款钳制）
+#[inline]
+fn guide_tab_label(k: usize) -> &'static str {
+    evtx(GUIDE_TABS_NS[k.min(GUIDE_TABS_NS.len() - 1)] as usize)
+}
+// v1.16.33 单1 NIZE 通道：GUIDE_PANEL_NOTE 收编 textpack N=2435（引用位
+// evtx(GUIDE_PANEL_NOTE_N as usize)，访问器/绘制位由施工方手改）
+const GUIDE_PANEL_NOTE_N: u16 = 2435;
+// v1.16.33 单1 NIZE 通道：GUIDE_TABS 收编 textpack（2 元素，同值共享
+// N——引用位 evtx(GUIDE_TABS_NS[k] as usize)，访问器/循环由施工方手改）
+const GUIDE_TABS_NS: [u16; 2] = [
+    2521, 2522,
+];
 
 // 章节书全量字形预热（开启面板/切签事件帧一次；九章文案+状态词+奖励行+章间记事
 // 全段+进度串+前情摘要，动态的只有前情摘要一行 &str 借用，稳态帧零栅格化零分配）。
@@ -3225,18 +3213,18 @@ pub fn prewarm_guide_panel(g: &Game) {
     prewarm_text("道途指引", &[24]);
     prewarm_text("当前目标", &[16]);
     prewarm_text("修行之道", &[16]);
-    for s in GUIDE_PANEL_LINES.iter() {
-        prewarm_text(s, &[14]);
+    for k in 0..GUIDE_PANEL_LINES_NS.len() {
+        prewarm_text(guide_panel_line(k), &[14]);
     }
-    prewarm_text(GUIDE_PANEL_NOTE, &[14]);
+    prewarm_text(guide_panel_note(), &[14]);
     let idx = crate::guide::guide_index(g).min(crate::guide::HINTS.len() as u8 - 1);
     let hint = &crate::guide::HINTS[idx as usize];
     prewarm_text(hint.text(), &[20]);
     if let Some(b) = hint.btn {
         prewarm_text(b, &[18]);
     }
-    for t in GUIDE_TABS.iter() {
-        prewarm_text(t, &[16]);
+    for k in 0..GUIDE_TABS_NS.len() {
+        prewarm_text(guide_tab_label(k), &[16]);
     }
     prewarm_chapter_view(g);
 }
@@ -3325,7 +3313,8 @@ fn draw_guide_panel(g: &mut Game) {
     }
     // 页签（照 draw_help_panel 语言；guide_tab 会话态 min 钳制，panic=abort 纪律）
     g.guide_tab = g.guide_tab.min(1);
-    for (i, t) in GUIDE_TABS.iter().enumerate() {
+    for (i, &n) in GUIDE_TABS_NS.iter().enumerate() {
+        let t = evtx(n as usize);
         let x = 170.0 + i as f32 * 200.0;
         if button(x, 128.0, 190.0, 34.0, t, None, true) {
             g.guide_tab = i as u8;
@@ -3372,10 +3361,10 @@ fn draw_guide_panel(g: &mut Game) {
     }
     draw_rectangle(170.0, 340.0, 940.0, 1.5, Color::from_rgba(96, 76, 130, 160));
     txt("修行之道", 170.0, 356.0, 16, C_GOLD_D);
-    for (i, s) in GUIDE_PANEL_LINES.iter().enumerate() {
-        txt(s, 170.0, 388.0 + i as f32 * 30.0, 14, C_TEXT);
+    for (i, &n) in GUIDE_PANEL_LINES_NS.iter().enumerate() {
+        txt(evtx(n as usize), 170.0, 388.0 + i as f32 * 30.0, 14, C_TEXT);
     }
-    txt(GUIDE_PANEL_NOTE, 170.0, 560.0, 14, C_DIM);
+    txt(guide_panel_note(), 170.0, 560.0, 14, C_DIM);
 }
 
 // v1.16.8 章节书视图：左列章目目录（v1.16.10 起九行，状态词右上）+ 右栏本章引入/目标清单/前情提要。
@@ -3588,7 +3577,7 @@ fn draw_book_record(g: &mut Game) {
         return;
     }
     txt(
-        "问笔终战（现实破境问笔·九重雷劫全扛，且封卷吏已斩）之后，执笔人递笔——你如何落款？",
+        evtx(2555)/* 原文：问笔终战（现实破境问笔·九重雷劫全扛，且封卷吏已斩）之后，执笔人递笔——你如何落款？ */,
         170.0,
         146.0,
         14,
@@ -3607,7 +3596,7 @@ fn draw_book_record(g: &mut Game) {
         } else if i == 3 {
             (
                 "？？？".to_string(),
-                "先撕稿留白（后事不详），再来问笔——未完的书，收册人自会看见".to_string(),
+                evtx(2556)/* 原文：先撕稿留白（后事不详），再来问笔——未完的书，收册人自会看见 */.to_string(),
             )
         } else {
             (
@@ -3633,15 +3622,12 @@ fn draw_book_record(g: &mut Game) {
     let end_n = g.meta.endings_seen.count_ones() as usize;
     if done_ch >= n_ch {
         txt(
-            &format!("主线 {}/{} · 九章已毕", done_ch, n_ch),
+            &evf(2557, &[&(done_ch) as &dyn core::fmt::Display, &(n_ch) as &dyn core::fmt::Display])/* 原文：主线 {}/{} · 九章已毕 */,
             170.0, 554.0, 14, C_TEXT,
         );
     } else {
         txt(
-            &format!(
-                "主线 {}/{} · 现进行：{}",
-                done_ch, n_ch, crate::data::CHAPTERS[cur.min(n_ch - 1)].name()
-            ),
+            &evf(2558, &[&(done_ch) as &dyn core::fmt::Display, &(n_ch) as &dyn core::fmt::Display, &(crate::data::CHAPTERS[cur.min(n_ch - 1)].name()) as &dyn core::fmt::Display])/* 原文：主线 {}/{} · 现进行：{} */,
             170.0, 554.0, 14, C_TEXT,
         );
     }
@@ -3649,23 +3635,15 @@ fn draw_book_record(g: &mut Game) {
     // choose_ending 全卷之礼 toast 成对交付；并进本行零新增行零布局风险）
     let end_note = if end_n >= crate::game::ENDINGS.len() {
         if g.meta.worn_title == 17 {
-            " · 四结局集齐·『执笔人』已佩"
+            evtx(2559)/* 原文： · 四结局集齐·『执笔人』已佩 */
         } else {
-            " · 四结局集齐·『执笔人』可佩"
+            evtx(2560)/* 原文： · 四结局集齐·『执笔人』可佩 */
         }
     } else {
         ""
     };
     txt(
-        &format!(
-            "称号『{}』 · 手札 {}/{} · 结局 {}/{}{}",
-            g.worn_title_of(),
-            seen_n,
-            crate::data::EVENTS.len(),
-            end_n,
-            crate::game::ENDINGS.len(),
-            end_note
-        ),
+        &evf(2561, &[&(g.worn_title_of()) as &dyn core::fmt::Display, &(seen_n) as &dyn core::fmt::Display, &(crate::data::EVENTS.len()) as &dyn core::fmt::Display, &(end_n) as &dyn core::fmt::Display, &(crate::game::ENDINGS.len()) as &dyn core::fmt::Display, &(end_note) as &dyn core::fmt::Display])/* 原文：称号『{}』 · 手札 {}/{} · 结局 {}/{}{} */,
         170.0, 578.0, 14, C_TEXT,
     );
 }
@@ -3677,7 +3655,7 @@ fn draw_book_record(g: &mut Game) {
 pub fn prewarm_book_record(g: &Game) {
     prewarm_text("书 志 · 终卷四结局", &[24]);
     prewarm_text(
-        "问笔终战（现实破境问笔·九重雷劫全扛，且封卷吏已斩）之后，执笔人递笔——你如何落款？",
+        evtx(2555)/* 原文：问笔终战（现实破境问笔·九重雷劫全扛，且封卷吏已斩）之后，执笔人递笔——你如何落款？ */,
         &[14],
     );
     // ？？？双档预热（复审修）：14 供图鉴/手札行复用口径，20 供本页未达成行
@@ -3686,7 +3664,7 @@ pub fn prewarm_book_record(g: &Game) {
     // （结局未达成最常见态）3 个 20px 字形冷栅格化触发 2048² 图集整图重传
     prewarm_text("？？？", &[14, 20]);
     prewarm_text("走向问笔终战，卡上自有分说", &[14]);
-    prewarm_text("先撕稿留白（后事不详），再来问笔——未完的书，收册人自会看见", &[14]);
+    prewarm_text(evtx(2556)/* 原文：先撕稿留白（后事不详），再来问笔——未完的书，收册人自会看见 */, &[14]);
     for e in crate::game::ENDINGS.iter() {
         // 行首括号/间隔符与名/alias 一次灌齐（事件帧 format! 豁免，照 build_event
         // 卡面预热同口径）
@@ -3703,8 +3681,8 @@ pub fn prewarm_book_record(g: &Game) {
         "称号『』",
         "手札",
         "结局",
-        " · 四结局集齐·『执笔人』可佩",
-        " · 四结局集齐·『执笔人』已佩",
+        evtx(2560)/* 原文： · 四结局集齐·『执笔人』可佩 */,
+        evtx(2559)/* 原文： · 四结局集齐·『执笔人』已佩 */,
     ] {
         prewarm_text(s, &[14]);
     }
@@ -3779,5 +3757,27 @@ mod draw_tests {
             crate::draw::help_line(2).contains("「造化」"),
             "模拟毕行引号漂移"
         );
+    }
+
+    // v1.16.33 单1 刀3 NIZE 通道查表口逐位钉（内容=原表字面量；N 错行/共享错串
+    // /越界钳制错位在此必红；行值取自真相源 tools/row_reader.py 口径）
+    #[test]
+    fn nize_guide_tables_pinned() {
+        assert_eq!(super::guide_tab_label(0), "当前目标");
+        assert_eq!(super::guide_tab_label(1), "章节书");
+        assert_eq!(
+            super::guide_panel_line(0),
+            "· 闭关修炼长修为，修为圆满可冲击破境，境境登高。"
+        );
+        assert_eq!(
+            super::guide_panel_line(4),
+            "· 与长老、掌柜、宁清霜、醉道人赠礼交好，增益长久生效。"
+        );
+        assert_eq!(
+            super::guide_panel_note(),
+            "主界面顶部金框横带常驻显示当前目标（现实界面）。"
+        );
+        // 越界 min 钳制（panic=abort 纪律防御臂）
+        assert_eq!(super::guide_tab_label(usize::MAX), super::guide_tab_label(1));
     }
 }

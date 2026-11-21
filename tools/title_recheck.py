@@ -9,8 +9,9 @@
   钉A（臂内禁 card.title 赋值）：build_event 函数体内不得再出现任何
      `card.title = ...` 行（字面量或动态都禁）——标题唯一来源是构造行查表。
      若未来某臂需要「与表不同的标题」，必须先回评审改设计，不许静默回填字面量。
-  钉B（名段覆盖断言）：EVENT_NAMES 名段（段一..段八基址 × EV_SEG 段界，段八自
-     v1.16.32 单3 扩池批起）对
+  钉B（名段覆盖断言）：EVENT_NAMES 名段（段一..段九基址 × EV_SEG 段界，段八自
+     v1.16.32 单3 扩池批起、段九自 v1.16.33 单3 扩池批起，另有钉B-2 段八/段九
+     首尾内容钉——错行非空串三查抓不住，内容钉兜底）对
      id 0..=N_EVENTS-1 逐条可解析、非空、行号=N 不错位——段基址/段界漂移当场红。
   钉C（构造行单源断言）：臂内零赋值形态下，EventCard 构造行必须存在
      `title: EVENT_NAMES[id].into()`——标题单源链断不得。
@@ -26,7 +27,9 @@
     ——本注当时滞后只写到段三口径，v1.16.31 随批补全）；
     EV_SEG4..EV_SEG5 → TXT_NAME5_BASE+id−EV_SEG4；EV_SEG5..EV_SEG6 →
     TXT_NAME6_BASE+id−EV_SEG5；≥EV_SEG6 →
-    TXT_NAME7_BASE+id−EV_SEG6。段界/基址常量直接从
+    TXT_NAME7_BASE+id−EV_SEG6；≥EV_SEG7 → TXT_NAME8_BASE+id−EV_SEG7（段八）；
+    ≥EV_SEG8 → TXT_NAME9_BASE+id−EV_SEG8（段九，v1.16.33 随批补全——本注
+    此前滞后只写到段七口径）。段界/基址常量直接从
     src/data.rs 与 src/text_offsets.inc 解析，不硬编码。
   - text_source.txt 行号=N（0 基），真相源权威。
 
@@ -105,6 +108,7 @@ def main():
     seg5 = parse_const(data_txt, "EV_SEG5")
     seg6 = parse_const(data_txt, "EV_SEG6")
     seg7 = parse_const(data_txt, "EV_SEG7")
+    seg8 = parse_const(data_txt, "EV_SEG8")
     b1 = parse_inc_base("TXT_NAME_BASE")
     b2 = parse_inc_base("TXT_NAME2_BASE")
     b3 = parse_inc_base("TXT_NAME3_BASE")
@@ -113,8 +117,9 @@ def main():
     b6 = parse_inc_base("TXT_NAME6_BASE")
     b7 = parse_inc_base("TXT_NAME7_BASE")
     b8 = parse_inc_base("TXT_NAME8_BASE")
+    b9 = parse_inc_base("TXT_NAME9_BASE")
 
-    # id -> 名段 N 映射（与 data.rs EvTable 八段连寻同口径）
+    # id -> 名段 N 映射（与 data.rs EvTable base8+base9 双段九段连寻同口径）
     def name_n(eid):
         if eid < seg1:
             return b1 + eid
@@ -130,7 +135,14 @@ def main():
             return b6 + (eid - seg5)
         if eid < seg7:
             return b7 + (eid - seg6)
-        return b8 + (eid - seg7)
+        if eid < seg8:
+            # v1.16.33 复审必修①：扩段九时段八分支整行被段九 return 顶替——
+            # id 338..343 被映射到 charpanel 延后批串 N2570..2575，钉B「行存在/
+            # 行号/非空」三查抓不住错行非空串，段八名段覆盖静默失效；恢复本
+            # 分支，与 data.rs EvTable base8 段八+base9 段九双段连寻同口径
+            return b8 + (eid - seg7)
+        # v1.16.33 段九：EV_SEG8=344 快照段界，段九基址 TXT_NAME9_BASE
+        return b9 + (eid - seg8)
 
     # 钉B：名段覆盖断言（真相源逐条可解析、非空、行号=N）
     src_lines = SRC.read_text(encoding="utf-8").splitlines()
@@ -154,6 +166,16 @@ def main():
         names[eid] = m.group(2)
     if bad:
         raise SystemExit("FATAL 钉B 名段覆盖断言失败:\n  " + "\n  ".join(bad[:8]))
+
+    # 钉B-2 内容级自证（v1.16.33 复审必修①随批加固）：段映射漂移在钉B 三查
+    # 下不可见（错行非空串与真名段同样过查）——段八/段九首尾逐字钉与
+    # data.rs ev_tables_section_bounds get() 内容钉同源，漂移当场红
+    for _eid, _want in ((338, "暮坛对酌"), (343, "老炉现纹"),
+                        (344, "同裱旧稿"), (348, "霜橘分甘")):
+        if names.get(_eid) != _want:
+            raise SystemExit("FATAL 钉B-2 名段内容钉失败: id%d → %r (期望 %r)"
+                             % (_eid, names.get(_eid), _want))
+    print("OK 钉B-2 段八/段九首尾内容钉 ✓（338/343/344/348）")
 
     game_lines = GAME.read_text(encoding="utf-8").splitlines()
     st, en = build_event_span(game_lines)
@@ -231,9 +253,9 @@ def main():
             "每臂恰 1 次赋值" % (len(hits), n_events - 1)
         )
     print(
-        "OK 钉B 名段覆盖 ✓（N_EVENTS=%d 段界 %d/%d/%d/%d/%d/%d/%d 基址 %d/%d/%d/%d/%d/%d/%d/%d）"
-        % (n_events, seg1, seg2, seg3, seg4, seg5, seg6, seg7, b1, b2, b3, b4,
-           b5, b6, b7, b8)
+        "OK 钉B 名段覆盖 ✓（N_EVENTS=%d 段界 %d/%d/%d/%d/%d/%d/%d/%d 基址 %d/%d/%d/%d/%d/%d/%d/%d/%d）"
+        % (n_events, seg1, seg2, seg3, seg4, seg5, seg6, seg7, seg8, b1, b2, b3,
+           b4, b5, b6, b7, b8, b9)
     )
     print("title_recheck 全绿")
 

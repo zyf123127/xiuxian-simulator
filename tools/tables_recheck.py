@@ -17,7 +17,10 @@
 # v1.16.32 单3 扩池起八段连号——段八基址 TXT_NAME8_BASE/TXT_BRIEF8_BASE=
 # 2338/2344，与 data.rs EV_SEG7=338 同批登记（单1/单2 已用 N1971..2337 故
 # 段八顺延），故段八起于 2338。
-# 对账：段行数 == EVENTS 行数 == 344、NAMES 去「·续」后互异、基址段界内。只读。
+# v1.16.33 单3 扩池起九段连号——段九基址 TXT_NAME9_BASE/TXT_BRIEF9_BASE=
+# 2576/2581，与 data.rs EV_SEG8=344 快照常量同批登记（单1 N 化批已用
+# N2368..2575 故段九顺延），故段九起于 2576。
+# 对账：段行数 == EVENTS 行数 == 349、NAMES 去「·续」后互异、基址段界内。只读。
 import io
 import re
 import sys
@@ -74,6 +77,7 @@ _SEG4 = 317
 _SEG5 = 325
 _SEG6 = 335
 _SEG7 = 338
+_SEG8 = 344
 _name2 = re.search(r"pub static TXT_NAME2_BASE: u32 = (\d+);", inc)
 _brief2 = re.search(r"pub static TXT_BRIEF2_BASE: u32 = (\d+);", inc)
 _name3 = re.search(r"pub static TXT_NAME3_BASE: u32 = (\d+);", inc)
@@ -102,10 +106,14 @@ _name8 = re.search(r"pub static TXT_NAME8_BASE: u32 = (\d+);", inc)
 _brief8 = re.search(r"pub static TXT_BRIEF8_BASE: u32 = (\d+);", inc)
 name8_base = int(_name8.group(1)) if _name8 else None
 brief8_base = int(_brief8.group(1)) if _brief8 else None
+_name9 = re.search(r"pub static TXT_NAME9_BASE: u32 = (\d+);", inc)
+_brief9 = re.search(r"pub static TXT_BRIEF9_BASE: u32 = (\d+);", inc)
+name9_base = int(_name9.group(1)) if _name9 else None
+brief9_base = int(_brief9.group(1)) if _brief9 else None
 
 
-def _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, n):
-    """段一 0..min(n,291) + 段二..段八续号（扩池批）；返回行号列表"""
+def _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, base9, n):
+    """段一 0..min(n,291) + 段二..段九续号（扩池批）；返回行号列表"""
     out = [base + i for i in range(min(n, _SEG1))]
     if n > _SEG1:
         assert base2 is not None, "扩池后段二基址缺失（pack_text.py 未登记）"
@@ -127,16 +135,19 @@ def _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, n):
         out += [base7 + i for i in range(min(n, _SEG7) - _SEG6)]
     if n > _SEG7:
         assert base8 is not None, "扩池后段八基址缺失（pack_text.py 未登记）"
-        out += [base8 + i for i in range(n - _SEG7)]
+        out += [base8 + i for i in range(min(n, _SEG8) - _SEG7)]
+    if n > _SEG8:
+        assert base9 is not None, "扩池后段九基址缺失（pack_text.py 未登记）"
+        out += [base9 + i for i in range(n - _SEG8)]
     return out
 brief_base = int(re.search(r"pub static TXT_BRIEF_BASE: u32 = (\d+);", inc).group(1))
 
 tables = {}
-for tname, base, base2, base3, base4, base5, base6, base7, base8 in (
-        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base, name6_base, name7_base, name8_base),
-        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base, brief6_base, brief7_base, brief8_base)):
+for tname, base, base2, base3, base4, base5, base6, base7, base8, base9 in (
+        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base, name6_base, name7_base, name8_base, name9_base),
+        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base, brief6_base, brief7_base, brief8_base, brief9_base)):
     entries = []
-    for n in _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, n_events):
+    for n in _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, base9, n_events):
         assert n in rows, f"{tname} 段缺行 N={n}（基址漂移/收编段不齐）"
         val = decode_raw(rows[n])
         assert val is not None, f"{tname} N={n} 不可解码"
@@ -144,7 +155,8 @@ for tname, base, base2, base3, base4, base5, base6, base7, base8 in (
     tables[tname] = entries
     print(tname, "base", base, "base2", base2, "base3", base3, "base4", base4,
           "base5", base5, "base6", base6, "base7", base7, "base8", base8,
-          "rows", len(entries), "aligned:", len(entries) == n_events == 344)
+          "base9", base9, "rows", len(entries), "aligned:",
+          len(entries) == n_events == 349)
 
 names = tables["EVENT_NAMES"]
 seen = set()
@@ -171,13 +183,15 @@ for tname in ("EVENT_NAMES", "EVENT_BRIEF"):
         r"\s*base4: \w+ as u16," + _C + r"\s*len4: \(?\w+ - \w+\)? as u16," + _C +
         r"\s*base5: \w+ as u16," + _C + r"\s*len5: \(?\w+ - \w+\)? as u16," + _C +
         r"\s*base6: \w+ as u16," + _C + r"\s*len6: \(?\w+ - \w+\)? as u16," + _C +
-        # v1.16.32 单3 扩段八：base8/len8 双段登记（len8 末段 N_EVENTS−EV_SEG7）
+        # v1.16.32 单3 扩段八：base8/len8 双段登记（len8 段界差 EV_SEG8−EV_SEG7）
+        # v1.16.33 单3 扩段九：base9/len9 双段登记（len9 末段 N_EVENTS−EV_SEG8）
         r"\s*base7: \w+ as u16," + _C + r"\s*len7: \(?\w+ - \w+\)? as u16," + _C +
-        r"\s*base8: \w+ as u16," + _C + r"\s*len8: \(?\w+ - \w+\)? as u16,\s*\};"
+        r"\s*base8: \w+ as u16," + _C + r"\s*len8: \(?\w+ - \w+\)? as u16," + _C +
+        r"\s*base9: \w+ as u16," + _C + r"\s*len9: \(?\w+ - \w+\)? as u16,\s*\};"
     )
     m = re.search(pat, src)
     assert m, f"{tname} EvTable 声明缺失"
-print("EvTable statics 七段声明在位，len() == n_events:", n_events)
+print("EvTable statics 九段声明在位，len() == n_events:", n_events)
 
 # ---------------- v1.16.29 单1刀B：表通道扩容登记 ----------------
 # 新三段连号整表（NPC_TALES/HELP_LINES/HINTS text）：基址在 .inc，行数钉死，
@@ -233,3 +247,57 @@ for _n in _field_ns + _lore_starts:
     _v = decode_raw(rows[_n])
     assert _v is not None and _v != "", f"结构体表字段 N={_n} 空/不可解码"
 print("struct-table field Ns:", len(_field_ns), "+ lore starts:", len(_lore_starts), "all decode: OK")
+
+
+# ---------------- v1.16.33 单1 NIZE 通道登记 ----------------
+# SPECIAL_SUB（game.rs eff_desc fn 内 fn 级 const）+ 8 张 N 表 + 2 条 N 常量：
+# 槽数钉死防半收编，N 全部在真相源可解码非空；稀疏槽/兜底行同 N（dedup alloc）
+# 的结构由 pack_text.py 产侧 assert 固化，此处只做行存在性与可解码对账。
+_nize_game = open("src/game.rs", encoding="utf-8").read()
+_mt0 = re.search(r"const SPECIAL_SUB: \[u16; (\d+)\] = \[(.*?)\];", _nize_game, re.S)
+assert _mt0, "SPECIAL_SUB 表缺失"
+_nize_size = int(_mt0.group(1))
+_nize_slots = [int(x) for x in re.findall(r"\d+", _mt0.group(2))]
+assert len(_nize_slots) == _nize_size == 77, (
+    f"SPECIAL_SUB 槽数 {_nize_size} != 77（special 覆盖 0..=76；扩臂须同步改表）")
+assert _nize_slots[0] == _nize_slots[19] == _nize_slots[76], (
+    "SPECIAL_SUB 稀疏槽 0/19/76 未统一指兜底行（原 _ 臂「机缘」）")
+for _n in _nize_slots:
+    assert _n in rows, f"SPECIAL_SUB N={_n} 缺行"
+    _v = decode_raw(rows[_n])
+    assert _v is not None and _v != "", f"SPECIAL_SUB N={_n} 空/不可解码"
+print("SPECIAL_SUB slots:", _nize_size, "fallback N:", _nize_slots[0], "all decode: OK")
+
+_NIZE_TABLES = (
+    ("COMP_PAGE_PREWARM_NS", "src/charpanel.rs", 30),
+    ("COMP_PAGE_PREWARM_16_NS", "src/charpanel.rs", 3),
+    ("HIST_PREWARM_NS", "src/charpanel.rs", 14),
+    ("PREWARM_STRS_NS", "src/gallery.rs", 21),
+    ("EV_NOTE_PREWARM_NS", "src/gallery.rs", 24),
+    ("RECALL_CHROME_NS", "src/gallery.rs", 3),
+    ("GUIDE_PANEL_LINES_NS", "src/draw.rs", 5),
+    ("GUIDE_TABS_NS", "src/draw.rs", 2),
+)
+for _tname, _tfile, _tcnt in _NIZE_TABLES:
+    _tsrc = open(_tfile, encoding="utf-8").read()
+    _mt = re.search(r"const %s: \[u16; (\d+)\] = \[(.*?)\];" % _tname, _tsrc, re.S)
+    assert _mt, f"{_tname} N 表缺失"
+    _ns2 = [int(x) for x in re.findall(r"\d+", _mt.group(2))]
+    assert len(_ns2) == int(_mt.group(1)) == _tcnt, (
+        f"{_tname} 槽数 {len(_ns2)}/{_mt.group(1)} != 期望 {_tcnt}")
+    for _n in _ns2:
+        assert _n in rows, f"{_tname} N={_n} 缺行"
+        _v = decode_raw(rows[_n])
+        assert _v is not None and _v != "", f"{_tname} N={_n} 空/不可解码"
+    print(_tname, "rows", _tcnt, "all decode: OK")
+
+for _cname, _cfile in (("DUAL_CULT_HINT_N", "src/charpanel.rs"),
+                       ("GUIDE_PANEL_NOTE_N", "src/draw.rs")):
+    _csrc = open(_cfile, encoding="utf-8").read()
+    _mc = re.search(r"const %s: u16 = (\d+);" % _cname, _csrc)
+    assert _mc, f"{_cname} 常量缺失"
+    _n = int(_mc.group(1))
+    assert _n in rows, f"{_cname} N={_n} 缺行"
+    _v = decode_raw(rows[_n])
+    assert _v is not None and _v != "", f"{_cname} N={_n} 空/不可解码"
+    print(_cname, "N", _n, "decode: OK")

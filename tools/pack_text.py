@@ -43,7 +43,17 @@ text_offsets.inc（data.rs 侧 const 数组由施工方换查表器 static，本
      新文案直接写在 game.rs 臂里（裸字面量功能照常，只是不压缩）-> 重跑本脚本
      自动收编（append 新 N，旧 N 永不变号）。
 
-用法：python tools/pack_text.py [--dry-run]
+v1.16.33 单1 NIZE 通道（--nize）：special 副标 match 表通道 + const 串表 N 化批。
+  - special：eff_desc 内 `let s = match self.special {..}` 整体换 fn 内 const
+    SPECIAL_SUB: [u16;77] N 表 + evtx 查表（稀疏窗位/未登记值统一落「机缘」
+    兜底 N——与原 _ 臂逐值等价；臂原文注随替身上移保留）；
+  - tables：9 张 const 串表/2 条单串 const 整体换 [u16;K] N 表 / N 常量——
+    alloc dedup 同值共享 N（_16 双档、RECALL_CHROME∩EV_NOTE_PREWARM、
+    COMP_PAGE_PREWARM 内 DUAL_CULT_HINT 由此共享），访问器/循环由施工方手改。
+  两个子域（--nize / --nize=special / --nize=tables）均幂等：域已换出即跳过。
+
+用法：python tools/pack_text.py [--dry-run] [--tables] [--block-tmpl]
+             [--block-lit] [--tables2] [--nize[=special|tables]]
 """
 import io
 import re
@@ -101,6 +111,11 @@ BRIEF7_BASE_MANIFEST = 1957
 # N1971..2337 故段八顺延 2338/2344——与 data.rs EV_SEG7=338 同批登记）
 NAME8_BASE_MANIFEST = 2338
 BRIEF8_BASE_MANIFEST = 2344
+# v1.16.33 单3 扩池起：段八（6 条）满员后新批连号追加为段九（5 条：名
+# 2576..=2580/简 2581..=2585，真相源手写连号段先于正文；单1 N 化批已用
+# N2368..2575 故段九顺延 2576/2581——与 data.rs EV_SEG8=344 同批登记）
+NAME9_BASE_MANIFEST = 2576
+BRIEF9_BASE_MANIFEST = 2581
 
 dry = '--dry-run' in sys.argv
 collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测用；表收编后自动幂等）
@@ -108,12 +123,24 @@ collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测
 do_block_tmpl = '--block-tmpl' in sys.argv  # 刀A：块外（build_event 之外）format! 纯{}模板收编 evf
 do_block_lit = '--block-lit' in sys.argv    # 刀C：块外 ≥40B 散件字面量 evtx 化（24-39B 档勘察实测净负，不做）
 do_tables2 = '--tables2' in sys.argv        # 刀B：表通道扩容（结构体表字段级 `_n` + 整表连号基址）
+# v1.16.33 单1 NIZE 通道开关（special 副标 match 表通道 + const 串表 N 化批）——
+# alloc dedup 共享行、重跑幂等（域已换出即跳过），子域可单刀量测。
+# 注意用 startswith 前缀判（--nize=special 是单元素，in 列表判定必漏）
+do_nize = any(narg.startswith('--nize') for narg in sys.argv)
+nize_scope = 'all'
+for narg in sys.argv:
+    if narg.startswith('--nize='):
+        nize_scope = narg.split('=', 1)[1]
 
-# 块外扫描域：帧路径 draw.rs/charpanel.rs 延后第二批（勘察纪律——evf 分配与
-# format! 等价，但每帧重画站点先缓存化或延后，守帧路径纪律）
+# 块外扫描域：v1.16.33 单1 主刀②起 draw.rs/charpanel.rs 延后批开刀（v1.16.29
+# 勘察遗留）——bare≥40B 站 evtx 零分配（&'static str blob 切片，与字面量引用
+# 等价、仅多两次数组访问+OnceLock 原子读 ns 级）；fmt 纯{} 站 evf（String 分配
+# 与原每帧 format! 等价）。const 表体仍由 const_item_ranges 排除（N 化归 --nize
+# 通道）、cfg(test) 测试串永不入池、非纯{}（{:.2}/{:.0}）自动跳过不得手改
 BLOCK_SCAN_FILES = ['game.rs', 'data.rs', 'guide.rs', 'main.rs', 'menu.rs',
                     'npc.rs', 'world.rs', 'gallery.rs', 'ui.rs', 'art.rs',
-                    'cam.rs', 'pixel.rs', 'save.rs', 'sounds.rs']
+                    'cam.rs', 'pixel.rs', 'save.rs', 'sounds.rs',
+                    'draw.rs', 'charpanel.rs']
 SRC_DIR = ROOT / 'src'
 
 # v1.16.29 刀B 表通道扩容清单。
@@ -178,6 +205,31 @@ BASE_KEYS_TABLES2 = ('TXT_TALES_BASE', 'TXT_HELP_BASE', 'TXT_HINT_BASE',
                      'TXT_MINOR_BASE', 'TXT_COMPT_BASE', 'TXT_NPCBRIEF_BASE',
                      'TXT_DFD_BASE', 'TXT_WFLAV_BASE', 'TXT_EXPCHO_BASE',
                      'TXT_ADCREA_BASE', 'TXT_DONE_BASE', 'TXT_CHAIN_BASE')
+
+# v1.16.33 单1 NIZE 通道清单（--nize）。与 ARR/STRUCT 通道不同：不走 base+i 连号，
+# 每表产出 [u16;K] N 表（元素序=原数组序），N 走 alloc dedup——同值串共享既有行，
+# COMP_PAGE_PREWARM_16 双档/RECALL_CHROME∩EV_NOTE_PREWARM/COMP_PAGE_PREWARM 内
+# DUAL_CULT_HINT 引用由此零额外行。基址不进 .inc（N 在源码表内，重跑幂等无需回读）。
+# NIZE_CONSTS：单串 const——`const NAME: &str = "…";` 整项换 `const NAME_N: u16 = N;`
+#（引用位 evtx(NAME_N as usize)/访问器由施工方手改）。必须先于 NIZE_TABLES 处理
+#（表内 ident 引用查此处换出的 N）。
+NIZE_CONSTS = [
+    ('DUAL_CULT_HINT', 'charpanel.rs', 'DUAL_CULT_HINT_N'),
+    ('GUIDE_PANEL_NOTE', 'draw.rs', 'GUIDE_PANEL_NOTE_N'),
+]
+# NIZE_TABLES：串数组 const——`const NAME: … = [ … ];` 整项换
+# `const NAME_NS: [u16; K] = [N0, …];`。元素=字符串字面量 + 白名单裸 ident 引用
+#（源序解析）。期望元素数钉死防半收编（勘实测值，nize_probe.py 口径）。
+NIZE_TABLES = [
+    ('COMP_PAGE_PREWARM', 'charpanel.rs', 'COMP_PAGE_PREWARM_NS', 30, ('DUAL_CULT_HINT',)),
+    ('COMP_PAGE_PREWARM_16', 'charpanel.rs', 'COMP_PAGE_PREWARM_16_NS', 3, ()),
+    ('HIST_PREWARM_STRS', 'charpanel.rs', 'HIST_PREWARM_NS', 14, ()),
+    ('PREWARM_STRS', 'gallery.rs', 'PREWARM_STRS_NS', 21, ()),
+    ('EV_NOTE_PREWARM', 'gallery.rs', 'EV_NOTE_PREWARM_NS', 24, ()),
+    ('RECALL_CHROME', 'gallery.rs', 'RECALL_CHROME_NS', 3, ()),
+    ('GUIDE_PANEL_LINES', 'draw.rs', 'GUIDE_PANEL_LINES_NS', 5, ()),
+    ('GUIDE_TABS', 'draw.rs', 'GUIDE_TABS_NS', 2, ()),
+]
 
 src = GAME.read_text(encoding='utf-8')
 data_src = DATA.read_text(encoding='utf-8')
@@ -763,13 +815,14 @@ def table_bases_from_inc():
     out = {}
     if OFFS.exists():
         txt = OFFS.read_text(encoding='utf-8')
-        for key in (('TXT_NAME_BASE', 'TXT_BRIEF_BASE', 'TXT_NAME2_BASE',
-                     'TXT_BRIEF2_BASE', 'TXT_NAME3_BASE', 'TXT_BRIEF3_BASE',
-                     'TXT_NAME4_BASE', 'TXT_BRIEF4_BASE', 'TXT_NAME5_BASE',
-                     'TXT_BRIEF5_BASE', 'TXT_NAME6_BASE', 'TXT_BRIEF6_BASE',
-                     'TXT_NAME7_BASE', 'TXT_BRIEF7_BASE',
-                     'TXT_NAME8_BASE', 'TXT_BRIEF8_BASE')
-                    + BASE_KEYS_TABLES2):
+    for key in (('TXT_NAME_BASE', 'TXT_BRIEF_BASE', 'TXT_NAME2_BASE',
+                 'TXT_BRIEF2_BASE', 'TXT_NAME3_BASE', 'TXT_BRIEF3_BASE',
+                 'TXT_NAME4_BASE', 'TXT_BRIEF4_BASE', 'TXT_NAME5_BASE',
+                 'TXT_BRIEF5_BASE', 'TXT_NAME6_BASE', 'TXT_BRIEF6_BASE',
+                 'TXT_NAME7_BASE', 'TXT_BRIEF7_BASE',
+                 'TXT_NAME8_BASE', 'TXT_BRIEF8_BASE',
+                 'TXT_NAME9_BASE', 'TXT_BRIEF9_BASE')
+                + BASE_KEYS_TABLES2):
             mm = re.search(r'pub static %s: u32 = (\d+);' % key, txt)
             if mm:
                 out[key] = int(mm.group(1))
@@ -945,6 +998,306 @@ for bk3, exp3 in ARR_EXPECT.items():
         assert next_n - 1 >= inc_bases[bk3] + exp3 - 1, '%s 基址段越界' % bk3
         new_base_emits[bk3] = inc_bases[bk3]
 
+# ================= v1.16.33 单1：NIZE 通道（--nize） =================
+# 两个子域均 append-only（alloc dedup 共享行，旧 N 永不变号）、重跑幂等。
+# 纪律：循环变量一律带后缀（nize_* / n 前缀+数字）——模块级 i/j 是 build_event
+# 定位索引与括号游标（:186-200），泄漏覆盖会把尾部拼接截断（v1.16.28 事故先例，
+# 见 :512 注）；本通道绝不裸用 i/j。
+
+def nize_const_item(text, name):
+    """`(?m)^[ \\t]*const[ \\t]+NAME\\b` 起、字符串/char/注释感知扫到 depth0 ';'
+    的整项区间（起, 止含分号）。表已换出（NAME_NS 等不匹配 \\b）返回 None。"""
+    nm1 = re.search(r'(?m)^[ \t]*const[ \t]+' + name + r'\b', text)
+    if not nm1:
+        return None
+    nk1 = nm1.end()
+    nlen1 = len(text)
+    ndep1 = 0
+    while nk1 < nlen1:
+        nc1 = text[nk1]
+        if nc1 == '"':
+            nk1 = skip_str(text, nk1, '"')
+            continue
+        if nc1 == "'":
+            nmm1 = CHAR_LIT.match(text, nk1)
+            if nmm1:
+                nk1 = nmm1.end()
+                continue
+        if nc1 == '/' and text[nk1:nk1 + 2] == '//':
+            ne1 = text.find('\n', nk1)
+            if ne1 == -1:
+                return None
+            nk1 = ne1
+            continue
+        if nc1 == '/' and text[nk1:nk1 + 2] == '/*':
+            ne1 = text.find('*/', nk1 + 2)
+            if ne1 == -1:
+                return None
+            nk1 = ne1 + 2
+            continue
+        if nc1 in '([{':
+            ndep1 += 1
+        elif nc1 in ')]}':
+            ndep1 -= 1
+        elif nc1 == ';' and ndep1 == 0:
+            return (nm1.start(), nk1 + 1)
+        nk1 += 1
+    return None
+
+nize_report = []
+nize_const_n = {}    # NIZE_CONSTS 换出的 const 名 -> N（NIZE_TABLES ident 引用查此表）
+nize_elem_cnt = 0
+nize_raw_b = 0
+if do_nize:
+    # ---- 子域 A：special 副标 match 表通道（game.rs eff_desc）----
+    if nize_scope in ('all', 'special'):
+        nsp1 = re.search(r'let s = match self\.special \{', src)
+        if nsp1 is None:
+            if 'const SPECIAL_SUB' in src:
+                nize_report.append('special: match 已换 N 表（幂等跳过）')
+            else:
+                raise SystemExit('nize special: match 与 SPECIAL_SUB 均未找到——人工核对')
+        else:
+            nopen1 = src.index('{', nsp1.start())
+            nk2 = nopen1
+            ndep2 = 0
+            nclose1 = None
+            while nk2 < len(src):
+                nc2 = src[nk2]
+                if nc2 == '"':
+                    nk2 = skip_str(src, nk2, '"')
+                    continue
+                if nc2 == "'":
+                    nmm2 = CHAR_LIT.match(src, nk2)
+                    if nmm2:
+                        nk2 = nmm2.end()
+                        continue
+                if nc2 == '/' and src[nk2:nk2 + 2] == '//':
+                    ne2 = src.find('\n', nk2)
+                    if ne2 == -1:
+                        break
+                    nk2 = ne2
+                    continue
+                if nc2 == '/' and src[nk2:nk2 + 2] == '/*':
+                    ne2 = src.find('*/', nk2 + 2)
+                    if ne2 == -1:
+                        break
+                    nk2 = ne2 + 2
+                    continue
+                if nc2 == '{':
+                    ndep2 += 1
+                elif nc2 == '}':
+                    ndep2 -= 1
+                    if ndep2 == 0:
+                        nclose1 = nk2
+                        break
+                nk2 += 1
+            assert nclose1 is not None, 'special match 括号配平失败'
+            nsemi1 = src.index(';', nclose1)
+            nspan1 = src[nsp1.start():nsemi1 + 1]
+            # 注释掩码（保位）——臂解析只在代码位；注释行原样上移保留
+            nmask1 = list(nspan1)
+            nk3 = 0
+            while nk3 < len(nspan1):
+                nc3 = nspan1[nk3]
+                if nc3 == '"':
+                    nk3 = skip_str(nspan1, nk3, '"')
+                    continue
+                if nc3 == '/' and nspan1[nk3:nk3 + 2] == '//':
+                    ne3 = nspan1.find('\n', nk3)
+                    if ne3 == -1:
+                        ne3 = len(nspan1)
+                    for nfill3 in range(nk3, ne3):
+                        nmask1[nfill3] = ' '
+                    nk3 = ne3
+                    continue
+                if nc3 == '/' and nspan1[nk3:nk3 + 2] == '/*':
+                    ne3 = nspan1.find('*/', nk3 + 2)
+                    if ne3 == -1:
+                        break
+                    for nfill3 in range(nk3, ne3 + 2):
+                        nmask1[nfill3] = ' '
+                    nk3 = ne3 + 2
+                    continue
+                nk3 += 1
+            nclean1 = ''.join(nmask1)
+            narms1 = {}
+            for nam1 in re.finditer(r'(\d+)\s*=>\s*"((?:[^"\\]|\\.)*)"', nclean1):
+                assert int(nam1.group(1)) not in narms1, \
+                    'special 臂 %d 重复解析' % int(nam1.group(1))
+                narms1[int(nam1.group(1))] = nam1.group(2)
+            nfb1 = re.search(r'_\s*=>\s*"((?:[^"\\]|\\.)*)"', nclean1)
+            assert nfb1 is not None, 'special match 无 _ 兜底臂'
+            assert nclean1.count('=>') == len(narms1) + 1, \
+                'special 臂数不配：数字臂 %d + _ 1 != => 总数 %d（注释残留模式位？）' \
+                % (len(narms1), nclean1.count('=>'))
+            nsize1 = max(max(narms1), 76) + 1   # 表覆盖 0..=76：76/预留窗位与 >76 值
+            nfb_val1 = decode_raw(nfb1.group(1))
+            assert nfb_val1 is not None and encode_val(nfb_val1) == nfb1.group(1), \
+                'special 兜底臂往返失败'
+            assert '*/' not in nfb1.group(1) and '/*' not in nfb1.group(1)
+            nfb_n1 = alloc(nfb1.group(1))
+            nslot1 = [None] * nsize1
+            for nv1 in sorted(narms1):
+                nraw4 = narms1[nv1]
+                nval4 = decode_raw(nraw4)
+                assert nval4 is not None and encode_val(nval4) == nraw4, \
+                    'special 臂往返失败: %r' % nraw4[:20]
+                assert '*/' not in nraw4 and '/*' not in nraw4
+                nslot1[nv1] = alloc(nraw4)
+                nize_elem_cnt += 1
+                nize_raw_b += len(nval4.encode('utf-8'))
+            for nsi1 in range(nsize1):
+                if nslot1[nsi1] is None:
+                    nslot1[nsi1] = nfb_n1    # 稀疏窗位/槽0/未登记值 -> 机缘（= _ 臂）
+            # 臂间注释行原样上移（链窗位语义文档不丢）
+            ncomment1 = []
+            for nline1 in nspan1.split('\n'):
+                nstrip1 = nline1.strip()
+                if nstrip1.startswith('//'):
+                    ncomment1.append('            ' + nstrip1)
+            nrowtxt1 = []
+            for nrs1 in range(0, nsize1, 8):
+                nchunk1 = nslot1[nrs1:nrs1 + 8]
+                nrowtxt1.append('                '
+                                + ', '.join(str(x) for x in nchunk1) + ',')
+            nrepl1 = (
+                '\n'.join(ncomment1) + '\n'
+                + '            // v1.16.33 单1 副标表通道（--nize）：本 match 收编 textpack——\n'
+                + '            // special→N 查表 evtx 一次间接（非帧路径，draw.rs stale 缓存）；\n'
+                + '            // 稀疏窗位/未登记值（>%d 与槽 0）统一落「机缘」兜底 N，与原\n' % (nsize1 - 1)
+                + '            // _ 臂逐值等价（special_subtitle_fix_tests 全表钉验收）。\n'
+                + '            const SPECIAL_SUB: [u16; %d] = [\n' % nsize1
+                + '\n'.join(nrowtxt1) + '\n'
+                + '            ];\n'
+                + '            let s = evtx(SPECIAL_SUB[(self.special as usize)\n'
+                + '                .min(SPECIAL_SUB.len() - 1)] as usize);'
+            )
+            out_edits.setdefault('game.rs', []).append((nsp1.start(), nsemi1 + 1, nrepl1))
+            nize_report.append('special: %d 臂 + 兜底「机缘」，表 [u16;%d]，臂 raw %dB'
+                               % (len(narms1), nsize1, nize_raw_b))
+    # ---- 子域 B：const 串表 N 化批（charpanel/gallery/draw）----
+    if nize_scope in ('all', 'tables'):
+        # 先单串 const（表内 ident 引用依赖其 N）
+        for (nc1_name, nc1_file, nc1_nname) in NIZE_CONSTS:
+            if nc1_file not in FTXT:
+                FTXT[nc1_file] = (SRC_DIR / nc1_file).read_text(encoding='utf-8')
+            ntext1 = FTXT[nc1_file]
+            nreg3 = nize_const_item(ntext1, nc1_name)
+            if nreg3 is None:
+                if ('const %s' % nc1_nname) in ntext1:
+                    nize_report.append('%s: 已换 N 常量（幂等跳过）' % nc1_name)
+                    continue
+                raise SystemExit('nize: %s 未找到且 %s 缺失——人工核对'
+                                 % (nc1_name, nc1_nname))
+            nitem1 = ntext1[nreg3[0]:nreg3[1]]
+            nlits1 = LIT.findall(nitem1)
+            assert len(nlits1) == 1, '%s 单串 const 解析 %d 条 != 1' % (nc1_name, len(nlits1))
+            nraw5 = nlits1[0]
+            nval5 = decode_raw(nraw5)
+            assert nval5 is not None and encode_val(nval5) == nraw5, \
+                '%s 往返失败: %r' % (nc1_name, nraw5[:20])
+            assert '*/' not in nraw5 and '/*' not in nraw5, '%s 含注释界' % nc1_name
+            nn1 = alloc(nraw5)
+            nize_const_n[nc1_name] = nn1
+            nize_elem_cnt += 1
+            nize_raw_b += len(nval5.encode('utf-8'))
+            nrepl5 = ('// v1.16.33 单1 NIZE 通道：%s 收编 textpack N=%d（引用位\n'
+                      '// evtx(%s as usize)，访问器/绘制位由施工方手改）\n'
+                      % (nc1_name, nn1, nc1_nname)
+                      + 'const %s: u16 = %d;' % (nc1_nname, nn1))
+            out_edits.setdefault(nc1_file, []).append((nreg3[0], nreg3[1], nrepl5))
+            nize_report.append('%s: N=%d（%dB raw）→ %s'
+                               % (nc1_name, nn1, len(nval5.encode('utf-8')), nc1_nname))
+        # 再串数组 const（元素=字面量+白名单 ident，源序）
+        ntok1 = re.compile(r'"((?:[^"\\]|\\.)*)"|([A-Z_][A-Z0-9_]{1,})')
+        for (nt1_name, nt1_file, nt1_nname, nt1_expect, nt1_refs) in NIZE_TABLES:
+            if nt1_file not in FTXT:
+                FTXT[nt1_file] = (SRC_DIR / nt1_file).read_text(encoding='utf-8')
+            ntext2 = FTXT[nt1_file]
+            nreg4 = nize_const_item(ntext2, nt1_name)
+            if nreg4 is None:
+                if ('const %s' % nt1_nname) in ntext2:
+                    nize_report.append('%s: 已换 N 表（幂等跳过）' % nt1_name)
+                    continue
+                raise SystemExit('nize: %s 未找到且 %s 缺失——人工核对'
+                                 % (nt1_name, nt1_nname))
+            nitem2 = ntext2[nreg4[0]:nreg4[1]]
+            # 注释掩码（保位）——表体内注释行常引大写表名（PREWARM_STRS 体内
+            # 「COMPANION_NAMES/NPC_NAMES/NPC_TIER_NAMES」实证），不掩会虚增
+            # 元素计数；字符串字面量原样保留（元素值来源）
+            nmask2 = list(nitem2)
+            nk4 = 0
+            while nk4 < len(nitem2):
+                nc4 = nitem2[nk4]
+                if nc4 == '"':
+                    nk4 = skip_str(nitem2, nk4, '"')
+                    continue
+                if nc4 == '/' and nitem2[nk4:nk4 + 2] == '//':
+                    ne4 = nitem2.find('\n', nk4)
+                    if ne4 == -1:
+                        ne4 = len(nitem2)
+                    for nfill4 in range(nk4, ne4):
+                        nmask2[nfill4] = ' '
+                    nk4 = ne4
+                    continue
+                if nc4 == '/' and nitem2[nk4:nk4 + 2] == '/*':
+                    ne4 = nitem2.find('*/', nk4 + 2)
+                    if ne4 == -1:
+                        break
+                    for nfill4 in range(nk4, ne4 + 2):
+                        nmask2[nfill4] = ' '
+                    nk4 = ne4 + 2
+                    continue
+                nk4 += 1
+            nclean3 = ''.join(nmask2)
+            neq1 = nclean3.index('=')
+            nelems1 = []
+            for nto1 in ntok1.finditer(nclean3, neq1):
+                if nto1.group(1) is not None:
+                    nelems1.append(('lit', nto1.group(1)))
+                else:
+                    nelems1.append(('ident', nto1.group(2)))
+            assert len(nelems1) == nt1_expect, \
+                '%s 元素 %d != 期望 %d（防半收编，nize_probe 口径）' \
+                % (nt1_name, len(nelems1), nt1_expect)
+            nns1 = []
+            for nkind1, nraw6 in nelems1:
+                if nkind1 == 'lit':
+                    nval6 = decode_raw(nraw6)
+                    assert nval6 is not None and encode_val(nval6) == nraw6, \
+                        '%s 往返失败: %r' % (nt1_name, nraw6[:20])
+                    assert '*/' not in nraw6 and '/*' not in nraw6, '%s 含注释界' % nt1_name
+                    nn2 = alloc(nraw6)
+                    nize_raw_b += len(nval6.encode('utf-8'))
+                else:
+                    assert nraw6 in nt1_refs, \
+                        '%s 裸 ident 引用 %s 不在白名单 %s' % (nt1_name, nraw6, nt1_refs)
+                    assert nraw6 in nize_const_n, \
+                        '%s ident %s 的 N 常量未先经 NIZE_CONSTS 换出' % (nt1_name, nraw6)
+                    nn2 = nize_const_n[nraw6]
+                nns1.append(nn2)
+                nize_elem_cnt += 1
+            nrowtxt2 = []
+            for nrs2 in range(0, len(nns1), 10):
+                nchunk2 = nns1[nrs2:nrs2 + 10]
+                nrowtxt2.append('    ' + ', '.join(str(x) for x in nchunk2) + ',')
+            nrepl6 = ('// v1.16.33 单1 NIZE 通道：%s 收编 textpack（%d 元素，同值共享\n'
+                      '// N——引用位 evtx(%s[k] as usize)，访问器/循环由施工方手改）\n'
+                      % (nt1_name, len(nns1), nt1_nname)
+                      + 'const %s: [u16; %d] = [\n' % (nt1_nname, len(nns1))
+                      + '\n'.join(nrowtxt2) + '\n];')
+            out_edits.setdefault(nt1_file, []).append((nreg4[0], nreg4[1], nrepl6))
+            nize_report.append('%s: %d 元素 → %s（首 N=%d，去重后 %d 行）'
+                               % (nt1_name, len(nns1), nt1_nname, nns1[0],
+                                  len(set(nns1))))
+if do_nize:
+    print('---- nize report ----')
+    for nline2 in nize_report:
+        print('  ' + nline2)
+    print('nize: %d elements, %d B raw moved (dedup shared rows not double-counted in blob)'
+          % (nize_elem_cnt, nize_raw_b))
+
 # ---- blob 与 offsets ----
 blob = bytearray()
 offs = [0]
@@ -1109,6 +1462,13 @@ if name_base is not None:
 if brief_base is not None:
     inc += emit_base('TXT_BRIEF8_BASE',
                      inc_bases.get('TXT_BRIEF8_BASE', BRIEF8_BASE_MANIFEST))
+# v1.16.33 单3 段九基址（首轮 emit 取 manifest 手分值；此后回读 .inc 幂等）
+if name_base is not None:
+    inc += emit_base('TXT_NAME9_BASE',
+                     inc_bases.get('TXT_NAME9_BASE', NAME9_BASE_MANIFEST))
+if brief_base is not None:
+    inc += emit_base('TXT_BRIEF9_BASE',
+                     inc_bases.get('TXT_BRIEF9_BASE', BRIEF9_BASE_MANIFEST))
 # v1.16.29 刀B 整表基址（首轮 emit 收编 N 段基址；此后每次运行从 .inc 回读重发，
 # 与段一/二/三同款幂等——非 --tables2 运行也不许丢基址，否则 include! 断链）
 for bk2 in BASE_KEYS_TABLES2:

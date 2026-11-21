@@ -421,7 +421,9 @@ pub fn exp_choose(g: &mut Game, i: usize) {
                     l.pills[3] += 1;
                     gain_qi(l, gain);
                 }
-                push_loot(g, evf(1595, &[&(fmt_num(gain))])/* 原文：采得灵药：聚气丹+1、培元丹+1，修为+{} */);
+                // v1.16.33 单2 金句A：行直改 N1595 不变号（+1×2 恒定冗余删——道具页
+                // 自见计数；{} 实参数量不变，注释同步照 evf(1574) 漂移红线）
+                push_loot(g, evf(1595, &[&(fmt_num(gain))])/* 原文：采得聚气丹、培元丹，修为+{} */);
                 g.play(crate::sounds::Which::Gain);
             }
             2 => {

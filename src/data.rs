@@ -1792,7 +1792,7 @@ pub const ORIGINS: [OriginDef; 6] = [
 // 轮盘路径纳秒级）；行可读形态与 tools/tables_recheck.py、ledger_recheck.py 的
 // 4 元组解析口径零变（表行仍是 (id,w,mr,good)）；打包无损性由 game.rs
 // events_bitfield_pack_lossless 全表逐行钉测兜底（w>63/mr>7 当场红）。
-pub const N_EVENTS: usize = 344;
+pub const N_EVENTS: usize = 349;
 /// 名/简 textpack 段一条数（v1.16.26 末态；段二自 v1.16.27 扩池起连号追加）
 const EV_SEG1: usize = 291;
 /// 名/简 textpack 段二条数（v1.16.27 末态；段三自 v1.16.28 扩池起连号追加）。
@@ -1833,6 +1833,13 @@ const EV_SEG6: usize = 335;
 /// 逐字钉为内容级防线，见 ev_tables_section_bounds / batch_tables_aligned
 /// v1.16.32 段八）
 const EV_SEG7: usize = 338;
+/// 名/简 textpack 段八条数界（v1.16.32 单3 末态 344=N_EVENTS 快照；下批扩池开
+/// 段九时 N_EVENTS 增长，本常量冻结段八上沿——len8 唯一正确写法=EV_SEG8−EV_SEG7
+/// 段界常量差，勿回写 N_EVENTS−EV_SEG7：N_EVENTS 增长时 len8 会静默吞掉段九首行、
+/// id338..343 名/简读到段九错行非空串，is_empty 防线抓不住——段九 get 首尾逐字
+/// 钉为内容级防线照 batch_tables_aligned 先例）。v1.16.33 单1 先行引入快照常量
+///（字节效应 0，扩池段九开工前把末段差写法钉死）
+const EV_SEG8: usize = 344;
 
 pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (0, 12, 0, true),  // 灵草满坡
@@ -2416,7 +2423,9 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     // 均值、mr5 25 条仍最薄，本批 mr5 +2）；恶缘 mr3 6→7/mr5 5→6/mr6 4→5
     (291, 3, 1, true),  // 换窗新纸（老年层，余量≤10 载门控）
     (292, 3, 4, true),  // 讲堂补席（玄诚长老 Npc(0) mr4 首卡）
-    (293, 3, 6, true),  // 袖里暖石（伴随白名单第 26 条，mr6 有伴第 3 条）
+    (293, 3, 6, true),  // 袖里暖石（伴随白名单第 26 条，mr6 有伴第 2 条——序数
+                        // 勘误随批：mr6 有伴实为 225 首条/293 第 2 条/339 第 3 条，
+                        // 原注「第 3 条」把 226 mr0 误计，三副本同批改）
     (294, 3, 3, false), // 假丹换真（mr3 恶）
     (295, 3, 5, false), // 符价压市（mr5 恶）
     (296, 3, 4, true),  // 醉题酒旗（醉道人 Npc(3) mr4 首卡）
@@ -2564,11 +2573,20 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     // 67 条 237 权；mr 全行分布（344 条）0:79/1:63/2:53/3:36/4:38/5:32/6:24/
     // 7:19；常态池（w>0）309 条
     (338, 3, 7, true),  // 暮坛对酌（醉道人 Npc(3) 第八卡，mr7 善）
-    (339, 3, 6, true),  // 岁暮并账（伴随白名单第 30 条，mr6 有伴第 4 条）
+    (339, 3, 6, true),  // 岁暮并账（伴随白名单第 30 条，mr6 有伴第 3 条——序数勘误
+                        // 同 293 注：226 mr0 误计入 mr6，实 225/293/339 三条）
     (340, 3, 4, true),  // 雾里听剑（雾门 weather==3，宁清霜 Npc(2) 第八卡，mr4）
     (341, 1, 5, true),  // 砚底星痕（稀有 mr5 w1，散件）
     (342, 3, 4, true),  // 灯花并盏（老年×伴双门控 mr4 换层第 10 条）
     (343, 3, 6, false), // 老炉现纹（mr6 恶，恶缘 66→67 条）
+    // v1.16.33 单3 扩池批 5 条（段九，N_EVENTS 344→349）：A1..A5 按减包后余量
+    // 22,755B 落 22~24KB 带取 5 条（A6 洞府门续作砍，裁剪序 A6→A5→A4 勿倒）
+    (344, 3, 7, true),  // 同裱旧稿（伴随白名单第 31 条，mr7 有伴第 3 条，Comp 立绘）
+    (345, 3, 7, false), // 井绳朽断（mr7 恶，恶缘 67→68 条，散件）
+    (346, 3, 3, true),  // 晴日晒药（晴门 weather==0，mr3 善，散件）
+    (347, 1, 2, true),  // 梦续残句（稀有 w1：mr2 稀有第 4 条照 72/234/329 层位，散件 special 恒 0）
+    (348, 3, 6, true),  // 霜橘分甘（老年×伴双门控第 11 条，mr6 换层——双门控
+                        // mr6/mr7 原零覆盖，Comp 立绘不入白名单）
 ];
 
 const fn pack_ev(r: (u16, u8, u8, bool)) -> u16 {
@@ -2703,6 +2721,13 @@ pub struct EvTable {
     // len7 原注：段界差是唯一正确写法，下批扩池续段九时须同步改差）
     base8: u16,
     len8: u16,
+    // v1.16.33 单3 扩池起：段八（6 条）满员后新批连号追加为段九（TXT_NAME9_
+    // BASE/TXT_BRIEF9_BASE=2576/2581 同款登记与产出；段八后下一空 N=2576——
+    // 单1 N 化批已用 N2368..2575 故段九顺延）；九面同步扩九段连寻（扩段只加
+    // 一行 segs）。len9 取段界常量差 N_EVENTS−EV_SEG8（EV_SEG8=344 快照常量
+    // 单1 已引入——新「末段写法」，下批扩池续段十时须改差，见 EV_SEG8 注）
+    base9: u16,
+    len9: u16,
 }
 
 impl EvTable {
@@ -2724,6 +2749,8 @@ impl EvTable {
             (self.base6, self.len6),
             (self.base7, self.len7),
             (self.base8, self.len8),
+            // v1.16.33 单3 扩段九：只加一行 segs（base9/len9），累减循环自动续寻
+            (self.base9, self.len9),
         ];
         let mut k = i;
         for seg_k in segs.iter() {
@@ -2745,6 +2772,7 @@ impl EvTable {
             + self.len6 as usize
             + self.len7 as usize
             + self.len8 as usize
+            + self.len9 as usize
     }
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -2796,7 +2824,14 @@ pub static EVENT_NAMES: EvTable = EvTable {
     // 扩段八后会随 N_EVENTS 静默吞掉段八首行——见 EV_SEG7 注）
     len7: (EV_SEG7 - EV_SEG6) as u16,
     base8: TXT_NAME8_BASE as u16,
-    len8: (N_EVENTS - EV_SEG7) as u16,
+    // v1.16.33 单1：len8 由 N_EVENTS−EV_SEG7 改段界常量差 EV_SEG8−EV_SEG7
+    //（N_EVENTS 快照常量先行引入——扩池开段九时 N_EVENTS 增长不再静默吞段八
+    // 首行，见 EV_SEG8 注；单3 扩池起 N_EVENTS=349≠EV_SEG8=344，差写法兑现）
+    len8: (EV_SEG8 - EV_SEG7) as u16,
+    // v1.16.33 单3 扩段九：base9/len9 双段登记——len9 取段界常量差
+    // N_EVENTS−EV_SEG8（新「末段写法」，下批扩段十须改差，照 len7/len8 原注）
+    base9: TXT_NAME9_BASE as u16,
+    len9: (N_EVENTS - EV_SEG8) as u16,
 };
 
 
@@ -2823,7 +2858,11 @@ pub static EVENT_BRIEF: EvTable = EvTable {
     // v1.16.32 单3 扩段八起改段界常量差（同 EVENT_NAMES len7 注）
     len7: (EV_SEG7 - EV_SEG6) as u16,
     base8: TXT_BRIEF8_BASE as u16,
-    len8: (N_EVENTS - EV_SEG7) as u16,
+    // v1.16.33 单1：同 EVENT_NAMES len8 注（EV_SEG8 快照常量差写法）
+    len8: (EV_SEG8 - EV_SEG7) as u16,
+    // v1.16.33 单3 扩段九：同 EVENT_NAMES base9/len9 注（len9 末段差写法）
+    base9: TXT_BRIEF9_BASE as u16,
+    len9: (N_EVENTS - EV_SEG8) as u16,
 };
 
 
@@ -3505,7 +3544,7 @@ pub const INHERIT_LEGACY_FAV: i32 = 10; // 遗泽承接好感加成
 // 字体 cmap 与 charset_diff_check 口径不变；存档只存事件 id，零兼容影响。
 pub static TEXTPACK: &[u8] = include_bytes!("../assets/textpack.bin");
 // 生成件（pack_text.py 产出）：pub static TXT_ANCH: [u32; A]（每 K32=128 条一个绝对
-// 锚，锚数 A=ceil(行数/128)——v1.16.32 单3 末态 2,368 行→19 锚（K32=128
+// 锚，锚数 A=ceil(行数/128)——v1.16.33 单3 末态 2,601 行→21 锚（K32=128
 // 粗化后锚距；历史注「1,971 行→62 锚」为 32 距口径，已随粗化清账）+
 // pub static TXT_DELTA: [u16; N]（组内 delta，off(i)=ANCH[i>>7]+DELTA[i]——
 // v1.16.28 刀C 两级表，v1.16.32 单1 组距 32→128 粗化后 shift 5→7；旧 [u32;N]
@@ -3568,13 +3607,27 @@ pub static TEXTPACK: &[u8] = include_bytes!("../assets/textpack.bin");
 // 收编 N2350 起（EV_SEG7=338 段界登记，len7 改段界差 EV_SEG7−EV_SEG6、
 // len8=N_EVENTS−EV_SEG7——下批扩池续段九时 len8 同步改段界差，见 EV_SEG7 注）；
 // N 追加不变号，段基址稳定）
+// v1.16.33 单1 N 化批 N2368..=2575（--nize/--block-lit/--block-tmpl 通道）：
+// special 副标 66 臂+兜底「机缘」N2368..=2433（SPECIAL_SUB [u16;77] 查表，
+// 「机缘」占 2368、臂 10「魔窟探宝」dedup 共享既有行 843）+ const 串表 N 化
+// N2434..=2522（DUAL_CULT_HINT 2434/GUIDE_PANEL_NOTE 2435 + 八表 104 元素
+// dedup 后 89 行——COMP_PAGE_PREWARM_16/RECALL_CHROME/DUAL_CULT_HINT 引用
+// 同串共享）+ draw.rs/charpanel.rs 块外延后批收编 N2523..=2575（30 evf+
+// 39 evtx）；单2 行直改 9 行 N1307/1359/1377/1414/1417/1595/1873/1874/1959
+// （第十二批简语 8 行+金句A 采药句，N 不变号，−67B）；
+// v1.16.33 单3 扩池段九：名段九 N2576..=2580（TXT_NAME9_BASE=2576）+ 简段九
+// N2581..=2585（TXT_BRIEF9_BASE=2581）真相源手写连号段先于正文 + 五臂正文
+// 收编 N2586..=2600（15 站=11 evtx+4 evf；EV_SEG8=344 快照常量差写法兑现，
+// len8=(EV_SEG8−EV_SEG7)、len9=N_EVENTS−EV_SEG8——下批扩池续段十时 len9
+// 同步改段界差，见 EV_SEG8 注）；末态 2,601 行、TXT_ANCH 21 锚、TXT_DELTA
+// [u16;2602]；N 追加不变号，段基址稳定）
 include!("text_offsets.inc");
 
 static TEXT_BLOB: std::sync::OnceLock<&'static [u8]> = std::sync::OnceLock::new();
 
 /// 解包单源（get_or_init 的初始化闭包）：成功返回 leak 后的 blob，失败/校验不
 /// 过返回 EMPTY 哨兵——INIT_TRIED 钉死「只试一次」，失败后不再重试（防帧路径
-/// 反复 inflate）。EMPTY 即失败态（真实 blob 恒非空：2,368 条非空文案串接，
+/// 反复 inflate）。EMPTY 即失败态（真实 blob 恒非空：2,601 条非空文案串接，
 /// 随收编增长勿当硬断言——v1.16.26 注 647/v1.16.29 注 1,492/1,865/
 /// v1.16.30 注 1,905/v1.16.31 注 1,954/1,969 均已过期清账）。
 static TEXT_INIT_TRIED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -3763,8 +3816,9 @@ mod text_tests {
         // v1.16.30 扩池：len = 段一 291 + 段二 8 + 段三 10 + 段四 8 + 段五 8 = 325
         // v1.16.31 扩池：+ 段六 10 = 335；v1.16.31 新功能：+ 段七 3 = 338
         // v1.16.32 单3 扩池：+ 段八 6 = 344
-        assert_eq!(EVENT_NAMES.len(), 344);
-        assert_eq!(EVENT_BRIEF.len(), 344);
+        // v1.16.33 单3 扩池：+ 段九 5 = 349
+        assert_eq!(EVENT_NAMES.len(), 349);
+        assert_eq!(EVENT_BRIEF.len(), 349);
         assert_eq!(EVENT_NAMES.get(0), Some("灵草满坡"));
         assert_eq!(EVENT_NAMES.get(290), Some("误入猎套"));
         assert_eq!(EVENT_BRIEF.get(0), Some("满坡灵草露水未干，采满一筐"));
@@ -3774,7 +3828,9 @@ mod text_tests {
         assert_eq!(EVENT_NAMES.get(291), Some("换窗新纸"));
         assert_eq!(EVENT_NAMES.get(298), Some("灵脉被截"));
         assert_eq!(EVENT_BRIEF.get(291), Some("霜日重糊窗，邻童按纸角"));
-        assert_eq!(EVENT_BRIEF.get(298), Some("灵脉被新契截走，循山另引"));
+        // v1.16.33 单2 第十二批改写后随批同步（原「灵脉被新契截走，循山另引」−12B；
+        // kw 拦腰截走取自 id298 臂 N1439 verbatim）
+        assert_eq!(EVENT_BRIEF.get(298), Some("新贵拦腰截走灵脉"));
         // 段三（v1.16.28 扩池 10 条，TXT_NAME3_BASE=1442/TXT_BRIEF3_BASE=1452）：
         // len2 漂移唯一内容级防线——首尾逐字钉，错行（非空串）在此必红
         assert_eq!(EVENT_NAMES.get(299), Some("合誊旧稿"));
@@ -3793,7 +3849,9 @@ mod text_tests {
         // len4 写 N_EVENTS−EV_SEG3 静默吞段五时在此必红
         assert_eq!(EVENT_NAMES.get(317), Some("崖灯照径"));
         assert_eq!(EVENT_NAMES.get(324), Some("旧卷新墨"));
-        assert_eq!(EVENT_BRIEF.get(317), Some("危崖挂灯，夜行人少绕三里"));
+        // v1.16.33 单2 第十二批改写后随批同步（原「危崖挂灯，夜行人少绕三里」−3B；
+        // kw 灯油/添满取自 id317 臂 N1881 verbatim）
+        assert_eq!(EVENT_BRIEF.get(317), Some("危崖悬灯，灯油添满三夜"));
         assert_eq!(EVENT_BRIEF.get(324), Some("百年旧卷里，认出你自己的字迹"));
         // 段六（v1.16.31 扩池 10 条，TXT_NAME6_BASE=1905/TXT_BRIEF6_BASE=1915，
         // 手写名/简连号段先于正文收编）：len5 漂移唯一内容级防线——首尾逐字
@@ -3808,7 +3866,9 @@ mod text_tests {
         assert_eq!(EVENT_NAMES.get(335), Some("连雨收书"));
         assert_eq!(EVENT_NAMES.get(337), Some("三脉同焕"));
         assert_eq!(EVENT_BRIEF.get(335), Some("连雨护书，雨停分文不取"));
-        assert_eq!(EVENT_BRIEF.get(337), Some("三设施全满，长老登山观府"));
+        // v1.16.33 单2 第十二批改写后随批同步（原「三设施全满，长老登山观府」
+        // −3B；kw 同焕/叩门取自 id337 臂 N1966 verbatim）——首版漏同步当场红
+        assert_eq!(EVENT_BRIEF.get(337), Some("三脉同焕，长老登山叩门"));
         // 段八（v1.16.32 单3 扩池 6 条，TXT_NAME8_BASE=2338/TXT_BRIEF8_BASE=
         // 2344，手写名/简连号段先于正文收编——单1/单2 已用 N1971..2337 故段八
         // 顺延）：len7 漂移唯一内容级防线——首尾逐字钉，len7 写 N_EVENTS−
@@ -3817,9 +3877,17 @@ mod text_tests {
         assert_eq!(EVENT_NAMES.get(343), Some("老炉现纹"));
         assert_eq!(EVENT_BRIEF.get(338), Some("泥封启处，醉话入稿"));
         assert_eq!(EVENT_BRIEF.get(343), Some("老炉细纹，岁晚难补"));
-        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=344）
-        assert_eq!(EVENT_NAMES.get(344), None);
-        assert_eq!(EVENT_BRIEF.get(344), None);
+        // 段九（v1.16.33 单3 扩池 5 条，TXT_NAME9_BASE=2576/TXT_BRIEF9_BASE=
+        // 2581，手写名/简连号段先于正文收编——单1 N 化批已用 N2368..2575 故
+        // 段九顺延）：len8 漂移唯一内容级防线——首尾逐字钉，len8 写
+        // N_EVENTS−EV_SEG7 静默吞段九时在此必红（EV_SEG8=344 快照兜底）
+        assert_eq!(EVENT_NAMES.get(344), Some("同裱旧稿"));
+        assert_eq!(EVENT_NAMES.get(348), Some("霜橘分甘"));
+        assert_eq!(EVENT_BRIEF.get(344), Some("旧稿起皱，同裱成轴"));
+        assert_eq!(EVENT_BRIEF.get(348), Some("霜后橘熟，分甘各半"));
+        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=349）
+        assert_eq!(EVENT_NAMES.get(349), None);
+        assert_eq!(EVENT_BRIEF.get(349), None);
         assert_eq!(EVENT_NAMES.get(usize::MAX), None);
     }
 
@@ -3840,6 +3908,9 @@ mod text_tests {
         );
         // v1.16.32 单2 金句B：N1588 行直改后断言同步
         assert_eq!(evf(1588, &[&"青云宗"]), "行囊在肩，此番抵达青云宗。");
+        // v1.16.33 单2 金句A：N1595 行直改后断言同步（world.rs:424 采药句 −13B，
+        // 原文注释已同步照 evf(1574) 漂移红线；{} 实参数量不变仍单实参）
+        assert_eq!(evf(1595, &[&"3"]), "采得聚气丹、培元丹，修为+3");
         // v1.16.29 单2 故事润色改写钉（N1574 真相源行直改后唯一无简钉的文本
         // 改写——此处补齐；原文注释同步见 game.rs 寻仇胜句站）
         assert_eq!(
@@ -3921,5 +3992,41 @@ mod text_tests {
         );
         assert_eq!(evtx(1802), "等待点击（输入正常，不催促）");
         assert_eq!(evtx(1824), "字体解压失败（deflate 流损坏）");
+        // v1.16.33 单1 刀2 延后批扩面：draw.rs/charpanel.rs 站样例（每文件 bare
+        // 收编 ≥1 钉；原字面量取自收编站「原文」注释，与源码 grep 双源一致）
+        assert_eq!(
+            evtx(2523),
+            "天道写你的书，写了十万年，写废了十万稿——这一稿，不肯退"
+        );
+        assert_eq!(evtx(2532), "—— 大事记 · 点一行留作朱批 ——");
+        assert_eq!(evtx(2563), "交情愈深，其人故事自会显于纸上。");
+        assert_eq!(evtx(2564), "情谊随赠礼事件与遗泽积累；更换道侣亦不忘旧谊。");
+        // v1.16.33 单1 刀2 fmt→evf 通道钉：模板 Display 语义与 format! 等价
+        //（占位替换产物逐字节等价；样例覆盖 draw.rs 单实参/多实参与 charpanel.rs
+        // 异型混排三站）
+        assert_eq!(
+            evf(2524, &[&(3) as &dyn core::fmt::Display,
+                        &(5) as &dyn core::fmt::Display,
+                        &(2) as &dyn core::fmt::Display,
+                        &("999") as &dyn core::fmt::Display]),
+            "已历 3 世 · 最高境界 5境 · 斩杀宿敌 2 · 道韵 999"
+        );
+        assert_eq!(
+            evf(2566, &[&(1200) as &dyn core::fmt::Display]),
+            "耗灵石 1200 · 情谊+5 · 道心+1 气运+1 · 修为+2载"
+        );
+        assert_eq!(
+            evf(2574, &[&(7) as &dyn core::fmt::Display,
+                        &(2) as &dyn core::fmt::Display,
+                        &("初沁墨") as &dyn core::fmt::Display,
+                        &("88") as &dyn core::fmt::Display,
+                        &("90") as &dyn core::fmt::Display]),
+            "第7世·第2稿  初沁墨境  享年88载·历90年"
+        );
+        // v1.16.33 单1 刀1 副标表通道抽钉：SPECIAL_SUB 查表值 == 原臂字面量
+        //（全表 77 slot 逐字节钉见 game.rs special_sub_table_full_sweep）
+        assert_eq!(evtx(2368), "机缘");
+        assert_eq!(evtx(2369), "探索上古洞府");
+        assert_eq!(evtx(2433), "受檐马一问");
     }
 }

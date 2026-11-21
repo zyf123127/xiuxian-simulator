@@ -56,36 +56,25 @@ fn tap_y_in_view(my: f32) -> bool {
 
 // 首开预热语料（PanelAct::Tab(4) 执行帧一次性灌字形，字号档 [14,16,20] 均既有离散档；
 // 仅静态标签——动态数值行的 ASCII 数字/符号由菜单期 panel_warm_chars 保底覆盖）
-const PREWARM_STRS: &[&str] = &[
-    "图鉴",
-    "？？？",
-    "此生同页",
-    "曾同页",
-    "世",
-    "未识 · 尘封之名",
-    "情谊",
-    "/100",
-    "好感",
-    "识人小传",
-    "心结已解",
-    "有心事待叙",
-    "—— 文狱交游 ——",
-    "同页人 已识",
-    "/10",
-    "交游",
-    "/4",
-    // v1.16.11 low 修复：页脚「手札收录 n/N」的收/录二字此前不在任何预热串
-    //（COMPANION_NAMES/NPC_NAMES/NPC_TIER_NAMES 皆无）——新档首开图鉴帧冷栅格化
-    "手札收录",
-    "—— 同页之缘起于模拟，跨世持久。",
-    "她的页仍在你书间",
-    "缘起模拟，同页之人。她的故事，待你与她共书。",
+// v1.16.33 单1 NIZE 通道：PREWARM_STRS 收编 textpack（21 元素，同值共享
+// N——引用位 evtx(PREWARM_STRS_NS[k] as usize)，访问器/循环由施工方手改）
+const PREWARM_STRS_NS: [u16; 21] = [
+    2479, 2439, 2440, 2443, 2444, 2445, 2438, 2480, 2481, 2482,
+    2483, 2484, 2485, 2486, 2487, 2488, 2489, 2490, 2491, 2492,
+    1823,
 ];
+
+/// 图鉴页预热串查表口（v1.16.33 单1 NIZE 通道访问器；越界 min 钳制——
+/// panic=abort 纪律；evtx 零分配 &'static str）
+#[inline]
+fn gallery_prewarm_str(k: usize) -> &'static str {
+    evtx(PREWARM_STRS_NS[k.min(PREWARM_STRS_NS.len() - 1)] as usize)
+}
 
 /// 图鉴页首开帧预热（charpanel exec_panel_act Tab(4) 单点调用）
 pub fn prewarm_corpus() {
-    for s in PREWARM_STRS {
-        prewarm_text(s, &[14, 16, 20]);
+    for k in 0..PREWARM_STRS_NS.len() {
+        prewarm_text(gallery_prewarm_str(k), &[14, 16, 20]);
     }
     for n in COMPANION_NAMES.iter() {
         prewarm_text(n, &[14, 16, 20]);
@@ -101,42 +90,27 @@ pub fn prewarm_corpus() {
 // 遭遇手札分节行/徽标/计数静态串（v1.16.10）：首开帧一次灌字形防滚动期栅格化
 // 触发图集整图重传（照 prewarm_corpus 同款事故教训）。计数串只备 ×1..=9——
 // 实际遭遇同卡 ≥10 次属长尾，走 format! 兜底（≤ 可见行数，页面性能红线同 gallery#6 口径）
-const EV_NOTE_PREWARM: &[&str] = &[
-    "—— 遭遇手札 ——",
-    "未遇",
-    "？？？",
-    "稀有",
-    "链起",
-    "链段",
-    "伴随",
-    "章节",
-    "老年",
-    "宿敌",
-    "遭遇",
-    // v1.16.16 结局回响徽标（165..=167 event_badge 单口新增词）
-    "回响",
-    "×1",
-    "×2",
-    "×3",
-    "×4",
-    "×5",
-    "×6",
-    "×7",
-    "×8",
-    "×9",
-    // v1.16.11 手札回味覆层静态 chrome（全部 @14，prewarm_event_book 一次灌齐；
-    // 覆层正文/标题字形走构建帧预热，见 draw_event_recall_overlay 注释）
-    "手札回味",
-    "本世未存全文，仅录简介",
-    "点按任意处返回",
+// v1.16.33 单1 NIZE 通道：EV_NOTE_PREWARM 收编 textpack（24 元素，同值共享
+// N——引用位 evtx(EV_NOTE_PREWARM_NS[k] as usize)，访问器/循环由施工方手改）
+const EV_NOTE_PREWARM_NS: [u16; 24] = [
+    2493, 2494, 2439, 2495, 2496, 2497, 2498, 2499, 2500, 2501,
+    2502, 2503, 2504, 2505, 2506, 2507, 2508, 2509, 2510, 2511,
+    2512, 2513, 2514, 2515,
 ];
+
+/// 手札预热串查表口（v1.16.33 单1 NIZE 通道访问器；越界 min 钳制——
+/// panic=abort 纪律；evtx 零分配 &'static str）
+#[inline]
+fn ev_note_prewarm(k: usize) -> &'static str {
+    evtx(EV_NOTE_PREWARM_NS[k.min(EV_NOTE_PREWARM_NS.len() - 1)] as usize)
+}
 
 /// 遭遇手札首开帧预热（exec_panel_act Tab(4)/指引 Gallery 跳转同口调用）：静态串
 /// 全量 + 已遇事件的标题/简介（未遇不灌——全池灌齐有图集余量风险，且未遇
 /// 行只显？？？；收录随游玩渐进，预热开销与之同长）
 pub fn prewarm_event_book(g: &Game) {
-    for s in EV_NOTE_PREWARM {
-        prewarm_text(s, &[14]);
+    for k in 0..EV_NOTE_PREWARM_NS.len() {
+        prewarm_text(ev_note_prewarm(k), &[14]);
     }
     for (i, &c) in g.meta.ev_cnt.iter().enumerate() {
         if c > 0 {
@@ -199,10 +173,13 @@ pub fn event_badge(id: usize) -> (&'static str, Color) {
         // v1.16.32 单3 老年徽标扩 342（灯花并盏，双门控第 10 条——同 328 口径
         // 不入 COMPANION 白名单，老年臂先命中出「老年」徽标）；339 岁暮并账入
         // COMPANION 白名单走上方伴随臂，勿挂本臂。
+        // v1.16.33 单3 老年徽标扩 348（霜橘分甘，双门控第 11 条 mr6——同 342
+        // 口径不入 COMPANION 白名单，老年臂先命中出「老年」徽标；复审必修②
+        // 补登记——漏挂会落默认臂显「遭遇」，复刻 v1.16.26 已修漏登记类）。
         // 212 相扶看雪同为老年×有伴双门控，但在 COMPANION_EVENTS 白名单内，
         // 上方 COMPANION 臂先命中恒出「伴随」徽标——不入本臂（死模式勿挂）
         88 | 89 | 170 | 171 | 189 | 198 | 199 | 204 | 215 | 216 | 227 | 239 | 268 | 288
-        | 291 | 297 | 299 | 309 | 310 | 322 | 328 | 342 => {
+        | 291 | 297 | 299 | 309 | 310 | 322 | 328 | 342 | 348 => {
             return ("老年", C_GOLD_D)
         }
         // v1.16.26 宿敌徽标扩 289（同门销踪，宿敌回响——照 110 夺积余波口径，
@@ -465,7 +442,18 @@ fn prewarm_recall_overlay(g: &Game, i: usize) {
 // 绘制位（draw_event_recall_overlay 三处按下标取串）与两条开启口的预热同源——
 // Tab(4) 手札页口并入 EV_NOTE_PREWARM（对账测试钉死不漂移），终局页本稿遭遇口
 // 由 prewarm_run_recall 循环本表自灌（该口不经 prewarm_event_book）
-const RECALL_CHROME: [&str; 3] = ["手札回味", "本世未存全文，仅录简介", "点按任意处返回"];
+// v1.16.33 单1 NIZE 通道：RECALL_CHROME 收编 textpack（3 元素，同值共享
+// N——引用位 evtx(RECALL_CHROME_NS[k] as usize)，访问器/循环由施工方手改）
+const RECALL_CHROME_NS: [u16; 3] = [
+    2513, 2514, 2515,
+];
+
+/// 回味覆层 chrome 查表口（v1.16.33 单1 NIZE 通道访问器；越界 min 钳制——
+/// panic=abort 纪律；evtx 零分配 &'static str，覆层稳态帧零堆分配口径不变）
+#[inline]
+fn recall_chrome(k: usize) -> &'static str {
+    evtx(RECALL_CHROME_NS[k.min(RECALL_CHROME_NS.len() - 1)] as usize)
+}
 
 // v1.16.11 手札回味覆层：图鉴已遇行点按开启的只读详情（纯展示不结算）。模态独占
 // 输入照 zoom_art 早退先例（draw_reality 早退链独占渲染，本函数由其调用）；版式
@@ -504,7 +492,7 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
     if let Some(ec) = edge {
         draw_rectangle_lines(340.0, 100.0, 600.0, 500.0, 2.5, ec);
     }
-    txt(RECALL_CHROME[0], 380.0, 112.0, 14, C_DIM);
+    txt(recall_chrome(0), 380.0, 112.0, 14, C_DIM);
     let name = EVENT_NAMES.get(id).unwrap_or("？？？"); // 防御同手札行口径
     txt_c(name, V_W * 0.5, 128.0, 24, C_GOLD);
     draw_rectangle(
@@ -533,7 +521,7 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
             wrap_draw(t, 380.0, 196.0, 16, 520.0, 28.0, C_TEXT);
         }
         None => {
-            txt(RECALL_CHROME[1], 380.0, 196.0, 14, C_DIM);
+            txt(recall_chrome(1), 380.0, 196.0, 14, C_DIM);
             if let Some(b) = EVENT_BRIEF.get(id) {
                 if !b.is_empty() {
                     wrap_draw(b, 380.0, 224.0, 14, 520.0, 22.0, C_TEXT);
@@ -572,7 +560,7 @@ pub fn draw_event_recall_overlay(g: &mut Game) {
             1.0,
         );
     }
-    txt_c(RECALL_CHROME[2], V_W * 0.5, 566.0, 14, C_DIM);
+    txt_c(recall_chrome(2), V_W * 0.5, 566.0, 14, C_DIM);
     if is_mouse_button_pressed(MouseButton::Left) {
         g.ev_recall = None;
         g.play(crate::sounds::Which::Page);
@@ -592,8 +580,8 @@ pub fn prewarm_run_recall(g: &Game) {
     // v1.16.14 复审修：本稿遭遇口点行开启的回味覆层不经 prewarm_event_book（那是
     // Tab(4) 手札页口）——chrome 三串在此自灌，否则未开过手札页的会话（开 sim→
     // 终局→本稿剧情→点行）首开覆层三串冷栅格化
-    for s in RECALL_CHROME {
-        prewarm_text(s, &[14]);
+    for k in 0..RECALL_CHROME_NS.len() {
+        prewarm_text(recall_chrome(k), &[14]);
     }
     for id in &g.run_events {
         let (bt, _) = event_badge(*id);
@@ -952,10 +940,11 @@ mod gallery_v11614_tests {
     //（0=头标/1=降级标签/2=返回提示），数组被重排/增删会静默错位——逐位钉值
     #[test]
     fn recall_chrome_shape_pinned() {
-        assert_eq!(RECALL_CHROME.len(), 3);
-        assert_eq!(RECALL_CHROME[0], "手札回味");
-        assert_eq!(RECALL_CHROME[1], "本世未存全文，仅录简介");
-        assert_eq!(RECALL_CHROME[2], "点按任意处返回");
+        // v1.16.33 单1 NIZE 通道：RECALL_CHROME 改 N 表后钉值走查表口（内容钉不变）
+        assert_eq!(RECALL_CHROME_NS.len(), 3);
+        assert_eq!(recall_chrome(0), "手札回味");
+        assert_eq!(recall_chrome(1), "本世未存全文，仅录简介");
+        assert_eq!(recall_chrome(2), "点按任意处返回");
     }
 
     // Tab(4) 手札页开启口对账：EV_NOTE_PREWARM 必须覆盖 chrome 全集——预热清单
@@ -964,13 +953,38 @@ mod gallery_v11614_tests {
     // 同一单源，覆盖属结构保证，不存在可对账的旁路清单）
     #[test]
     fn recall_chrome_covered_by_event_book_prewarm() {
-        for s in RECALL_CHROME {
+        // v1.16.33 单1 NIZE 通道：两表改 N 后对账走查表口逐位比较（语义不变）
+        for k in 0..RECALL_CHROME_NS.len() {
+            let s = recall_chrome(k);
             assert!(
-                EV_NOTE_PREWARM.contains(&s),
+                (0..EV_NOTE_PREWARM_NS.len()).any(|e| ev_note_prewarm(e) == s),
                 "chrome「{}」不在 EV_NOTE_PREWARM——Tab(4) 口首开覆层冷栅格化",
                 s
             );
         }
+    }
+
+    // v1.16.33 单1 刀3 NIZE 通道查表口逐位钉（内容=原表字面量；N 错行/共享错串
+    // 在此必红；行值取自真相源 tools/row_reader.py 口径）
+    #[test]
+    fn nize_prewarm_tables_pinned() {
+        assert_eq!(gallery_prewarm_str(0), "图鉴");
+        assert_eq!(gallery_prewarm_str(18), "—— 同页之缘起于模拟，跨世持久。");
+        // 1823 行系 v1.16.29 刀C 既有收编行——dedup 共享（同串同 N）
+        assert_eq!(gallery_prewarm_str(20), evtx(1823));
+        assert_eq!(ev_note_prewarm(0), "—— 遭遇手札 ——");
+        assert_eq!(ev_note_prewarm(11), "回响");
+        assert_eq!(ev_note_prewarm(12), "×1");
+        // v1.16.33 门禁修：索引 21..23 为 chrome 三行（×1..×9 占 12..20）——
+        // 首版钉 21/22 错位一档（×块末数错一位）当场红
+        assert_eq!(ev_note_prewarm(21), "手札回味");
+        assert_eq!(ev_note_prewarm(22), "本世未存全文，仅录简介");
+        // RECALL_CHROME 三行与 EV_NOTE_PREWARM 末三行同串共享 N（结构保证）
+        assert_eq!(recall_chrome(0), ev_note_prewarm(21));
+        assert_eq!(recall_chrome(1), ev_note_prewarm(22));
+        assert_eq!(recall_chrome(2), ev_note_prewarm(23));
+        // 越界 min 钳制（panic=abort 纪律防御臂）
+        assert_eq!(ev_note_prewarm(usize::MAX), ev_note_prewarm(23));
     }
 
     // 抬起命中带边界：内容带 [RUN_RECALL_Y0, RUN_RECALL_Y1] 闭区间内可点，缘外

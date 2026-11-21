@@ -711,10 +711,7 @@ fn draw_npc_page(g: &mut Game) -> Option<PanelAct> {
     let cfav = g.life.as_ref().map_or(0, |x| x.comp_fav);
     tales += tale_unlocked(cfav).max((g.meta.companion_lives >= 1) as usize);
     txt(
-        &format!(
-            "好感随交往与赠礼增长，跨世持久（随轮回烙印存档）；赠礼价随交情水涨船高。 · 识人小传 {}/15",
-            tales
-        ),
+        &evf(2562, &[&(tales) as &dyn core::fmt::Display])/* 原文：好感随交往与赠礼增长，跨世持久（随轮回烙印存档）；赠礼价随交情水涨船高。 · 识人小传 {}/15 */,
         170.0,
         630.0, 14,
         C_DIM,
@@ -808,7 +805,7 @@ fn draw_npc_card(
             wrap_draw(npc_tale(i, seg - 1), col, y + 196.0, 14, 640.0, 22.0, C_TEXT);
         }
     } else if npc_row_vis(y + 196.0) {
-        txt("交情愈深，其人故事自会显于纸上。", col, y + 196.0, 14, C_DIM);
+        txt(evtx(2563)/* 原文：交情愈深，其人故事自会显于纸上。 */, col, y + 196.0, 14, C_DIM);
     }
     // 赠礼钮 230×60（v1.16.1 底对齐：卡高 430→y+358，随立绘盒向下延伸沉到卡底；
     // 仅整钮可见时绘出与可点）；gift_npc 内部再校验灵石（单口）
@@ -917,7 +914,7 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
             }
             if npc_row_vis(y + 168.0) {
                 txt(
-                    "情谊随赠礼事件与遗泽积累；更换道侣亦不忘旧谊。",
+                    evtx(2564)/* 原文：情谊随赠礼事件与遗泽积累；更换道侣亦不忘旧谊。 */,
                     col,
                     y + 168.0,
                     14,
@@ -952,7 +949,7 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
             }
             if npc_row_vis(gy + 18.0) {
                 txt(
-                    "模拟中遇『同页天成』事件，选『认下这页』即可结缘。",
+                    evtx(2456)/* 原文：模拟中遇『同页天成』事件，选『认下这页』即可结缘。 */,
                     gx + 16.0,
                     gy + 18.0, 16,
                     C_TEXT,
@@ -964,14 +961,14 @@ fn draw_comp_card(g: &Game, l: Option<&Life>, y: f32, comp_tex: Option<&Texture2
                 // 未结缘无图态（剪影）原行照旧
                 if comp_tex.is_some() {
                     txt(
-                        "此绘承自历世之缘，此生再遇『同页天成』可再续。",
+                        evtx(2457)/* 原文：此绘承自历世之缘，此生再遇『同页天成』可再续。 */,
                         gx + 16.0,
                         gy + 50.0, 16,
                         C_TEXT,
                     );
                 } else {
                     txt(
-                        "结缘后，她的立绘、情谊与双修加成都会在此卡显现。",
+                        evtx(2565)/* 原文：结缘后，她的立绘、情谊与双修加成都会在此卡显现。 */,
                         gx + 16.0,
                         gy + 50.0, 16,
                         C_TEXT,
@@ -1047,8 +1044,15 @@ const COMP_SCROLL_MAX: f32 = COMP_CARD_H
     - (NPC_VIEW_Y1 - NPC_VIEW_Y0);
 
 // 双修共进收益/限制说明（主卡常显行；与按钮副标同源数字——改一处须同步按钮副标）
-const DUAL_CULT_HINT: &str =
-    "双修共进：情谊+5 · 道心+1 · 气运+1 · 修为+2 载 · 每载一次（耗灵石随境界涨）";
+// v1.16.33 单1 NIZE 通道：DUAL_CULT_HINT 收编 textpack N=2434（引用位
+// evtx(DUAL_CULT_HINT_N as usize)，访问器/绘制位由施工方手改）
+const DUAL_CULT_HINT_N: u16 = 2434;
+
+/// 双修说明行查表口（v1.16.33 单1 NIZE 通道访问器；evtx 零分配 &'static str）
+#[inline]
+fn dual_cult_hint() -> &'static str {
+    evtx(DUAL_CULT_HINT_N as usize)
+}
 
 // 缘谱行已识判定（纯函数供单测；gallery known 同口径：历世账 >0 || 此生同页）
 fn bond_row_known(bonds: u8, cur: bool) -> bool {
@@ -1098,11 +1102,11 @@ fn comp_nocompanion_sub(hist_bond: bool) -> &'static str {
 // 「再续」，账上已有缘不再说「即可结缘」）/ 历世无缘（首缘引导原句）
 fn comp_footer_head(bonded: bool, hist_bond: bool) -> &'static str {
     if bonded {
-        "落幕后可承道侣遗泽：道心+8 气运+8（永久）。"
+        evtx(2463)/* 原文：落幕后可承道侣遗泽：道心+8 气运+8（永久）。 */
     } else if hist_bond {
-        "历世有缘，此生未续——模拟中遇『同页天成』，选『认下这页』即可再续；落幕后可承道侣遗泽。"
+        evtx(2461)/* 原文：历世有缘，此生未续——模拟中遇『同页天成』，选『认下这页』即可再续；落幕后可承道侣遗泽。 */
     } else {
-        "模拟中遇『同页天成』，选『认下这页』即可结缘；落幕后可承道侣遗泽。"
+        evtx(2462)/* 原文：模拟中遇『同页天成』，选『认下这页』即可结缘；落幕后可承道侣遗泽。 */
     }
 }
 
@@ -1287,7 +1291,7 @@ fn draw_comp_main_card(
             }
             // 双修共进收益/限制行（与按钮副标同源数字）
             if npc_row_vis(y + 162.0) {
-                txt(DUAL_CULT_HINT, col, y + 162.0, 14, C_GOLD_D);
+                txt(dual_cult_hint(), col, y + 162.0, 14, C_GOLD_D);
             }
             // 缝页缘行：feng_bn==ci 显『三生缝页·缘 N』（N=blv 0..=3，ASCII 动态）
             if npc_row_vis(y + 188.0) {
@@ -1359,12 +1363,9 @@ fn draw_comp_main_card(
             // 副标：可用态写明代价与收益；置灰态写明差什么（门控优先级 =
             // NoCompanion > ThisYear > Stones，照 gate 单源）
             let sub = match gate {
-                DualGate::Ready => format!(
-                    "耗灵石 {} · 情谊+5 · 道心+1 气运+1 · 修为+2载",
-                    fmt_int(cost)
-                ),
+                DualGate::Ready => evf(2566, &[&(fmt_int(cost)) as &dyn core::fmt::Display])/* 原文：耗灵石 {} · 情谊+5 · 道心+1 气运+1 · 修为+2载 */,
                 DualGate::ThisYear => "本载已双修 · 推岁一载后方可再修".to_string(),
-                DualGate::Stones => format!("灵石不足（需 {}）", fmt_int(cost)),
+                DualGate::Stones => evf(2567, &[&(fmt_int(cost)) as &dyn core::fmt::Display])/* 原文：灵石不足（需 {}） */,
                 // NoCompanion 本臂（Some(companion) 分支）按 gate 单源不可达，纯防御
                 // 口径；v1.16.18 文案仍随历世账分流保持单口径（comp_nocompanion_sub
                 // 单口；历世账直查 bonds>0——此处 comp_idx 是此生伴下标，不能当 hist 判据）
@@ -1399,7 +1400,7 @@ fn draw_comp_main_card(
             }
             if npc_row_vis(gy + 18.0) {
                 txt(
-                    "模拟中遇『同页天成』事件，选『认下这页』即可结缘。",
+                    evtx(2456)/* 原文：模拟中遇『同页天成』事件，选『认下这页』即可结缘。 */,
                     gx + 16.0,
                     gy + 18.0, 16,
                     C_TEXT,
@@ -1408,14 +1409,14 @@ fn draw_comp_main_card(
             if npc_row_vis(gy + 50.0) {
                 if comp_tex.is_some() {
                     txt(
-                        "此绘承自历世之缘，此生再遇『同页天成』可再续。",
+                        evtx(2457)/* 原文：此绘承自历世之缘，此生再遇『同页天成』可再续。 */,
                         gx + 16.0,
                         gy + 50.0, 16,
                         C_TEXT,
                     );
                 } else {
                     txt(
-                        "结缘后，她的立绘、情谊与双修加成都会在此页显现。",
+                        evtx(2458)/* 原文：结缘后，她的立绘、情谊与双修加成都会在此页显现。 */,
                         gx + 16.0,
                         gy + 50.0, 16,
                         C_TEXT,
@@ -1436,7 +1437,7 @@ fn draw_comp_main_card(
                 );
             }
             if npc_row_vis(y + 182.0) {
-                txt(DUAL_CULT_HINT, col, y + 182.0, 14, C_GOLD_D);
+                txt(dual_cult_hint(), col, y + 182.0, 14, C_GOLD_D);
             }
             // 缝页缘行（历世有缘者 feng_bn 已定；此生未结缘也标出来供缘谱对读）
             if npc_row_vis(y + 208.0) && g.meta.feng_bn != FENG_UNSET {
@@ -1573,10 +1574,7 @@ fn draw_bond_total_row(g: &Game, y: f32) {
     let total: u32 = g.meta.comp_bonds.iter().map(|&b| b as u32).sum();
     if npc_row_vis(y + 14.0) {
         txt(
-            &format!(
-                "合计 · 历世结缘 {} 次 · 同页累计 {} 世",
-                g.meta.companion_lives, total
-            ),
+            &evf(2568, &[&(g.meta.companion_lives) as &dyn core::fmt::Display, &(total) as &dyn core::fmt::Display])/* 原文：合计 · 历世结缘 {} 次 · 同页累计 {} 世 */,
             x + 16.0,
             y + 14.0, 14,
             C_DIM,
@@ -1588,66 +1586,47 @@ fn draw_bond_total_row(g: &Game, y: f32) {
 // 页静态串 + 十伴名补 24 档（主卡名号 24px；14/16 照图鉴档——18 由菜单期
 // panel_warm_chars 保底覆盖）+ 档次名 @16 + 小传 @14。动态数值行 ASCII 由菜单期
 // panel_warm_chars 保底（先例口径）。
-const COMP_PAGE_PREWARM: &[&str] = &[
-    // 页签/主卡
-    "道侣",
-    "道侣 · 此生未结缘",
-    "情谊",
-    // 缘谱行态
-    "？？？",
-    "此生同页",
-    "缘定三生",
-    "旧页回声所指",
-    "曾同页",
-    "世",
-    "未识 · 尘封之名",
-    "合计 · 历世结缘",
-    "次 · 同页累计",
-    // 缝页/历世
-    "三生缝页·缘",
-    "历世结缘",
-    // 双修
-    "双修共进",
-    DUAL_CULT_HINT,
-    "耗灵石",
-    "· 情谊+5 · 道心+1 气运+1 · 修为+2载",
-    "本载已双修 · 推岁一载后方可再修",
-    "灵石不足（需",
-    "）",
-    // 空态引导（复用现成文案）+ 剪影小字
-    "模拟中遇『同页天成』事件，选『认下这页』即可结缘。",
-    "此绘承自历世之缘，此生再遇『同页天成』可再续。",
-    "结缘后，她的立绘、情谊与双修加成都会在此页显现。",
-    "结缘之后，立绘自会在此显现",
-    // v1.16.18 口径弥合两态（空态标题/双修副标 @24 另灌 + 页脚历世有缘句 @14）
-    "历世有缘 · 此生未续",
-    "历世有缘，此生未续——模拟中遇『同页天成』，选『认下这页』即可再续；落幕后可承道侣遗泽。",
-    // 页脚三态（未结缘引导 / 遗泽口径 / 链10 门控提示）
-    "模拟中遇『同页天成』，选『认下这页』即可结缘；落幕后可承道侣遗泽。",
-    "落幕后可承道侣遗泽：道心+8 气运+8（永久）。",
-    "灯市深处，旧页回声或再现。",
+// v1.16.33 单1 NIZE 通道：COMP_PAGE_PREWARM 收编 textpack（30 元素，同值共享
+// N——引用位 evtx(COMP_PAGE_PREWARM_NS[k] as usize)，访问器/循环由施工方手改）
+const COMP_PAGE_PREWARM_NS: [u16; 30] = [
+    2436, 2437, 2438, 2439, 2440, 2441, 2442, 2443, 2444, 2445,
+    2446, 2447, 2448, 2449, 2450, 2434, 2451, 2452, 2453, 2454,
+    2455, 2456, 2457, 2458, 2459, 2460, 2461, 2462, 2463, 2464,
 ];
+
+/// 道侣专页预热串查表口（v1.16.33 单1 NIZE 通道访问器；越界 min 钳制——
+/// panic=abort 纪律；evtx 零分配 &'static str）
+#[inline]
+fn comp_page_prewarm(k: usize) -> &'static str {
+    evtx(COMP_PAGE_PREWARM_NS[k.min(COMP_PAGE_PREWARM_NS.len() - 1)] as usize)
+}
 
 // 空态引导框 @16 档（与 COMP_PAGE_PREWARM @14 同串双档——绘制档见 draw_comp_main_card）
-const COMP_PAGE_PREWARM_16: &[&str] = &[
-    "模拟中遇『同页天成』事件，选『认下这页』即可结缘。",
-    "此绘承自历世之缘，此生再遇『同页天成』可再续。",
-    "结缘后，她的立绘、情谊与双修加成都会在此页显现。",
+// v1.16.33 单1 NIZE 通道：COMP_PAGE_PREWARM_16 收编 textpack（3 元素，同值共享
+// N——引用位 evtx(COMP_PAGE_PREWARM_16_NS[k] as usize)，访问器/循环由施工方手改）
+const COMP_PAGE_PREWARM_16_NS: [u16; 3] = [
+    2456, 2457, 2458,
 ];
 
+/// 空态引导框 @16 档串查表口（v1.16.33 单1；与 comp_page_prewarm 同款钳制）
+#[inline]
+fn comp_page_prewarm_16(k: usize) -> &'static str {
+    evtx(COMP_PAGE_PREWARM_16_NS[k.min(COMP_PAGE_PREWARM_16_NS.len() - 1)] as usize)
+}
+
 pub(crate) fn prewarm_comp_page() {
-    for s in COMP_PAGE_PREWARM {
-        prewarm_text(s, &[14]);
+    for k in 0..COMP_PAGE_PREWARM_NS.len() {
+        prewarm_text(comp_page_prewarm(k), &[14]);
     }
     // 空态引导框两行 @16（引导框文案绘制档）；双修钮主标 @20（button 带 sub 的主标档）
-    for s in COMP_PAGE_PREWARM_16 {
-        prewarm_text(s, &[16]);
+    for k in 0..COMP_PAGE_PREWARM_16_NS.len() {
+        prewarm_text(comp_page_prewarm_16(k), &[16]);
     }
     prewarm_text("双修共进", &[20]);
     // 主卡两条动态 format! 行的静态字集样例串（ASCII 数字与 × 由菜单期保底，
     // 先例口径）；「放大」鉴赏徽标（zoom_badge @14，本页新消费方补挂）
-    prewarm_text("当前：双修加成 ×0.00（结缘起步+20%，只升不降）", &[14]);
-    prewarm_text("结缘起步情谊 25（双修 +20%），道侣赠礼事件再 +5。", &[14]);
+    prewarm_text(evtx(2569)/* 原文：当前：双修加成 ×0.00（结缘起步+20%，只升不降） */, &[14]);
+    prewarm_text(evtx(2570)/* 原文：结缘起步情谊 25（双修 +20%），道侣赠礼事件再 +5。 */, &[14]);
     prewarm_text("放大", &[14]);
     // 页签「道侣」@18（chrome button 无 sub 主标档；菜单期 panel_warm 保底之外再灌一道）
     prewarm_text("道侣", &[18]);
@@ -1810,12 +1789,7 @@ fn draw_overview(g: &Game, l: &Life) {
         txt("无", col1 + 45.0, 304.0, 14, C_DIM);
     } else {
         txt(
-            &format!(
-                "已装 {}/{} · 包内 {}",
-                l.equipped.len().min(RELIC_EQUIP_MAX),
-                RELIC_EQUIP_MAX,
-                l.relics.len()
-            ),
+            &evf(2526, &[&(l.equipped.len().min(RELIC_EQUIP_MAX)) as &dyn core::fmt::Display, &(RELIC_EQUIP_MAX) as &dyn core::fmt::Display, &(l.relics.len()) as &dyn core::fmt::Display])/* 原文：已装 {}/{} · 包内 {} */,
             col1 + 45.0,
             304.0,
             14,
@@ -1914,21 +1888,14 @@ fn draw_overview(g: &Game, l: &Life) {
     // 生涯两行
     draw_rectangle(col2, 440.0, 310.0, 1.0, Color::from_rgba(96, 76, 130, 160));
     txt(
-        &format!(
-            "生涯：最高 {}境 · 战力 {}",
-            REALMS[l.max_realm.min(14)].name,
-            fmt_num(power(l))
-        ),
+        &evf(2571, &[&(REALMS[l.max_realm.min(14)].name) as &dyn core::fmt::Display, &(fmt_num(power(l))) as &dyn core::fmt::Display])/* 原文：生涯：最高 {}境 · 战力 {} */,
         col2,
         480.0,
         14,
         C_TEXT,
     );
     txt(
-        &format!(
-            "斩敌 {} · 历战 {} 场 · 重伤 {} 年",
-            l.wins, l.fights, l.injured
-        ),
+        &evf(2572, &[&(l.wins) as &dyn core::fmt::Display, &(l.fights) as &dyn core::fmt::Display, &(l.injured) as &dyn core::fmt::Display])/* 原文：斩敌 {} · 历战 {} 场 · 重伤 {} 年 */,
         col2,
         506.0,
         14,
@@ -2224,13 +2191,7 @@ fn draw_ach_title_page(g: &Game) -> Option<PanelAct> {
     // 页脚提示（称号按历代最高境界判定）；v1.12.1 讨牒 n/6 进度——看得见 6/6 才知道终战在
     let taodie = g.meta.taodie;
     txt(
-        &format!(
-            "历代最高 {}境 · 斩杀宿敌 {} · 讨牒 {}/6{} · 「自动跟随」随最强境界实时变化",
-            REALMS[best_realm.min(14)].name,
-            neme_slain,
-            taodie,
-            if taodie >= 6 { "（可赴问笔终战）" } else { "" },
-        ),
+        &evf(2573, &[&(REALMS[best_realm.min(14)].name) as &dyn core::fmt::Display, &(neme_slain) as &dyn core::fmt::Display, &(taodie) as &dyn core::fmt::Display, &(if taodie >= 6 { "（可赴问笔终战）" } else { "" }) as &dyn core::fmt::Display])/* 原文：历代最高 {}境 · 斩杀宿敌 {} · 讨牒 {}/6{} · 「自动跟随」随最强境界实时变化 */,
         170.0,
         636.0, 14,
         C_DIM,
@@ -2344,28 +2305,25 @@ mod title_cell_tests {
 // draw.rs:1797）。行数恒 ≤5（HIST_MAX），无滚动/会话态/遮幅/整卡剔除；panel_card
 // 底板由调用方 draw_char_panel 统一绘制。动态行 format! 口径照勘察（draw_inherit
 // 每帧 ≥8 处先例）：可见 5 卡 × 2 行 + 固定页脚 1 次。
-const HIST_PREWARM_STRS: &[&str] = &[
-    "旧稿",
-    "第",
-    "世·第",
-    "稿",
-    "境",
-    "享年",
-    "载·历",
-    "年",
-    "道韵+",
-    "灵石",
-    "侣：",
-    "无",
-    "旧稿录 · 只记近 5 稿，最新在最上。",
-    "尚无旧稿——模拟一世落幕后方有记录。",
+// v1.16.33 单1 NIZE 通道：HIST_PREWARM_STRS 收编 textpack（14 元素，同值共享
+// N——引用位 evtx(HIST_PREWARM_NS[k] as usize)，访问器/循环由施工方手改）
+const HIST_PREWARM_NS: [u16; 14] = [
+    2465, 2466, 2467, 2468, 2469, 2470, 2471, 2472, 2473, 2474,
+    2475, 2476, 2477, 2478,
 ];
+
+/// 旧稿页预热串查表口（v1.16.33 单1 NIZE 通道访问器；越界 min 钳制——
+/// panic=abort 纪律；evtx 零分配 &'static str）
+#[inline]
+fn hist_prewarm_str(k: usize) -> &'static str {
+    evtx(HIST_PREWARM_NS[k.min(HIST_PREWARM_NS.len() - 1)] as usize)
+}
 
 /// 旧稿页首开帧预热（exec_panel_act Tab(5) 单点调用，照 gallery::prewarm_corpus 先例）：
 /// 静态语料 + 境界名 + 十道侣名 + 各稿死因（≤5 条）——防冷字形首帧栅格化触发图集重传
 pub(crate) fn prewarm_hist(g: &Game) {
-    for s in HIST_PREWARM_STRS {
-        prewarm_text(s, &[14, 16]);
+    for k in 0..HIST_PREWARM_NS.len() {
+        prewarm_text(hist_prewarm_str(k), &[14, 16]);
     }
     for r in REALMS.iter() {
         prewarm_text(r.name, &[14, 16]);
@@ -2385,7 +2343,7 @@ pub(crate) fn prewarm_hist(g: &Game) {
 
 fn draw_hist_page(g: &Game) {
     if g.meta.hist.is_empty() {
-        txt("尚无旧稿——模拟一世落幕后方有记录。", 180.0, 160.0, 16, C_DIM);
+        txt(evtx(2478)/* 原文：尚无旧稿——模拟一世落幕后方有记录。 */, 180.0, 160.0, 16, C_DIM);
         return;
     }
     // 最新在顶（rev 首条即最新，照继承屏大事记 rev().take(7) 先例）
@@ -2417,14 +2375,7 @@ fn draw_hist_page(g: &Game) {
         );
         // 头行：第N世·第M稿 境界 享年/历经（max_realm .min(14) 照 draw.rs:1782 先例）
         txt(
-            &format!(
-                "第{}世·第{}稿  {}境  享年{}载·历{}年",
-                r.life_no,
-                r.run_no,
-                REALMS[r.max_realm.min(14)].name,
-                fmt_num(r.age),
-                fmt_num(r.years as f64)
-            ),
+            &evf(2574, &[&(r.life_no) as &dyn core::fmt::Display, &(r.run_no) as &dyn core::fmt::Display, &(REALMS[r.max_realm.min(14)].name) as &dyn core::fmt::Display, &(fmt_num(r.age)) as &dyn core::fmt::Display, &(fmt_num(r.years as f64)) as &dyn core::fmt::Display])/* 原文：第{}世·第{}稿  {}境  享年{}载·历{}年 */,
             176.0,
             y + 10.0, 16,
             C_TEXT,
@@ -2495,11 +2446,7 @@ fn draw_hist_page(g: &Game) {
     }
     // 页脚（y630 固定视口外，照 gallery.rs:162-170 每帧 1 次 format! 口径）
     txt(
-        &format!(
-            "旧稿 {} 条 · 只记近 {} 稿，最新在最上。",
-            g.meta.hist.len(),
-            crate::game::HIST_MAX
-        ),
+        &evf(2575, &[&(g.meta.hist.len()) as &dyn core::fmt::Display, &(crate::game::HIST_MAX) as &dyn core::fmt::Display])/* 原文：旧稿 {} 条 · 只记近 {} 稿，最新在最上。 */,
         170.0,
         630.0, 14,
         C_DIM,
@@ -2605,7 +2552,7 @@ mod comp_page_tests {
         for s in [
             "道侣",
             "双修共进",
-            DUAL_CULT_HINT,
+            dual_cult_hint(),
             "此生同页",
             "缘定三生",
             "旧页回声所指",
@@ -2614,12 +2561,42 @@ mod comp_page_tests {
             "历世有缘 · 此生未续",
             comp_footer_head(false, true),
         ] {
+            // v1.16.33 单1 NIZE 通道：COMP_PAGE_PREWARM 改 N 表后对账走查表口
+            // 逐位比较（语义与旧 &[&str].contains 等价）
             assert!(
-                COMP_PAGE_PREWARM.contains(&s),
+                (0..COMP_PAGE_PREWARM_NS.len()).any(|k| comp_page_prewarm(k) == s),
                 "静态串「{}」不在 COMP_PAGE_PREWARM——Tab(6) 口首开冷栅格化",
                 s
             );
         }
+    }
+
+    // v1.16.33 单1 刀3 NIZE 通道查表口逐位钉（内容=原表字面量；N 错行/共享错串
+    // /越界钳制错位在此必红；行值取自真相源 tools/row_reader.py 口径）
+    #[test]
+    fn nize_table_accessors_pinned() {
+        assert_eq!(comp_page_prewarm(0), "道侣");
+        assert_eq!(comp_page_prewarm(2), "情谊");
+        // DUAL_CULT_HINT 槽（idx 15）与独立访问器同源（N=2434 单行共享）
+        assert_eq!(comp_page_prewarm(15), dual_cult_hint());
+        assert_eq!(
+            dual_cult_hint(),
+            "双修共进：情谊+5 · 道心+1 · 气运+1 · 修为+2 载 · 每载一次（耗灵石随境界涨）"
+        );
+        // _16 双档三行与主表同串共享 N（dedup alloc 结构保证）
+        assert_eq!(
+            comp_page_prewarm_16(0),
+            "模拟中遇『同页天成』事件，选『认下这页』即可结缘。"
+        );
+        assert_eq!(comp_page_prewarm_16(0), comp_page_prewarm(21));
+        assert_eq!(hist_prewarm_str(0), "旧稿");
+        assert_eq!(hist_prewarm_str(12), "旧稿录 · 只记近 5 稿，最新在最上。");
+        // 越界 min 钳制：k 越界落末位行（panic=abort 纪律防御臂，绝不越界崩）
+        assert_eq!(
+            comp_page_prewarm(999),
+            comp_page_prewarm(COMP_PAGE_PREWARM_NS.len() - 1)
+        );
+        assert_eq!(hist_prewarm_str(usize::MAX), hist_prewarm_str(13));
     }
 
     // v1.16.18 P0 回归：切页签必须整批归零滚动会话态（人物页 max 1698 翻底
