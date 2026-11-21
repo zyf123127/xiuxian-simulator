@@ -113,6 +113,8 @@ def main():
     seg8 = parse_const(data_txt, "EV_SEG8")
     seg9 = parse_const(data_txt, "EV_SEG9")
     seg10 = parse_const(data_txt, "EV_SEG10")
+    # v1.16.36 单3 扩段十二：EV_SEG11=353 快照段界（单1 预建本批引用）
+    seg11 = parse_const(data_txt, "EV_SEG11")
     b1 = parse_inc_base("TXT_NAME_BASE")
     b2 = parse_inc_base("TXT_NAME2_BASE")
     b3 = parse_inc_base("TXT_NAME3_BASE")
@@ -124,6 +126,8 @@ def main():
     b9 = parse_inc_base("TXT_NAME9_BASE")
     b10 = parse_inc_base("TXT_NAME10_BASE")
     b11 = parse_inc_base("TXT_NAME11_BASE")
+    # v1.16.36 单3 扩段十二：段十二基址 TXT_NAME12_BASE
+    b12 = parse_inc_base("TXT_NAME12_BASE")
 
     # id -> 名段 N 映射（与 data.rs EvTable base8+base9 双段九段连寻同口径）
     def name_n(eid):
@@ -157,7 +161,12 @@ def main():
         # v1.16.35 段十一：EV_SEG10=351 快照段界，段十一基址 TXT_NAME11_BASE
         #（新增分支勿替换段十 return——同上红线；段十分支已由无卫语句末段
         # return 改带 if eid<seg10 卫语句，覆盖面原样保留）
-        return b11 + (eid - seg10)
+        if eid < seg11:
+            return b11 + (eid - seg10)
+        # v1.16.36 段十二：EV_SEG11=353 快照段界，段十二基址 TXT_NAME12_BASE
+        #（新增分支勿替换段十一 return——同上红线；段十一分支已由无卫语句末段
+        # return 改带 if eid<seg11 卫语句，覆盖面原样保留）
+        return b12 + (eid - seg11)
 
     # 钉B：名段覆盖断言（真相源逐条可解析、非空、行号=N）
     src_lines = SRC.read_text(encoding="utf-8").splitlines()
@@ -188,11 +197,12 @@ def main():
     for _eid, _want in ((338, "暮坛对酌"), (343, "老炉现纹"),
                         (344, "同裱旧稿"), (348, "霜橘分甘"),
                         (349, "结绳记事"), (350, "云隙借光"),
-                        (351, "共拓崖铭"), (352, "苔阶履痕")):
+                        (351, "共拓崖铭"), (352, "苔阶履痕"),
+                        (353, "岭上补松"), (355, "磨镜还光")):
         if names.get(_eid) != _want:
             raise SystemExit("FATAL 钉B-2 名段内容钉失败: id%d → %r (期望 %r)"
                              % (_eid, names.get(_eid), _want))
-    print("OK 钉B-2 段八/段九/段十/段十一首尾内容钉 ✓（338/343/344/348/349/350/351/352）")
+    print("OK 钉B-2 段八/段九/段十/段十一/段十二首尾内容钉 ✓（338/343/344/348/349/350/351/352/353/355）")
 
     game_lines = GAME.read_text(encoding="utf-8").splitlines()
     st, en = build_event_span(game_lines)
@@ -270,9 +280,9 @@ def main():
             "每臂恰 1 次赋值" % (len(hits), n_events - 1)
         )
     print(
-        "OK 钉B 名段覆盖 ✓（N_EVENTS=%d 段界 %d/%d/%d/%d/%d/%d/%d/%d/%d/%d 基址 %d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d）"
+        "OK 钉B 名段覆盖 ✓（N_EVENTS=%d 段界 %d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d 基址 %d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d）"
         % (n_events, seg1, seg2, seg3, seg4, seg5, seg6, seg7, seg8, seg9, seg10,
-           b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11)
+           seg11, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12)
     )
     print("title_recheck 全绿")
 

@@ -2,7 +2,14 @@
 """单1 刀1 等价性验收（只读）：git HEAD 的 eff_desc special match 66 臂原文
 对照 当前 SPECIAL_SUB N 表 + text_source 真相源行 —— 逐 slot 全等校验，
 并产出 game.rs 全表钉测代码（special_subtitle_fix_tests 扩面用）。
-纪律：循环变量带后缀；本脚本只读仓库、只打印，不写任何文件。"""
+纪律：循环变量带后缀；本脚本只读仓库、只打印，不写任何文件。
+
+【使命终结·v1.16.36 单3 处置】special66 臂已于 v1.16.33 整表化 SPECIAL_SUB
+（game.rs:476 区）——HEAD 源里 `let s = match self.special {` 原臂已不存在，
+本件 :44 锚搜索恒空（AttributeError 实锤于 v1.16.36 基线复跑）。留作当轮
+（v1.16.33）等价验收历史证据不再常跑：下方守卫在锚缺失时打印 SKIP 并以 0
+退出，勿再当常跑验收件误导门禁；若需复审 SPECIAL_SUB 表与真相源的一致性，
+改跑 tools/tables_recheck.py（SPECIAL_SUB slots 77 段常驻对账）。"""
 import io
 import re
 import subprocess
@@ -41,6 +48,12 @@ def decode_raw(raw):
 head = subprocess.run(['git', 'show', 'HEAD:src/game.rs'], capture_output=True,
                       encoding='utf-8').stdout
 m0 = re.search(r'let s = match self\.special \{', head)
+# 使命终结守卫（v1.16.36 单3）：HEAD 已整表化 SPECIAL_SUB，原臂恒缺失——
+# 锚找不到即 SKIP 退出（exit 0），AttributeError 不再误导门禁
+if m0 is None:
+    print("SKIP 使命终结：special66 臂已于 v1.16.33 整表化 SPECIAL_SUB，"
+          "HEAD 无原臂可对照（历史验收证据，不再常跑）")
+    sys.exit(0)
 b0 = head.index('{', m0.start())
 dep = 0
 k = b0

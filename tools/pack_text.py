@@ -13,7 +13,10 @@ data::evtx，避让 ui.rs::txt 绘制函数重名），并产出：
                            + 双表基址常量（data.rs include!；v1.16.32 单3 末态
                            八对十六常量：TXT_NAME6/TXT_BRIEF6 后增 TXT_NAME7/
                            TXT_BRIEF7、TXT_NAME8/TXT_BRIEF8——历史注「六段基址
-                           十常量」与全角 include！均为笔误，已随段清账）
+                           十常量」与全角 include！均为笔误，已随段清账；
+                           v1.16.33..36 扩池随批续至十二对二十四常量——TXT_NAME9/
+                           TXT_BRIEF9（2576/2581）..TXT_NAME12/TXT_BRIEF12
+                           （2667/2670，段十二，v1.16.36 单3 登记））
 运行期 data.rs::init_text() boot 一次 miniz_oxide::inflate::decompress_to_vec
 （与 ui.rs 字体同款通路），txt(i) O(1) 切片零分配。
 
@@ -127,6 +130,13 @@ BRIEF10_BASE_MANIFEST = 2649
 # 2657/2659——与 data.rs EV_SEG10=351 快照常量同批登记）
 NAME11_BASE_MANIFEST = 2657
 BRIEF11_BASE_MANIFEST = 2659
+
+# v1.16.36 单3 扩池起：段十一（2 条）满员后新批连号追加为段十二（3 条：名
+# 2667..=2669/简 2670..=2672，真相源手写连号段先于正文；单1 EV_SEG11=353 快照
+# 预建+单2 零改动未用正文 N 故段十二顺延 2667/2670——与 data.rs EV_SEG11=353
+# 快照常量同批登记）
+NAME12_BASE_MANIFEST = 2667
+BRIEF12_BASE_MANIFEST = 2670
 
 dry = '--dry-run' in sys.argv
 collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测用；表收编后自动幂等）
@@ -939,7 +949,8 @@ def table_bases_from_inc():
                  'TXT_NAME8_BASE', 'TXT_BRIEF8_BASE',
                  'TXT_NAME9_BASE', 'TXT_BRIEF9_BASE',
                  'TXT_NAME10_BASE', 'TXT_BRIEF10_BASE',
-                 'TXT_NAME11_BASE', 'TXT_BRIEF11_BASE')
+                 'TXT_NAME11_BASE', 'TXT_BRIEF11_BASE',
+                 'TXT_NAME12_BASE', 'TXT_BRIEF12_BASE')
                 + BASE_KEYS_TABLES2):
             mm = re.search(r'pub static %s: u32 = (\d+);' % key, txt)
             if mm:
@@ -2022,6 +2033,13 @@ if name_base is not None:
 if brief_base is not None:
     inc += emit_base('TXT_BRIEF11_BASE',
                      inc_bases.get('TXT_BRIEF11_BASE', BRIEF11_BASE_MANIFEST))
+# v1.16.36 单3 段十二基址（同段十一款：首轮 emit manifest 手分、此后回读 .inc 幂等）
+if name_base is not None:
+    inc += emit_base('TXT_NAME12_BASE',
+                     inc_bases.get('TXT_NAME12_BASE', NAME12_BASE_MANIFEST))
+if brief_base is not None:
+    inc += emit_base('TXT_BRIEF12_BASE',
+                     inc_bases.get('TXT_BRIEF12_BASE', BRIEF12_BASE_MANIFEST))
 # v1.16.29 刀B 整表基址（首轮 emit 收编 N 段基址；此后每次运行从 .inc 回读重发，
 # 与段一/二/三同款幂等——非 --tables2 运行也不许丢基址，否则 include! 断链）
 for bk2 in BASE_KEYS_TABLES2:
