@@ -42,6 +42,15 @@ rem the source is missing or implausibly small.
 copy /y assets\font.ttf.deflate taptap\taptap_verify\taptap_h5\font.ttf.deflate >nul || exit /b 1
 copy /y assets\font.ttf.deflate web\font.ttf.deflate >nul || exit /b 1
 python -c "import os; s=os.path.getsize('assets/font.ttf.deflate'); assert s>100000, f'font.ttf.deflate missing or implausibly small: {s}'" || exit /b 1
+rem v1.16.37 textpack-externalize: ship assets\textpack.bin as a loose file next to
+rem the wasm (index.html prefetches textpack.bin?v=GAME_VER in parallel with the wasm
+rem download and hands it to the wasm via the xx_text env plugin; the embedded copy is
+rem desktop-only now, so the wasm loses ~83KB). Copy into both the TapTap deploy dir
+rem and web\ (local http.server acceptance). Fail hard if the source is missing or
+rem implausibly small.
+copy /y assets\textpack.bin taptap\taptap_verify\taptap_h5\textpack.bin >nul || exit /b 1
+copy /y assets\textpack.bin web\textpack.bin >nul || exit /b 1
+python -c "import os; s=os.path.getsize('assets/textpack.bin'); assert s>50000, f'textpack.bin missing or implausibly small: {s}'" || exit /b 1
 rem keep taptap_h5\index.html in sync with web\index.html (cache-bust params live there)
 rem v1.16.8 load-knife 1: minify index.html at deploy time (source
 rem web\index.html stays readable; only the shipped copy is stripped).
@@ -50,9 +59,9 @@ rem xx_storage) is lost.
 rem v1.16.9 knife B: mq_js_bundle.js is INLINED into the shipped index.html
 rem (3rd arg = bundle path) - one less serial request on cold boot.
 python tools\minify_index.py web\index.html taptap\taptap_verify\taptap_h5\index.html web\mq_js_bundle.js || exit /b 1
-rem assert the TapTap deploy set is complete (v1.16.10: index.html + xiuxian.wasm
-rem + font.ttf.deflate + portraits\ 18 pngs (bundle is INLINED into index.html, not a separate entry))
-python -c "import os; root='taptap/taptap_verify/taptap_h5'; need=['index.html','xiuxian.wasm','font.ttf.deflate']; missing=[n for n in need if not os.path.isfile(os.path.join(root,n))]; assert not missing, 'taptap_h5 missing: '+str(missing); pngs=[f for f in os.listdir(os.path.join(root,'portraits')) if f.endswith('.png')]; assert len(pngs)==18, f'taptap_h5/portraits must be exactly 18 pngs, got {len(pngs)}'" || exit /b 1
+rem assert the TapTap deploy set is complete (v1.16.37: index.html + xiuxian.wasm
+rem + font.ttf.deflate + textpack.bin + portraits\ 18 pngs (bundle is INLINED into index.html, not a separate entry))
+python -c "import os; root='taptap/taptap_verify/taptap_h5'; need=['index.html','xiuxian.wasm','font.ttf.deflate','textpack.bin']; missing=[n for n in need if not os.path.isfile(os.path.join(root,n))]; assert not missing, 'taptap_h5 missing: '+str(missing); pngs=[f for f in os.listdir(os.path.join(root,'portraits')) if f.endswith('.png')]; assert len(pngs)==18, f'taptap_h5/portraits must be exactly 18 pngs, got {len(pngs)}'" || exit /b 1
 rem v1.16.9: recursive zip walk (portraits/ subdir now ships INSIDE the zip;
 rem the old os.listdir would have produced an empty-dir entry and dropped PNGs -
 rem verify_taptap_zip.py name-list assertion is the safety net for that)

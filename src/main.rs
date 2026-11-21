@@ -124,6 +124,32 @@ mod xx_font {
     }
 }
 
+// v1.16.37 文案外置（textpack.bin，仅 wasm）：与 index.html 的 xx_text 插件成对
+// 出现（env 导入，wasm 实例化校验导入存在——JS 漏注册或 Rust 漏声明任一侧即实例化
+// 即败，与 xx_font/xx_storage 同模式；三方成对断言见 verify_taptap_zip.py / 构建
+// 脚本 / pack_taptap.py）。JS 侧与 wasm 下载全并行 fetch textpack.bin?v=GAME_VER：
+//   xx_text_len：-1 = 仍在下载、-2 = 已失败（终态，xxTextFail 一次性置位无重试
+//                ——boot 轮询遇 -2 立即 break 走 state(96)，语义与字体 -2 独立同构，
+//                见下方文案轮询块）、N ≥ 0 = 就绪字节数
+//   xx_text_read：把就绪字节写入 wasm 内存（ptr/len 由 Rust 分配，len 与
+//                 xx_text_len 报告值一致）
+#[cfg(target_arch = "wasm32")]
+mod xx_text {
+    #[link(wasm_import_module = "env")]
+    unsafe extern "C" {
+        fn xx_text_len() -> i32;
+        fn xx_text_read(ptr: *mut u8, len: i32);
+    }
+
+    pub fn len() -> i32 {
+        unsafe { xx_text_len() }
+    }
+
+    pub fn read(buf: &mut [u8]) {
+        unsafe { xx_text_read(buf.as_mut_ptr(), buf.len() as i32) }
+    }
+}
+
 /// JS → Rust 调试开关入口（?dbg=1 时 JS 在 wasm 就绪后调用）
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
@@ -167,12 +193,52 @@ async fn main() {
     if std::env::var("GF_CLEAN").is_ok() || std::env::var("GF_DEBUG").is_ok() {
         let _ = std::fs::remove_file(save::PATH);
     }
+    // v1.16.37 文案外置（textpack.bin，wasm）：字节经 index.html xx_text 插件回传，
+    // 与 wasm/字体下载全并行预取（正常路径 exports 就绪时通常已就位）。装载顺序
+    // 严格 textpack→font：ui.rs 字体解压失败的 expect 消息走 evtx(1824)，textpack
+    // 先行装载才可达该路径文案；且 TEXT_BLOB 是 OnceLock——若任何 evtx/evf 调用
+    // 抢在装载前触发惰性兜底（wasm 桩返 EMPTY）先占坑，init_text_from_bytes 的
+    // set 永久失效、文案全空且不可覆写（红线：任何新的 evtx/evf 调用不得出现在
+    // 本块之前）。失败码 96 与字体 95 相互独立（95 的 JS 分支文案是「字体未至」，
+    // 96 走「文案未至，点击重试」；xx_state 处理器两分支并存）。-1=仍在下载、
+    // -2=已失败（终态）、600 帧死线（~10s）——语义与字体轮询块同构，失败/死线 →
+    // state(96) 且不进主循环；init_text_from_bytes 解压/UTF-8 校验失败同样返
+    // false 走 state(96)——绝不静默落 EMPTY 继续跑（满屏空文案比黑屏更劣），
+    // JS 侧加载层转失败文案 + 可点重试（绝不静默黑屏）。
+    #[cfg(target_arch = "wasm32")]
+    {
+        let mut waited = 0u32;
+        let len = loop {
+            let l = xx_text::len();
+            // -2 是 JS 预取的终态失败（index.html xxTextFail 一次性置位、无重试
+            // 回 0），立即 break 走 state(96) 失败收口。隐式契约与字体同款：
+            // 若将来给 textpack 预取加重试逻辑（失败回 0），必须同步撤销本条件
+            // ——重试窗口内 wasm 侧会误判终败。
+            if l >= 0 || l == -2 || waited >= 600 {
+                break l;
+            }
+            waited += 1;
+            next_frame().await;
+        };
+        if len <= 0 {
+            xx_dbg::state(96);
+            return;
+        }
+        let mut buf = vec![0u8; len as usize];
+        xx_text::read(&mut buf);
+        if !data::init_text_from_bytes(&buf) {
+            xx_dbg::state(96);
+            return;
+        }
+    }
     // v1.16.10 字体外置（wasm）：字体 deflate 字节经 index.html xx_font 插件回传
     // （JS 与 wasm 下载全并行预取，exports 就绪时通常已就位——正常路径 0-1 帧命中，
     // 不把字体下载排到实例化之后串行）。-1=仍在下载、-2=已失败、N=就绪；600 帧
     // 死线（~10s）只防 wasm 侧无限空转，更长的 JS 侧慢载由 45s 看门狗/D1/D2 自动
     // 重载兜底。失败/死线 → state(95) 且不进主循环（场景码不发、加载层保持），
     // JS 侧显「资源加载失败（字体），点击重试」+可点重试——绝不静默黑屏。
+    // v1.16.37 注：装载顺序 textpack（上块）先于本字体块（evtx(1824) 依赖），
+    // 文案失败码 96 与字体 95 相互独立、互不影响。
     // 桌面端维持内嵌（ui.rs cfg 包住表本体本身，字节不进 wasm，构建产物零变化）。
     #[cfg(target_arch = "wasm32")]
     {
@@ -202,7 +268,10 @@ async fn main() {
     ui::init_font();
     // v1.16.23 减包刀②：事件臂文案资产化——boot 一次性 raw-deflate 解包
     // （数十 KB，miniz inflate <5ms，与字体同款通路；量级随收编增长，
-    // 精确值勿写在注释里防漂——blob 实长见 pack_text.py 产出日志）；双端同路径零分叉。
+    // 精确值勿写在注释里防漂——blob 实长见 pack_text.py 产出日志）。
+    // v1.16.37 注：桌面仍走此内嵌解包路径零变化；wasm 侧 TEXT_BLOB 已由上方
+    // xx_text 块的 init_text_from_bytes 先行 set，此处 get_or_init 直达已装
+    // 快路径（幂等 no-op）。
     data::init_text();
     art::init_art();
     // v1.15.0 X5 排障：启动分段标记（st90 进入主体 / st91 空 Audio 就绪 /

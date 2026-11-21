@@ -113,10 +113,11 @@ def main() -> int:
     # 版本串由 build_web.bat 前置的升版步骤保证，这里做通用存在性断言）。
     # v1.16.9 刀B：外链 token mq_js_bundle.js?v= 随内联消失，改断言 bundle
     # 特征串（首行 "use strict" + miniquad_add_plugin）逐字存活。
-    for token in ("GAME_VER", '"use strict"', "miniquad_add_plugin", "xx_storage", "xx_font"):
+    for token in ("GAME_VER", '"use strict"', "miniquad_add_plugin", "xx_storage", "xx_font", "xx_text"):
         assert token in mini, f"minify 丢 token: {token}"
     assert "xiuxian.wasm?v=" in mini, "minify 丢 wasm 缓存穿透参数"
     assert "font.ttf.deflate?v=" in mini, "minify 丢字体缓存穿透参数（v1.16.10 字体外置）"
+    assert "textpack.bin?v=" in mini, "minify 丢文案缓存穿透参数（v1.16.37 textpack 外置）"
     if bundle:
         assert '<script src="mq_js_bundle.js' not in mini, "内联后仍残留外链行"
     assert mini.strip(), "minify 产出为空"

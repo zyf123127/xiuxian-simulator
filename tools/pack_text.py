@@ -138,6 +138,15 @@ BRIEF11_BASE_MANIFEST = 2659
 NAME12_BASE_MANIFEST = 2667
 BRIEF12_BASE_MANIFEST = 2670
 
+# v1.16.37 单2 扩池起：段十二（3 条）满员后新批连号追加为段十三（3 条：名
+# 2684..=2686/简 2687..=2689，真相源手写连号段先于正文；v1.16.36 正文收编至
+# N2683（evtx 2673..2678+evf 2679..2681 共 9 站+evf 2682/2683 漩心 loot 双裸串）
+# 故段十三顺延 2684/2687；另手写检定副标行 N2690「受缶一问」（special76 检定窗
+# 启用，356 哑缶一声副标，SPECIAL_SUB[76]=2690 查表）——与 data.rs EV_SEG12=356
+# 快照常量差写法兑现/EV_SEG13=359 快照预建同批登记）
+NAME13_BASE_MANIFEST = 2684
+BRIEF13_BASE_MANIFEST = 2687
+
 dry = '--dry-run' in sys.argv
 collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测用；表收编后自动幂等）
 # v1.16.29 单1（wasm 源级减包）三刀开关——均 append-only 旧 N 不变号，逐刀可量测：
@@ -950,7 +959,8 @@ def table_bases_from_inc():
                  'TXT_NAME9_BASE', 'TXT_BRIEF9_BASE',
                  'TXT_NAME10_BASE', 'TXT_BRIEF10_BASE',
                  'TXT_NAME11_BASE', 'TXT_BRIEF11_BASE',
-                 'TXT_NAME12_BASE', 'TXT_BRIEF12_BASE')
+                 'TXT_NAME12_BASE', 'TXT_BRIEF12_BASE',
+                 'TXT_NAME13_BASE', 'TXT_BRIEF13_BASE')
                 + BASE_KEYS_TABLES2):
             mm = re.search(r'pub static %s: u32 = (\d+);' % key, txt)
             if mm:
@@ -2040,6 +2050,13 @@ if name_base is not None:
 if brief_base is not None:
     inc += emit_base('TXT_BRIEF12_BASE',
                      inc_bases.get('TXT_BRIEF12_BASE', BRIEF12_BASE_MANIFEST))
+# v1.16.37 单2 段十三基址（同段十二款：首轮 emit manifest 手分、此后回读 .inc 幂等）
+if name_base is not None:
+    inc += emit_base('TXT_NAME13_BASE',
+                     inc_bases.get('TXT_NAME13_BASE', NAME13_BASE_MANIFEST))
+if brief_base is not None:
+    inc += emit_base('TXT_BRIEF13_BASE',
+                     inc_bases.get('TXT_BRIEF13_BASE', BRIEF13_BASE_MANIFEST))
 # v1.16.29 刀B 整表基址（首轮 emit 收编 N 段基址；此后每次运行从 .inc 回读重发，
 # 与段一/二/三同款幂等——非 --tables2 运行也不许丢基址，否则 include! 断链）
 for bk2 in BASE_KEYS_TABLES2:

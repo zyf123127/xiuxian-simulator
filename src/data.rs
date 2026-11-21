@@ -1792,7 +1792,7 @@ pub const ORIGINS: [OriginDef; 6] = [
 // 轮盘路径纳秒级）；行可读形态与 tools/tables_recheck.py、ledger_recheck.py 的
 // 4 元组解析口径零变（表行仍是 (id,w,mr,good)）；打包无损性由 game.rs
 // events_bitfield_pack_lossless 全表逐行钉测兜底（w>63/mr>7 当场红）。
-pub const N_EVENTS: usize = 356;
+pub const N_EVENTS: usize = 359;
 /// 名/简 textpack 段一条数（v1.16.26 末态；段二自 v1.16.27 扩池起连号追加）
 const EV_SEG1: usize = 291;
 /// 名/简 textpack 段二条数（v1.16.27 末态；段三自 v1.16.28 扩池起连号追加）。
@@ -1870,9 +1870,18 @@ const EV_SEG11: usize = 353;
 /// 首行、id353..355 名/简读到段十三错行非空串，is_empty 防线抓不住——段十三 get
 /// 首尾逐字钉为内容级防线照 batch_tables_aligned 先例，由扩池单随批补钉）。
 /// v1.16.36 单3 先行引入快照常量（字节效应 0，扩池段十三开工前把末段差写法钉死）——
-/// 段十三未开工：len12 末段写法 N_EVENTS−EV_SEG11 暂在位，扩池单兑现改差
-/// len12=(EV_SEG12−EV_SEG11) 后本常量即被引用（dead_code 警告随之消失）
+/// v1.16.37 单2 段十三已开工，差写法兑现（len12=(EV_SEG12−EV_SEG11) 在位）
 const EV_SEG12: usize = 356;
+/// 名/简 textpack 段十三条数界（v1.16.37 单2 末态 359=N_EVENTS 快照；下批扩池开
+/// 段十四时 N_EVENTS 增长，本常量冻结段十三上沿——len13 唯一正确写法=EV_SEG13−
+/// EV_SEG12 段界常量差，勿回写 N_EVENTS−EV_SEG12：N_EVENTS 增长时 len13 会静默
+/// 吞掉段十四首行、id356..358 名/简读到段十四错行非空串，is_empty 防线抓不住——
+/// 段十四 get 首尾逐字钉为内容级防线照 batch_tables_aligned 先例，由扩池单随批补钉）。
+/// v1.16.37 单2 先行引入快照常量（字节效应 0，扩池段十四开工前把末段差写法钉死）——
+/// 段十四未开工：len13 末段写法 N_EVENTS−EV_SEG12 暂在位，扩池单兑现改差
+/// len13=(EV_SEG13−EV_SEG12) 后本常量即被引用；dead_code 警告按 v1.16.36
+/// EV_SEG12 先例**预期持续到段十四开工**，非本轮缺陷，勿消
+const EV_SEG13: usize = 359;
 
 pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (0, 12, 0, true),  // 灵草满坡
@@ -2642,10 +2651,10 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (352, 1, 6, true),  // 苔阶履痕（稀有 w1：mr6 稀有第 3 条照 213/324 层位，散件 special 恒 0）
     // v1.16.36 单3 扩池批 3 条（段十二，N_EVENTS 353→356）：按单1 预建快照
     // +单2 零改动后余量 25,233B 落 ≥25KB 带取 3 条（勘察 A1/A2/A3）；
-    // 扩池后账本实测复算（tools/ledger_recheck.py）：总基权 1080→1089（本批
-    // +9=3×w3）；稀有 29 条 49 权不变 ≈4.50%（49/1089 如实记账）；恶缘
-    // 68→69 条 240→243 权 ≈22.3%；常态池（w>0）mr 分布（319 条）
-    // 0:45/1:63/2:54/3:37/4:38/5:33/6:28/7:23
+    // 扩池后账本实测复算（tools/ledger_recheck.py）：总基权 1089→1096（本批
+    // +7=1×w1+2×w3）；稀有 29→30 条 49→50 权 ≈4.56%（50/1096 守 ~4.5% 带）；
+    // 恶缘 69 条 243 权不变；常态池（w>0）mr 分布（322 条）
+    // 0:45/1:63/2:55/3:38/4:39/5:33/6:28/7:23
     (353, 3, 7, true),  // 岭上补松（mr7 善散件 w3——mr7 常态池 22 条 66 权全池
                         // 最薄层摊薄，题材避醉道人系 222/325/338 与链 18 余波 270）
     (354, 3, 6, false), // 器铺走水（mr6 恶散件 w3——恶缘 68→69 条；题材避
@@ -2653,6 +2662,23 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (355, 3, 0, true),  // 磨镜还光（老年×伴双门控第 13 条，mr0 零覆盖补缺——
                         // 双门控 12 条 mr1×5/mr2/mr3/mr4×2/mr5/mr6/mr7 各 1 后
                         // mr0 层空缺；不入白名单，Comp 立绘照 351 模板）
+    (356, 1, 2, true),  // 哑缶一声（稀有 w1 mr2 善，special76 道心检定——检定窗
+                        // 75..=76 最后余窗启用收官，检定臂照 329 模板；题材避
+                        // 32 青灯三问/33 墨叟一问/34 拦问纸人/66 旧砚一问/69
+                        // 松风问琴/73 空谷叩问/74 枯莲夜雨/75 檐马问风：哑缶
+                        // 自鸣是裂口瓦缶的自鸣一问。原拟「哑磬一声」磬=cmap
+                        // 外字（全池 0 出现）改写缶——N361 击缶仅伴奏引用不撞
+                        // 自鸣义，不扩字体纪律）
+    (357, 3, 4, true),  // 同扎一篱（伴随白名单 32→33 条 mr4——mr4 伴随 225/240/
+                        // 257 三条后六批未落最陈薄层；题材避 321 同封新茶/327
+                        // 灯下拼卷/344 同裱旧稿/351 共拓崖铭/82 缝补旧稿/190
+                        // 旧履还坊：扎篱是枝条来递的共作手作面。原拟「织机
+                        // 共梭」梭/纺=cmap 外字改写篱）
+    (358, 3, 3, true),  // 灶膛煨薯（老年×伴双门控第 14 条，mr3——双门控 13 条
+                        // mr1×5/mr2/mr3/mr4×2/mr5/mr6/mr7/mr0 各 1 后 mr3 层
+                        // 322 后六批未落；不入白名单，Comp 立绘照 355 模板、
+                        // 徽标走老年臂 gallery 同批登记；煨/薯/灶池内字 0 撞，
+                        // 215 灶火留谱是家传菜谱面不同义）
 ];
 
 const fn pack_ev(r: (u16, u8, u8, bool)) -> u16 {
@@ -2814,12 +2840,22 @@ pub struct EvTable {
     // EV_SEG11−EV_SEG10 兑现；len12 取段界常量差 N_EVENTS−EV_SEG11（EV_SEG11=353
     // 快照常量单1 已预建本批引用——新「末段写法」，下批扩池续段十三时须改差，
     // 见 EV_SEG11/EV_SEG12 注）
+    // v1.16.37 单2 扩池起：段十二（3 条）满员后新批连号追加为段十三（3 条：
+    // TXT_NAME13_BASE/TXT_BRIEF13_BASE=2684/2687 同款登记与产出；段十二后下一
+    // 空 N=2684——v1.16.36 正文收编至 N2683 故段十三顺延）；十三面同步扩十三段
+    // 连寻（扩段只加一行 segs）。len12 由 N_EVENTS−EV_SEG11 改段界常量差
+    // EV_SEG12−EV_SEG11 兑现；len13 取段界常量差 N_EVENTS−EV_SEG12（EV_SEG12=356
+    // 快照常量 v1.16.36 单3 已预建本批引用——新「末段写法」，下批扩池续段十四时
+    // 须改差，见 EV_SEG12/EV_SEG13 注；EV_SEG13=359 快照常量本批预建，届时
+    // len13 改差 (EV_SEG13−EV_SEG12)、len14 写 N_EVENTS−EV_SEG13）
     base10: u16,
     len10: u16,
     base11: u16,
     len11: u16,
     base12: u16,
     len12: u16,
+    base13: u16,
+    len13: u16,
 }
 
 impl EvTable {
@@ -2849,6 +2885,8 @@ impl EvTable {
             (self.base11, self.len11),
             // v1.16.36 单3 扩段十二：只加一行 segs（base12/len12），累减循环自动续寻
             (self.base12, self.len12),
+            // v1.16.37 单2 扩段十三：只加一行 segs（base13/len13），累减循环自动续寻
+            (self.base13, self.len13),
         ];
         let mut k = i;
         for seg_k in segs.iter() {
@@ -2875,6 +2913,8 @@ impl EvTable {
             + self.len11 as usize
             // v1.16.36 单3 扩段十二：len() 总长和随段扩一行
             + self.len12 as usize
+            // v1.16.37 单2 扩段十三：len() 总长和随段扩一行
+            + self.len13 as usize
     }
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -2955,10 +2995,16 @@ pub static EVENT_NAMES: EvTable = EvTable {
     // N_EVENTS−EV_SEG11（新「末段写法」，下批扩段十三须改差，照 len11 原注；
     // EV_SEG12=356 快照常量单3 已预建——届时 len12 改差 (EV_SEG12−EV_SEG11)、
     // len13 写 N_EVENTS−EV_SEG12，见 EV_SEG12 注）
+    // v1.16.37 单2：len12 由 N_EVENTS−EV_SEG11 改段界常量差 EV_SEG12−EV_SEG11
+    //（EV_SEG12=356 快照常量先行引入——扩池开段十四时 N_EVENTS 增长不再静默
+    // 吞段十二首行，见 EV_SEG12 注）；base13/len13 双段登记照款——len13 取
+    // 段界常量差 N_EVENTS−EV_SEG12（新「末段写法」，下批扩段十四须改差）
     base11: TXT_NAME11_BASE as u16,
     len11: (EV_SEG11 - EV_SEG10) as u16,
     base12: TXT_NAME12_BASE as u16,
-    len12: (N_EVENTS - EV_SEG11) as u16,
+    len12: (EV_SEG12 - EV_SEG11) as u16,
+    base13: TXT_NAME13_BASE as u16,
+    len13: (N_EVENTS - EV_SEG12) as u16,
 };
 
 
@@ -2998,10 +3044,14 @@ pub static EVENT_BRIEF: EvTable = EvTable {
     // v1.16.35 单3 扩段十一：同 EVENT_NAMES base11/len11 注（len11 末段差写法）
     // v1.16.36 单1：同 EVENT_NAMES len11 注（EV_SEG11 快照差写法兑现）
     // v1.16.36 单3 扩段十二：同 EVENT_NAMES base12/len12 注（len12 末段差写法）
+    // v1.16.37 单2：同 EVENT_NAMES len12 注（EV_SEG12 快照差写法兑现）+
+    // base13/len13 双段登记（len13 末段差写法 N_EVENTS−EV_SEG12）
     base11: TXT_BRIEF11_BASE as u16,
     len11: (EV_SEG11 - EV_SEG10) as u16,
     base12: TXT_BRIEF12_BASE as u16,
-    len12: (N_EVENTS - EV_SEG11) as u16,
+    len12: (EV_SEG12 - EV_SEG11) as u16,
+    base13: TXT_BRIEF13_BASE as u16,
+    len13: (N_EVENTS - EV_SEG12) as u16,
 };
 
 
@@ -3677,6 +3727,15 @@ pub const INHERIT_LEGACY_FAV: i32 = 10; // 遗泽承接好感加成
 // <5ms）；evtx() 为
 // O(1) 下标切片，帧路径零分配（性能十戒）；文案内容逐字节等价（脚本往返断言），
 // 字体 cmap 与 charset_diff_check 口径不变；存档只存事件 id，零兼容影响。
+// v1.16.37 textpack 外置（wasm）：include_bytes 整块 cfg(not wasm32) 包住——照
+// ui.rs:17/art.rs:308 双先例，必须 cfg 静态本体本身，只 cfg unpack_text 或调用方
+// 字节照样进 wasm 数据段（ui.rs:10 教训原文重申）。wasm 侧由 index.html 与 wasm
+// 下载全并行 fetch textpack.bin?v=GAME_VER，经 env 导入 xx_text_len/xx_text_read
+// 回传（main.rs boot 头轮询，失败 state(96) 如实报错，见 init_text_from_bytes 注），
+// wasm 数据段减去整个 blob（v1.16.36 时点实测 83,065B）；miniz_oxide 解码器因
+// ui.rs 字体 inflate 仍留在 wasm，勿把「codec 出 wasm」写进任何账目。桌面端内嵌
+// 口径不变、构建产物零变化。
+#[cfg(not(target_arch = "wasm32"))]
 pub static TEXTPACK: &[u8] = include_bytes!("../assets/textpack.bin");
 // 生成件（pack_text.py 产出）：pub static TXT_ANCH: [u32; A]（每 K32=128 条一个绝对
 // 锚，锚数 A=ceil(行数/128)——v1.16.34 单3 末态 2,657 行→21 锚（K32=128
@@ -3785,17 +3844,35 @@ fn unpack_text() -> &'static [u8] {
     if TEXT_INIT_TRIED.swap(true, Ordering::Relaxed) {
         return EMPTY;
     }
-    match miniz_oxide::inflate::decompress_to_vec(TEXTPACK) {
-        Ok(v) => {
-            // from_utf8 全量校验一次：之后 evtx() 的 unchecked 切片以此为安全论证
-            if core::str::from_utf8(&v).is_ok() {
-                Box::leak(v.into_boxed_slice()) as &'static [u8]
-            } else {
-                EMPTY
+    // v1.16.37 textpack 外置拆分（作用域变更说明）：原函数体是一个 match 尾表达式，
+    // 现拆为双 cfg 分支的先赋值再返回写法——桌面分支体与原 match 逐字等价（仅挪进
+    // 代码块），wasm 分支为兜底桩（见块内注）；不写成「cfg 尾 match + cfg 尾块」
+    // 是因为带属性的块尾表达式存在语句/尾表达式歧义，显式赋值消除解析歧义。
+    let blob: &'static [u8];
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        blob = match miniz_oxide::inflate::decompress_to_vec(TEXTPACK) {
+            Ok(v) => {
+                // from_utf8 全量校验一次：之后 evtx() 的 unchecked 切片以此为安全论证
+                if core::str::from_utf8(&v).is_ok() {
+                    Box::leak(v.into_boxed_slice()) as &'static [u8]
+                } else {
+                    EMPTY
+                }
             }
-        }
-        Err(_) => EMPTY,
+            Err(_) => EMPTY,
+        };
     }
+    #[cfg(target_arch = "wasm32")]
+    {
+        // v1.16.37：wasm 无内嵌 blob（TEXTPACK 本体已 cfg 剪出数据段），本函数
+        // 降级为惰性兜底桩——正常路径 boot 的 init_text_from_bytes 已先行
+        // TEXT_BLOB.set，get_or_init 直达已装快路径根本不会调到此处；仅防漏装
+        // 环境首调 evtx 时占坑成终态 EMPTY（文案缺失但不崩）。EMPTY 在 wasm 绝
+        // 不可为归宿：失败收口归 main.rs boot 的 state(96)，此处绝不静默重试。
+        blob = EMPTY;
+    }
+    blob
 }
 
 /// boot 一次性解包（main.rs 启动序列调用；幂等）。get_or_init 并发安全：
@@ -3803,6 +3880,31 @@ fn unpack_text() -> &'static [u8] {
 /// 时不装 blob——evtx() 全返空串（文案缺失但不崩，wasm trap 纪律）。
 pub fn init_text() {
     TEXT_BLOB.get_or_init(unpack_text);
+}
+
+/// v1.16.37 textpack 外置（wasm 专用装载口，照 ui.rs init_font_from_bytes 先例）：
+/// index.html xx_text 插件回传的 deflate 字节 → miniz inflate → UTF-8 全量校验 →
+/// leak → TEXT_BLOB.set。与桌面 unpack_text 解压/校验/leak 逐项同口径；唯一差异
+/// 是失败不落 EMPTY 哨兵而返 false——wasm 失败归宿由 main.rs boot 收口 state(96)
+/// （可点重试），绝不静默落 EMPTY 继续跑（满屏空文案比黑屏更劣）。已占坑（防御：
+/// evtx 惰性兜底先行占了 OnceLock）或解压/UTF-8 失败或产空一律 false，不覆写。
+#[cfg(target_arch = "wasm32")]
+pub fn init_text_from_bytes(deflated: &[u8]) -> bool {
+    if TEXT_BLOB.get().is_some() {
+        return false;
+    }
+    let v = match miniz_oxide::inflate::decompress_to_vec(deflated) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    // from_utf8 全量校验一次：之后 evtx() 的 unchecked 切片以此为安全论证；
+    // 空产出等价失败态（真实 blob 恒非空——EMPTY 即失败哨兵，见 unpack_text 注）
+    if core::str::from_utf8(&v).is_err() || v.is_empty() {
+        return false;
+    }
+    TEXT_BLOB
+        .set(Box::leak(v.into_boxed_slice()) as &'static [u8])
+        .is_ok()
 }
 
 /// O(1) 查池：blob[off(i)..off(i+1)]。越界/未初始化一律空串兜底
@@ -3993,8 +4095,9 @@ mod text_tests {
         // v1.16.34 单3 扩池：+ 段十 2 = 351
         // v1.16.35 单3 扩池：+ 段十一 2 = 353
         // v1.16.36 单3 扩池：+ 段十二 3 = 356
-        assert_eq!(EVENT_NAMES.len(), 356);
-        assert_eq!(EVENT_BRIEF.len(), 356);
+        // v1.16.37 单2 扩池：+ 段十三 3 = 359
+        assert_eq!(EVENT_NAMES.len(), 359);
+        assert_eq!(EVENT_BRIEF.len(), 359);
         assert_eq!(EVENT_NAMES.get(0), Some("灵草满坡"));
         assert_eq!(EVENT_NAMES.get(290), Some("误入猎套"));
         assert_eq!(EVENT_BRIEF.get(0), Some("满坡灵草露水未干，采满一筐"));
@@ -4085,9 +4188,17 @@ mod text_tests {
         assert_eq!(EVENT_NAMES.get(355), Some("磨镜还光"));
         assert_eq!(EVENT_BRIEF.get(353), Some("点松入土，百年成凉"));
         assert_eq!(EVENT_BRIEF.get(355), Some("旧镜磨还光，照见白头"));
-        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=356）
-        assert_eq!(EVENT_NAMES.get(356), None);
-        assert_eq!(EVENT_BRIEF.get(356), None);
+        // 段十三（v1.16.37 单2 扩池 3 条，TXT_NAME13_BASE=2684/TXT_BRIEF13_BASE=
+        // 2687，手写名/简连号段先于正文收编——v1.16.36 正文收编至 N2683 故段十三
+        // 顺延）：len12 漂移唯一内容级防线——首尾逐字钉，len12 写 N_EVENTS−
+        // EV_SEG11 静默吞段十三时在此必红（EV_SEG12=356 快照兜底）
+        assert_eq!(EVENT_NAMES.get(356), Some("哑缶一声"));
+        assert_eq!(EVENT_NAMES.get(358), Some("灶膛煨薯"));
+        assert_eq!(EVENT_BRIEF.get(356), Some("废缶自鸣，问声来者"));
+        assert_eq!(EVENT_BRIEF.get(358), Some("灰里煨薯，分两个暖"));
+        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=359）
+        assert_eq!(EVENT_NAMES.get(359), None);
+        assert_eq!(EVENT_BRIEF.get(359), None);
         assert_eq!(EVENT_NAMES.get(usize::MAX), None);
     }
 
@@ -4327,5 +4438,7 @@ mod text_tests {
         assert_eq!(evtx(2368), "机缘");
         assert_eq!(evtx(2369), "探索上古洞府");
         assert_eq!(evtx(2433), "受檐马一问");
+        // v1.16.37 单2 检定窗 76 启用（哑缶一声 356）：副标手写行 N2690
+        assert_eq!(evtx(2690), "受缶一问");
     }
 }

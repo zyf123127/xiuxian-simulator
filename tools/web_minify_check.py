@@ -21,10 +21,11 @@ inl = M.inline_bundle(src, BUNDLE)
 mini = M.minify(inl)
 
 # ---- main() 全断言内存复刻 ----
-for token in ('GAME_VER', '"use strict"', 'miniquad_add_plugin', 'xx_storage', 'xx_font'):
+for token in ('GAME_VER', '"use strict"', 'miniquad_add_plugin', 'xx_storage', 'xx_font', 'xx_text'):
     assert token in mini, 'minify 丢 token: %s' % token
 assert 'xiuxian.wasm?v=' in mini, '丢 wasm 缓存穿透参数'
 assert 'font.ttf.deflate?v=' in mini, '丢字体缓存穿透参数'
+assert 'textpack.bin?v=' in mini, '丢文案缓存穿透参数（v1.16.37 textpack 外置）'
 assert '<script src="mq_js_bundle.js' not in mini, '内联后仍残留外链行'
 assert mini.strip(), 'minify 产出为空'
 assert len(mini.encode('utf-8')) < n_raw, 'minify 未变小'
@@ -37,12 +38,15 @@ print('[1] main() 断言全过（内存）: raw %d -> %d (-%d), 行 %d -> %d' % 
 for s in ['__xxWasmUrl', 'res.arrayBuffer', 'refetch', 'reuse',
           '摄取仙机 ', '灵机汇聚，推演轮回…', '炼化仙机…', '凝神开卷，布置洞府…',
           '前尘入卷，山河重展…', '万事俱备…', '推演开始…', '字体未至，点击重试',
+          '文案未至，点击重试',
           '仙机已至，炼化中…', '已纳仙机 ', '旧地重游，片刻即至…', '凡人模拟 · 灵机汇聚…']:
     assert s in mini, 'minify 丢新面: %s' % s
 assert mini.count('字体未至，点击重试') == 2, '字体失败文案成对存活数≠2'
+assert mini.count('文案未至，点击重试') == 2, '文案失败文案成对存活数≠2（v1.16.37 xxTextFail+state96）'
+assert mini.count('__xxText') >= 3 and mini.count('xx_text_len') >= 1, '文案外置插件面丢失'
 n_url = src.count('window.__xxWasmUrl')
 assert n_url == 3, '__xxWasmUrl 应为 3 处（HTML 注释说明+捕获+消费），实得 %d' % n_url
-print('[2] 项1 两态兜底 + 项2 文案新面全部存活（字体失败文案成对×2，__xxWasmUrl 捕获+消费×2）')
+print('[2] 项1 两态兜底 + 项2 文案新面全部存活（字体/文案失败文案各成对×2，__xxWasmUrl 捕获+消费×2）')
 
 # ---- 看门狗文案逐字未动 ----
 for s in ['游戏包较大，首次加载约需 10~40 秒，请稍候…（下次进入会快很多）',
@@ -65,11 +69,13 @@ src_lines = src.split('\n')
 order = [
     ('GAME_VER 定义', lambda l: 'var GAME_VER =' in l),
     ('字体预取', lambda l: 'fetch("font.ttf.deflate?v=" + GAME_VER)' in l),
+    ('文案预取', lambda l: 'fetch("textpack.bin?v=" + GAME_VER)' in l),
     ('wasm 头部预取', lambda l: 'window.__xxWasmP = fetch(' in l),
     ('compileStreaming 包装', lambda l: 'var _cs = WebAssembly.compileStreaming;' in l),
     ('bundle 外链行', lambda l: '<script src="mq_js_bundle.js' in l),
     ('xx_storage 注册', lambda l: 'name: "xx_storage"' in l),
     ('xx_font 注册', lambda l: 'name: "xx_font"' in l),
+    ('xx_text 注册', lambda l: 'name: "xx_text"' in l),
     ('fetch 包装器', lambda l: 'window.fetch = function' in l),
     ('load() 调用', lambda l: 'load("xiuxian.wasm?v=" + GAME_VER)' in l),
 ]
@@ -89,11 +95,11 @@ print('[5] 依赖序完好: ' + ' -> '.join('%s@%d' % (n, i) for (n, _), i in zi
 assert src.count('var GAME_VER') == 1, 'GAME_VER 定义数异常'
 assert 'mq_js_bundle.js?v=' in src, 'bundle ?v= 外链行丢失'
 vv = re.findall(r'\?v=" \+ GAME_VER|\?v=[0-9.]+"', src)
-assert len(vv) == 4, '?v= 站点数 %d（应为 4：字体/wasm 预取/bundle/load）' % len(vv)
-print('[6] GAME_VER 唯一源 ×1，?v= 站点 ×4（字体预取/wasm 预取/bundle 外链/load）')
+assert len(vv) == 5, '?v= 站点数 %d（应为 5：字体/文案/wasm 预取/bundle/load）' % len(vv)
+print('[6] GAME_VER 唯一源 ×1，?v= 站点 ×5（字体预取/文案预取/wasm 预取/bundle 外链/load）')
 
 # ---- 字形核对（铁律④参考口径：HTML 层走系统字体，无子集约束；核对仅供参考）----
-newc = set('灵机汇聚推演轮回摄取仙旧地重游片刻即至炼化前尘入卷山河重展万事俱备凝神开布置洞府纳已至字体未')
+newc = set('灵机汇聚推演轮回摄取仙旧地重游片刻即至炼化前尘入卷山河重展万事俱备凝神开布置洞府纳已至字体未文案资源加载失败点击')
 have = set((ROOT / 'assets' / 'text_source.txt').read_text(encoding='utf-8'))
 missing = sorted(c for c in newc if c not in have)
 print('[7] 新文案独立汉字 %d 个；不在游戏字体集(text_source)者: %s（HTML 层系统字体渲染，不构成字形约束）'

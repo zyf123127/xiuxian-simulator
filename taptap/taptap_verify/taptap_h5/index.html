@@ -84,7 +84,7 @@ display: none;
 </div>
 <div id="errlog"></div>
 <canvas id="glcanvas" tabindex='1'></canvas>
-<script>var GAME_VER = "1.16.36";</script>
+<script>var GAME_VER = "1.16.37";</script>
 <script>
 window.__xxFont = { state: 0, bytes: null };
 (function () {
@@ -114,6 +114,37 @@ window.__xxFont.bytes = new Uint8Array(buf);
 window.__xxFont.state = 1;
 })["catch"](xxFontFail);
 } catch (e) { xxFontFail(); }
+})();
+</script>
+<script>
+window.__xxText = { state: 0, bytes: null };
+(function () {
+function xxTextFail() {
+try { if (window.__xxText) window.__xxText.state = -1; } catch (e0) {}
+try {
+var el = document.getElementById("errlog");
+if (el) el.textContent += "[ERR] 文案资源加载失败（textpack.bin）\n";
+} catch (e1) {}
+try {
+if (!window.wasm_exports) {
+if (typeof xx_stage === "function") xx_stage("文案未至，点击重试");
+var ld = document.getElementById("loading");
+if (ld) {
+ld.style.pointerEvents = "auto";
+ld.onclick = function () { location.reload(); };
+}
+}
+} catch (e2) {}
+}
+try {
+fetch("textpack.bin?v=" + GAME_VER).then(function (res) {
+if (!res.ok) throw new Error("HTTP " + res.status);
+return res.arrayBuffer();
+}).then(function (buf) {
+window.__xxText.bytes = new Uint8Array(buf);
+window.__xxText.state = 1;
+})["catch"](xxTextFail);
+} catch (e) { xxTextFail(); }
 })();
 </script>
 <script>
@@ -356,6 +387,34 @@ arr.set(f.bytes.subarray(0, len));
 },
 on_init: function () {}
 });
+window.miniquad_add_plugin({
+name: "xx_text",
+version: 1,
+register_plugin: function (importObject) {
+importObject.env.xx_text_len = function () {
+var t = window.__xxText;
+if (!t || t.state === -1) return -2;
+if (t.state === 1 && t.bytes) return t.bytes.length;
+return -1;
+};
+importObject.env.xx_text_read = function (ptr, len) {
+try {
+var t = window.__xxText;
+if (!t || t.state !== 1 || !t.bytes) return;
+var mem =
+window.wasm_memory && window.wasm_memory.buffer
+? window.wasm_memory.buffer
+: window.wasm_exports && window.wasm_exports.memory
+? window.wasm_exports.memory.buffer
+: null;
+if (!mem) return;
+var arr = new Uint8Array(mem, ptr, len);
+arr.set(t.bytes.subarray(0, len));
+} catch (e) { console.error("xx_text_read:", e); }
+};
+},
+on_init: function () {}
+});
 var XX_GPU_OK = !!(window.WebGLRenderingContext || window.WebGL2RenderingContext);
 var XX_MAX_TEX = 0; // 0 = 未探测
 function xx_probe_max_tex() {
@@ -465,6 +524,13 @@ var ld95 = document.getElementById("loading");
 if (ld95) {
 ld95.style.pointerEvents = "auto";
 ld95.onclick = function () { location.reload(); };
+}
+} else if (code === 96) {
+xx_stage("文案未至，点击重试");
+var ld96 = document.getElementById("loading");
+if (ld96) {
+ld96.style.pointerEvents = "auto";
+ld96.onclick = function () { location.reload(); };
 }
 }
 } catch (eS) {}

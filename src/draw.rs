@@ -67,6 +67,28 @@ pub fn button_accent(
     enabled: bool,
     accent: bool,
 ) -> bool {
+    // v1.16.37 单3 起全部既有调用点经 α=1.0 委托零改动（照 panel_card→
+    // panel_card_a 包装先例 draw.rs:163-165）
+    button_a_accent(x, y, w, h, label, sub, enabled, accent, 1.0)
+}
+
+/// v1.16.37 单3 剧情演出包⑦：带透明度选项钮（事件卡选项逐条入场节奏用）。
+/// alpha=1.0 时逐像素等同 button_accent；底/描边/内衬/主副标同步乘 α。命中与
+/// 按压判定不乘 α——沿用 draw_modal_card「动画期照常可点，命中=所见」口径
+///（卡体入场期命中几何随卡体同步，稳态复位）。30+ 既有 button_accent 调用点
+/// 经上方委托零改动；α 乘算不入 wrap 缓存 key（颜色不入 key，ui.rs WrapKey 先例）。
+pub fn button_a_accent(
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    label: &str,
+    sub: Option<&str>,
+    enabled: bool,
+    accent: bool,
+    alpha: f32,
+) -> bool {
+    let a = alpha.clamp(0.0, 1.0);
     // v1.5.0：经信箱相机回虚拟坐标（桌面恒等，H5 任意屏比例正确命中）
     let (mx, my) = crate::cam::mouse();
     let hot = mx >= x && mx <= x + w && my >= y && my <= y + h;
@@ -82,21 +104,24 @@ pub fn button_accent(
     } else {
         Color::from_rgba(56, 42, 86, 235)
     };
-    draw_rectangle(x, y, w, h, base);
+    draw_rectangle(x, y, w, h, fade(base, a));
     draw_rectangle_lines(
         x,
         y,
         w,
         h,
         2.0,
-        if !enabled {
-            // v1.8.0 A6：禁用描边提亮（66,56,88→96,82,124），弱可用态一眼可辨
-            Color::from_rgba(96, 82, 124, 255)
-        } else if accent {
-            C_GOLD
-        } else {
-            C_GOLD_D
-        },
+        fade(
+            if !enabled {
+                // v1.8.0 A6：禁用描边提亮（66,56,88→96,82,124），弱可用态一眼可辨
+                Color::from_rgba(96, 82, 124, 255)
+            } else if accent {
+                C_GOLD
+            } else {
+                C_GOLD_D
+            },
+            a,
+        ),
     );
     if press {
         // 内缩 2px 的高亮内衬：按压「陷下去」的视觉锚点（纯矩形零分配）
@@ -106,7 +131,7 @@ pub fn button_accent(
             w - 4.0,
             h - 4.0,
             1.0,
-            Color::from_rgba(160, 128, 200, 130),
+            fade(Color::from_rgba(160, 128, 200, 130), a),
         );
     }
     if let Some(s) = sub {
@@ -115,23 +140,29 @@ pub fn button_accent(
             x + w * 0.5,
             y + h * 0.5 - 17.0,
             20,
-            // v1.8.0 A6：禁用主标 C_DIM→(184,178,196)，与可用态层级拉开
-            if enabled {
-                C_TEXT
-            } else {
-                Color::from_rgba(184, 178, 196, 255)
-            },
+            fade(
+                // v1.8.0 A6：禁用主标 C_DIM→(184,178,196)，与可用态层级拉开
+                if enabled {
+                    C_TEXT
+                } else {
+                    Color::from_rgba(184, 178, 196, 255)
+                },
+                a,
+            ),
         );
         txt_c(
             s,
             x + w * 0.5,
             y + h - 26.0, 14,
-            if enabled {
-                C_DIM
-            } else {
-                // v1.8.0 A6：禁用副标提亮（152,148,168→178,172,192）
-                Color::from_rgba(178, 172, 192, 255)
-            },
+            fade(
+                if enabled {
+                    C_DIM
+                } else {
+                    // v1.8.0 A6：禁用副标提亮（152,148,168→178,172,192）
+                    Color::from_rgba(178, 172, 192, 255)
+                },
+                a,
+            ),
         );
     } else {
         txt_c(
@@ -139,12 +170,15 @@ pub fn button_accent(
             x + w * 0.5,
             y + h * 0.5 - 11.0,
             18,
-            // v1.8.0 A6：禁用主标同上
-            if enabled {
-                C_TEXT
-            } else {
-                Color::from_rgba(184, 178, 196, 255)
-            },
+            fade(
+                // v1.8.0 A6：禁用主标同上
+                if enabled {
+                    C_TEXT
+                } else {
+                    Color::from_rgba(184, 178, 196, 255)
+                },
+                a,
+            ),
         );
     }
     // v1.15.0 同点快速二击去抖（见 click_debounced 注释）
@@ -1966,11 +2000,18 @@ pub fn draw_modal_card(g: &mut Game) {
         // 立绘盒 (270,160) 220×420、底边锚 580（box_h=bottom_off=420：顶 = 580−dh ≥ 160，
         // 恒落 npc_clip_band 116..616 视口内不裁）；v1.16.9 复审修后 AI 图未到/缺失
         // 时 portrait 走像素/剪影兜底恒 Some（actor 有恒邂逅版式，见 meeting latched）
+        // v1.16.37 单3 剧情演出包⑧：入画沉降——立绘在 0.05s 滞后淡入通道上叠
+        // 二次缓动 y+3px×(1−art_a)²（淡入起 +3px 随进度归零，纯算术零分配）。
+        // 收敛数学：稳态 modal_anim==0 → art_a==1 → 沉降恰 0，稳态逐像素不变
+        //（draw.rs:1821 纪律）；动画期极值 +3px 叠加 dy 滑入（≤14px）仍在
+        // npc_clip_band 116..616 窗内不触裁剪（槽底 583<616）；结算屏/回味/
+        // 终局页等备案域不入（art_a 仅本邂逅卡通道，draw.rs:1825 备案原样）。
+        let art_sink = 3.0 * (1.0 - art_a) * (1.0 - art_a);
         crate::charpanel::npc_portrait_box_a(
             portrait.as_ref(),
             &crate::art::art().icon_yun,
             270.0,
-            160.0 + dy,
+            160.0 + dy + art_sink,
             220.0,
             420.0,
             420.0,
@@ -2109,7 +2150,13 @@ pub fn draw_modal_card(g: &mut Game) {
             || matches!(kind_acc, Some(crate::game::CardKind::Finale) if i == 1)
             // v1.16.21 破境抉择卡首钮（立即破境/立即问笔）推荐位金描边
             || (card_brk && i == 0);
-        if button_accent(bx, by, bw, bhh, label, Some(descs[i].1.as_str()), true, accent) {
+        // v1.16.37 单3 剧情演出包⑦：选项钮逐条入场节奏——开启帧起 0.06s 后每钮
+        // 错峰 30ms（相位式照 draw_event_text 段除数压缩先例，除数取 0.03 恒定：
+        // 稳态 modal_anim==0 时值=(0.12−0.03i)/0.03=4−i，i≤3 恒 ≥1.0 收敛为
+        // 1.0——稳态逐像素不变红线；终战 4 钮 i≤3 恰收敛，事件卡 opts ≤3 同款）。
+        // 命中不乘 α（动画期照常可点，卡体入场期本就随卡体偏移，口径沿用）。
+        let btn_a = ((((0.18 - g.modal_anim) - 0.06) - i as f32 * 0.03) / 0.03).clamp(0.0, 1.0);
+        if button_a_accent(bx, by, bw, bhh, label, Some(descs[i].1.as_str()), true, accent, btn_a) {
             picked = Some(i);
         }
     }

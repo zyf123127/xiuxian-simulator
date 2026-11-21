@@ -86,7 +86,7 @@
     <canvas id="glcanvas" tabindex='1'></canvas>
     <!-- miniquad 加载器：https://github.com/not-fl3/macroquad/blob/master/js/mq_js_bundle.js -->
     <!-- 缓存穿透：每次发版改 GAME_VER，wasm/bundle URL 带上版本参数，WebView 不会用旧缓存 -->
-    <script>var GAME_VER = "1.16.36";</script>
+    <script>var GAME_VER = "1.16.37";</script>
     <!-- v1.16.10 字体外置：font.ttf.deflate 与 wasm 下载全并行预取（唯一能赢的时序
          ——env 导入回传方案 vs wasm 内 load_file await：后者把字体下载排到实例化
          之后串行，反而更慢）。就绪态存 __xxFont（state 0=下载中 1=就绪 -1=失败），
@@ -122,6 +122,45 @@
                     window.__xxFont.state = 1;
                 })["catch"](xxFontFail);
             } catch (e) { xxFontFail(); }
+        })();
+    </script>
+    <!-- v1.16.37 文案外置（textpack.bin）：与 wasm/字体下载全并行预取（照 v1.16.10
+         字体外置款）。就绪态存 __xxText（state 0=下载中 1=就绪 -1=失败），由下方
+         xx_text 插件的 env 导入在 wasm boot 头回传（Rust main.rs 轮询）；失败码 96
+         与字体 95 相互独立，Rust 侧 boot 收口 state(96)（init_text_from_bytes 解压/
+         UTF-8 校验失败同样返 false 走 96——EMPTY 绝不可为归宿，满屏空文案比黑屏
+         更劣）。失败即如实报错：errlog [ERR] + 加载层失败文案 + 可点重试，绝不
+         静默黑屏。位置在下方 fetch 包装器安装之前 → 走原 fetch，不被 wasm 进度条
+         包装拦截（与字体预取同）；缓存穿透 ?v=GAME_VER 必带。 -->
+    <script>
+        window.__xxText = { state: 0, bytes: null };
+        (function () {
+            function xxTextFail() {
+                try { if (window.__xxText) window.__xxText.state = -1; } catch (e0) {}
+                try {
+                    var el = document.getElementById("errlog");
+                    if (el) el.textContent += "[ERR] 文案资源加载失败（textpack.bin）\n";
+                } catch (e1) {}
+                try {
+                    if (!window.wasm_exports) {
+                        if (typeof xx_stage === "function") xx_stage("文案未至，点击重试");
+                        var ld = document.getElementById("loading");
+                        if (ld) {
+                            ld.style.pointerEvents = "auto";
+                            ld.onclick = function () { location.reload(); };
+                        }
+                    }
+                } catch (e2) {}
+            }
+            try {
+                fetch("textpack.bin?v=" + GAME_VER).then(function (res) {
+                    if (!res.ok) throw new Error("HTTP " + res.status);
+                    return res.arrayBuffer();
+                }).then(function (buf) {
+                    window.__xxText.bytes = new Uint8Array(buf);
+                    window.__xxText.state = 1;
+                })["catch"](xxTextFail);
+            } catch (e) { xxTextFail(); }
         })();
     </script>
     <!-- v1.16.24 加载提速⑤：wasm 头部预取——与字体预取同窗口并行起跑，省掉
@@ -360,7 +399,7 @@
             } catch (e) { /* 包装失败维持原状：流式可用则用，不可用走旧分支 */ }
         })();
     </script>
-    <script src="mq_js_bundle.js?v=1.16.36"></script>
+    <script src="mq_js_bundle.js?v=1.16.37"></script>
     <script>
         // v1.5.0 H5 本地存档：注册 miniquad 插件，为 wasm 提供 localStorage 存取的 env 导入。
         // 必须在 load() 之前注册（register_plugins 在 wasm 实例化前消费 plugins 列表）。
@@ -424,6 +463,41 @@
                         var arr = new Uint8Array(mem, ptr, len);
                         arr.set(f.bytes.subarray(0, len));
                     } catch (e) { console.error("xx_font_read:", e); }
+                };
+            },
+            on_init: function () {}
+        });
+
+        // v1.16.37 文案外置：xx_text 插件（与头部并行预取脚本、Rust main.rs xx_text
+        // extern 块三方成对——wasm 实例化校验导入存在，漏任一侧即实例化即败）。
+        // xx_text_len：-1 = 预取仍在下载、-2 = 已失败（终态）、N ≥ 0 = 就绪字节数
+        // （语义与 xx_font_len 同构但对象/失败态完全独立，勿复用 __xxFont）；
+        // xx_text_read：把就绪字节写入 wasm 内存（buffer 取用照 xx_font 三级回退链）。
+        // 必须在 load() 之前注册（与 xx_storage/xx_font 同理）。
+        window.miniquad_add_plugin({
+            name: "xx_text",
+            version: 1,
+            register_plugin: function (importObject) {
+                importObject.env.xx_text_len = function () {
+                    var t = window.__xxText;
+                    if (!t || t.state === -1) return -2;
+                    if (t.state === 1 && t.bytes) return t.bytes.length;
+                    return -1;
+                };
+                importObject.env.xx_text_read = function (ptr, len) {
+                    try {
+                        var t = window.__xxText;
+                        if (!t || t.state !== 1 || !t.bytes) return;
+                        var mem =
+                            window.wasm_memory && window.wasm_memory.buffer
+                                ? window.wasm_memory.buffer
+                                : window.wasm_exports && window.wasm_exports.memory
+                                  ? window.wasm_exports.memory.buffer
+                                  : null;
+                        if (!mem) return;
+                        var arr = new Uint8Array(mem, ptr, len);
+                        arr.set(t.bytes.subarray(0, len));
+                    } catch (e) { console.error("xx_text_read:", e); }
                 };
             },
             on_init: function () {}
@@ -576,6 +650,18 @@
                             if (ld95) {
                                 ld95.style.pointerEvents = "auto";
                                 ld95.onclick = function () { location.reload(); };
+                            }
+                        } else if (code === 96) {
+                            // v1.16.37 文案外置失败码 96（与字体 95 相互独立）：Rust
+                            // 轮询 xx_text_len 得 -2/600 帧死线，或 init_text_from_bytes
+                            // 解压/UTF-8 校验失败——textpack 是全部事件臂文案的硬依赖，
+                            // 缺它满屏空文案比黑屏更劣，故不进主循环。加载层转失败文案
+                            // + 可点重试（与 95 同款收口；45s 看门狗/D1D2 自动重载仍兜底）。
+                            xx_stage("文案未至，点击重试");
+                            var ld96 = document.getElementById("loading");
+                            if (ld96) {
+                                ld96.style.pointerEvents = "auto";
+                                ld96.onclick = function () { location.reload(); };
                             }
                         }
                     } catch (eS) {}
