@@ -1939,6 +1939,10 @@ pub fn draw_modal_card(g: &mut Game) {
         && mxp <= hx + 110.0
         && myp >= hy
         && myp <= hy + 26.0;
+    // v1.16.38 单3 剧情演出包⑨：暂避钮两版式改挂卡体入场 α（下两处
+    // button_a_accent(.., card_a)）——命中采样在 α 之前且不乘 α：开帧钮不可见
+    // 但可点，与 v1.16.37 选项钮 ⑦「动画期照常可点，命中=所见」同口径
+    //（draw.rs 选项钮段注；几何随 dy 同步，稳态 card_a==1 逐像素不变）
     if meeting {
         panel_card_a(240.0, 100.0 + dy, 800.0, 520.0, card_a);
         // v1.16.7 稀有/链段卡描边：叠于 panel_card_a 金描边之上（2.5 同位覆盖）——
@@ -1959,25 +1963,29 @@ pub fn draw_modal_card(g: &mut Game) {
         txt_c(title, V_W * 0.5, 128.0 + dy, 24, fade(C_GOLD, card_a));
         // v1.16.7 链段阶段徽标（复用品级徽标 68×26 半透明底+16px 字语言）：标题
         // 右侧 x=736..804，与暂避钮（920,122）不交
+        // v1.16.38 单3 剧情演出包⑩：链段/类目徽标+场景要素行挂 0.05s 立绘滞后
+        // 通道 art_a（徽标比标题迟 ~50ms 浮现，稳态 art_a==1 逐像素不变；纯只读
+        // 共享 art_a 与 ⑧ 沉降无写冲突；徽标/场景行零命中几何纯视觉；本批注与
+        // 下方类目/场景行及普通版式对称三处同批同改，勿半改）
         if let Some((seg, total)) = card_stage {
             let (bx, by) = (736.0, 122.0 + dy);
-            draw_rectangle(bx, by, 68.0, 26.0, fade(Color::from_rgba(130, 220, 230, 60), card_a));
-            draw_rectangle_lines(bx, by, 68.0, 26.0, 1.0, fade(C_CYAN, card_a));
+            draw_rectangle(bx, by, 68.0, 26.0, fade(Color::from_rgba(130, 220, 230, 60), art_a));
+            draw_rectangle_lines(bx, by, 68.0, 26.0, 1.0, fade(C_CYAN, art_a));
             txt_c(
                 stage_label(seg, total), // 复审④：&'static str 零分配
                 bx + 34.0,
                 by + 4.0,
                 16,
-                fade(C_CYAN, card_a),
+                fade(C_CYAN, art_a),
             );
         }
         // v1.16.21 类目徽标 chip：标题左侧镜像 stage 徽标位（736..804 关于版式中轴
         // 640 → 476..544；事件标题 ≤6 字（568..712）恒不相交）。底色取徽标色 α0.24
         if let Some((cw, cc)) = card_cat {
             let (bx, by) = (476.0, 122.0 + dy);
-            draw_rectangle(bx, by, 68.0, 26.0, fade(Color::new(cc.r, cc.g, cc.b, 0.24), card_a));
-            draw_rectangle_lines(bx, by, 68.0, 26.0, 1.0, fade(cc, card_a));
-            txt_c(cw, bx + 34.0, by + 4.0, 16, fade(cc, card_a));
+            draw_rectangle(bx, by, 68.0, 26.0, fade(Color::new(cc.r, cc.g, cc.b, 0.24), art_a));
+            draw_rectangle_lines(bx, by, 68.0, 26.0, 1.0, fade(cc, art_a));
+            txt_c(cw, bx + 34.0, by + 4.0, 16, fade(cc, art_a));
         }
         draw_rectangle(
             270.0,
@@ -1995,7 +2003,7 @@ pub fn draw_modal_card(g: &mut Game) {
         // v1.16.21 场景要素行：分隔线右端「青云宗 · 雨」@14 C_DIM（152..166，
         // 正文列 170 起/暂避钮底 148——双不交，零版式位移）
         if let Some(sc) = scene {
-            txt_r(sc, 1010.0, 151.0 + dy, 14, fade(C_DIM, card_a));
+            txt_r(sc, 1010.0, 151.0 + dy, 14, fade(C_DIM, art_a));
         }
         // 立绘盒 (270,160) 220×420、底边锚 580（box_h=bottom_off=420：顶 = 580−dh ≥ 160，
         // 恒落 npc_clip_band 116..616 视口内不裁）；v1.16.9 复审修后 AI 图未到/缺失
@@ -2028,7 +2036,10 @@ pub fn draw_modal_card(g: &mut Game) {
             0.18 - g.modal_anim,
             160.0, // v1.16.9 文本区 170..330 预算（5 行×28+段距），超限截断不压钮区
         );
-        button(920.0, 122.0 + dy, 110.0, 26.0, "暂 避", None, true);
+        // v1.16.38 单3 剧情演出包⑨：暂避钮挂卡体入场 α——分层入画收尾（卡体→
+        // 徽标/立绘→正文→选项钮错峰→暂避钮同批全显）；accent=false 非推荐位
+        // 语义不变，稳态 card_a==1 逐像素不变
+        button_a_accent(920.0, 122.0 + dy, 110.0, 26.0, "暂 避", None, true, false, card_a);
     } else {
         // v1.16.7 多段正文承载：普通 600×400 文本区（224..316）仅 3 行；模拟事件卡
         //（kind=Npc）正文 >3 行走 600×440 加高变体（卡顶 140/文本 204/钮 336，
@@ -2056,25 +2067,27 @@ pub fn draw_modal_card(g: &mut Game) {
         }
         txt_c(title, V_W * 0.5, cy + 28.0 + dy, 24, fade(C_GOLD, card_a));
         // v1.16.7 链段阶段徽标：标题右侧（x=736..804），与暂避钮（820, cy+14）不交
+        // v1.16.38 单3 剧情演出包⑩：普通版式链段/类目徽标+场景行同款挂 art_a
+        //（照 meeting 版式 ⑩ 注，两版式对称同改勿半改）
         if let Some((seg, total)) = card_stage {
             let (bx, by) = (736.0, cy + 13.0 + dy);
-            draw_rectangle(bx, by, 68.0, 26.0, fade(Color::from_rgba(130, 220, 230, 60), card_a));
-            draw_rectangle_lines(bx, by, 68.0, 26.0, 1.0, fade(C_CYAN, card_a));
+            draw_rectangle(bx, by, 68.0, 26.0, fade(Color::from_rgba(130, 220, 230, 60), art_a));
+            draw_rectangle_lines(bx, by, 68.0, 26.0, 1.0, fade(C_CYAN, art_a));
             txt_c(
                 stage_label(seg, total), // 复审④：&'static str 零分配
                 bx + 34.0,
                 by + 4.0,
                 16,
-                fade(C_CYAN, card_a),
+                fade(C_CYAN, art_a),
             );
         }
         // v1.16.21 类目徽标 chip：标题左侧镜像 stage 徽标位（736..804 关于版式中轴
         // 640 → 476..544；事件标题 ≤6 字（568..712）恒不相交）。底色取徽标色 α0.24
         if let Some((cw, cc)) = card_cat {
             let (bx, by) = (476.0, cy + 13.0 + dy);
-            draw_rectangle(bx, by, 68.0, 26.0, fade(Color::new(cc.r, cc.g, cc.b, 0.24), card_a));
-            draw_rectangle_lines(bx, by, 68.0, 26.0, 1.0, fade(cc, card_a));
-            txt_c(cw, bx + 34.0, by + 4.0, 16, fade(cc, card_a));
+            draw_rectangle(bx, by, 68.0, 26.0, fade(Color::new(cc.r, cc.g, cc.b, 0.24), art_a));
+            draw_rectangle_lines(bx, by, 68.0, 26.0, 1.0, fade(cc, art_a));
+            txt_c(cw, bx + 34.0, by + 4.0, 16, fade(cc, art_a));
         }
         draw_rectangle(
             380.0,
@@ -2092,7 +2105,7 @@ pub fn draw_modal_card(g: &mut Game) {
         // v1.16.21 场景要素行：分隔线右端「青云宗 · 雨」@14 C_DIM（cy+51..cy+65，
         // 正文列 cy+64 起/暂避钮底 cy+40——双不交，零版式位移）
         if let Some(sc) = scene {
-            txt_r(sc, 900.0, cy + 51.0 + dy, 14, fade(C_DIM, card_a));
+            txt_r(sc, 900.0, cy + 51.0 + dy, 14, fade(C_DIM, art_a));
         }
         if kind_is_npc {
             // 分段淡入正文（复审②：秒标度 t，稳态全段恒 1 与旧单次 wrap_draw
@@ -2113,7 +2126,9 @@ pub fn draw_modal_card(g: &mut Game) {
             // Finale/Path 卡维持 v1.16.6 动效原样（单次 wrap_draw，逐像素不变）
             wrap_draw(text, 380.0, 224.0 + dy, 16, 520.0, 28.0, fade(C_TEXT, text_a));
         }
-        button(820.0, cy + 14.0 + dy, 110.0, 26.0, "暂 避", None, true);
+        // v1.16.38 单3 剧情演出包⑨：普通版式暂避钮同款挂卡体入场 α（两版式
+        // 对称同改，照 meeting 版式注）
+        button_a_accent(820.0, cy + 14.0 + dy, 110.0, 26.0, "暂 避", None, true, false, card_a);
     }
     // 命中先收集、借还后再分派（&mut）——免整卡克隆
     let mut picked: Option<usize> = None;

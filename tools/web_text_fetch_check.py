@@ -16,6 +16,14 @@ textpack.bin fetch 外置大刀的加载链内存级行为断言（零落盘产�
   5. 三方成对静态核对（Rust main.rs xx_text mod + data.rs cfg 包 TEXTPACK 本体 +
      init_text_from_bytes + 组包三件套 21→22 断言同批）。
 
+升版锚（v1.16.38 单4 清账②改造）：GAME_VER 单源解析——本文件升版零手改。
+v1.16.37 时桩值 "1.16.37" 硬编码 5 处（HARNESS 内 A/B/C/D 四用例 new Function
+传参 ×4 + A 用例 URL 断言 ×1，"textpack.bin?v=…" 整串字面量），升版逐轮手改、
+漏任一行即红（自曝但烦）。现改从 web/index.html 提取 `var GAME_VER = "…"` 后
+经 %VER% 注入上述 5 处消费位；?v= 机制断言独立性不变（URL 形态/缺 ?v=/不引用
+GAME_VER 变量仍当场红），版本「值」↔Cargo.toml 一致性由 verify_taptap_zip.py
+CARGO_VER 动态对账守门（v1.16.16 同款去硬编码先例）。
+
 用法：PYTHONIOENCODING=utf-8 python tools/web_text_fetch_check.py（仓库根执行；
       依赖 node 在 PATH，node web_mime_retry_check.js 同款依赖）。
 """
@@ -36,6 +44,17 @@ SRC = (ROOT / 'web' / 'index.html').read_text(encoding='utf-8')
 BUNDLE = str(ROOT / 'web' / 'mq_js_bundle.js')
 MAIN_RS = (ROOT / 'src' / 'main.rs').read_text(encoding='utf-8')
 DATA_RS = (ROOT / 'src' / 'data.rs').read_text(encoding='utf-8')
+
+# ---------- [0] GAME_VER 单源解析（v1.16.38 单4 升版锚改造：升版零手改） ----------
+# v1.16.37 时本文件 5 处硬编码桩值（4×new Function 传参 + 1×URL 断言），升版
+# 逐轮手改且漏任一行即红（自曝但烦）——现改从 web/index.html 单源提取后经
+# %VER% 注入 HARNESS；?v= 机制断言独立性不变（URL 形态/缺 ?v=/不引用 GAME_VER
+# 变量仍当场红），版本「值」的对账移交给 verify_taptap_zip CARGO_VER 动态对账
+_m = re.search(r'var GAME_VER = "([^"]+)"', SRC)
+assert _m, 'web/index.html 缺 GAME_VER 定义（缓存穿透单源失守）'
+GAME_VER = _m.group(1)
+assert re.fullmatch(r'\d+\.\d+\.\d+', GAME_VER), f'GAME_VER 形态异常: {GAME_VER}'
+print(f'[0] GAME_VER 单源解析：{GAME_VER}（web/index.html → HARNESS %VER% ×5）')
 
 mini = M.minify(M.inline_bundle(SRC, BUNDLE))
 
@@ -84,8 +103,8 @@ async function flush() { await new Promise(r => setImmediate(r)); }
   const pluginSrc = %PLUGIN%;
 
   // ---- A 成功装载：fetch ok → state=1 → len/read 字节回传 ----
-  // v1.16.37 单5 升版锚：GAME_VER 桩值（与断言同值自洽——harness 不读 index.html
-  // 实际版本，传参即桩；升版时与 Cargo.toml/index GAME_VER 同批走）
+  // GAME_VER 桩值由 python 侧 [0] 解析注入（v1.16.38 单4 升版锚改造——单源
+  // web/index.html 解析，升版零手改；harness 结构不变仍传参收值）
   {
     const win = { __xxText: null };
     const doc = stubDoc();
@@ -99,9 +118,9 @@ async function flush() { await new Promise(r => setImmediate(r)); }
       });
     };
     new Function("window", "document", "xx_stage", "location", "fetch", "GAME_VER",
-      prefetchSrc)(win, doc, (s) => stages.push(s), undefined, fetch, "1.16.37");
+      prefetchSrc)(win, doc, (s) => stages.push(s), undefined, fetch, "%VER%");
     await flush();
-    assert.equal(fetchedUrl, "textpack.bin?v=1.16.37", "预取 URL 未带 GAME_VER 缓存穿透");
+    assert.equal(fetchedUrl, "textpack.bin?v=%VER%", "预取 URL 未带 GAME_VER 缓存穿透");
     assert.equal(win.__xxText.state, 1, "成功路径 state 应为 1");
     assert.deepEqual(Array.from(win.__xxText.bytes), [0x31, 0x36, 0x2e], "预取字节内容不符");
 
@@ -132,7 +151,7 @@ async function flush() { await new Promise(r => setImmediate(r)); }
     const location = { reload: () => { reloaded += 1; } };
     const fetch = () => Promise.reject(new Error("network down"));
     new Function("window", "document", "xx_stage", "location", "fetch", "GAME_VER",
-      prefetchSrc)(win, doc, (s) => stages.push(s), location, fetch, "1.16.37");
+      prefetchSrc)(win, doc, (s) => stages.push(s), location, fetch, "%VER%");
     await flush();
     assert.equal(win.__xxText.state, -1, "失败终态应一次性置 -1（无重试回 0）");
     assert.ok(doc.errlog.textContent.includes("[ERR] 文案资源加载失败（textpack.bin）"),
@@ -151,7 +170,7 @@ async function flush() { await new Promise(r => setImmediate(r)); }
     const stages = [];
     const fetch = () => Promise.resolve({ ok: false, status: 404, arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) });
     new Function("window", "document", "xx_stage", "location", "fetch", "GAME_VER",
-      prefetchSrc)(win, doc, (s) => stages.push(s), undefined, fetch, "1.16.37");
+      prefetchSrc)(win, doc, (s) => stages.push(s), undefined, fetch, "%VER%");
     await flush();
     assert.equal(win.__xxText.state, -1, "HTTP 非 ok 应走失败终态");
     assert.ok(stages.includes("文案未至，点击重试"), "HTTP 非 ok 失败文案未透出");
@@ -165,7 +184,7 @@ async function flush() { await new Promise(r => setImmediate(r)); }
     const stages = [];
     const fetch = () => Promise.reject(new Error("down"));
     new Function("window", "document", "xx_stage", "location", "fetch", "GAME_VER",
-      prefetchSrc)(win, doc, (s) => stages.push(s), undefined, fetch, "1.16.37");
+      prefetchSrc)(win, doc, (s) => stages.push(s), undefined, fetch, "%VER%");
     await flush();
     assert.equal(win.__xxText.state, -1, "wasm 已就绪时失败仍应置终态");
     assert.equal(stages.length, 0, "wasm 已就绪时失败文案不应抢屏（与 xxFontFail 同款）");
@@ -196,7 +215,12 @@ async function flush() { await new Promise(r => setImmediate(r)); }
 
 def run_node(src_text: str, tag: str) -> None:
     """对源码版/minify 版各跑一遍行为 harness。"""
+    # v1.16.38 必修单：补 %VER% 注入——单4 改造宣称「单源解析→%VER% 注入 5 处」
+    # 但本链路漏了本行，node 实收字面 "%VER%" 与 URL 断言双向自洽（假绿，值传播
+    # 校验退化）。修后 [0] 解析值真实进 HARNESS 5 处消费位，端到端
+    # 「index GAME_VER 值→预取 URL」行为校验成立。
     code = (HARNESS
+            .replace('%VER%', GAME_VER)
             .replace('%PREFETCH%', repr(extract_prefetch(src_text)))
             .replace('%PLUGIN%', repr(extract_plugin(src_text))))
     tmp = tempfile.NamedTemporaryFile('w', suffix='.js', delete=False, encoding='utf-8')
