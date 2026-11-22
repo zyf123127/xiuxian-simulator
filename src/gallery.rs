@@ -779,7 +779,14 @@ fn draw_gal_comp_card(g: &Game, i: usize, y: f32, cur: bool) {
         }    }
     if npc_row_vis(y + 48.0) {
         if cur {
-            txt("此生同页", col, y + 48.0, 14, C_GOLD);
+            // v1.16.46 段十九批 主/副伴行标分化（勘察六提名二）：tag 单源
+            // Life::comp_row_tag（charpanel.rs 缘谱行同批勿半改——两消费点共用）
+            txt(
+                g.sim
+                    .as_ref()
+                    .map_or("此生同页", |s| s.comp_row_tag(i)),
+                col, y + 48.0, 14, C_GOLD,
+            );
         } else if known {
             txt(&format!("曾同页 {} 世", bonds), col, y + 48.0, 14, C_TEXT);
         } else {

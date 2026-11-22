@@ -118,9 +118,33 @@ print(f"written {OUT} ({sz/1024:.0f} KB)")
 # 等工具读 cmap（容器变、内容不变）。raw deflate（zlib wbits=-15，非 gzip 容器）
 # 与 miniz_oxide::inflate::decompress_to_vec 对口；mtime 不进 deflate 流，输出确定。
 import zlib
-defl = zlib.compressobj(9, zlib.DEFLATED, -15)
+# v1.16.46 加载优化②（施工单三/勘察一提名②）：zopfli 同容器（raw-deflate wbits=-15）
+# 再压缩，web 首载传输再省 5~8%——仅构建机 pip 依赖，照 build_web.bat wasm-opt
+# 先例 graceful skip：缺装时回落 zlib level 9 原行为，管线不断。产物仍是合法
+# raw-deflate，ui.rs init_font_from_bytes 的 miniz_oxide::inflate 对口零变化；
+# 回环自检保留即天然防坏流。zopfli 输出确定（无时间戳入流），重跑幂等。
+try:
+    # zopfli 包 __init__ 为空，子模块须显式导入（zopfli/zlib.py 是 zopfli 家族的
+    # zlib 容器封装，非标准库 zlib——别名 _zopfli_zlib 防混）
+    import zopfli.zlib as _zopfli_zlib
+
+    def _deflate_best(raw):
+        # python-zopfli 0.4.x 仅产 zlib/gzip 容器（无 raw 模式）——产 zlib 容器后
+        # 剥 2 字节头 + 4 字节 adler 尾得 raw-deflate（RFC1950 包裹 RFC1951 的
+        # 标准关系）；FDICT 位守卫防预设字典变体、剥离后回环断言防容器错剥
+        out = _zopfli_zlib.compress(raw)
+        assert (out[1] & 0x20) == 0, "zopfli 输出含 FDICT 预设字典，剥离口径失效"
+        raw_out = out[2:-4]
+        assert zlib.decompress(raw_out, -15) == raw, "zopfli raw 剥离回环失败"
+        return raw_out
+    print("zopfli: enabled")
+except ImportError:
+    def _deflate_best(raw):
+        c = zlib.compressobj(9, zlib.DEFLATED, -15)
+        return c.compress(raw) + c.flush()
+    print("zopfli: not installed, fallback zlib level 9 (wasm-opt graceful-skip precedent)")
 data = open(OUT, "rb").read()
-blob = defl.compress(data) + defl.flush()
+blob = _deflate_best(data)
 OUT_DEFLATE = os.path.join(ROOT, "assets", "font.ttf.deflate")
 with open(OUT_DEFLATE, "wb") as f:
     f.write(blob)

@@ -53,6 +53,32 @@ pub(crate) fn bar_stagger_a(e: f32, k: usize) -> f32 {
     ((e - k as f32 * 0.03) / 0.03).clamp(0.0, 1.0)
 }
 
+// v1.16.46 演出包⑲ 破境金辉氛围层三角包络（照 weather_veil_alpha draw.rs:788
+// 单口先例）：k=modal_anim/0.18 复用①相位零新状态，k 自 1（开帧）→0（稳态），
+// 前半程渐显后半程渐隐 env∈[0,1] 峰值恰 0.5；稳态 k==0 → 0.0（消费口 a>0 才画
+// 先例）不落像素逐比特恒等。⑳ 结缘金尘错峰共用本包络（bond_mote_a 包装）——
+// 单源勿双写。
+#[inline]
+pub(crate) fn brk_veil_a(k: f32) -> f32 {
+    if k <= 0.0 {
+        return 0.0;
+    }
+    let kk = k.clamp(0.0, 1.0);
+    if kk > 0.5 {
+        (1.0 - kk) / 0.5
+    } else {
+        kk / 0.5
+    }
+}
+
+// v1.16.46 演出包⑳ 结缘金尘错峰：单粒相位 = 共用三角包络作用于 (k − idx×0.05)
+// ——idx 越大越早入峰（k 自 1 递减过程按粒错峰显隐）；稳态 k==0 → 全粒 0.0；
+// 全域有界 [0,1]；上升位移/α 均由本包络派生（消费口乘 art_a/card 系数）。
+#[inline]
+pub(crate) fn bond_mote_a(k: f32, k_idx: usize) -> f32 {
+    brk_veil_a((k - k_idx as f32 * 0.05).clamp(0.0, 1.0))
+}
+
 pub fn button(
     x: f32,
     y: f32,
@@ -134,7 +160,14 @@ pub fn button_a_accent(
         fade(
             if !enabled {
                 // v1.8.0 A6：禁用描边提亮（66,56,88→96,82,124），弱可用态一眼可辨
-                Color::from_rgba(96, 82, 124, 255)
+                // v1.16.46 按钮花样 C：禁用态 hover 弱反馈第三层（96,82,124→
+                // 118,102,148）——「可望不可点」弱可辨性；非 hover 禁用帧逐像素
+                // =旧实现；主/副标禁用色（v1.8.0 A6 定稿）不动只动描边一色
+                if hot {
+                    Color::from_rgba(118, 102, 148, 255)
+                } else {
+                    Color::from_rgba(96, 82, 124, 255)
+                }
             } else if accent {
                 C_GOLD
             } else {
@@ -152,6 +185,29 @@ pub fn button_a_accent(
             h - 4.0,
             1.0,
             fade(Color::from_rgba(160, 128, 200, 130), a),
+        );
+        // v1.16.46 按钮花样 A：按压态外圈金辉——1px 外扩金圈与 2px 主框构成
+        // 「按下时描边变厚变亮」层次感；α 与内衬线同乘 a（stagger/卡面入场窗同
+        // 步显隐）；press=false 不落像素逐像素=旧实现；零状态零分配零新字形
+        draw_rectangle_lines(
+            x - 1.0,
+            y - 1.0 + dy,
+            w + 2.0,
+            h + 2.0,
+            1.0,
+            fade(C_GOLD, 0.35 * a),
+        );
+    } else if hot {
+        // v1.16.46 按钮花样 B：hot 态顶部内衬高光——hover=顶光、按压=全框+下沉
+        // 两级内衬语言可辨；与 press 分支 if/else 互斥防按压帧双线叠加；非 hot
+        // 帧零像素逐像素=旧实现；触屏 hot≡手指落钮（:106-108 口径）与按压态天
+        // 然衔接；零状态零分配零新字形
+        draw_rectangle(
+            x + 2.0,
+            y + 2.0,
+            w - 4.0,
+            1.0,
+            fade(Color::from_rgba(214, 200, 244, 255), 0.25 * a),
         );
     }
     if let Some(s) = sub {
@@ -2522,6 +2578,26 @@ pub fn draw_modal_card(g: &mut Game) {
         let card = g.rmodal.as_ref().or(g.modal.as_ref()).unwrap();
         (card.rare, card.stage, card.cat, card.brk)
     };
+    // v1.16.46 演出包⑳ 结缘仪式门控采样（随卡生灭会话态照 rare/stage 采样先例）：
+    // opts 静态扫描 special==17（opts≤4 零分配）——构建口唯一精确记号（模拟 28
+    // 臂 game.rs:4404「认下这页」/现实 rencounter 认下臂 game.rs:14180；cfg(test)
+    // 夹具不算），勿放宽 actor==Comp——普通邂逅/好感卡会误入
+    let card_rite = g
+        .rmodal
+        .as_ref()
+        .or(g.modal.as_ref())
+        .unwrap()
+        .opts
+        .iter()
+        .any(|o| o.1.special == 17);
+    // v1.16.46 演出包⑲ 破境金辉氛围层：暗幕上卡体下全屏金辉（brk 门控=天劫/破境
+    // 两路统一置位 game.rs:3420「天劫/破境两路同点」）；brk_veil_a(k) 三角包络
+    // 峰值 α=0.08，稳态 modal_anim==0 → k=0 → α=0 → 早退不落像素逐比特恒等；
+    // 纯矩形零分配零新字形，颜色走 fade 通道不入字形缓存 key
+    let brk_a = 0.08 * brk_veil_a(k);
+    if brk_a > 0.0 {
+        draw_rectangle(0.0, 0.0, V_W, V_H, fade(C_GOLD, brk_a));
+    }
     // v1.16.21 场景要素行采样（&str 借用横跨绘制段——与 modal_desc 同为只读，
     // 段内唯一 &mut 是段尾 modal_min，借用纪律不破）
     let scene: Option<&str> = g
@@ -2555,7 +2631,7 @@ pub fn draw_modal_card(g: &mut Game) {
         .is_some_and(|c| c.kind == crate::game::CardKind::Npc);
     let lines = crate::ui::wrap_lines(text, 16, 520.0);
     let segs = text.matches('\n').count() + 1;
-    let tall = !meeting && kind_is_npc && lines + segs - 1 > 3; // 加高容量 ≤4 行（4*28+段距8 ≤132px）
+    let tall = !meeting && kind_is_npc && lines + segs - 1 > 3; // 加高容量 ≤4 行（v1.16.46 勘四必修①改准：4*28+段距8=120px 恰 tall max_h——原 132px 注与 112px 实参自相矛盾已修正）
     let cy = if tall { 140.0 } else { 160.0 };
     // v1.16.4 暂避钮命中先采样：title/descs 只读借用横跨绘制段直到选项循环结束，
     // g.modal_min 的 &mut 移到段尾执行，免 E0502（钮面在两版式分支内照常绘出）
@@ -2656,6 +2732,34 @@ pub fn draw_modal_card(g: &mut Game) {
             420.0,
             art_a,
         );
+        // v1.16.46 演出包⑳ 结缘仪式金尘：special17 门控（card_rite 采样段）——
+        // 8 粒金尘纯矩形错峰（bond_mote_a 包络派生 α 与上升位移，盒内 220×420
+        // 全域有界）+盒缘金描边呼吸（⑤ title_ornament 三层矩形同语言）；叠加层
+        // 画在 npc_portrait_box_a 之后不改其几何（v11648_bond_rite_tests 零位移
+        // 钉）；α 乘 art_a 与立绘同显隐（稳态 modal_anim==0 → k=0 → 全 0 整段
+        // 早退不落像素逐比特恒等）；勿动 npc_portrait_box_a 内部（npc_clip_band
+        // charpanel.rs:229-235 红线）
+        if card_rite && k > 0.0 && art_a > 0.0 {
+            for mote_k in 0..8usize {
+                let env = bond_mote_a(k, mote_k);
+                if env <= 0.0 {
+                    continue;
+                }
+                let mx = 270.0 + 26.0 + (mote_k % 4) as f32 * 56.0;
+                let my = 160.0 + dy + art_sink + 96.0 + (mote_k / 4) as f32 * 130.0
+                    - 24.0 * env;
+                let ms = if mote_k % 3 == 0 { 3.0 } else { 2.0 };
+                draw_rectangle(mx, my, ms, ms, fade(C_GOLD, 0.45 * env * art_a));
+            }
+            draw_rectangle_lines(
+                270.0 - 3.0,
+                160.0 + dy + art_sink - 3.0,
+                220.0 + 6.0,
+                420.0 + 6.0,
+                1.5,
+                fade(C_GOLD, 0.3 * brk_veil_a(k) * art_a),
+            );
+        }
         draw_event_text(
             text,
             530.0,
@@ -2742,6 +2846,11 @@ pub fn draw_modal_card(g: &mut Game) {
             // 分段淡入正文（复审②：秒标度 t，稳态全段恒 1 与旧单次 wrap_draw
             // 逐像素一致）；v1.16.9 文本区像素预算上移（cy+64..316 钮区）：
             // tall 卡 112px（4 行）、普通卡 92px（3 行），超限截断不压钮区
+            // v1.16.46 勘四必修①：tall max_h 112→120——两段式 2+2 行 used_h=
+            // 56+8+56=120px 恰满（v1.16.45 段十八 371/373 与段十九 374 第二段
+            // 在 112px 下被先判后画整段截断，勘察四静态算术+fontTools hmtx
+            // advance=1.0em 实锤）；204+120=324 仍在 tall 钮区 336 上方留 12px，
+            // 普通卡 92px 不动逐像素不变
             draw_event_text(
                 text,
                 380.0,
@@ -2751,7 +2860,7 @@ pub fn draw_modal_card(g: &mut Game) {
                 28.0,
                 C_TEXT,
                 0.18 - g.modal_anim,
-                if tall { 112.0 } else { 92.0 },
+                if tall { 120.0 } else { 92.0 },
             );
         } else {
             // Finale/Path 卡维持 v1.16.6 动效原样（单次 wrap_draw，逐像素不变）
@@ -4572,5 +4681,202 @@ mod draw_tests {
         // 越界 min 钳制（panic=abort 纪律防御臂）——v1.16.40 扩第三签后末签=2，
         // 钳制上沿随签数走（断言本意=越界恒等于末签）
         assert_eq!(super::guide_tab_label(usize::MAX), super::guide_tab_label(2));
+    }
+}
+
+// ================= v1.16.46 演出包⑲ 破境金辉氛围层（brk_veil）钉测 =================
+// 模组名注：v11645/v11646/v11647 前缀均已被占用（v11645_comp_multi_tests、
+// v11646_bar_anim/pool_tests、施工单二/三 v11647_seg19_tests/v11647_loadspeed_tests
+// ——charpanel v11646_button_fx_tests 亦占 v11646），本批钉测模块名顺延 v11648，
+// 内容版本以本头注 v1.16.46 为准（照 charpanel.rs v11646_button_fx_tests 逐模块
+// 头注款）。
+// 钉面：①三角包络两端归零/对称/61 步全域有界/峰值 0.5 稳态逐比特（照
+// weather_veil_tests 款）②消费口静态钉（峰值 α 0.08 单口+早退门）③brk 构建口
+// 静态钉（game.rs brk:true 天劫/破境两路同点恰 1 + draw.rs card_brk 采样恰 1）。
+#[cfg(test)]
+mod v11648_brk_veil_tests {
+    use super::brk_veil_a;
+
+    fn prod_of(fname: &str) -> String {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(fname))
+            .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", fname, e));
+        // 行首 #[cfg(test)] 起至行首顶格 } 止滤测试区（照 press_sink prod 款）
+        let mut out = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
+    }
+
+    // ── 包络：两端归零逐比特/对称/61 步全域有界/峰值恰 0.5 ──
+    #[test]
+    fn brk_veil_envelope() {
+        assert_eq!(brk_veil_a(0.0).to_bits(), 0f32.to_bits(), "稳态 k=0 归零逐比特");
+        assert_eq!(brk_veil_a(-0.3).to_bits(), 0f32.to_bits(), "负 k 归零");
+        assert_eq!(brk_veil_a(1.0).to_bits(), 0f32.to_bits(), "开帧 k=1 包络归零（三角远端）");
+        assert_eq!(brk_veil_a(0.5).to_bits(), 1f32.to_bits(), "峰值恰 k=0.5");
+        // 对称：brk_veil_a(0.5−d)≈brk_veil_a(0.5+d)（f32 表示误差容差 1e-6——
+        // 0.4f32 与 1.0−0.6f32 差 1 ULP 属表示层非逻辑层，照 weather_veil_tests
+        // 近似口径；端点/峰值仍逐比特）
+        for d_k in [0.05f32, 0.1, 0.2, 0.35, 0.45] {
+            let (lv, rv) = (brk_veil_a(0.5 - d_k), brk_veil_a(0.5 + d_k));
+            assert!(
+                (lv - rv).abs() < 1e-6,
+                "三角对称 d={}: {} vs {}",
+                d_k,
+                lv,
+                rv
+            );
+        }
+        // 61 步全域扫描：有界 [0,1] + 两段单调
+        let mut prev = 0.0f32;
+        let mut rising = true;
+        for st_k in 0..=60usize {
+            let v = brk_veil_a(st_k as f32 / 60.0);
+            assert!((0.0..=1.0).contains(&v), "包络越界 k={}", st_k as f32 / 60.0);
+            if rising && v < prev {
+                rising = false;
+            }
+            assert!(
+                if rising { v >= prev } else { v <= prev },
+                "两段单调破坏 k={}",
+                st_k as f32 / 60.0
+            );
+            prev = v;
+        }
+    }
+
+    // ── 静态钉：消费口 + brk 门控构建口 ──
+    #[test]
+    fn brk_veil_static_pins() {
+        let draw_p = prod_of("draw.rs");
+        let count = |needle: &str| draw_p.matches(needle).count();
+        assert_eq!(count("let brk_a = 0.08 * brk_veil_a(k);"), 1, "⑲ 峰值 α 0.08 单口");
+        assert_eq!(count("if brk_a > 0.0 {"), 1, "⑲ 稳态早退门（a>0 才画先例）");
+        assert_eq!(
+            count("let (card_rare, card_stage, card_cat, card_brk) = {"),
+            1,
+            "card_brk 采样口恰 1（插层置于采样之后层级=暗幕上卡体下）"
+        );
+        let game_p = prod_of("game.rs");
+        assert_eq!(
+            game_p.matches("brk: true").count(),
+            1,
+            "brk 构建口恰 1（game.rs 天劫/破境两路同点——新增破境类卡须并入本口并扩钉）"
+        );
+    }
+}
+
+// ================= v1.16.46 演出包⑳ 结缘仪式金尘（bond_motes）钉测 =================
+// 模组名注：同上 v11648 顺延缘由。钉面：①bond_mote_a 错峰包络稳态逐比特/全域
+// 有界/错峰序②special17 门控三面静态钉（game.rs 构建口恰 2+npc.rs 消费口恰 1+
+// draw.rs 采样与早退门）③立绘盒几何零位移钉（金尘为盒外叠层不改
+// npc_portrait_box_a 实参——npc_clip_band 红线）。
+#[cfg(test)]
+mod v11648_bond_rite_tests {
+    use super::bond_mote_a;
+
+    fn prod_of(fname: &str) -> String {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(fname))
+            .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", fname, e));
+        let mut out = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
+    }
+
+    // ── 错峰包络：稳态全零逐比特/有界/错峰序（idx 大者先入峰）──
+    #[test]
+    fn bond_mote_envelope() {
+        // 稳态 k=0：全粒归零逐比特（整段早退前提）
+        for idx in 0..8usize {
+            assert_eq!(
+                bond_mote_a(0.0, idx).to_bits(),
+                0f32.to_bits(),
+                "稳态金尘 idx={} 归零逐比特",
+                idx
+            );
+        }
+        // 61 步 × 8 粒全域扫描有界 [0,1]
+        for st_k in 0..=60usize {
+            for idx in 0..8usize {
+                let v = bond_mote_a(st_k as f32 / 60.0, idx);
+                assert!(
+                    (0.0..=1.0).contains(&v),
+                    "金尘包络越界 k={} idx={}",
+                    st_k as f32 / 60.0,
+                    idx
+                );
+            }
+        }
+        // 错峰序：k=0.85 时 idx7 已入峰而 idx0 未及（idx 大者早入峰）；k=0.5 时
+        // idx0 恰峰值
+        assert!(
+            bond_mote_a(0.85, 7) > bond_mote_a(0.85, 0),
+            "错峰序破坏：idx 大者应先入峰"
+        );
+        assert_eq!(bond_mote_a(0.5, 0).to_bits(), 1f32.to_bits(), "idx0 峰值恰 k=0.5");
+    }
+
+    // ── 静态钉：special17 门控三面 + 立绘盒零位移 ──
+    #[test]
+    fn bond_rite_static_pins() {
+        let draw_p = prod_of("draw.rs");
+        let count = |needle: &str| draw_p.matches(needle).count();
+        assert_eq!(
+            count("let card_rite = g"),
+            1,
+            "⑳ 门控采样口恰 1（opts 静态扫描 special==17）"
+        );
+        assert_eq!(
+            count("if card_rite && k > 0.0 && art_a > 0.0 {"),
+            1,
+            "⑳ 稳态早退门（k=0/art_a=0 整段不落像素）"
+        );
+        assert_eq!(count("bond_mote_a(k, mote_k)"), 1, "⑳ 金尘错峰消费恰 1");
+        assert_eq!(
+            count("160.0 + dy + art_sink,\n            220.0,\n            420.0,\n            420.0,\n            art_a,"),
+            1,
+            "立绘盒几何零位移（金尘为盒外叠层不改 npc_portrait_box_a 实参）"
+        );
+        let game_p = prod_of("game.rs");
+        assert_eq!(
+            game_p.matches("e1.special = 17;").count(),
+            2,
+            "special17 构建口恰 2（模拟 28 臂+现实 rencounter 认下臂——新增结缘口须并入本钉）"
+        );
+        let npc_p = prod_of("npc.rs");
+        assert_eq!(
+            npc_p.matches("e.special == 17").count(),
+            1,
+            "special17 消费口恰 1（apply_reff 前置独占臂）"
+        );
     }
 }

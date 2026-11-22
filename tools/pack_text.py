@@ -187,6 +187,12 @@ BRIEF17_BASE_MANIFEST = 2780
 # EV_SEG17=371 差写法兑现（len17 改差）/EV_SEG18=374 快照预建同批登记）
 NAME18_BASE_MANIFEST = 2801
 BRIEF18_BASE_MANIFEST = 2804
+# v1.16.46 段十九扩池起：段十八（3 条）满员后新批连号追加为段十九（3 条：名
+# 2816..=2818/简 2819..=2821，真相源手写连号段先于正文 N2822..——v1.16.46 段
+# 十九批名/简/正文占 N2816..2830 故段十九即 2816/2819——与 data.rs EV_SEG18
+# =374 差写法兑现（len18 改差）/EV_SEG19=377 快照预建同批登记）
+NAME19_BASE_MANIFEST = 2816
+BRIEF19_BASE_MANIFEST = 2819
 
 dry = '--dry-run' in sys.argv
 collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测用；表收编后自动幂等）
@@ -1006,7 +1012,8 @@ def table_bases_from_inc():
                  'TXT_NAME15_BASE', 'TXT_BRIEF15_BASE',
                  'TXT_NAME16_BASE', 'TXT_BRIEF16_BASE',
                  'TXT_NAME17_BASE', 'TXT_BRIEF17_BASE',
-                 'TXT_NAME18_BASE', 'TXT_BRIEF18_BASE')
+                 'TXT_NAME18_BASE', 'TXT_BRIEF18_BASE',
+                 'TXT_NAME19_BASE', 'TXT_BRIEF19_BASE')
                 + BASE_KEYS_TABLES2):
             mm = re.search(r'pub static %s: u32 = (\d+);' % key, txt)
             if mm:
@@ -1944,8 +1951,32 @@ for pos, raw, vb, n in lit_items:
 for _ms, _cl, raw, vb, n, _a, _kinds in tmpl_items:
     assert blob[offs[n]:offs[n + 1]] == vb, 'blob slice mismatch at N=%d (tmpl)' % n
 
-comp = zlib.compressobj(9, zlib.DEFLATED, -15)
-packed = comp.compress(bytes(blob)) + comp.flush()
+# v1.16.46 加载优化②（施工单三/勘察一提名②）：zopfli 同容器再压缩——与
+# make_font.py 同款 graceful skip（构建机 pip 依赖，缺装回落 zlib level 9 原行
+# 为，照 build_web.bat wasm-opt 先例）。blob 不变、基址/offs 不变，仅 .bin 字节
+# 更小；产物仍是合法 raw-deflate，data.rs init_text_from_bytes 的
+# miniz_oxide::inflate 对口零变化，回环自检保留即天然防坏流。
+try:
+    # zopfli 包 __init__ 为空，子模块须显式导入（与 make_font.py 同款别名防与
+    # 标准库 zlib 混淆）
+    import zopfli.zlib as _zopfli_zlib
+
+    def _deflate_best(raw):
+        # python-zopfli 0.4.x 仅产 zlib/gzip 容器（无 raw 模式）——产 zlib 容器后
+        # 剥 2 字节头 + 4 字节 adler 尾得 raw-deflate（与 make_font.py 同款剥离
+        # 口径）；FDICT 位守卫防预设字典变体、剥离后回环断言防容器错剥
+        out = _zopfli_zlib.compress(raw)
+        assert (out[1] & 0x20) == 0, "zopfli 输出含 FDICT 预设字典，剥离口径失效"
+        raw_out = out[2:-4]
+        assert zlib.decompress(raw_out, -15) == raw, "zopfli raw 剥离回环失败"
+        return raw_out
+    print("zopfli: enabled")
+except ImportError:
+    def _deflate_best(raw):
+        c = zlib.compressobj(9, zlib.DEFLATED, -15)
+        return c.compress(raw) + c.flush()
+    print("zopfli: not installed, fallback zlib level 9 (wasm-opt graceful-skip precedent)")
+packed = _deflate_best(bytes(blob))
 
 # ---- 等价性纪律 3：压缩回环 ----
 dec = zlib.decompressobj(-15)
@@ -2138,6 +2169,13 @@ if name_base is not None:
 if brief_base is not None:
     inc += emit_base('TXT_BRIEF18_BASE',
                      inc_bases.get('TXT_BRIEF18_BASE', BRIEF18_BASE_MANIFEST))
+# v1.16.46 段十九基址（同段十八款：首轮 emit manifest 手分、此后回读 .inc 幂等）
+if name_base is not None:
+    inc += emit_base('TXT_NAME19_BASE',
+                     inc_bases.get('TXT_NAME19_BASE', NAME19_BASE_MANIFEST))
+if brief_base is not None:
+    inc += emit_base('TXT_BRIEF19_BASE',
+                     inc_bases.get('TXT_BRIEF19_BASE', BRIEF19_BASE_MANIFEST))
 # v1.16.29 刀B 整表基址（首轮 emit 收编 N 段基址；此后每次运行从 .inc 回读重发，
 # 与段一/二/三同款幂等——非 --tables2 运行也不许丢基址，否则 include! 断链）
 for bk2 in BASE_KEYS_TABLES2:

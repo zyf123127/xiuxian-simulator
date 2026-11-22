@@ -811,6 +811,21 @@ impl Life {
             || self.comp_extra.iter().any(|x| x == cn)
     }
 
+    // v1.16.46 段十九批 多道侣主/副可辨（勘察六提名二）：缘谱行/图鉴卡行标单源
+    // ——多伴态（comp_extra 非空，v1.16.45 新态）下主伴「此生主页」/副伴「此生
+    // 同页」；单伴态恒旧文「此生同页」零稳态变化（取舍照勘察六声明：绝对零稳
+    // 态变化款——charpanel/gallery 两消费点同批勿半改，v11648_comp_ui_tests 静
+    // 态钉看守）；「主」字已在 PANEL_WARM_CHARS 零新字形
+    pub fn comp_row_tag(&self, i: usize) -> &'static str {
+        if self.comp_extra.is_empty() {
+            return "此生同页";
+        }
+        match crate::data::COMPANION_NAMES.get(i) {
+            Some(cn) if self.companion.as_deref() == Some(*cn) => "此生主页",
+            _ => "此生同页",
+        }
+    }
+
     // 结缘三分支单源口（模拟侧 special17 与现实侧 bond_life_companion 共用）：
     // 返回落位与被轮替的旧名。主伴空→主伴位；主伴有未满→extra 尾；满编→extra[0]
     // FIFO 轮替。comp_fav/gallery 等账面由调用点各自记账，本口只动伴名槽位。
@@ -4064,6 +4079,15 @@ impl Game {
                 }
             }
 
+            // v1.16.46 段十九扩池 副伴专属：374 三纸同檐无副伴不入池（独立单 if
+            // 照 sect/lingmai/道侣白名单同点纪律，异门勿并）——勘察二主1 两案权
+            // 衡弃白名单改 comp_extra 分支：白名单口径是「主伴在场」，副伴位空时
+            // 入池会空谈副伴；本门只读 sim.comp_extra 既有字段零新增存档键；臂内
+            // 读点带兜底名照 357 无伴进卡走兜底名不 panic 先例
+            if id == 374 && self.sim.as_ref().map_or(true, |s| s.comp_extra.is_empty()) {
+                ww = 0.0;
+            }
+
             // v1.16.8 章节联动事件：主线章节达成（施工单1章节书系统 chap_done 位掩码）
             // 才入池——模拟侧的章节涟漪，照 sect/lingmai/blank_used 同点结算：
             // 74 血仇余响 = 第三章·血仇得报已了（bit2）；75 同页灯约 = 第六章·
@@ -4667,7 +4691,7 @@ impl Game {
 
             10 => {
 
-                card.text = evtx(26)/* 原文：一道苍老的声音在识海中响起：「吾道后继有人……」 */.into();
+                card.text = evtx(26)/* 原文：一道苍老的声音在你识海中响起：「吾道后继有人……」话音散去，余韵犹在——那是师门长辈的传讯玉符烧尽前的最后一句。你朝宗门方向遥遥一拜：香火未断，山上有人记得你。 */.into();
 
                 let mut e = Eff::new();
 
@@ -4682,7 +4706,7 @@ impl Game {
 
             11 => {
 
-                card.text = evtx(27)/* 原文：空间裂缝中露出一座上古秘境的入口，宝光与凶险并存。 */.into();
+                card.text = evtx(27)/* 原文：空间裂缝中露出一座上古秘境的入口，宝光与凶险并存——裂缝边缘还挂着前人斩落的剑穗，说明有人先进去过，也可能没能出来。你在入口前站定，把退路在心里多备了两条。 */.into();
 
                 let mut e1 = Eff::new();
 
@@ -4720,7 +4744,7 @@ impl Game {
 
             13 => {
 
-                card.text = evtx(29)/* 原文：天地灵气忽然暴涨，如潮水般涌来！ */.into();
+                card.text = evtx(29)/* 原文：天地灵气忽然暴涨，如潮水般涌来——草叶上的露珠倒悬不落，井水夜里泛着微光，连檐下的铜铃都无风自响。你盘膝坐于潮头，任灵机从百汇灌入，行遍周身经脉，丹田里的那一点星火，烧得比往常任何一夜都旺。 */.into();
 
                 let mut e = Eff::new();
 
@@ -4733,7 +4757,7 @@ impl Game {
 
             14 => {
 
-                card.text = evtx(30)/* 原文：一道黑影自暗中暴起偷袭！招招夺命。 */.into();
+                card.text = evtx(30)/* 原文：一道黑影自暗中暴起偷袭，招招抢你的要害！巷口的风都跟着凝住——你来不及细想，护体灵光已应声碎裂。杀意贴着耳侧擦过去，你才看清那张蒙面脸的眼睛：不是劫财，是要你的命。 */.into();
 
                 let mut e = Eff::new();
 
@@ -4746,7 +4770,7 @@ impl Game {
 
             15 => {
 
-                card.text = evtx(31)/* 原文：轰然一声，山体崩开，露出一座流光溢彩的仙人遗府！ */.into();
+                card.text = evtx(31)/* 原文：轰然一声，山体崩开，露出一座流光溢彩的仙人遗府！府门上灵纹流转未熄，阶前尘土里半枚玉简泛着微光——主人不知何年坐化，满府造化却偏偏像是留到今日，等你推门。 */.into();
 
                 let rl = gen_range(0, RELICS.len());
 
@@ -4763,7 +4787,7 @@ impl Game {
 
             16 => {
 
-                card.text = evtx(32)/* 原文：你路遇两妖相争两败俱伤，捡漏一枚温润妖丹。 */.into();
+                card.text = evtx(32)/* 原文：你路遇两妖相争，獠牙相向互不相让，斗到两败俱伤各自遁走——原地只余一枚温润妖丹，还带着恶斗的余温。你捡起细看：丹面纹路完好，是枚难得的完璧。 */.into();
 
                 let mut e = Eff::new();
 
@@ -11413,7 +11437,7 @@ impl Game {
                 // 修自坠面不同义，正文禁风雨/地动成因——天气门五面收官、364 地
                 // 动刚落；散件不挂脸；灵石数臂照 274/364 款 e.stones=-g + 灵石-{}
                 // 模板；原拟「凌/棱/晶」cmap 外字改「冰柱」沿 356 磬→缶纪律）
-                card.text = evtx(2767)/* 原文：夜半院墙一声闷响，塌了半面——年久的砖石散了一地，缺口正对着风口。 */.to_string();
+                card.text = evtx(2767)/* 原文：夜半院墙一声闷响，塌了半面——年久的砖石散了一地，缺口正对着风口。你连夜搬石垒回半人高，指节磨得发亮：院墙塌了可以再垒，风灌进来的那个口子，得趁天亮前堵上。 */.to_string();
                 let g = (20.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
@@ -11450,7 +11474,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = evf(2770, &[&(cn) as &dyn core::fmt::Display])/* 原文：秋深了，落叶把院前小径埋了半尺。你与{}一人一把小帚，从门廊一路扫到山门——扫帚声沙沙的，像替秋天收尾。 */;
+                card.text = evf(2770, &[&(cn) as &dyn core::fmt::Display])/* 原文：秋深了，落叶把院前小径埋了半尺。你与{}一人一把小帚，从门廊一路扫到山门——扫帚声沙沙的，像替秋天收尾。扫净处露出的青石又湿又亮，{}忽然说：明年落叶还会再来，帚也还在。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
@@ -11485,7 +11509,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = evf(2773, &[&(cn) as &dyn core::fmt::Display])/* 原文：连日霜冻，檐口垂下一排冰柱。晨光初起，你与{}站在廊下看冰柱透亮——一根一根，亮得晃眼。 */;
+                card.text = evf(2773, &[&(cn) as &dyn core::fmt::Display])/* 原文：连日霜冻，檐口垂下一排冰柱。晨光初起，你与{}站在廊下看冰柱透亮——一根一根，亮得晃眼。晌午日头一暖，冰柱滴水，落地有声，{}伸手接了一滴：凉，但干净得像新开蒙的那页纸。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
@@ -11651,6 +11675,95 @@ impl Game {
                     evtx(2815)/* 原文：你把残稿收进匣底，与旧历页放作一处——有些对话，不必等回音。气运+1 */.into(),
                 ];
                 card.opts.push(("收入匣底".into(), e2));
+            }
+            374 => {
+                // v1.16.46 段十九扩池：mr3 善——mr3 层 331 后十三批未落全表最陈
+                // 薄层；勘察二主1 副伴专属卡（多道侣系统 v1.16.45 落地后
+                // build_event 区 comp_extra 零引用剧情空位补面）；门控在
+                // sim_event_weights 新增 comp_extra 独立 if（无副伴不入池——白
+                // 名单口径主伴在场语义不准弃用）；Comp 立绘=副伴反查照 357 模板；
+                // 权重 A 案 3×w3 不入稀有（稀有 31/51 不变，总基权 1139→1148 第
+                // 三副本 ledger_recheck.py 同批零改）；题材避 28 同页天成/N2795
+                // 「同页仍止三纸」（另缝一页入檐誊卷面不触结缘面）；正文照施工
+                // 单三③口径 2 段（反斜杠 n 分段）tall 版式零新代码
+                let (xn, cn) = {
+                    let s = self.sim.as_ref().unwrap();
+                    (
+                        s.comp_extra
+                            .first()
+                            .cloned()
+                            .unwrap_or_else(|| COMPANION_NAMES[1].to_string()),
+                        s.companion
+                            .clone()
+                            .unwrap_or_else(|| COMPANION_NAMES[0].to_string()),
+                    )
+                };
+                let xi = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == xn)
+                    .unwrap_or(1);
+                card.actor = Some(CardActor::Comp(xi));
+                card.text = evf(2822, &[&(xn) as &dyn core::fmt::Display, &(cn) as &dyn core::fmt::Display])/* 原文：{}另缝一页未久，与{}共一张案誊卷——一个字大一圈，一个字小半格，谁也不肯就着谁的格子写。\n你在末张落笔，三纸排开同一檐下，檐水滴进三只笔洗，先浸了你那一角。 */;
+                let mut e1 = Eff::new();
+                e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
+                e1.dao = 1.0;
+                e1.msg = vec![
+                    evf(2823, &[&(cn) as &dyn core::fmt::Display, &(crate::data::COMPANION_GIFT_FAV) as &dyn core::fmt::Display])/* 原文：{}看了看三纸排开，把你那角往檐里挪了半寸——三纸同檐，从此算一户人家。道心+1（好感+{}） */,
+                ];
+                card.opts.push(("同檐共笔".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(2824)/* 原文：你不肯就格子，也不让谁就你的——檐水各落各的笔洗，三纸三样墨色，同檐不同格。气运+1 */.into(),
+                ];
+                card.opts.push(("各誊各卷".into(), e2));
+            }
+            375 => {
+                // v1.16.46 段十九扩池：mr7 恶散件——恶缘 mr7 层 371 后未落 7 条
+                // 全恶层最薄+mr7 常态池 27 条全表最薄；勘察二主2 争风面全池 0 占
+                // 位；无门控散件——题材写成旁人同页道侣当街生隙拉玩家评理（无伴
+                // 玩家可读，非自身道侣事件）；石罚 3000×ss 照 371 mr7 案值厚先例
+                //（stone_scale 乘区）；总基权同批 1139→1148；「评理」字面撞 715
+                // 评理钱（彼收钱旁观此被拽评理）不同义共存照 365「径」先例；与
+                // 28 同页天成成对面；正文照施工单三③口径 2 段（tall 版式零新代
+                // 码）
+                card.text = evtx(2825)/* 原文：山道上迎面撞见一对同页道侣当街生隙——两半撕开的纸页各攥在手心，缝口的字迹对不拢，纸屑落了一路。\n其中一人当街拽住你袖口，要你评个理：谁的字先离的页。 */.into();
+                let mut e1 = Eff::new();
+                // 拉偏架两头不是：负灵石照 5014/371 先例（stone_scale 乘区）
+                e1.stones = -((3000.0 * ss) as i64);
+                e1.msg = vec![
+                    evf(2826, &[&(fmt_int((3000.0 * ss) as i64)) as &dyn core::fmt::Display])/* 原文：你句句想着两全，话音才落，两半纸页一齐朝你卷来——评理评成了两头不是人，赔了一笔灵石供奉。灵石-{} */,
+                ];
+                card.opts.push(("评个理".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = -1.0;
+                e2.qi_pct = 0.08;
+                e2.good = false;
+                e2.msg = vec![
+                    evtx(2827)/* 原文：你侧身让过纸屑，半日心绪不宁——同页尚且生隙，何况独页。夜里打坐，倒比往日静了三分。气运-1，修为+8% */.into(),
+                ];
+                card.opts.push(("侧身避开".into(), e2));
+            }
+            376 => {
+                // v1.16.46 段十九扩池：mr4 善散件——mr4 层 357 后九批未落次陈薄
+                // 层；勘察二主3 蝶意象全池 0 占位全新面（新字形「蝶」1 个——意
+                // 象本字无法避，照 356「缶」注款：make_font 自动收、不手补字表）；
+                // special78 检定窗照勘察二 A 案建议让给下批（356/369 三批一条频
+                // 率），本卡纯善散件无新机制臂；总基权同批 1139→1148；正文照施工
+                // 单三③口径 2 段（tall 版式零新代码）
+                card.text = evtx(2828)/* 原文：石阶上落了一只白蝶，白得像新裁的纸，停在你晨课必经的空阶——不动，也不飞。\n你扫阶的帚悬在半空，忽然不知这一帚该不该落下去。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(2829)/* 原文：你提帚绕阶，绕出一道弧线——阶让给了蝶，晨课少走了三步，心里倒宽了一寸。道心+2 */.into(),
+                ];
+                card.opts.push(("绕阶而行".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(2830)/* 原文：你把帚放轻，扫过处白蝶自飞，绕阶三匝又落回阶心——阶上无尘，蝶亦无尘。气运+1 */.into(),
+                ];
+                card.opts.push(("轻帚同扫".into(), e2));
             }
 
             _ => {}
@@ -14059,6 +14172,10 @@ impl Game {
     // CardActor::Comp(ci)（卡面文本名与立绘下标同源同掷）；认下臂 special=17
     //（经 apply_reff special17 臂 → bond_life_companion 落现实 life），婉拒臂
     // dao+5 照 28 臂 e2 原样（文案 N0/evtx(0) 复用）。零新渲染路径零新立绘。
+    // 口径留档（v1.16.45 复审④）：卡面名与认下结缓名独立另掷（COMPANION_NAMES
+    // len=10 → 同名恰 1/10、异名 9/10）——结缓名由 npc.rs special17 臂独立另掷，
+    // 沿 28 臂「卡面立绘与掷名无涉」既有口径，认下自述行（N671 嵌卡面名）与
+    // 结缘行（掷名）两名并见属既定设计非缺陷。
     fn rencounter_card() -> EventCard {
         let ci = gen_range(0, COMPANION_NAMES.len());
         let cn = COMPANION_NAMES[ci];
@@ -18710,6 +18827,12 @@ mod chain_event_tests {
             (371, false, None),
             (372, false, None),
             (373, false, None),
+            // v1.16.46 段十九三行（374 comp_extra 副伴门控善/375 恶散件/376 善
+            // 散件——w3 均不入稀有桶照款，stage 恒 None 非链段；v1.16.33 起逐
+            // 批追加先例延续勿中断）
+            (374, false, None),
+            (375, false, None),
+            (376, false, None),
         ] {
             g.modal = None;
             g.build_event(id);
@@ -20193,7 +20316,8 @@ mod event_batch_v1168_tests {
         // v1.16.43 单3 扩池 3（365 院墙夜塌/366 共扫叶径/367 檐冰垂光）→ 368 条
         // v1.16.44 扩池 3（368 暖阁晒背/369 漏刻无声/370 同制新历）→ 371 条
         // v1.16.45 施工单三扩池 3（371 牒案翻旧/372 堂前领差/373 残页对笔）→ 374 条
-        assert_eq!(EVENTS.len(), 374);
+        // v1.16.46 段十九扩池 3（374 三纸同檐/375 同页生隙/376 空阶一蝶）→ 377 条
+        assert_eq!(EVENTS.len(), 377);
     }
 }
 
@@ -20817,10 +20941,19 @@ mod v11615_reward_and_pool_tests {
     // 照勘察五提名全落；总基权 1130→1139（3×w3）；稀有 31 条 51 权不变
     // 51/1139≈4.48% 守带；常态池（w>0）mr 分布（339 条）
     // 0:47/1:63/2:57/3:39/4:40/5:35/6:31/7:27
+    // v1.16.46 段十九扩池批 3 条随批：三纸同檐 374 w3 mr3 善（comp_extra 副伴门
+    // 控第一卡——sim_event_weights 新增独立 if，道侣白名单 37 条不动/第三副本
+    // tools/ledger_recheck.py COMPANION 集合零改）/同页生隙 375 w3 mr7 恶（恶缘
+    // 73→74 条 255→258 权——恶 mr7 371 后未落 7 条全恶层最薄）/空阶一蝶 376 w3
+    // mr4 善（special78 检定窗照勘察二 A 案建议让给下批——356/369 三批一条频率）；
+    // 共 3 条零新键零资产照勘察二提名全落（A 案 3×w3 全不入稀有）；总基权
+    // 1139→1148（3×w3）；稀有 31 条 51 权不变 51/1148≈4.44% 守带（v1.16.40
+    // 4.54%/v1.16.45 4.48% 先例）；常态池（w>0）mr 分布（342 条）
+    // 0:47/1:63/2:57/3:40/4:41/5:35/6:31/7:28
     #[test]
     fn pool_ledger_recheck() {
         let total: i32 = EVENTS.iter().map(|&p| ev_w(p)).sum();
-        assert_eq!(total, 1139, "总基权漂移——照 data.rs v1.16.45 施工单三扩池批注重算");
+        assert_eq!(total, 1148, "总基权漂移——照 data.rs v1.16.46 段十九扩池批注重算");
         let rare: Vec<(usize, i32)> = EVENTS
             .iter()
             .filter(|&&p| ev_w(p) > 0 && ev_w(p) <= crate::data::RARE_W)
@@ -21302,9 +21435,10 @@ mod v11617_pool_tests {
         // v1.16.43 单3 扩池 3 条（365..=367）同批随批注口径 365→368
         // v1.16.44 扩池 3 条（368..=370）同批随批注口径 368→371
         // v1.16.45 施工单三扩池 3 条（371..=373）同批随批注口径 371→374
-        assert_eq!(EVENTS.len(), 374);
-        assert_eq!(EVENT_NAMES.len(), 374);
-        assert_eq!(EVENT_BRIEF.len(), 374);
+        // v1.16.46 段十九扩池 3 条（374..=376）同批随批注口径 374→377
+        assert_eq!(EVENTS.len(), 377);
+        assert_eq!(EVENT_NAMES.len(), 377);
+        assert_eq!(EVENT_BRIEF.len(), 377);
         for id in 183..=204usize {
             assert_eq!(EVENTS_ROWS[id].0 as usize, id, "新增段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
@@ -27940,6 +28074,8 @@ mod v11645_comp_multi_tests {
 // bar_anim=BAR_ANIM_T，且非触发路径（默认夹具/换幕）不置位；静态钉：五生产口
 // 逐口 3 行窗结构断言（game.rs 计 3 / world.rs 计 2，照 v11641_zoom_anim_tests
 // plan 数组款——漏改/错改/新增口未带计时即红；autopilot 置场非正式玩法不列计）。
+// 模组名 v11646（v11645 前缀已被 v11645_comp_multi_tests 占用，按本批顺延）——
+// 内容版本以本头注「演出包⑰-2」（v1.16.45 批）为准（v1.16.45 复审③补账）。
 #[cfg(test)]
 mod v11646_bar_anim_tests {
     use super::revenge_tests::game_with;
@@ -28028,6 +28164,9 @@ mod v11646_bar_anim_tests {
 }
 
 // ================= v1.16.45 施工单三扩池段十八 + 剧情加长 + 第二十一批润色 钉测 =================
+// 模组名 v11646（v11645 前缀已被 v11645_comp_multi_tests 占用，按本批顺延）——
+// 内容版本以本头注 v1.16.45 为准（v1.16.45 复审③补账，照本文件 v11644 模组头与
+// charpanel.rs v11646_button_fx_tests 的逐模块头注款）。
 #[cfg(test)]
 mod v11646_pool_tests {
     use super::revenge_tests::game_with;
@@ -28060,6 +28199,24 @@ mod v11646_pool_tests {
                 id,
                 card.opts.len()
             );
+            // v1.16.46 勘四必修①随批 wrap 行数代理钉（照③口径防回退）：tall 版式
+            // max_h=120px（draw.rs 勘四必修①改后）=2+2 行恰满——每段 ≤58 字（32
+            // 字/行贪心 → ≤2 行），两段合计 ≤4 行即 120px 内完整可见；段十八三卡
+            // 44+40/25+46/34+47 字全在预算内（112px 旧实参下 371/373 第二段被截，
+            // 修复后完整）。检查置于 choose_option 之前（card 不可变借用与 &mut
+            // 不相交——借用纪律）
+            let segs: Vec<&str> = card.text.split('\n').collect();
+            for (seg_k, seg) in segs.iter().enumerate() {
+                let n = seg.chars().count();
+                assert!(
+                    n <= 58,
+                    "段十八 id {} 段 {} 越 58 字预算（tall 120px=2+2 行代理）: {} ({}字)",
+                    id,
+                    seg_k,
+                    seg,
+                    n
+                );
+            }
             g.choose_option(0); // apply_eff 全链不 panic（sync_save 仅置脏不落盘）
         }
     }
@@ -28172,5 +28329,371 @@ mod v11646_pool_tests {
                 n
             );
         }
+    }
+}
+
+// ================= v1.16.46 段十九扩池（三纸同檐/同页生隙/空阶一蝶）钉测 =================
+// 模组名注：v11645 前缀已被 v11645_comp_multi_tests 占用、v11646 前缀已被
+// v11646_bar_anim/v11646_pool/v11646_button_fx 三模组占用，本批钉测模块名顺延
+// v11647，内容版本以本头注 v1.16.46 为准（照本文件 v11644 模组头与 charpanel.rs
+// v11646_button_fx_tests 的逐模块头注款）。
+// 钉面：①段十九三卡良构（id 连续/w3 A 案/标题双源/≥2 选项/2 段 ≤58 字/rare=false
+// stage None/374 副伴立绘反查同源）②374 副伴门控行为钉（主伴在场而副伴位空仍
+// 0——白名单口径反证；有副伴入池；375/376 免门控各按 mr 层入池）③门控分支静态
+// 钉（comp_extra.is_empty() 恰 1 处在 prod 区防误删防改白名单口径）
+#[cfg(test)]
+mod v11647_seg19_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // ── 段十九三卡良构（照 seg18_cards_well_formed 款） ──
+    #[test]
+    fn seg19_cards_well_formed() {
+        let mut g = game_with(Life::default(), None);
+        g.sim = Some(Life::default());
+        for id in 374..=376usize {
+            assert_eq!(EVENTS_ROWS[id].0 as usize, id, "段十九 id 连续");
+            assert_eq!(EVENTS_ROWS[id].1, 3, "段十九 id {} 基权 w3（A 案）", id);
+            g.modal = None;
+            g.build_event(id);
+            let card = g.modal.as_ref().unwrap();
+            assert_eq!(card.title, EVENT_NAMES[id], "标题双源 id {}", id);
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两选项", id);
+            assert!(!card.rare, "id {} A 案 w3 不入稀有", id);
+            assert!(card.stage.is_none(), "id {} 散件 stage 恒 None", id);
+            // ③口径钉：正文 2 段各 ≤58 字（tall max_h=120px=2+2 行代理，照
+            // seg18 勘四必修①随批款）
+            let segs: Vec<&str> = card.text.split('\n').collect();
+            assert_eq!(segs.len(), 2, "id {} 段数须恰 2", id);
+            for (k, seg) in segs.iter().enumerate() {
+                let n = seg.chars().count();
+                assert!(
+                    n <= 58,
+                    "id {} 段 {} 越 58 字预算: {} ({}字)",
+                    id,
+                    k,
+                    seg,
+                    n
+                );
+            }
+        }
+        // 副伴卡立绘同源钉：374 立绘=副伴反查⟺正文含副伴名（照 357/G7 款）
+        let mut g2 = sim_game(3, 100.0);
+        if let Some(s) = g2.sim.as_mut() {
+            s.companion = Some(COMPANION_NAMES[0].to_string());
+            s.comp_extra = vec![COMPANION_NAMES[3].to_string()];
+        }
+        g2.modal = None;
+        g2.build_event(374);
+        let card = g2.modal.as_ref().unwrap();
+        if let Some(CardActor::Comp(xi)) = card.actor {
+            assert_eq!(
+                COMPANION_NAMES[xi], COMPANION_NAMES[3],
+                "374 立绘须为副伴反查"
+            );
+            assert!(
+                card.text.contains(COMPANION_NAMES[3])
+                    && card.text.contains(COMPANION_NAMES[0]),
+                "374 正文须含副伴与主伴名"
+            );
+        } else {
+            panic!("374 须挂 Comp 副伴立绘（零新立绘红线）");
+        }
+    }
+
+    // ── 374 副伴门控行为钉 ──
+    #[test]
+    fn seg19_extra_comp_gate() {
+        // 主伴在场而副伴位空：ws[374]==0（白名单口径反证——门在 comp_extra）
+        let mut g = sim_game(3, 100.0);
+        if let Some(s) = g.sim.as_mut() {
+            s.companion = Some(COMPANION_NAMES[0].to_string());
+        }
+        let (ws, _) = g.sim_event_weights(100.0, 3, false, false, true);
+        assert_eq!(
+            ws[374], 0.0,
+            "主伴在场而副伴位空 → 374 不入池（comp_extra 门）"
+        );
+        // 补上副伴：入池
+        if let Some(s) = g.sim.as_mut() {
+            s.comp_extra = vec![COMPANION_NAMES[3].to_string()];
+        }
+        let (ws2, _) = g.sim_event_weights(100.0, 3, false, false, true);
+        assert!(ws2[374] > 0.0, "有副伴 → 374 入池");
+        // 无任何伴：不入池（副伴更无从谈起）
+        let g3 = sim_game(3, 100.0);
+        let (ws3, _) = g3.sim_event_weights(100.0, 3, false, false, false);
+        assert_eq!(ws3[374], 0.0, "无伴 → 374 不入池");
+        // 375/376 免门控（指无伴/副伴条件；mr 层门照常）：各按自身 mr 层入池
+        let g7 = sim_game(7, 100.0);
+        let (ws7, _) = g7.sim_event_weights(100.0, 7, false, false, false);
+        assert!(ws7[375] > 0.0, "375 无门控 mr7 层入池");
+        let g4 = sim_game(4, 100.0);
+        let (ws4, _) = g4.sim_event_weights(100.0, 4, false, false, false);
+        assert!(ws4[376] > 0.0, "376 无门控 mr4 层入池");
+    }
+
+    // ── 门控分支静态钉：comp_extra 门单点在 prod 区（防误删/防改白名单口径） ──
+    #[test]
+    fn seg19_extra_gate_static() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src =
+            std::fs::read_to_string(std::path::Path::new(root).join("src").join("game.rs"))
+                .expect("读 src/game.rs");
+        // prod 滤测试区（照 comm_hooks_static_pins prod() 款：行首 #[cfg(test)]
+        // 起至行首顶格 } 止——本钉自身字面量不入扫描面）
+        let mut prod = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            prod.push_str(line);
+            prod.push('\n');
+        }
+        let k = prod.matches("s.comp_extra.is_empty()").count();
+        assert_eq!(
+            k, 1,
+            "374 副伴门 comp_extra.is_empty() 须恰 1 处在 prod 区（实得 {}）",
+            k
+        );
+        assert!(
+            prod.contains(
+                "if id == 374 && self.sim.as_ref().map_or(true, |s| s.comp_extra.is_empty())"
+            ),
+            "374 门控行原样在位（防改白名单口径）"
+        );
+    }
+}
+
+// ================= v1.16.46 加载速度优化（施工单三/勘察一提名①②）钉测 =================
+// 模组名注：v11645 前缀已被 v11645_comp_multi_tests 占用、v11646 前缀已被
+// v11646_bar_anim/v11646_pool/v11646_button_fx 三模组占用，本批钉测模块名顺延
+// v11647（与 v11647_seg19_tests 同批双模组、各自头注照逐模块头注款），内容版本
+// 以本头注 v1.16.46 为准。
+// 钉面：①双资产 miniz 对口件级 guard——产侧 zopfli 换压缩器后运行时
+// miniz_oxide::inflate 必须逐位还原（font: 解压==assets/font.ttf 逐位，fontdue
+// 解析面由 draw.rs banner_charset_kerning_zero 同文件钉互补；textpack: 解压非空，
+// 查表面由 textpack_inflate_and_spot_check 覆盖）②boot 提名①静态钉——wasm 路径
+// init_art 先于 textpack 轮询块、桌面路径原序保持（init_text 之后 cfg(not) 守卫）
+// ③art 红线守卫——art.rs 运行时区零 evtx/evf（TEXT_BLOB OnceLock 抢坑红线，
+// main.rs:199-202 语义的常驻看守）。
+#[cfg(test)]
+mod v11647_loadspeed_tests {
+
+    // ── 双资产 miniz 对口钉（加载优化②件级 guard）──
+    #[test]
+    fn loadspeed_assets_miniz_roundtrip() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        // 字体：miniz_oxide inflate（真运行 ui.rs init_font_from_bytes 同款解压口）
+        // 解压必须逐位 == assets/font.ttf（产侧 make_font.py 回环自检 + 本钉双保险）
+        let defl = std::fs::read(std::path::Path::new(root).join("assets/font.ttf.deflate"))
+            .expect("缺 assets/font.ttf.deflate");
+        let ttf = std::fs::read(std::path::Path::new(root).join("assets/font.ttf"))
+            .expect("缺 assets/font.ttf");
+        let back = miniz_oxide::inflate::decompress_to_vec(&defl)
+            .unwrap_or_else(|e| panic!("font.ttf.deflate miniz inflate 失败：{:?}", e));
+        assert_eq!(back, ttf, "font deflate 解压与 font.ttf 逐位不一致（产侧换压缩器须重跑 make_font.py）");
+        assert!(back.len() > 4 && back[0] == 0 && back[1] == 1, "解压首字节非 TTF 魔数");
+        // 文本包：容器对口（查表内容级由 textpack_inflate_and_spot_check 覆盖）
+        let pk = std::fs::read(std::path::Path::new(root).join("assets/textpack.bin"))
+            .expect("缺 assets/textpack.bin");
+        let pb = miniz_oxide::inflate::decompress_to_vec(&pk)
+            .unwrap_or_else(|e| panic!("textpack.bin miniz inflate 失败：{:?}", e));
+        assert!(!pb.is_empty(), "textpack 解压空");
+    }
+
+    // ── boot 提名①静态钉 + art 红线守卫 ──
+    #[test]
+    fn boot_art_order_static() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join("main.rs"))
+            .expect("读 src/main.rs");
+        let lines: Vec<&str> = src.lines().collect();
+        // 语句级定位：trim 后恰为 art::init_art(); 的行（注释内散文不入扫描面）
+        let sites: Vec<usize> = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| l.trim() == "art::init_art();")
+            .map(|(k, _)| k)
+            .collect();
+        assert_eq!(sites.len(), 2, "main.rs art::init_art(); 调用口须恰 2 处（wasm 提前 + 桌面原序）");
+        let first = sites[0];
+        let last = sites[1];
+        // 提前口：wasm cfg 守卫 + 先于 textpack 轮询块首行
+        assert!(
+            lines[first - 1].trim().starts_with("#[cfg(target_arch = \"wasm32\")]"),
+            "提前口须带 wasm cfg 守卫（防误挪桌面路径）"
+        );
+        let poll = lines
+            .iter()
+            .position(|l| l.contains("xx_text::len()"))
+            .unwrap_or_else(|| panic!("textpack 轮询块缺失"));
+        assert!(
+            first < poll,
+            "wasm 提名①：init_art 须先于 textpack 轮询块（与网络等待重叠）"
+        );
+        // 桌面口：cfg(not) 守卫 + 原序（init_text 之后）
+        assert!(
+            lines[last - 1].trim().starts_with("#[cfg(not(target_arch"),
+            "桌面口须带 cfg(not(wasm32)) 守卫（保持桌面原序零改动）"
+        );
+        let init_text = lines
+            .iter()
+            .position(|l| l.trim() == "data::init_text();")
+            .unwrap_or_else(|| panic!("data::init_text(); 语句缺失"));
+        assert!(init_text < last, "桌面 init_art 原序保持（init_text 之后）");
+        // 红线守卫：art.rs 运行时区（滤 cfg(test) 照 comm_hooks prod() 款）零
+        // evtx/evf——TEXT_BLOB OnceLock 抢坑红线的常驻看守
+        let art_src = std::fs::read_to_string(std::path::Path::new(root).join("src").join("art.rs"))
+            .expect("读 src/art.rs");
+        let mut prod = String::new();
+        let mut skip = false;
+        for line in art_src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            prod.push_str(line);
+            prod.push('\n');
+        }
+        assert!(
+            !prod.contains("evtx") && !prod.contains("evf("),
+            "art.rs 运行时区不得引用 evtx/evf（TEXT_BLOB OnceLock 抢坑红线——init_art 先于 textpack 装载的前提）"
+        );
+    }
+}
+
+// ================= v1.16.46 多道侣 UI 完善（勘察六提名一/二）钉测 =================
+// 模组名注：v11645/v11646/v11647 前缀均已被占用（同 draw.rs v11648 模组头注缘
+// 由），本批钉测模块名顺延 v11648，内容版本以本头注 v1.16.46 为准。
+// 钉面：①comp_row_tag 行标单源行为钉（单伴态零稳态变化/多伴态主副分化/满编态
+// 全粒序）+comp_full 满编口径②满编预告行/N2831/两消费点/prewarm 样例串静态钉
+// ③N2831 真相源内容级逐字钉（本行不入任何 EvTable 段，tables_recheck 无看守——
+// 本钉即该行内容级防线）。
+#[cfg(test)]
+mod v11648_comp_ui_tests {
+    use super::*;
+
+    // ── comp_row_tag 行标单源行为钉 + comp_full 满编口径 ──
+    #[test]
+    fn comp_row_tag_single_source() {
+        let mut s = Life::default();
+        // 无伴/单伴态：恒旧文「此生同页」（勘察六取舍声明——绝对零稳态变化款）
+        assert_eq!(s.comp_row_tag(0), "此生同页", "无伴态恒旧文");
+        s.companion = Some(COMPANION_NAMES[0].to_string());
+        assert_eq!(s.comp_row_tag(0), "此生同页", "单伴态主伴行零稳态变化");
+        // 多伴态：主伴「此生主页」/副伴「此生同页」（v1.16.45 新态无旧稳态包袱）
+        s.comp_extra = vec![COMPANION_NAMES[3].to_string()];
+        assert_eq!(s.comp_row_tag(0), "此生主页", "多伴态主伴行标");
+        assert_eq!(s.comp_row_tag(3), "此生同页", "多伴态副伴行标");
+        // 满编态（主伴+2 副伴）：主伴主页、两副伴同页 + comp_full 口径（FIFO 预告
+        // 行前置条件——非满编零追加）
+        s.comp_extra = vec![COMPANION_NAMES[3].to_string(), COMPANION_NAMES[7].to_string()];
+        assert!(s.comp_full(), "主伴+2 副伴=满编（COMP_MAX=3）");
+        assert_eq!(s.comp_row_tag(0), "此生主页");
+        assert_eq!(s.comp_row_tag(3), "此生同页");
+        assert_eq!(s.comp_row_tag(7), "此生同页");
+        let mut s2 = Life::default();
+        s2.companion = Some(COMPANION_NAMES[0].to_string());
+        s2.comp_extra = vec![COMPANION_NAMES[3].to_string()];
+        assert!(!s2.comp_full(), "主伴+1 副伴未满编");
+    }
+
+    // ── 静态钉：预告行/两消费点/prewarm 样例串 + N2831 内容级逐字钉 ──
+    #[test]
+    fn comp_ui_static_pins() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let prod_of = |fname: &str| -> String {
+            let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(fname))
+                .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", fname, e));
+            let mut out = String::new();
+            let mut skip = false;
+            for line in src.lines() {
+                if line.starts_with("#[cfg(test)]") {
+                    skip = true;
+                    continue;
+                }
+                if skip {
+                    if line == "}" {
+                        skip = false;
+                    }
+                    continue;
+                }
+                out.push_str(line);
+                out.push('\n');
+            }
+            out
+        };
+        let char_p = prod_of("charpanel.rs");
+        assert_eq!(
+            char_p.matches("let fifo_warn = l").count(),
+            1,
+            "满编预告行口恰 1（comp_full 门控——非满编零追加）"
+        );
+        assert_eq!(
+            char_p.matches("evf(2831, &[&(nm) as &dyn core::fmt::Display])").count(),
+            1,
+            "N2831 满编预告消费恰 1（charpanel 副伴行尾）"
+        );
+        assert_eq!(
+            char_p.matches("s.comp_row_tag(i)").count(),
+            1,
+            "charpanel 缘谱行标走 comp_row_tag 单口"
+        );
+        assert_eq!(
+            char_p.matches("evf(2831, &[&COMPANION_NAMES[0] as &dyn core::fmt::Display])")
+                .count(),
+            1,
+            "prewarm N2831 静态字集样例串恰 1（@14 防首开冷栅格化）"
+        );
+        let gal_p = prod_of("gallery.rs");
+        assert_eq!(
+            gal_p.matches("s.comp_row_tag(i)").count(),
+            1,
+            "gallery 图鉴卡行标走 comp_row_tag 单口（两消费点同批勿半改）"
+        );
+        let game_p = prod_of("game.rs");
+        assert_eq!(
+            game_p.matches("pub fn comp_row_tag").count(),
+            1,
+            "行标判定单口恰 1（Life::comp_row_tag）"
+        );
+        // N2831 内容级逐字钉：本行不入任何 EvTable 段（名段止 2818/简段止 2821），
+        // tables_recheck 无看守——逐字对账即该行唯一内容级防线
+        let src_txt = std::fs::read_to_string(std::path::Path::new(root).join("assets/text_source.txt"))
+            .expect("读 assets/text_source.txt");
+        let n2831 = src_txt
+            .lines()
+            .find(|l| l.starts_with("2831\t"))
+            .unwrap_or_else(|| panic!("真相源缺 N2831 行（满编预告文案）"));
+        assert_eq!(
+            n2831.trim_end_matches('\r'),
+            "2831\t再缝则{}页渐疏",
+            "N2831 内容漂移（与 charpanel 原文注/占位符数联动）"
+        );
     }
 }

@@ -1471,13 +1471,22 @@ fn draw_comp_main_card(
             //（60+ 单值读点零手术）；副伴进缘谱行看账（行「当前」判定 has_comp_idx）
             let extra_names = l.map(|x| x.comp_extra.join(" · ")).unwrap_or_default();
             let extra_shift = if extra_names.is_empty() { 0.0 } else { 26.0 };
+            // v1.16.46 段十九批 多道侣满编预告（勘察六提名一）：满编态（主伴+2
+            // 副伴）再结缘将 FIFO 轮替 comp_extra[0]（bond_slot game.rs:817 区）——
+            // 行尾追加「再缝则{首副伴}页渐疏」（N2831，与 N2795『{}的页渐疏』同语
+            // 呼应）；非满编/无副伴零追加零稳态变化；行宽预算 col..1080 约 47 字，
+            // 追加 10 字不溢出零版式位移
+            let fifo_warn = l
+                .filter(|x| x.comp_full())
+                .map(|x| x.comp_extra[0].clone());
             if !extra_names.is_empty() && npc_row_vis(y + 240.0) {
-                txt(
-                    &evf(2798, &[&(extra_names.as_str()) as &dyn core::fmt::Display])/* 原文：另有同页：{}（情谊随主页） */,
-                    col,
-                    y + 240.0, 14,
-                    C_DIM,
-                );
+                let mut row =
+                    evf(2798, &[&(extra_names.as_str()) as &dyn core::fmt::Display])/* 原文：另有同页：{}（情谊随主页） */;
+                if let Some(nm) = fifo_warn {
+                    row.push_str(" · ");
+                    row.push_str(&evf(2831, &[&(nm) as &dyn core::fmt::Display])/* 原文：再缝则{}页渐疏 */);
+                }
+                txt(&row, col, y + 240.0, 14, C_DIM);
             }
             // 识人小传：道侣槽共通段（首段结缘保底，段2/3 随情谊 40/70 解锁，照 :895 口径）
             // v1.16.45：副伴行占位时下移一行（26px 行距）——extra 空时 y+240 原样零位移
@@ -1719,7 +1728,15 @@ fn draw_bond_row(g: &Game, i: usize, y: f32, cur: bool, best: usize) {
     }
     if npc_row_vis(y + 24.0) {
         if cur {
-            txt("此生同页", tx, y + 24.0, 14, C_GOLD);
+            // v1.16.46 段十九批 主/副伴行标分化（勘察六提名二）：tag 单源
+            // Life::comp_row_tag（多伴态主伴「此生主页」副伴「此生同页」，单伴态
+            // 恒旧文零稳态变化）；gallery.rs 图鉴卡同批勿半改
+            txt(
+                g.sim
+                    .as_ref()
+                    .map_or("此生同页", |s| s.comp_row_tag(i)),
+                tx, y + 24.0, 14, C_GOLD,
+            );
         } else if known {
             txt(&format!("曾同页 {} 世", bonds), tx, y + 24.0, 14, C_TEXT);
         } else {
@@ -1797,6 +1814,17 @@ pub(crate) fn prewarm_comp_page() {
     prewarm_text(evtx(2569)/* 原文：当前：双修加成 ×0.00（结缘起步+20%，只升不降） */, &[14]);
     prewarm_text(evtx(2570)/* 原文：结缘起步情谊 25（双修 +20%），道侣赠礼事件再 +5。 */, &[14]);
     prewarm_text("放大", &[14]);
+    // v1.16.46 段十九批 多道侣行 @14 静态字集样例串（照 2569/2570 动态 format!
+    // 行先例：N2798 副伴行 + N2831 满编预告行模板字形；副伴名 @14 沿 N2798 行
+    // 现状冷栅格化一次口径，样例串灌模板字防首开冷栅格化）
+    prewarm_text(
+        &evf(2798, &[&COMPANION_NAMES[0] as &dyn core::fmt::Display]),
+        &[14],
+    );
+    prewarm_text(
+        &evf(2831, &[&COMPANION_NAMES[0] as &dyn core::fmt::Display]),
+        &[14],
+    );
     // 页签「道侣」@18（chrome button 无 sub 主标档；菜单期 panel_warm 保底之外再灌一道）
     prewarm_text("道侣", &[18]);
     // 主卡名号 @24 / 空态标题 @24（v1.16.17 两态）/ 鉴赏名单 @16（缘谱行名）
@@ -3227,5 +3255,56 @@ mod v11646_button_fx_tests {
         let (gx, gy) = (150.0f32 - 58.0, 188.0f32 - 26.0);
         assert!(super::zoom_badge_hot(gx + 29.0, gy + 11.0, gx, gy), "图鉴徽标中心含");
         assert!(!super::zoom_badge_hot(gx + 58.1, gy, gx, gy), "图鉴徽标右缘外拒");
+    }
+}
+
+// ================= v1.16.46 按钮花样 A/B/C（button_a_accent 单口）钉测 =================
+// 模组名注：v11645/v11646/v11647 前缀均已被占用（同 draw.rs v11648 模组头注缘
+// 由），本批钉测模块名顺延 v11648，内容版本以本头注 v1.16.46 为准。
+// 钉面：三花样零状态稳态逐像素——A 按压外圈金辉/B hot 顶光（与 press 分支
+// if/else 互斥防双线叠加）/C 禁用 hover 弱反馈；needle 全部走 draw.rs prod 过滤
+// （照 press_sink_static_pins charpanel.rs:3133 款）；命中/收口语义不变由既有钉
+// 逐藏（press_sink_static_pins/bar_stagger_wiring_pins 未动同批复跑）。
+#[cfg(test)]
+mod v11648_button_jewel_tests {
+    #[test]
+    fn button_jewel_static_pins() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src =
+            std::fs::read_to_string(std::path::Path::new(root).join("src").join("draw.rs"))
+                .expect("读 src/draw.rs");
+        let mut prod = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            prod.push_str(line);
+            prod.push('\n');
+        }
+        let count = |needle: &str| prod.matches(needle).count();
+        // A：按压外圈金辉（唯一 α 0.35*a 单口）
+        assert_eq!(count("fade(C_GOLD, 0.35 * a)"), 1, "花样 A 外圈金辉恰 1 处");
+        // B：hot 顶光高亮（唯一色值 + 与 press 分支互斥的 else-if 结构）
+        assert_eq!(count("214, 200, 244"), 1, "花样 B hot 顶光恰 1 处");
+        assert_eq!(
+            count("\n    } else if hot {\n        // v1.16.46 按钮花样 B"),
+            1,
+            "花样 B 须挂 press 分支的 else-if（互斥防按压帧双线叠加）"
+        );
+        // C：禁用 hover 描边弱反馈（唯一色值；主/副标禁用色不动）
+        assert_eq!(count("118, 102, 148"), 1, "花样 C 禁用 hover 描边恰 1 处");
+        assert_eq!(
+            count("if hot {\n                    Color::from_rgba(118, 102, 148, 255)"),
+            1,
+            "花样 C 须在禁用描边色分支内（hot 门控——非 hover 禁用帧逐像素=旧实现）"
+        );
     }
 }

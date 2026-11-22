@@ -205,6 +205,17 @@ async fn main() {
     // state(96) 且不进主循环；init_text_from_bytes 解压/UTF-8 校验失败同样返
     // false 走 state(96)——绝不静默落 EMPTY 继续跑（满屏空文案比黑屏更劣），
     // JS 侧加载层转失败文案 + 可点重试（绝不静默黑屏）。
+    // v1.16.46 加载优化①（施工单三/勘察一提名①）：art::init_art() 自两轮询块
+    // 之后上移至此（仅 wasm 路径，桌面保持原序见下方 cfg(not) 守卫）——boot 唯
+    // 一既不依赖 textpack 也不依赖字体的 CPU 块（art.rs 运行时区零 evtx/evf/
+    // TEXT_BLOB 引用，v11647_loadspeed_tests 静态钉看守；桌面路径零轮询直达
+    // init_art 本身即证「无帧前提安全」，上方红线「evtx/evf 不得先于 textpack
+    // 装载」不触）。上移后纹理生成与字体/textpack 网络等待重叠：正常路径
+    // exports 就绪 0-1 帧命中收益≈0，慢网边沿收益数十至百余 ms（轮询
+    // next_frame().await 期 CPU 空闲）。ART OnceLock 早 set 无副作用（art()
+    // 消费点照旧，let _ = set 幂等）。
+    #[cfg(target_arch = "wasm32")]
+    art::init_art();
     #[cfg(target_arch = "wasm32")]
     {
         let mut waited = 0u32;
@@ -273,6 +284,9 @@ async fn main() {
     // xx_text 块的 init_text_from_bytes 先行 set，此处 get_or_init 直达已装
     // 快路径（幂等 no-op）。
     data::init_text();
+    // v1.16.46 加载优化①：wasm 路径 init_art 已上移至 textpack 轮询块前（与网络
+    // 等待重叠）——桌面无轮询块无收益，保持原序（init_text 之后）零改动
+    #[cfg(not(target_arch = "wasm32"))]
     art::init_art();
     // v1.15.0 X5 排障：启动分段标记（st90 进入主体 / st91 空 Audio 就绪 /
     // st92 Game::new 就绪 / st93 进入主循环）。st 停在 90-93 = 启动死
