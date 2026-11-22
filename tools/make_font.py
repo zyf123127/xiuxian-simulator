@@ -106,6 +106,15 @@ args = [
     "--layout-features=*",
     "--no-hinting",
     "--desubroutinize",
+    # v1.16.47 加载优化（施工单三/勘察一提名二）：死表剥离——运行期渲染链不读这
+    # 些表：fontdue kerning 仅读 b"kern"（本字体 sfnt 表目录无 kern，horizontal_kern
+    # 恒 None 前后一致）；GSUB 仅 load_substitutions=true 才读（macroquad 传
+    # FontSettings::default() 恒 false）；ttf-parser Face::parse 必需表仅 head/hhea/
+    # maxp，GPOS/GSUB/vhea/vmtx/post/name 全为 Option 槽；gasp 为 hinting 提示表
+    #（--no-hinting 已弃 hinting）。cmap/glyf 覆盖不受影响（fontcov_full/check_chars
+    # 与 cargo test 内容级钉照跑）。勘察一实测：TTF −16,964B/传输 deflate −5,326B
+    #（1.21%）。--text 语料集与既有子集参数零动（只追加本项）。
+    "--drop-tables+=GPOS,GSUB,vhea,vmtx,gasp,post,name",
     f"--output-file={OUT}",
 ]
 subset.main(args)

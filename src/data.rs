@@ -1798,7 +1798,7 @@ pub const ORIGINS: [OriginDef; 6] = [
 // 轮盘路径纳秒级）；行可读形态与 tools/tables_recheck.py、ledger_recheck.py 的
 // 4 元组解析口径零变（表行仍是 (id,w,mr,good)）；打包无损性由 game.rs
 // events_bitfield_pack_lossless 全表逐行钉测兜底（w>63/mr>7 当场红）。
-pub const N_EVENTS: usize = 377; // v1.16.46 段十九扩池 +3：374→377（374/375/376 照勘察二提名）
+pub const N_EVENTS: usize = 380; // v1.16.47 段二十扩池 +3：377→380（377/378/379 照勘察二提名——377 晒书使巡 special78 检定+378/379 散件）
 /// 名/简 textpack 段一条数（v1.16.26 末态；段二自 v1.16.27 扩池起连号追加）
 const EV_SEG1: usize = 291;
 /// 名/简 textpack 段二条数（v1.16.27 末态；段三自 v1.16.28 扩池起连号追加）。
@@ -1926,12 +1926,17 @@ const EV_SEG17: usize = 371;
 /// 本常量冻结段十八上沿，「预期持续到段十九开工」句至此已兑现）
 const EV_SEG18: usize = 374;
 
-/// 名/简 textpack 段十九条数界（v1.16.46 段十九扩池末态 377=N_EVENTS 快照；下批
-/// 扩池开段二十时 N_EVENTS 增长，本常量冻结段十九上沿——len19 唯一正确写法=
-/// EV_SEG19−EV_SEG18 段界常量差，届时改差）。本批先行引入快照常量（字节效应 0，
-/// 扩池段二十开工前把末段差写法钉死）——dead_code 警告按 v1.16.36 EV_SEG12 先例
-/// **预期持续到段二十开工**，非本轮缺陷，勿消
+/// 名/简 textpack 段十九条数界（v1.16.46 段十九扩池末态 377 快照；v1.16.47 段二
+/// 十开工批兑现——len19 两功能落点改段界常量差 (EV_SEG19−EV_SEG18)，本常量冻结
+/// 段十九上沿，「预期持续到段二十开工」句至此已兑现）
 const EV_SEG19: usize = 377;
+
+/// 名/简 textpack 段二十条数界（v1.16.47 段二十扩池末态 380=N_EVENTS 快照；下批
+/// 扩池开段二十一时 N_EVENTS 增长，本常量冻结段二十上沿——len20 唯一正确写法=
+/// EV_SEG20−EV_SEG19 段界常量差，届时改差）。本批先行引入快照常量（字节效应 0，
+/// 扩池段二十一开工前把末段差写法钉死）——dead_code 警告按 v1.16.36 EV_SEG12 先例
+/// **预期持续到段二十一开工**，非本轮缺陷，勿消
+const EV_SEG20: usize = 380;
 
 pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (0, 12, 0, true),  // 灵草满坡
@@ -2895,6 +2900,23 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
                         // 避，make_font 自动收）；special78 检定窗照勘察二 A
                         // 案建议让给下批（356/369 三批一条频率），本卡纯善散
                         // 件；总基权同批 1139→1148）
+    (377, 1, 2, true),  // 晒书使巡（v1.16.47 段二十：special78 道心检定 w1 mr2
+                        // 善——检定窗 77 收官后下一窗，356/369 三批一条频率轮
+                        // 到；照勘察二 A 案入稀有，稀有 31→32 条 51→52 权；题
+                        // 材照勘察二提名兑现 GameBook 留档「晒书使巡」官制缺口
+                        // ——文枢司晒书使巡曝书会抽勘卷来历，勘毕朱点入册暗钩
+                        // 收册人终卷线（只暗钩不组队，收册人仍终卷独占）；走新
+                        // 检定不触链互斥照 356 口径——apply_eff 新臂+SPECIAL_SUB
+                        // 槽 78 副标「卷面候勘」照 76/77 手写行先例；总基权同批
+                        // 1148→1155）
+    (378, 3, 6, true),  // 巷尾淘井（v1.16.47 段二十：mr6 善散件——mr6 层 372
+                        // 堂前领差后一批未落；无门控散件无新机制臂；题材井泉
+                        // 意象与 377 书卷面错开；总基权同批 1148→1155）
+    (379, 3, 7, false), // 夜渡加价（v1.16.47 段二十：mr7 恶散件——恶 mr7 层
+                        // 371/375 后每批一条节奏第三条全恶层最薄维持；石罚
+                        // 3000×ss 照 371/375 mr7 案值厚先例（stone_scale 乘
+                        // 区）；「加价」字面撞市价类文案不同义共存照 365「径」
+                        // 先例；总基权同批 1148→1155）
 ];
 
 const fn pack_ev(r: (u16, u8, u8, bool)) -> u16 {
@@ -3097,9 +3119,13 @@ pub struct EvTable {
     base18: u16,
     len18: u16,
     // v1.16.46 段十九扩段十九：base19/len19 双段登记（len19 末段差写法
-    // N_EVENTS−EV_SEG18——EV_SEG19=377 快照预建，下批扩段二十须改差）
+    // N_EVENTS−EV_SEG18——EV_SEG19=377 快照预建，v1.16.47 改差兑现）
     base19: u16,
     len19: u16,
+    // v1.16.47 段二十扩段二十：base20/len20 双段登记（len20 末段差写法
+    // N_EVENTS−EV_SEG19——EV_SEG20=380 快照预建，下批扩段二十一须改差）
+    base20: u16,
+    len20: u16,
 }
 
 impl EvTable {
@@ -3143,6 +3169,8 @@ impl EvTable {
             (self.base18, self.len18),
             // v1.16.46 段十九扩段十九：只加一行 segs（base19/len19），累减循环自动续寻
             (self.base19, self.len19),
+            // v1.16.47 段二十扩段二十：只加一行 segs（base20/len20），累减循环自动续寻
+            (self.base20, self.len20),
         ];
         let mut k = i;
         for seg_k in segs.iter() {
@@ -3183,6 +3211,8 @@ impl EvTable {
             + self.len18 as usize
             // v1.16.46 段十九扩段十九：len() 总长和随段扩一行
             + self.len19 as usize
+            // v1.16.47 段二十扩段二十：len() 总长和随段扩一行
+            + self.len20 as usize
     }
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -3303,9 +3333,14 @@ pub static EVENT_NAMES: EvTable = EvTable {
     // v1.16.46 段十九：len18 由末段差写法改段界常量差兑现（EV_SEG18 快照转
     // 实用）+base19/len19 双段登记（len19 新末段差写法 N_EVENTS−EV_SEG18，下批
     // 扩段二十须改差）
+    // v1.16.47 段二十：len19 由末段差写法改段界常量差兑现（EV_SEG19 快照转
+    // 实用）+base20/len20 双段登记（len20 新末段差写法 N_EVENTS−EV_SEG19，下批
+    // 扩段二十一须改差）
     len18: (EV_SEG18 - EV_SEG17) as u16,
     base19: TXT_NAME19_BASE as u16,
-    len19: (N_EVENTS - EV_SEG18) as u16,
+    len19: (EV_SEG19 - EV_SEG18) as u16,
+    base20: TXT_NAME20_BASE as u16,
+    len20: (N_EVENTS - EV_SEG19) as u16,
 };
 
 
@@ -3371,9 +3406,12 @@ pub static EVENT_BRIEF: EvTable = EvTable {
     len17: (EV_SEG17 - EV_SEG16) as u16,
     base18: TXT_BRIEF18_BASE as u16,
     // v1.16.46 段十九：len18 改差兑现+base19/len19 双段登记（同上注口径）
+    // v1.16.47 段二十：len19 改差兑现+base20/len20 双段登记（同上注口径）
     len18: (EV_SEG18 - EV_SEG17) as u16,
     base19: TXT_BRIEF19_BASE as u16,
-    len19: (N_EVENTS - EV_SEG18) as u16,
+    len19: (EV_SEG19 - EV_SEG18) as u16,
+    base20: TXT_BRIEF20_BASE as u16,
+    len20: (N_EVENTS - EV_SEG19) as u16,
 };
 
 
@@ -4562,8 +4600,9 @@ mod text_tests {
         // v1.16.44 扩池：+ 段十七 3 = 371
         // v1.16.45 施工单三扩池：+ 段十八 3 = 374
         // v1.16.46 段十九扩池：+ 段十九 3 = 377
-        assert_eq!(EVENT_NAMES.len(), 377);
-        assert_eq!(EVENT_BRIEF.len(), 377);
+        // v1.16.47 段二十扩池：+ 段二十 3 = 380
+        assert_eq!(EVENT_NAMES.len(), 380);
+        assert_eq!(EVENT_BRIEF.len(), 380);
         assert_eq!(EVENT_NAMES.get(0), Some("灵草满坡"));
         assert_eq!(EVENT_NAMES.get(290), Some("误入猎套"));
         assert_eq!(EVENT_BRIEF.get(0), Some("满坡灵草露水未干，采满一筐"));
@@ -4718,9 +4757,18 @@ mod text_tests {
         assert_eq!(EVENT_NAMES.get(376), Some("空阶一蝶"));
         assert_eq!(EVENT_BRIEF.get(374), Some("另缝一页，三纸同檐各誊各卷"));
         assert_eq!(EVENT_BRIEF.get(376), Some("白蝶停在空阶，一帚悬而未落"));
-        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=377）
-        assert_eq!(EVENT_NAMES.get(377), None);
-        assert_eq!(EVENT_BRIEF.get(377), None);
+        // 段二十（v1.16.47 段二十扩池 3 条，TXT_NAME20_BASE=2832/TXT_BRIEF20_BASE=
+        // 2835，名/简手写连号段先于检定副标 N2838 照 N2783 先例——勘察二提名三
+        // 卡）：len19 漂移唯一内容级防线——首尾逐字钉，len19 写 N_EVENTS−EV_SEG18
+        // 静默吞段二十时在此必红（EV_SEG19=377 快照兜底；v1.16.47 len19 已改差
+        // 兑现，本钉即改差内容级防线）
+        assert_eq!(EVENT_NAMES.get(377), Some("晒书使巡"));
+        assert_eq!(EVENT_NAMES.get(379), Some("夜渡加价"));
+        assert_eq!(EVENT_BRIEF.get(377), Some("晒书使巡人间，勘一卷来历"));
+        assert_eq!(EVENT_BRIEF.get(379), Some("夜渡船工坐地起价，晾你对岸"));
+        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=380）
+        assert_eq!(EVENT_NAMES.get(380), None);
+        assert_eq!(EVENT_BRIEF.get(380), None);
         assert_eq!(EVENT_NAMES.get(usize::MAX), None);
     }
 

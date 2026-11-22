@@ -721,6 +721,17 @@ async fn main() {
         if g.weather_anim > 0.0 {
             g.weather_anim = (g.weather_anim - dt).max(0.0);
         }
+        // 演出包㉑ 宿敌斩杀·血芒四沿计时递减（会话态，draw_banner 红边四沿共用
+        // brk_veil_a 三角包络消费），照 weather_anim 主循环先例——1.2s 一次性自灭
+        if g.neme_veil > 0.0 {
+            g.neme_veil = (g.neme_veil - dt).max(0.0);
+        }
+        // 演出包㉒ 周天吐纳·气脉呼吸计时递减（会话态，render_left 修为条 halo 共用
+        // 包络消费），照 weather_anim 主循环先例——act_cultivate 每载重置=持续吐纳
+        // 时呼吸不灭，停手/auto 停后 1.6s 内收敛 0
+        if g.qi_breath > 0.0 {
+            g.qi_breath = (g.qi_breath - dt).max(0.0);
+        }
         // 剧情演出包⑬ 鉴赏覆层入画计时递减（会话态，draw_zoom_overlay 相位反推
         // 消费），照 weather_anim 主循环先例——覆层为模态独占屏（下层不绘），0.22s
         // 一次性自灭，开启期任意点按即关（命中所见，无同帧竞争）

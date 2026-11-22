@@ -209,6 +209,37 @@ pub fn button_a_accent(
             1.0,
             fade(Color::from_rgba(214, 200, 244, 255), 0.25 * a),
         );
+        // v1.16.47 按钮花样延伸（勘察六花样 A）：hot 态内缩四角金角饰——照
+        // panel_card 角饰语言（:296-320 四角 L 形 C_GOLD fade）但内缩 2px 画在
+        // 框内（leg 10px/厚 2px/α 0.5a，小号同语）：零间距钮堆（终战四钮/charpanel
+        // 页签）角饰不出框不与邻钮叠画（勘察六复查②③首受益面）；与 press 分支
+        // if/else 互斥照花样 B 钉口径防按压帧双饰叠加；非 hot 帧零像素逐像素=旧
+        // 实现；色 C_GOLD 勿复用花样 B 的 214,200,244（钉 needle 唯一性）；零状态
+        // 零分配零新字形
+        let jgold = fade(C_GOLD, 0.5 * a);
+        let jleg = 10.0f32;
+        let jt = 2.0f32;
+        for (ax, ay, adx, ady) in [
+            (x + 2.0, y + 2.0, 1.0, 1.0),
+            (x + w - 2.0, y + 2.0, -1.0, 1.0),
+            (x + 2.0, y + h - 2.0, 1.0, -1.0),
+            (x + w - 2.0, y + h - 2.0, -1.0, -1.0),
+        ] {
+            draw_rectangle(
+                ax - if adx < 0.0 { jleg } else { 0.0 },
+                ay - if ady < 0.0 { jt } else { 0.0 },
+                jleg,
+                jt,
+                jgold,
+            );
+            draw_rectangle(
+                ax - if adx < 0.0 { jt } else { 0.0 },
+                ay - if ady < 0.0 { jleg } else { 0.0 },
+                jt,
+                jleg,
+                jgold,
+            );
+        }
     }
     if let Some(s) = sub {
         txt_c(
@@ -544,6 +575,22 @@ pub fn bar_glow(x: f32, y: f32, w: f32, h: f32, frac: f32, c: Color, t: f32) {
 
 // 全屏横幅演出（突破/飞升/斩敌）
 pub fn draw_banner(g: &Game) {
+    // 演出包㉑ 宿敌斩杀·血芒四沿：neme_veil>0 期间屏幕四沿各一条 10px C_RED 窄边
+    //（α=0.10×brk_veil_a 共用三角包络——单源勿双写照 ⑳ bond_mote_a 先例，峰值恰
+    // 窗中点 t=0.6s）。置于横幅绘制之前=层级在横幅底下；四沿均不交横幅带 236..322
+    //（上/下边 y<10/y>710，左/右边 x<10/x>1270 而横幅带 bx≥16 居中收拢——v1.8.0
+    // A7 收窄口径）。稳态 neme_veil==0 → nv_a=0.0 → 早退整段不落像素逐比特恒等；
+    // 独立于 banner Some（banner 单槽后写胜互吞时红边仍走完自身包络——勘察三风险
+    // 栏备案可接受）。与⑲错开：彼是卡开门控金辉全屏、此是横幅时刻红辉四沿，层级/
+    // 色/触发三异
+    let nv_a = 0.10 * brk_veil_a((g.neme_veil / crate::game::NEME_VEIL_T).clamp(0.0, 1.0));
+    if nv_a > 0.0 {
+        let red = fade(C_RED, nv_a);
+        draw_rectangle(0.0, 0.0, V_W, 10.0, red);
+        draw_rectangle(0.0, V_H - 10.0, V_W, 10.0, red);
+        draw_rectangle(0.0, 0.0, 10.0, V_H, red);
+        draw_rectangle(V_W - 10.0, 0.0, 10.0, V_H, red);
+    }
     if let Some((text, t, c)) = &g.banner {
         let k = (1.0 - t / 2.4).clamp(0.0, 1.0);
         let a = if k < 0.12 {
@@ -1331,6 +1378,13 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
         }
         crate::save::save(&g.meta);
     }
+    // v1.16.47 按钮花样延伸（勘察六花样 D）：toggle on 态内底 3px 金下划线——选中
+    // 态语言补缺（照周天槽 8 内底画法同款几何 y+h−3..y+h）；关态零像素零新字形零
+    // 状态。画面细节①（三处既有下划线 y 统一）不同批不做——那是既有稳态像素移位
+    // 需目检支撑，本件为纯新增像素低风险
+    if g.meta.music {
+        draw_rectangle(bx, 592.0 + 44.0 - 3.0, 140.0, 3.0, C_GOLD);
+    }
     let slabel = if g.meta.sfx {
         "音效：开"
     } else {
@@ -1340,6 +1394,10 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
         g.meta.sfx = !g.meta.sfx;
         g.audio.sfx_on = g.meta.sfx;
         crate::save::save(&g.meta);
+    }
+    // v1.16.47 花样 D 同批（音效 toggle，几何照音乐款）
+    if g.meta.sfx {
+        draw_rectangle(bx + 155.0, 592.0 + 44.0 - 3.0, 140.0, 3.0, C_GOLD);
     }
     if button(bx + 310.0, 592.0, 140.0, 44.0, "轮回烙印", None, true) {
         g.panel = 3;
@@ -1954,6 +2012,15 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
     let need = qi_need(l);
     let frac = (l.qi / need) as f32;
     bar_glow(28.0, 274.0, LEFT_W - 40.0, 20.0, frac, C_CYAN, g.time);
+    // 演出包㉒ 周天吐纳·气脉呼吸：qi_breath>0 期间修为条外扩 2px C_CYAN 描边
+    // halo（α=0.12×brk_veil_a 共用三角包络单源勿双写）。吐纳每载重置=呼吸与周天
+    // 1.6s 同频，停手/auto 停后 1.6s 内收敛 0；稳态 qi_breath==0 → qb_a=0.0 →
+    // 早退不落像素逐比特恒等（render_left &Game 只读零借用冲突——勘察三落点）。
+    // 与⑫错开：彼是全屏天气叠色 0.8s、此是左栏修为条局地 1.6s 呼吸，区域/周期/色三异
+    let qb_a = 0.12 * brk_veil_a((g.qi_breath / crate::game::QI_BREATH_T).clamp(0.0, 1.0));
+    if qb_a > 0.0 {
+        draw_rectangle_lines(26.0, 272.0, LEFT_W - 36.0, 24.0, 2.0, fade(C_CYAN, qb_a));
+    }
     let qlabel = evf(2615, &[&(fmt_num(l.qi)) as &dyn core::fmt::Display, &(fmt_num(need)) as &dyn core::fmt::Display, &(crate::data::Fmt0((frac * 100.0) as f64)) as &dyn core::fmt::Display])/* 原文：修为 {}/{}（{}%） */;
     txt_c(
         &qlabel,
@@ -4877,6 +4944,286 @@ mod v11648_bond_rite_tests {
             npc_p.matches("e.special == 17").count(),
             1,
             "special17 消费口恰 1（apply_reff 前置独占臂）"
+        );
+    }
+}
+
+// ================= v1.16.47 演出包㉑ 宿敌斩杀·血芒四沿钉测 =================
+// 模组名注：v11645 前缀已被 v11645_comp_multi_tests 占用、v11646 前缀已被
+// v11646_bar_anim/v11646_pool/v11646_button_fx 三模组占用、v11647 前缀已被
+// v11647_seg19/v11647_loadspeed 两模组占用、v11648 前缀已被 v11648_brk_veil/
+// v11648_bond_rite（draw.rs 两）/v11648_button_jewel（charpanel.rs）/v11648_comp_ui
+// 四模组占用、v11649 前缀已被 v11649_seg20_tests（game.rs 施工单二）占用，本批
+// 钉测模块名顺延 v11650，内容版本以本头注 v1.16.47 为准（照 v11647_seg19_tests
+// 逐模块头注款）。
+// 钉面：①置值口恰 2（revenge_win 现实寻仇胜+sim_neme_win_settle 模拟反杀胜）
+// ②消费早退门/峰值系数单口（draw_banner 顶层独立段）③save.rs 零引用（会话态
+// 不进存档红线）④包络复用单源（prod 不新增第二包络函数——照 ⑳ bond_mote_a
+// 单源勿双写纪律；共用 brk_veil_a 三角由 v11648_brk_veil_tests 既有钉看守不重写；
+// 本头注措辞刻意避开 prod 扫描 needle 字样，头注行位于 #[cfg(test)] 之前不入
+// prod 过滤面）
+#[cfg(test)]
+mod v11650_neme_veil_tests {
+    fn prod_of(fname: &str) -> String {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(fname))
+            .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", fname, e));
+        let mut out = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn neme_veil_static_pins() {
+        let game_p = prod_of("game.rs");
+        assert_eq!(
+            game_p
+                .matches("self.neme_veil = crate::game::NEME_VEIL_T;")
+                .count(),
+            2,
+            "㉑ 置值口恰 2（现实寻仇胜+模拟反杀胜——新增斩杀口须并入本钉）"
+        );
+        let draw_p = prod_of("draw.rs");
+        assert_eq!(
+            draw_p.matches("let nv_a = 0.10 * brk_veil_a").count(),
+            1,
+            "㉑ 峰值系数单口（红边 α 0.10×共用包络恰 1）"
+        );
+        assert_eq!(
+            draw_p.matches("if nv_a > 0.0 {").count(),
+            1,
+            "㉑ 消费早退门恰 1（稳态 neme_veil==0 整段不落像素）"
+        );
+        assert_eq!(
+            draw_p
+                .matches("draw_rectangle(0.0, V_H - 10.0, V_W, 10.0, red);")
+                .count(),
+            1,
+            "㉑ 下沿窄边在位（四沿 10px，量级之内；本消息全用既有字集防钉测字符进运行期字体）"
+        );
+        assert!(
+            !draw_p.contains("fn neme_veil_a"),
+            "㉑ 不得新增第二包络函数（复用 brk_veil_a 单源勿双写）"
+        );
+        let save_p = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src")
+                .join("save.rs"),
+        )
+        .unwrap_or_else(|e| panic!("读 src/save.rs 失败：{}", e));
+        assert!(
+            !save_p.contains("neme_veil"),
+            "㉑ save.rs 零引用（会话态不进存档红线）"
+        );
+        let main_p = prod_of("main.rs");
+        assert_eq!(
+            main_p
+                .matches("g.neme_veil = (g.neme_veil - dt).max(0.0);")
+                .count(),
+            1,
+            "㉑ 主循环递减口恰 1（照 weather_anim main.rs 先例）"
+        );
+    }
+}
+
+// ================= v1.16.47 演出包㉒ 周天吐纳·气脉呼吸钉测 =================
+// 模组名注：同上 v11650 顺延缘由（占用链见 v11650_neme_veil_tests 头注）。
+// 钉面：①置值口恰 1 且在 act_cultivate died 早退之后（成功段=死亡年无呼吸；
+// 勿挪 tick_auto 外层防结算/双修误触）②递减口恰 1（main.rs）③消费 α 单口+早退
+// 门+halo 几何恰 1（render_left 修为条）④save.rs 零引用⑤包络复用单源
+#[cfg(test)]
+mod v11650_qi_breath_tests {
+    fn prod_of(fname: &str) -> String {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(fname))
+            .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", fname, e));
+        let mut out = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn qi_breath_static_pins() {
+        let game_p = prod_of("game.rs");
+        assert_eq!(
+            game_p
+                .matches("self.qi_breath = crate::game::QI_BREATH_T;")
+                .count(),
+            1,
+            "㉒ 置值口恰 1（act_cultivate 成功段单口——勿挪 tick_auto 外层）"
+        );
+        // 置值口须在 died 早退之后（成功段）：置值位点 > died 早退块位点
+        let set_at = game_p
+            .find("self.qi_breath = crate::game::QI_BREATH_T;")
+            .expect("㉒ 置值口缺失");
+        let died_at = game_p.find("if died {").expect("㉒ died 早退块缺失");
+        assert!(
+            set_at > died_at,
+            "㉒ 置值口须在 died 早退之后（成功段=死亡年无呼吸）"
+        );
+        let draw_p = prod_of("draw.rs");
+        assert_eq!(
+            draw_p.matches("let qb_a = 0.12 * brk_veil_a").count(),
+            1,
+            "㉒ 消费 α 单口（halo 0.12×共用包络恰 1）"
+        );
+        assert_eq!(
+            draw_p.matches("if qb_a > 0.0 {").count(),
+            1,
+            "㉒ 消费早退门恰 1（稳态 qi_breath==0 整段不落像素）"
+        );
+        assert_eq!(
+            draw_p
+                .matches(
+                    "draw_rectangle_lines(26.0, 272.0, LEFT_W - 36.0, 24.0, 2.0, fade(C_CYAN, qb_a));"
+                )
+                .count(),
+            1,
+            "㉒ 修为条外扩 2px halo 几何在位（条 28,274,320,20 外扩为 26,272,324,24）"
+        );
+        assert!(
+            !draw_p.contains("fn qi_breath_a"),
+            "㉒ 不得新增第二包络函数（复用 brk_veil_a 单源勿双写）"
+        );
+        let save_p = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src")
+                .join("save.rs"),
+        )
+        .unwrap_or_else(|e| panic!("读 src/save.rs 失败：{}", e));
+        assert!(
+            !save_p.contains("qi_breath"),
+            "㉒ save.rs 零引用（会话态不进存档红线）"
+        );
+        let main_p = prod_of("main.rs");
+        assert_eq!(
+            main_p
+                .matches("g.qi_breath = (g.qi_breath - dt).max(0.0);")
+                .count(),
+            1,
+            "㉒ 主循环递减口恰 1（照 weather_anim main.rs 先例）"
+        );
+    }
+}
+
+// ================= v1.16.47 UX 沉浸感（多道侣两件+花样 A/D）钉测 =================
+// 模组名注：同上 v11650 顺延缘由（占用链见 v11650_neme_veil_tests 头注）。
+// 钉面：①多道侣提名一 cur 行左缘竖条+满编顺位行标恰 1 ②多道侣提名二副伴行
+// 分段上色两段在位（伴名 C_PURPLE）③花样 A hot 态内缩四角金角饰（else-if 互斥
+// 链内、C_GOLD 色 needle 唯一勿复用花样 B 的 214,200,244）④花样 D 两 toggle on
+// 态内底金下划线恰 2（本头注措辞刻意避开 prod 扫描 needle 字样——头注行位于
+// #[cfg(test)] 之前不入 prod 过滤面）
+#[cfg(test)]
+mod v11650_ux_pins_tests {
+    fn prod_of(fname: &str) -> String {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(fname))
+            .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", fname, e));
+        let mut out = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn ux_immersion_static_pins() {
+        let char_p = prod_of("charpanel.rs");
+        assert_eq!(
+            char_p.matches("· 页渐疏").count(),
+            1,
+            "多道侣一：满编顺位行标恰 1（缘谱行 tag 接排）"
+        );
+        assert_eq!(
+            char_p
+                .matches("draw_rectangle(x + 2.0, y + 1.0, 3.0, COMP_ROW_H - 2.0, lead);")
+                .count(),
+            1,
+            "多道侣一：cur 行左缘 3px 竖条恰 1（多伴态门控内）"
+        );
+        assert_eq!(
+            char_p.matches("let seg_pre = \"另有同页：\";").count(),
+            1,
+            "多道侣二：副伴行分段前缀在位（N2798 拆段首段）"
+        );
+        assert_eq!(
+            char_p
+                .matches("txt(&extra_names, sx, y + 240.0, 14, C_PURPLE);")
+                .count(),
+            1,
+            "多道侣二：伴名 C_PURPLE 段恰 1（照缘谱行名色语言）"
+        );
+        let draw_p = prod_of("draw.rs");
+        assert_eq!(
+            draw_p.matches("let jgold = fade(C_GOLD, 0.5 * a);").count(),
+            1,
+            "花样 A：hot 态角饰金 α 单口恰 1（C_GOLD 勿复用花样 B 色值）"
+        );
+        assert_eq!(
+            draw_p.matches("for (ax, ay, adx, ady) in [").count(),
+            1,
+            "花样 A：四角 L 形元组循环恰 1（照 panel_card 角饰语言小号款）"
+        );
+        assert_eq!(
+            draw_p
+                .matches("fade(Color::from_rgba(214, 200, 244, 255), 0.25 * a)")
+                .count(),
+            1,
+            "花样 B 既有顶光 needle 恰 1（花样 A 同批未污染其唯一性）"
+        );
+        assert_eq!(
+            draw_p
+                .matches("draw_rectangle(bx, 592.0 + 44.0 - 3.0, 140.0, 3.0, C_GOLD);")
+                .count(),
+            1,
+            "花样 D：音乐 toggle on 态下划线恰 1（内底 y+h−3 照周天款）"
+        );
+        assert_eq!(
+            draw_p
+                .matches("draw_rectangle(bx + 155.0, 592.0 + 44.0 - 3.0, 140.0, 3.0, C_GOLD);")
+                .count(),
+            1,
+            "花样 D：音效 toggle on 态下划线恰 1"
         );
     }
 }

@@ -1480,13 +1480,27 @@ fn draw_comp_main_card(
                 .filter(|x| x.comp_full())
                 .map(|x| x.comp_extra[0].clone());
             if !extra_names.is_empty() && npc_row_vis(y + 240.0) {
-                let mut row =
-                    evf(2798, &[&(extra_names.as_str()) as &dyn core::fmt::Display])/* 原文：另有同页：{}（情谊随主页） */;
+                // v1.16.47 多道侣完善（勘察六提名二）：副伴行分段上色——「另有同
+                // 页：」C_DIM + 伴名 C_PURPLE（照缘谱行名色 :1724 既有语言）+
+                // 「（情谊随主页）」C_DIM + 满编尾 N2831 C_GOLD_D；measure 分段同
+                // y 同档零版式位移（CJK 无 kerning 分段连续排布≈整行，字形已预热
+                // :1818-1827 口径）。N2798 模板保留 prewarm 消费（本行拆段后不再
+                // 整行消费，N 键 append-only 不动、textpack 对账不受影响）。独立副
+                // 伴情谊显示=存档键手术不做（comp_fav 单值共享 v1.6.0 D 红线
+                // :1467-1471 留档照旧）
+                let mut sx = col;
+                let seg_pre = "另有同页：";
+                txt(seg_pre, sx, y + 240.0, 14, C_DIM);
+                sx += measure(seg_pre, 14);
+                txt(&extra_names, sx, y + 240.0, 14, C_PURPLE);
+                sx += measure(&extra_names, 14);
+                let seg_suf = "（情谊随主页）";
+                txt(seg_suf, sx, y + 240.0, 14, C_DIM);
+                sx += measure(seg_suf, 14);
                 if let Some(nm) = fifo_warn {
-                    row.push_str(" · ");
-                    row.push_str(&evf(2831, &[&(nm) as &dyn core::fmt::Display])/* 原文：再缝则{}页渐疏 */);
+                    let seg4 = evf(2831, &[&(nm) as &dyn core::fmt::Display])/* 原文：再缝则{}页渐疏 */;
+                    txt(&format!(" · {}", seg4), sx, y + 240.0, 14, C_GOLD_D);
                 }
-                txt(&row, col, y + 240.0, 14, C_DIM);
             }
             // 识人小传：道侣槽共通段（首段结缘保底，段2/3 随情谊 40/70 解锁，照 :895 口径）
             // v1.16.45：副伴行占位时下移一行（26px 行距）——extra 空时 y+240 原样零位移
@@ -1731,12 +1745,39 @@ fn draw_bond_row(g: &Game, i: usize, y: f32, cur: bool, best: usize) {
             // v1.16.46 段十九批 主/副伴行标分化（勘察六提名二）：tag 单源
             // Life::comp_row_tag（多伴态主伴「此生主页」副伴「此生同页」，单伴态
             // 恒旧文零稳态变化）；gallery.rs 图鉴卡同批勿半改
-            txt(
-                g.sim
-                    .as_ref()
-                    .map_or("此生同页", |s| s.comp_row_tag(i)),
-                tx, y + 24.0, 14, C_GOLD,
-            );
+            // v1.16.47 多道侣完善（勘察六提名一）：cur 行左缘标识条+满编顺位行标
+            // 两件套——竖条仅在多伴态（comp_extra 非空）落像素，单伴/无伴态逐像素
+            // =旧实现（稳态不变设计）；主伴 C_GOLD/副伴 C_PURPLE 判定复用
+            // comp_row_tag 返回值单源勿另写（game.rs:817 勿半改纪律）；满编顺位
+            // 行标（间隔号+空格+页渐疏三字——本注措辞避开 prod 扫描 needle 字样）
+            // 满编 FIFO 下一顺位（comp_extra[0]）行标——字符 ·/空格/页/渐/疏 全在
+            // 既有字集（N2831 与 title 间隔号）零新字形；tx+measure 接排与右缘徽标
+            //（1084 右对齐）恒不相交
+            let tag = g.sim.as_ref().map_or("此生同页", |s| s.comp_row_tag(i));
+            txt(tag, tx, y + 24.0, 14, C_GOLD);
+            let multi = g
+                .sim
+                .as_ref()
+                .map_or(false, |s| !s.comp_extra.is_empty());
+            if multi {
+                let lead = if tag == "此生主页" { C_GOLD } else { C_PURPLE };
+                draw_rectangle(x + 2.0, y + 1.0, 3.0, COMP_ROW_H - 2.0, lead);
+                let lead_next = g.sim.as_ref().map_or(false, |s| {
+                    s.comp_full()
+                        && s.comp_extra
+                            .first()
+                            .map_or(false, |n| *n == COMPANION_NAMES[i])
+                });
+                if lead_next {
+                    txt(
+                        "· 页渐疏",
+                        tx + measure(tag, 14) + 6.0,
+                        y + 24.0,
+                        14,
+                        C_GOLD_D,
+                    );
+                }
+            }
         } else if known {
             txt(&format!("曾同页 {} 世", bonds), tx, y + 24.0, 14, C_TEXT);
         } else {
