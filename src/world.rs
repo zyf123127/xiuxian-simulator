@@ -1262,3 +1262,30 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     draw_toast(g);
     version_mark();
 }
+
+// v1.16.42 勘察二 low② 委托接线钉测（COMM_EXP↔push_loot）：push_loot 为 private
+// 战获单口（全 loot 臂覆盖语义，game.rs 挂点表写死），钉测须同文件 mod 直调
+//（per-file test mod 先例 draw.rs/gallery.rs）；夹具借 pub(crate)
+// game::revenge_tests::game_with，勿为测试改 pub（扩可见面即 API 面）。
+#[cfg(test)]
+mod v11642_comm_exp_wire_tests {
+    use super::{push_loot, Exped};
+
+    #[test]
+    fn exp_hook_wiring() {
+        let mut g = crate::game::revenge_tests::game_with(crate::game::Life::default(), None);
+        g.world.exp = Some(Exped {
+            steps: Vec::new(),
+            cur: 0,
+            loot: Vec::new(),
+        });
+        g.meta.comm_sel = 3; // 表行 3=COMM_EXP target1
+        g.meta.comm_prog = 0;
+        push_loot(&mut g, "试战获".to_string());
+        assert_eq!(g.meta.comm_prog, 1, "push_loot 须挂 COMM_EXP +1（战获单口）");
+        g.meta.comm_sel = 0; // 无关 kind 行（COMM_QUEST）重放同一触发
+        g.meta.comm_prog = 0;
+        push_loot(&mut g, "试战获二".to_string());
+        assert_eq!(g.meta.comm_prog, 0, "无关 kind 行 no-op（挂点↔kind 双向）");
+    }
+}

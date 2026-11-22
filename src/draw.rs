@@ -519,10 +519,13 @@ pub fn draw_banner(g: &Game) {
         // 描边底（v1.8.0 R1 修：txt_c 为中心定位，原 `V_W*0.5 - w*0.5` 再被 txt_c 减半宽，
         // w/2 被双重应用——横幅整体左移 w/2，长标题首字被裁出左缘（既有缺陷，A7 收窄后显形）。
         // measure 与实际墨宽一致（shot_007 实测 512 ≈ w=518），直接以屏幕中心为锚）
+        // 剧情演出包⑭ 落定震颤：描边 4 向与主字同加 banner_tremor_dx（活跃域
+        // k∈[0.10,0.40] 外恒 0=x 恒等旧实现；包络函数见上方批注）
+        let tdx = banner_tremor_dx(k, *t);
         for (dx, dy) in [(-2.0, 0.0), (2.0, 0.0), (0.0, -2.0), (0.0, 2.0)] {
             txt_c(
                 text,
-                V_W * 0.5 + dx,
+                V_W * 0.5 + dx + tdx,
                 250.0 + dy,
                 size,
                 Color::new(0.05, 0.02, 0.1, 0.9 * a),
@@ -530,7 +533,7 @@ pub fn draw_banner(g: &Game) {
         }
         txt_c(
             text,
-            V_W * 0.5,
+            V_W * 0.5 + tdx,
             250.0,
             size,
             Color::new(c.r, c.g, c.b, a),
@@ -641,6 +644,24 @@ const SWEEP_HALO_A: f32 = 0.05;
 /// 内芯 α 系数（×a 包络）
 const SWEEP_CORE_A: f32 = 0.06;
 
+// 剧情演出包⑭ 横幅落定震颤（零新状态，复用既有 k/t 双参数）：pop scale 于 k=0.25
+//（t=1.8s）落定，落定瞬间文字本体水平震颤 ±1.2px 余韵——三角包络活跃域
+// k∈[0.10,0.40]（t∈[1.44,2.16]s，恰覆盖落定点），包络外恒 0（描边/正文字 x 恒等
+// 旧实现）。仅动 x 位置：字号档位（:480-484 v1.9.25 红线）/measure/颜色/字形全原样，
+// 描边 4 向与主字同 dx 保持相对几何；底带矩形/流光/装饰线不动（流光动带、震颤动字，
+// 绘制序不变字后绘盖流光）。对全部横幅触发点（破境/飞升/斩敌/换幕/章节/血仇等
+// 10+ 口）统一生效，零新状态不设 kind 旗标（勘察风险 5 备案：统一语义通用任一
+// 大事件）。稳态自证与⑪同款：banner 2.4s 自灭（show_banner 置 2.4 → update 归
+// None），draw_banner 段在 if-let 之内——无 banner 帧（稳态）不落任何像素。
+#[inline]
+fn banner_tremor_dx(k: f32, t: f32) -> f32 {
+    let env = (1.0 - ((k - 0.25) / 0.15).abs()).max(0.0);
+    env * TREMOR_AMP * (t * 40.0).sin()
+}
+
+/// 震颤幅度（px）：包络峰值处最大水平位移（cfg(test) 钉测消费）
+const TREMOR_AMP: f32 = 1.2;
+
 // 剧情演出包⑫ 包络纯函数（cfg(test) 钉测消费，照 menu_danger_btn_hit 先例）：
 // anim 剩余秒 0.8→0（k=anim/0.8 随时间 1→0），前半程渐显后半程渐隐 env∈[0,1]，
 // 合成 α=WEATHER_TINT 表值/255×env；≤0 表示不画。
@@ -700,7 +721,7 @@ mod weather_veil_tests {
 // 本模组钉动画期常量口径。
 #[cfg(test)]
 mod banner_sweep_tests {
-    use super::{banner_sweep_phase, SWEEP_CORE_A, SWEEP_HALO_A};
+    use super::{banner_sweep_phase, banner_tremor_dx, SWEEP_CORE_A, SWEEP_HALO_A, TREMOR_AMP};
 
     // 相位端点与值域：k=0 起扫左缘；k∈[0,1] 全域相位 [0,1)
     #[test]
@@ -760,6 +781,69 @@ mod banner_sweep_tests {
             comp > 0.10 && comp < 0.115,
             "合成 α 守勘察口径带 (0.10,0.115)"
         );
+    }
+
+    // 剧情演出包⑭ 落定震颤钉测：包络两端恰归零（活跃域 k∈[0.10,0.40] 外 dx 恒 0=
+    // 描边/正文字 x 恒等旧实现）+ 全域有界 |dx|≤1.2 + 活跃域内实际起振 + 幅值常量钉。
+    // 稳态自证照⑪同款由 draw_banner 的 if-let 结构保证（本模组钉动画期常量口径）；
+    // 震颤仅动 x、字号/颜色/字形零变化（v1.9.25 档位红线未触碰）。
+    #[test]
+    fn tremor_envelope_ends_and_bounds() {
+        // 包络外（k≤0.10 / k≥0.40）恒 0——采样含端点与远端，t 用该 k 对应真实剩余秒
+        for k in [0.0f32, 0.05, 0.10, 0.40, 0.5, 0.75, 0.9, 1.0] {
+            let t = 2.4 * (1.0 - k);
+            assert_eq!(
+                banner_tremor_dx(k, t),
+                0.0,
+                "k={} 包络外应恰 0（文字位置恒等旧实现）",
+                k
+            );
+        }
+        // 全域 60 步采样：|dx|≤1.2 有界；活跃域内应实际起振（最大 |dx|>0.5）
+        let mut max_abs = 0.0f32;
+        for idx in 0..=60 {
+            let k = idx as f32 / 60.0;
+            let t = 2.4 * (1.0 - k);
+            let dx = banner_tremor_dx(k, t);
+            assert!(
+                dx.abs() <= TREMOR_AMP + 1e-6,
+                "k={} dx={} 超幅 {}",
+                k,
+                dx,
+                TREMOR_AMP
+            );
+            max_abs = max_abs.max(dx.abs());
+        }
+        assert!(max_abs > 0.5, "活跃域内应实际起振，最大 |dx|={}", max_abs);
+        // 落定点 k=0.25 恰在包络中心（env=1 峰值域）；幅值常量口径
+        let k_peak = 0.25f32;
+        assert!(
+            banner_tremor_dx(k_peak, 2.4 * (1.0 - k_peak)).abs()
+                <= TREMOR_AMP,
+            "落定点应在峰值域内有界"
+        );
+        assert_eq!(TREMOR_AMP, 1.2);
+    }
+
+    // 震颤时间连续性：t 递减（2.16→1.44，活跃域全程）dx 振荡但幅度受三角包络约束——
+    // 包络峰值线（k=0.25 邻域）处振幅应显著大于活跃域边缘（包络形状非平顶）
+    #[test]
+    fn tremor_envelope_shape() {
+        // 边缘 5%（k=0.11/k=0.39）包络≈0.067，中心 5% 包络≈1.0：取同相位难保证，
+        // 改钉包络上界——任意 t 下 |dx(k_edge)| ≤ 0.15×TREMOR_AMP+容差
+        let edge = [0.11f32, 0.39];
+        for k in edge {
+            for step in 0..40 {
+                let t = 2.16 - step as f32 * 0.018; // 2.16→1.44 全域扫
+                assert!(
+                    banner_tremor_dx(k, t).abs() <= 0.12 * TREMOR_AMP + 1e-6,
+                    "k={} 边缘包络（1−0.14/0.15≈0.0667）应 ≤0.12×幅值，t={} 实得 {}",
+                    k,
+                    t,
+                    banner_tremor_dx(k, t)
+                );
+            }
+        }
     }
 }
 
@@ -1952,6 +2036,8 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
             let z = crate::game::ZoomArt::Comp(ci);
             crate::charpanel::prewarm_zoom_text(g, &z);
             g.zoom_art = Some(z);
+            // 剧情演出包⑬ 入画动效计时（四开启口同批同改勿半改，照 charpanel 口同款）
+            g.zoom_anim = 0.22;
             g.play(crate::sounds::Which::Click);
         }
     }
@@ -2049,7 +2135,10 @@ pub fn draw_modal_card(g: &mut Game) {
     // 照 banner 先例（draw.rs k=1-t/T）；动画期命中几何随卡体同步偏移 dy，0.18s 后
     // 精确复位——动画期照常可点，命中=所见。淡入通道收编于剧情演出包①/③（终局页
     // gain_a 同款），新出场点默认复用 npc_portrait_box_a 的 alpha 参数——勿另起炉灶
-    //（v1.16.35 单4 勘察备案：结算/回味等无出场计时状态屏不加淡入，稳态逐像素红线）
+    //（v1.16.35 单4 勘察备案：结算/回味等无出场计时状态屏不加淡入，稳态逐像素红线；
+    // v1.16.41 翻转备案：鉴赏覆层原属该域，本批照⑫新增计时器先例补 zoom_anim
+    // 入画动效——立绘主时刻+开启帧已有 prewarm_zoom_text 事件口，翻转理由见
+    // game.rs zoom_anim 字段批注；结算/回味等其余状态屏维持不加）
     let k = (g.modal_anim / 0.18).clamp(0.0, 1.0); // 1=开启帧 → 0=稳态
     let p = 1.0 - k; // 入场进度 0→1
     let dim = 0.5 * (0.3 + 0.7 * p); // 暗幕先行：开启帧即压暗 0.15，随进度至 0.5
@@ -3480,14 +3569,19 @@ pub fn prewarm_guide_panel(g: &Game) {
     }
     // v1.16.40 长老委托第三签：委托名/描述/达标句/钮文案随 comm_sel 轮换——开
     // 面板帧一次灌齐当前委托全字形（comm_current 纯推导只读）；进度串 prog_txt
-    // 组合已由 prewarm_chapter_view 分母 1..=4 全量预热。「进度」为 <24B 原位
-    // 字面量（NIZE 阈值纪律），预热照灌防冷栅格化
+    // 分母 1..=4 组合由 prewarm_chapter_view @14 预热；委托视图进度 @16 绘制
+    //（v1.16.42 勘察五§5 注释改准）——字形经 PANEL_WARM_CHARS（含 0-9 与 / 全
+    // 数字）× UI_SIZES 六档全量预热兜底。「进度」为 <24B 原位字面量（NIZE 阈值
+    // 纪律），预热照灌防冷栅格化。v1.16.42 上品徽标串同批预热（徽标随 done 节律
+    // 显隐，无条件灌齐成本 7 字形 @14 一次）
     let ck = g.meta.comm_current();
     prewarm_text(crate::data::comm_title(ck), &[20]);
     prewarm_text(crate::data::comm_desc(ck), &[14]);
     prewarm_text(crate::data::evtx(crate::data::COMM_DONE_N as usize), &[16]);
     prewarm_text("交差", &[20]);
     prewarm_text("进度", &[14]);
+    prewarm_text("上品 · 报酬翻倍", &[14]);
+    prewarm_text("·上品", &[14]);
     prewarm_chapter_view(g);
 }
 
@@ -3635,16 +3729,27 @@ fn draw_guide_panel(g: &mut Game) {
 }
 
 // v1.16.40 长老委托视图（第三签「门中差事」）：当前委托名/描述 + 进度（未达标
-// prog_txt 静态查表——分母 1..=4 组合已由 prewarm_chapter_view 全量预热；达标换
+// prog_txt 静态查表——分母 1..=4 组合 prewarm_chapter_view 仅 @14 预热，本视图
+// @16 绘制无专项预热（v1.16.42 勘察五§5 注释改准）——0-9 与 / 全在
+// PANEL_WARM_CHARS，panel_warm_step 六档全量预热兜底，无冷栅格化缺口；达标换
 // 金句 N2744）+「交差」钮（达标才可点，claim 内部再校验照 gift_npc「按钮仅 UI 门」
 // 先例，复命后面板保持开显示轮换后的新委托）。全静态查表零 format!（帧路径零分配
 // 红线）；委托名/描述随轮换变化，字形由 prewarm_guide_panel（开面板帧）与
-// comm_claim（复命帧）双口事件级预热。
+// comm_claim（复命帧）双口事件级预热。v1.16.42 名行右侧上品徽标（comm_premium
+// 节律显隐，字面量直绘，双口预热同批灌齐）。
 fn draw_comm_view(g: &mut Game) {
     let ck = g.meta.comm_current();
     let c = crate::data::COMMISSIONS[ck];
     txt(guide_tab_label(2), 170.0, 184.0, 16, C_GOLD_D);
     txt(crate::data::comm_title(ck), 170.0, 214.0, 20, C_GOLD);
+    // 剧情可玩性·上品委托（v1.16.42 勘察二主选 A）：当前委托落上品档（done%5==4）
+    // 时名行右侧挂金徽标——谓词与 comm_claim 发奖同款同拍（done 在复命口尾部才
+    // 自增，绘↔账恒一致）；字面量直绘不入 textpack（照「进度/交差」先例），字形
+    // 由 prewarm_guide_panel/复命帧两口预热。名 4 字@20 止于 x≈250，徽标 @14
+    // 7 字≈119px 至 x≈389，行内右侧无碰撞（页签带 y128..166/描述带 y262 均不交）
+    if crate::data::comm_premium(g.meta.comm_done) {
+        txt("上品 · 报酬翻倍", 270.0, 218.0, 14, C_GOLD);
+    }
     wrap_draw(
         crate::data::comm_desc(ck),
         170.0,

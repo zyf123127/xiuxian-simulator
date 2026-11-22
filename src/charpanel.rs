@@ -137,6 +137,8 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             if i == 3 {
                 prewarm_text("差事：", &[14]);
                 prewarm_text(crate::data::comm_title(g.meta.comm_current()), &[14]);
+                // v1.16.42 上品短标同批预热（徽标随 done 节律显隐，无条件灌齐）
+                prewarm_text("·上品", &[14]);
             }
             g.char_tab = i;
             g.play(crate::sounds::Which::Page);
@@ -155,6 +157,9 @@ fn exec_panel_act(g: &mut Game, a: PanelAct) {
             // v1.16.1 立绘鉴赏：开启帧灌字形 + 置覆层态（draw_reality 早退链独占）
             prewarm_zoom_text(g, &z);
             g.zoom_art = Some(z);
+            // 剧情演出包⑬ 入画动效计时（四开启口同批同改勿半改；照 modal_anim
+            // 开启口置值先例，0.22 与 draw_zoom_overlay 包络常数同字面量、行为钉 pin）
+            g.zoom_anim = 0.22;
             g.play(crate::sounds::Which::Click);
         }
         PanelAct::DualCult => {
@@ -378,10 +383,57 @@ pub(crate) fn prewarm_zoom_text(g: &Game, z: &ZoomArt) {
     }
 }
 
+// ================= 剧情演出包⑬ 鉴赏覆层入画动效（会话态 zoom_anim 0.22→0） =================
+// 包络纯函数+常量（cfg(test) 钉测消费，照 draw.rs weather_veil_alpha / banner_sweep_phase
+// 先例）。稳态恒等路径纪律：anim<=0 早退直返恒等值，不经除法/减法/三角——稳态帧
+// 各消费量与旧实现逐像素一致（几何/字号/颜色全原样，仅乘 α 与加沉降）。
+
+/// 入画总时长（秒）：四开启口置值同款字面量（charpanel/draw/gallery 行为+静态钉 pin）
+const ZOOM_ANIM_T: f32 = 0.22;
+/// 立绘沉降幅度（px）：⑧ art_sink 同款平方缓动，开启帧低 4px 随进度归零落定
+/// （极值底缘 650+4=654 < V_H=720 无越界，覆层无 clip band）
+const ZOOM_SINK: f32 = 4.0;
+/// 名牌/档次/提示文字层滞后秒（照③立绘滞后 0.05s 分层入画先例）
+const ZOOM_TEXT_LAG: f32 = 0.05;
+
+/// 覆层入场进度 p∈[0,1]：anim 剩余秒 0.22→0 → p 0→1（0=开启帧全暗无图、1=稳态），
+/// 相位反推照 draw.rs modal_anim 先例（k=1−t/T 同构）。稳态恒等路径：anim<=0 直返
+/// 1.0——p=1 时暗幕 (244.0×1.0) as u8=244、沉降 4.0×0×0=0、tint {1,1,1,1}=WHITE
+/// 逐分量恒等，与旧实现逐像素一致。
+#[inline]
+fn zoom_overlay_p(anim: f32) -> f32 {
+    if anim <= 0.0 {
+        return 1.0;
+    }
+    1.0 - (anim / ZOOM_ANIM_T).clamp(0.0, 1.0)
+}
+
+/// 名牌/档次/提示滞后相位（照③ art_a 滞后式 (T−anim−lag)/(T−lag) clamp）：开启帧
+/// 0.05s 文字未现，随后 0.17s 淡满；稳态（anim<=0）直返 1.0——C_GOLD/C_DIM/
+/// C_PURPLE 皆 from_rgba α=255，×1.0 浮点恒等原色（颜色不入字形缓存 key，fade
+/// 不触重栅格，draw.rs txt 缓存先例）。
+#[inline]
+fn zoom_overlay_text_a(anim: f32) -> f32 {
+    if anim <= 0.0 {
+        return 1.0;
+    }
+    (((ZOOM_ANIM_T - anim) - ZOOM_TEXT_LAG) / (ZOOM_ANIM_T - ZOOM_TEXT_LAG)).clamp(0.0, 1.0)
+}
+
 // 鉴赏覆层（模态独占输入，照 rmodal/ending_show 早退先例）：全屏暗幕 + 立绘 contain
 // 大图（高 550 收进、底边 y=650 居中，较卡内立绘放大约 1.8 倍）+ 名牌（名字 24 /
 // 档次 16 居中）+ 底缘提示。任意点按关闭；开启帧由入口 prewarm_zoom_text 灌字形，
 // 本函数稳态零分配（全 &'static str，无 format!/clone）。
+// 剧情演出包⑬ 入画动效（照①模板+③分层+⑧沉降，zoom_anim 0.22→0 四开启口置值、
+// 主循环递减）：相位反推 p（0=开启帧→1=稳态，zoom_overlay_p），立绘 y 沉降
+// ZOOM_SINK×(1−p)²（⑧ art_sink 同款）、tint α=p、暗幕 α=244×p、文字层滞后 0.05s
+// 淡入（zoom_overlay_text_a）。稳态自证：zoom_anim==0（会话态默认/旧档载入/0.22s
+// 走完/覆层已关）→ p 恰 1.0、ta 恰 1.0（纯函数早退恒等路径，非 clamp 浮点巧合），
+// 全部消费量与旧实现逐像素一致。几何红线：覆层大图维持本函数手写 contain，勿改走
+// npc_portrait_box_a——其内嵌 npc_clip_band（charpanel.rs:229-235 域 116..616）会把
+// 底锚 y=650 的全屏大图裁掉；动画期极值底缘 654<720 无越界。动画期照常可点：本函数
+// 尾部点按关闭判定原样未动，命中=所见。v1.16.35 勘察备案「无出场计时状态屏不加淡入」
+//（draw.rs:2052）就此翻转，翻转理由见 game.rs zoom_anim 字段批注。
 pub fn draw_zoom_overlay(g: &mut Game) {
     let Some(z) = g.zoom_art else { return };
     let (tex, name, tier, col) = match z {
@@ -408,23 +460,52 @@ pub fn draw_zoom_overlay(g: &mut Game) {
         g.zoom_art = None; // 防御合页：纹理缺失不该发生（入口已判 AI 图存在）
         return;
     };
-    draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(8, 5, 16, 244));
+    let p = zoom_overlay_p(g.zoom_anim); // 0=开启帧 → 1=稳态
+    draw_rectangle(
+        0.0,
+        0.0,
+        V_W,
+        V_H,
+        Color::from_rgba(8, 5, 16, (244.0 * p) as u8),
+    );
     let ar = t.width() / t.height().max(1.0);
     let dw = (550.0 * ar).min(V_W - 120.0);
     let dh = dw / ar;
+    // 沉降仅加在 y（⑧ 同款平方缓动）；x/尺寸/源矩形原样，稳态 sink 恰 0
+    let sink = ZOOM_SINK * (1.0 - p) * (1.0 - p);
     draw_texture_ex(
         &t,
         (V_W - dw) * 0.5,
-        650.0 - dh,
-        WHITE,
+        650.0 - dh + sink,
+        Color::new(1.0, 1.0, 1.0, p), // 稳态 p=1 → {1,1,1,1} 与 WHITE 逐分量恒等
         DrawTextureParams {
             dest_size: Some(vec2(dw, dh)),
             ..Default::default()
         },
     );
-    txt_c(name, V_W * 0.5, 34.0, 24, col);
-    txt_c(tier, V_W * 0.5, 72.0, 16, C_DIM);
-    txt_c("点按任意处返回", V_W * 0.5, 668.0, 14, C_DIM);
+    // 文字层滞后淡入：位置/字号/基色原样，仅 α×ta（稳态 ta=1.0 浮点恒等）
+    let ta = zoom_overlay_text_a(g.zoom_anim);
+    txt_c(
+        name,
+        V_W * 0.5,
+        34.0,
+        24,
+        Color::new(col.r, col.g, col.b, col.a * ta),
+    );
+    txt_c(
+        tier,
+        V_W * 0.5,
+        72.0,
+        16,
+        Color::new(C_DIM.r, C_DIM.g, C_DIM.b, C_DIM.a * ta),
+    );
+    txt_c(
+        "点按任意处返回",
+        V_W * 0.5,
+        668.0,
+        14,
+        Color::new(C_DIM.r, C_DIM.g, C_DIM.b, C_DIM.a * ta),
+    );
     if is_mouse_button_pressed(MouseButton::Left) {
         g.zoom_art = None;
         g.play(crate::sounds::Which::Page);
@@ -807,6 +888,12 @@ fn draw_npc_card(
             y + 136.0, 14,
             C_GOLD_D,
         );
+        // 剧情可玩性·上品委托（v1.16.42 勘察二主选 A）：上品档同行尾挂金短标——
+        // 照同行尾挂零版式位移先例：名 4 字止于 col+372，短标「·上品」3 字形止于
+        // col+418，均在好感条 560px 右缘内；谓词与 comm_claim 发奖同款同拍
+        if crate::data::comm_premium(g.meta.comm_done) {
+            txt("·上品", col + 376.0, y + 136.0, 14, C_GOLD);
+        }
     }
     if npc_row_vis(y + 168.0) {
         wrap_draw(npc_brief(i), col, y + 168.0, 14, 660.0, 22.0, C_DIM);
@@ -2669,5 +2756,114 @@ mod comp_page_tests {
             assert!(std::path::Path::new(&web).is_file(), "缺外置立绘 {}", web);
             assert!(std::path::Path::new(&emb).is_file(), "缺内嵌立绘 {}", emb);
         }
+    }
+}
+
+// 剧情演出包⑬ 鉴赏覆层入画包络钉测（照 draw.rs weather_veil_tests/banner_sweep_tests
+// 纯函数钉样式）：稳态恒等（anim<=0 → p/ta 恰 1.0 早退路径非 clamp 巧合）+ 开启帧
+// 端点 + 滞后边界 + 两段单调 + 常量口径 + 行为钉（PanelAct::Zoom 开启口置值）。
+// 稳态逐像素自证的消费侧恒等（244×1.0/沉降至 0/tint=WHITE/α×1.0）在本模组逐项断言。
+#[cfg(test)]
+mod zoom_overlay_tests {
+    use super::*;
+
+    // 稳态恒等：无动画帧 p/ta 恰 1.0——消费侧 244×p→244、tint {1,1,1,1}=WHITE、
+    // sink 恰 0、文字 α×1.0=原值，逐像素一致（zoom_overlay_p/text_a 早退直返，
+    // 浮点恒等路径）
+    #[test]
+    fn zoom_envelope_steady_identity() {
+        assert_eq!(zoom_overlay_p(0.0), 1.0, "稳态 p 恰 1.0（早退恒等路径）");
+        assert_eq!(zoom_overlay_text_a(0.0), 1.0, "稳态文字 α 恰 1.0");
+        assert_eq!(zoom_overlay_p(-0.1), 1.0, "负值防御臂同恒等");
+        // 消费侧恒等逐项对照（draw_zoom_overlay 稳态帧）
+        assert_eq!((244.0 * zoom_overlay_p(0.0)) as u8, 244, "暗幕 α 稳态恒 244");
+        assert_eq!(
+            ZOOM_SINK * (1.0 - zoom_overlay_p(0.0)) * (1.0 - zoom_overlay_p(0.0)),
+            0.0,
+            "沉降稳态恰 0"
+        );
+        let w = Color::new(1.0, 1.0, 1.0, zoom_overlay_p(0.0));
+        assert_eq!((w.r, w.g, w.b, w.a), (1.0, 1.0, 1.0, 1.0), "tint 稳态=WHITE 逐分量");
+        assert_eq!(C_GOLD.a * zoom_overlay_text_a(0.0), C_GOLD.a, "文字基色 α 稳态恒等");
+    }
+
+    // 开启帧端点+滞后边界：anim=0.22 → p=0（全暗无图）、ta=0（文字未现）；滞后窗
+    // anim∈(0.17,0.22]（开启后前 0.05s）ta=0，0.17s 后起淡（照③ art_a 同构式
+    // (T−anim−lag)/(T−lag)，文字淡满仅在稳态抵达——与③淡入形状一致）；p/ta 随
+    // 进度单调升且恒 ≤1（0.21→0.01 步进采样，端点恒等已由 steady 钉覆盖）
+    #[test]
+    fn zoom_envelope_open_frame_lag_bounds() {
+        assert_eq!(zoom_overlay_p(0.22), 0.0, "开启帧 p=0（全暗无图）");
+        assert_eq!(zoom_overlay_text_a(0.22), 0.0, "开启帧文字未现");
+        assert_eq!(zoom_overlay_text_a(0.20), 0.0, "滞后窗内文字未现");
+        assert_eq!(
+            zoom_overlay_text_a(0.17),
+            0.0,
+            "滞后窗右端恰未起淡（f32：0.22−0.17−0.05<0 clamp 0）"
+        );
+        assert!(zoom_overlay_text_a(0.16) > 0.0, "0.17s 后起淡");
+        // 淡入中段取值：(0.22−0.05−0.05)/0.17≈0.7059（anim=0.05，照③同构式铁例）
+        let mid = zoom_overlay_text_a(0.05);
+        assert!(
+            (mid - 0.7058824).abs() < 1e-4,
+            "中段 α 应≈0.7059，实得 {}",
+            mid
+        );
+        // p 随 anim 减小单调升（开启→稳态）；ta 同向且恒 ≤1
+        let mut prev_p = 0.0f32;
+        let mut prev_ta = 0.0f32;
+        for k in 1..=21 {
+            let anim = 0.22 - k as f32 * 0.01;
+            let p = zoom_overlay_p(anim);
+            let ta = zoom_overlay_text_a(anim);
+            assert!(
+                (0.0..=1.0).contains(&p) && (0.0..=1.0).contains(&ta),
+                "越域 anim={}",
+                anim
+            );
+            assert!(p > prev_p, "p 应随进度单调升 anim={}", anim);
+            assert!(ta >= prev_ta, "ta 应随进度单调升 anim={}", anim);
+            prev_p = p;
+            prev_ta = ta;
+        }
+        assert!(
+            prev_p > 0.95,
+            "末采样（anim=0.01）应近稳态，实得 {}",
+            prev_p
+        );
+    }
+
+    // 常量口径钉：0.22 时长与四开启口/主循环字面量同源（行为+静态钉消费）、
+    // 4.0 沉降极值底缘 650+4=654<V_H 无越界（覆层无 clip band）、0.05 滞后照③式
+    #[test]
+    fn zoom_constants_and_geometry() {
+        assert_eq!(ZOOM_ANIM_T, 0.22);
+        assert_eq!(ZOOM_SINK, 4.0);
+        assert_eq!(ZOOM_TEXT_LAG, 0.05);
+        assert!(
+            650.0 + ZOOM_SINK < V_H,
+            "动画期极值底缘 {} 应 < V_H={} 无越界",
+            650.0 + ZOOM_SINK,
+            V_H
+        );
+    }
+
+    // 行为钉（照 game.rs card_open_sets_modal_anim 先例）：会话态默认 0（旧档载入
+    // 天然无动画）；PanelAct::Zoom 开启口置 0.22 且开覆层——charpanel 口实测，其余
+    // 三口（draw 随行卡/gallery 两路）为 draw 侧点按处理器由 v11641_zoom_anim_tests
+    // 静态钉全覆盖防漂移
+    #[test]
+    fn zoom_open_act_sets_anim() {
+        let mut g = crate::game::revenge_tests::game_with(crate::game::Life::default(), None);
+        assert_eq!(g.zoom_anim, 0.0, "会话态默认无动画（旧档载入口径）");
+        exec_panel_act(&mut g, PanelAct::Zoom(ZoomArt::Npc(0)));
+        assert!(g.zoom_art.is_some(), "Zoom 执行应开覆层");
+        assert_eq!(g.zoom_anim, 0.22, "开启口置入画动效计时");
+        // 道侣口同款
+        g.zoom_art = None;
+        g.zoom_anim = 0.0;
+        exec_panel_act(&mut g, PanelAct::Zoom(ZoomArt::Comp(0)));
+        assert!(g.zoom_art.is_some());
+        assert_eq!(g.zoom_anim, 0.22, "道侣开启口同款置值");
     }
 }

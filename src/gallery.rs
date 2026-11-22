@@ -189,7 +189,8 @@ pub fn event_badge(id: usize) -> (&'static str, Color) {
         88 | 89 | 170 | 171 | 189 | 198 | 199 | 204 | 215 | 216 | 227 | 239 | 268 | 288
         | 291 | 297 | 299 | 309 | 310 | 322 | 328 | 342 | 348 | 349 | 355 | 358 | 361
         // v1.16.40 单3 扩池 +1（363 同修暖榻，双门控第 16 条——mr2 换层，徽标走老年臂）
-        | 363 => {
+        // v1.16.43 单3 扩池 +1（367 檐冰垂光，双门控第 17 条——mr6 换层，徽标走老年臂）
+        | 363 | 367 => {
             return ("老年", C_GOLD_D)
         }
         // v1.16.26 宿敌徽标扩 289（同门销踪，宿敌回响——照 110 夺积余波口径，
@@ -280,6 +281,8 @@ pub fn draw_gallery_page(g: &mut Game) {
             let z = ZoomArt::Comp(i);
             prewarm_zoom_text(g, &z);
             g.zoom_art = Some(z);
+            // 剧情演出包⑬ 入画动效计时（四开启口同批同改勿半改，照 charpanel 口同款）
+            g.zoom_anim = 0.22;
             g.play(crate::sounds::Which::Click);
         }
     }
@@ -314,6 +317,8 @@ pub fn draw_gallery_page(g: &mut Game) {
             let z = ZoomArt::Npc(i);
             prewarm_zoom_text(g, &z);
             g.zoom_art = Some(z);
+            // 剧情演出包⑬ 入画动效计时（四开启口同批同改勿半改，照 charpanel 口同款）
+            g.zoom_anim = 0.22;
             g.play(crate::sounds::Which::Click);
         }
     }

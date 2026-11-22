@@ -77,7 +77,7 @@ pub const CHAIN_TTL: u8 = 8;
 // mr0 摊薄开局头部先例）——白名单 28→29。Comp 立绘反查照 262/257 模式。
 // 第三处硬编码副本 tools/ledger_recheck.py COMPANION 集合同批同步（漏一处
 // 账本 mr0 无伴口径对不上）
-pub const COMPANION_EVENTS: [u16; 35] = [
+pub const COMPANION_EVENTS: [u16; 36] = [
     53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185, 203, 210, 211, 212,
     225, 226, 240, 241, 257, // v1.16.23 扩池 +1：257 灯市挑灯（mr4 第 3 条）
     262, // v1.16.24 扩池 +1：262 同研一笺（mr1 第 10 条）
@@ -105,6 +105,10 @@ pub const COMPANION_EVENTS: [u16; 35] = [
          // 293/339 三条后八批未落最陈薄层（339 v1.16.32 后未落），mr6 常态池
          // 28→29 条同批摊薄；Comp 立绘照 351/357/359 模板；白名单 34→35；第三
          // 副本 tools/ledger_recheck.py 同批）
+    366, // v1.16.43 单3 扩池 +1：366 共扫叶径（mr3 有伴第 4 条——mr3 伴随 210/
+         // 240/321 三条后十批未落全表最陈薄层（321 v1.16.30 后未落），mr3 常态
+         // 池 38→39 条同批摊薄；Comp 立绘照 351/357/359/362 模板；白名单 35→36；
+         // 第三副本 tools/ledger_recheck.py 同批）
 ];
 
 // v1.16.7 置链臂 special 槽位段：20..=31（apply_eff 链裁决据此区分「重写链态」
@@ -913,6 +917,10 @@ impl Meta {
     /// v1.16.40 长老委托：当前委托下标纯推导（只读，绘制/预热帧路径安全）。
     /// sel 有效（<表长）直用写回缓存；否则由 (comm_done+map_seed)%表长 确定性
     /// 派生——同 seed+同 done 恒同结果，零 RNG 态（照勘察二公式）。
+    /// v1.16.40 复审 low③ 备案（在位注）：旧档 sel=255 未落定窗内，map_seed 随
+    /// 换幕 advance_map 演化会使派生下标漂移——纯显示层口径：委托名/描述随窗内
+    /// 换幕可变但进度零错账（bump/claim 首行 comm_ensure 即按当帧派生落定 sel，
+    /// 落定后恒定）；无账面写入、无存档键，不动作。
     pub fn comm_current(&self) -> usize {
         if (self.comm_sel as usize) < crate::data::COMMISSIONS.len() {
             self.comm_sel as usize
@@ -1319,6 +1327,16 @@ pub struct Game {
     // v11640_anim_tests），连续变天=覆盖式重启包络（表现为持续微光，勘察风险栏备案
     // 可接受）；递减挂主循环照 modal_anim 的 main.rs 先例
     pub weather_anim: f32,
+
+    // 剧情演出包⑬ 立绘鉴赏覆层入画动效：四开启口（charpanel PanelAct::Zoom /
+    // draw_sim 随行卡 / gallery 道侣·文狱两路）置 0.22→0（draw_zoom_overlay 消费）。
+    // 照上方 weather_anim 口径：会话态不进存档（save.rs 零引用），旧档载入天然 0
+    // 不误触；覆层开启期任意点按即关=动画期照常可关（命中所见零 hit 改动）；递减
+    // 挂主循环照 modal_anim/weather_anim 的 main.rs 先例。v1.16.35 勘察备案
+    // 「无出场计时状态屏不加淡入」（draw.rs:2052）就此翻转——覆层属该域但为全游
+    // 唯一零动效的全屏立绘主时刻，开启帧已有 prewarm_zoom_text 事件口，照⑫新增
+    // 计时器先例成本极低（翻转理由备案，复审据此核对）
+    pub zoom_anim: f32,
 
     pub speed: usize, // 模拟速度 0暂停 1慢 2快 3跳过
 
@@ -1917,6 +1935,8 @@ impl Game {
             ending_anim: 0.0,
 
             weather_anim: 0.0,
+
+            zoom_anim: 0.0,
 
             speed: 2,
 
@@ -4096,6 +4116,11 @@ impl Game {
                 // 并列最薄且最陈；不入白名单，徽标走老年臂 gallery 同批登记，
                 // Comp 立绘照 355/358 模板）
                 || id == 363
+                // v1.16.43 单3 扩池 +1（367 檐冰垂光，双门控第 17 条——mr6 换层
+                // 照 363 先例：双门控 mr6 层仅 348 一条（v1.16.33）后七批未落
+                // 最陈且并列最薄；不入白名单，徽标走老年臂 gallery 同批登记，
+                // Comp 立绘照 355/358 模板）
+                || id == 367
                 || id == 361)
                 && !(comp
                     && self
@@ -11263,6 +11288,101 @@ impl Game {
                 ];
                 card.opts.push(("守灯压稿".into(), e2));
             }
+            365 => {
+                // v1.16.43 单3 扩池：mr0 恶散件 w3（恶缘 71→72 条 249→252 权照
+                // 364 模板，mr0 恶 290 误入猎套（段一末 id）后十四批未落全表最
+                // 陈薄层；题材避 63 溪桥塌半边/2 禁制半塌/277 雪隘坡道塌/364 山
+                // 摇地动/345 井绳朽断/354 走水/360 亏空：院墙夜塌是宅墙年久失
+                // 修自坠面不同义，正文禁风雨/地动成因——天气门五面收官、364 地
+                // 动刚落；散件不挂脸；灵石数臂照 274/364 款 e.stones=-g + 灵石-{}
+                // 模板；原拟「凌/棱/晶」cmap 外字改「冰柱」沿 356 磬→缶纪律）
+                card.text = evtx(2767)/* 原文：夜半院墙一声闷响，塌了半面——年久的砖石散了一地，缺口正对着风口。 */.to_string();
+                let g = (20.0 * ss) as i64;
+                let mut e1 = Eff::new();
+                e1.stones = -g;
+                e1.good = false;
+                e1.msg = vec![
+                    evf(2768, &[&(fmt_int(g)) as &dyn core::fmt::Display])/* 原文：你请了匠人连夜砌新墙，好砖好灰，一次砌到位。灵石-{} */,
+                ];
+                card.opts.push(("请匠砌墙".into(), e1));
+                let mut e2 = Eff::new();
+                e2.dao = 1.0;
+                e2.msg = vec![
+                    evtx(2769)/* 原文：你自去后山搬石，垒了半日把缺口堵严——墙是自己砌的，住着格外踏实。道心+1 */.to_string(),
+                ];
+                card.opts.push(("自搬石垒".into(), e2));
+            }
+            366 => {
+                // v1.16.43 单3 扩池：伴随白名单 35→36 条（mr3 有伴第 4 条——mr3
+                // 伴随 210/240/321 三条后十批未落全表最陈薄层（321 v1.16.30 后未
+                // 落），mr3 常态池 38→39 条同批摊薄，w3 善照白名单全列先例；Comp
+                // 立绘照 351/357/359/362 反查模式；第三副本 tools/ledger_recheck.py
+                // 同批；题材避 352 苔阶履痕（阶上履痕面）/309 雪堤喂雀/314 檐下折
+                // 梅（冬日面）/272 寒江共网（共作渔面）/317 崖灯照径（径字题名唯
+                // 一他卡不同义）：共扫叶径是一把小帚扫出一径秋面，「叶径/小帚」全
+                // 池 0 卡——简语原拟「共糊纸窗」撞 291 换窗新纸、「纸鸢」撞 217
+                // 断线纸鸢已否）
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = evf(2770, &[&(cn) as &dyn core::fmt::Display])/* 原文：秋深了，落叶把院前小径埋了半尺。你与{}一人一把小帚，从门廊一路扫到山门——扫帚声沙沙的，像替秋天收尾。 */;
+                let mut e1 = Eff::new();
+                e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
+                e1.dao = 1.0;
+                e1.msg = vec![
+                    evf(2771, &[&(cn) as &dyn core::fmt::Display, &(crate::data::COMPANION_GIFT_FAV) as &dyn core::fmt::Display])/* 原文：{}扫得快，回头来接你的帚：一段路两个人扫，比一个人扫完快一倍。道心+1（好感+{}） */,
+                ];
+                card.opts.push(("共扫叶径".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(2772)/* 原文：你把扫拢的落叶留在径边，堆作来春的花泥——径会再落满，帚会一直在。气运+1 */.to_string(),
+                ];
+                card.opts.push(("留叶作泥".into(), e2));
+            }
+            367 => {
+                // v1.16.43 单3 扩池：老年×伴双门控第 17 条（mr6 换层照 363 先例：
+                // 双门控 mr6 层仅 348 一条（v1.16.33）后七批未落最陈且并列最薄，
+                // w3 善照双门控全列先例；不入白名单徽标走老年臂 gallery 同批登记，
+                // Comp 立绘照 355/358 模板；题材避 212 相扶看雪（雪面）/301 霜窗
+                // 描枝（霜窗画枝面）/348 霜橘分甘/361 熏笼共暖/363 同修暖榻/145
+                // 冰窖遗鲜（冰字题名唯一他卡藏鲜面不同义）：檐冰垂光是檐口冰柱
+                // 晨光透亮面——天时底色可述照 212 看雪先例，禁写成「天气变了」；
+                // 原拟「凌/棱/晶」cmap 外字改「冰柱」）
+                let cn = {
+                    let s = self.sim.as_ref().unwrap();
+                    s.companion
+                        .clone()
+                        .unwrap_or_else(|| COMPANION_NAMES[0].to_string())
+                };
+                let ci = COMPANION_NAMES
+                    .iter()
+                    .position(|&n| n == cn)
+                    .unwrap_or(0);
+                card.actor = Some(CardActor::Comp(ci));
+                card.text = evf(2773, &[&(cn) as &dyn core::fmt::Display])/* 原文：连日霜冻，檐口垂下一排冰柱。晨光初起，你与{}站在廊下看冰柱透亮——一根一根，亮得晃眼。 */;
+                let mut e1 = Eff::new();
+                e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
+                e1.dao = 1.0;
+                e1.msg = vec![
+                    evf(2774, &[&(cn) as &dyn core::fmt::Display, &(crate::data::COMPANION_GIFT_FAV) as &dyn core::fmt::Display])/* 原文：{}伸手接住檐角坠下的一根冰柱，递到你手里：凉是真凉，亮也是真亮。道心+1（好感+{}） */,
+                ];
+                card.opts.push(("檐冰垂光".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(2775)/* 原文：日头渐高，冰柱一根根落尽，檐口滴答了一上午——冬有自己的钟。气运+1 */.to_string(),
+                ];
+                card.opts.push(("候冰自落".into(), e2));
+            }
 
             _ => {}
         }
@@ -11773,48 +11893,11 @@ impl Game {
                         realm: 0,
                     });
 
-                    let reward_stones = (3000.0 * self.stone_scale(neme.realm)) as i64;
-
-                    let reward_dy = 40 * (1 + neme.realm as i64);
-
-                    {
-                        let s = self.sim.as_mut().unwrap();
-
-                        s.stones += reward_stones;
-
-                        s.highlights
-                            .push(format!("{}岁，阵斩宿敌{}", s.age as i32, neme.name));
-                    }
-
-                    self.meta.neme_slain += 1;
-
-                    self.comm_bump(crate::data::COMM_NEME); // v1.16.40 长老委托：斩除宿敌 +1（模拟反杀臂——与 revenge_win 双挂点均计，data.rs 头注写死）
-
-                    // v1.16.28 江湖声望 drift 挂点②：斩杀宿敌 +3（neme_slain 递增
-                    // 两处同批同值——模拟反杀与现实寻仇；saturating 封顶 255）
-                    self.meta.fame = self.meta.fame.saturating_add(3);
-
-                    self.meta.dao_yun += reward_dy;
-
-                    self.meta.sim_points += 2;
-
-                    self.log(
-                        evf(1522, &[&(neme.full())])/* 原文：【模拟中反杀】你循战意逆斩宿敌{}！现实中的你已悟得其招，宿敌授首。 */,
-                        C_GOLD,
-                    );
-
-                    self.show_banner("宿敌授首！", C_GOLD);
-
-                    self.log(
-                        evf(1523, &[&(fmt_int(reward_stones)), &(reward_dy)])/* 原文：得灵石 {}（现实），道韵+{}，模拟点数+2。 */,
-                        C_GOLD,
-                    );
-
-                    self.spawn_next_neme();
-
-                    self.play(crate::sounds::Which::Ascend);
-
-                    self.burst(60, true);
+                    // v1.16.42 low② 抽取：胜臂结算段（奖励/委托挂点/声望/横幅/续宿敌
+                    // 链）逐行平移入 sim_neme_win_settle——p clamp 0.95 永非确定，
+                    // 助手直调是唯一确定性驱动路（v11642_comm_wire_tests）；唯一
+                    // 调用点=本臂，1522/1523 两句原样随段入助手
+                    self.sim_neme_win_settle(neme);
                 } else {
                     let nfull = self
                         .meta
@@ -13738,7 +13821,10 @@ impl Game {
         self.meta.comm_prog = 0;
     }
 
-    /// 惰性初始化：sel 无效（旧档缺 cm= / 新档默认 255）时按派生落定
+    /// 惰性初始化：sel 无效（旧档缺 cm= / 新档默认 255）时按派生落定——落定后
+    /// 委托名恒定（v1.16.40 复审 low③ 备案收口：落定前显示层派生随 map_seed 换幕
+    /// 可漂移，comm_current 侧注在位；本口是漂移窗的唯一收口，bump/claim 恒首行
+    /// 经此，进度零错账）
     fn comm_ensure(&mut self) {
         if (self.meta.comm_sel as usize) >= crate::data::COMMISSIONS.len() {
             self.comm_roll();
@@ -13770,23 +13856,41 @@ impl Game {
         if self.meta.comm_prog < c.target {
             return;
         }
-        self.meta.sect_contrib += c.rw_contrib;
+        // 剧情可玩性·上品委托（v1.16.42 勘察二主选 A）：每 5 条复命第 5 条报酬
+        // 翻倍——comm_premium(done) 纯函数节律，done=自增前累计复命数（轮换仅
+        // 在本口尾部 done+=1，绘/账同拍）。三层发放单点乘区；通胀红线不破（奖励
+        // 层无道韵）。值域安全：rw_stones max 2000×2=4000（i32）/rw_pts max
+        // 2×2=4（u8→i32）/rw_contrib max 80×2=160（u32）均无溢出。log 数值
+        // 自述须写实发账（N2745 模板原样，三实参换乘区后实值）
+        let mult: u32 = if crate::data::comm_premium(self.meta.comm_done) {
+            2
+        } else {
+            1
+        };
+        let pays_c = c.rw_contrib * mult;
+        let pays_s = c.rw_stones as i64 * mult as i64;
+        let pays_p = c.rw_pts as i32 * mult as i32;
+        self.meta.sect_contrib += pays_c;
         if let Some(l) = self.life.as_mut() {
-            l.stones += c.rw_stones as i64;
+            l.stones += pays_s;
         }
-        self.meta.sim_points += c.rw_pts as i32;
+        self.meta.sim_points += pays_p;
         self.log(
-            crate::data::evf(crate::data::COMM_CLAIM_N as usize, &[&(c.rw_contrib), &(fmt_int(c.rw_stones as i64)), &(c.rw_pts)])/* 原文：复命：贡献+{}，灵石+{}，模拟点数+{} */,
+            crate::data::evf(crate::data::COMM_CLAIM_N as usize, &[&(pays_c), &(fmt_int(pays_s)), &(pays_p)])/* 原文：复命：贡献+{}，灵石+{}，模拟点数+{} */,
             C_GOLD,
         );
         self.play(crate::sounds::Which::Coin);
         self.meta.comm_done += 1;
         self.comm_roll();
         // 复命帧事件级预热：轮换后的新委托名/描述/钮文案一次灌齐（照 show_banner
-        // 事件帧预热先例，防任务面板第三签/长老卡首帧冷栅格化图集整图重传）
+        // 事件帧预热先例，防任务面板第三签/长老卡首帧冷栅格化图集整图重传）；
+        // v1.16.42 上品徽标两串同批预热（下一条委托可能落上品档，无条件灌齐
+        // ——7 字形 @14 一次成本，照「进度」字面量预热先例）
         crate::ui::prewarm_text(crate::data::comm_title(self.meta.comm_current()), &[20]);
         crate::ui::prewarm_text(crate::data::comm_desc(self.meta.comm_current()), &[14]);
         crate::ui::prewarm_text("交差", &[20]);
+        crate::ui::prewarm_text("上品 · 报酬翻倍", &[14]);
+        crate::ui::prewarm_text("·上品", &[14]);
         self.sync_save();
     }
 
@@ -14222,39 +14326,11 @@ impl Game {
                 // 钉测 story_11628_reality_break_line）
                 self.log(evf(1566, &[&(rd.name)])/* 原文：现实突破【{}境】！寿元大增！ */, C_GOLD);
 
-                // v1.16.28 江湖声望 drift 挂点③：破境（现实侧）+2（与模拟侧
-                // sim_do_break 成功臂同批同值——saturating 封顶 255）
-                self.meta.fame = self.meta.fame.saturating_add(2);
-
-                self.comm_bump(crate::data::COMM_BREAK); // v1.16.40 长老委托：破境而上 +1（现实 ok 臂——模拟侧破境不计，data.rs 头注写死）
-
-                self.show_banner(format!("突破 · {}境", rd.name), C_GOLD);
-
-                if first {
-                    self.log(evtx(1793)/* 原文：【首登】现实中的你首次踏入此境！ */, C_GOLD);
-                }
-
-                self.burst(60, true);
-
-                self.play(crate::sounds::Which::Ascend);
-
-                self.check_ach_all();
-
-                // v1.16.8 章节书：现实首破境事实翻转点（第二章目标边沿）
-                self.check_chapters();
-
-                // v1.14.0 立绘焕新时刻：跨相破境 toast + 金环闪光（置于成就 toast
-                // 之后——toast 单槽后写胜，焕然词不被同帧成就播报顶掉）
-                if let Some(ot) = old_tier {
-                    self.stage_awaken(ot, target);
-                }
-
-                // v1.12.0 P0 修复：跨境破入成行（realm 2）成功当帧弹道途卡——此前
-                // open_path_card 仅 resume_life 旧档补弹，会话内首次破境后三途五处
-                // 乘区全程空转；rmodal 被占时 open_path_card 自带 no-op，无需排队
-                if target == 2 {
-                    self.open_path_card();
-                }
+                // v1.16.42 low② 抽取：跨境 ok 臂结算段（声望/委托挂点/横幅/首登/
+                // 成就/章节/焕新/道途卡）逐行平移入 break_ok_settle——唯一调用点=
+                // 本臂（1566 句之后，行序由 v11642_comm_wire_tests 静态钉写死）；
+                // 同境进层 ok 臂（1564 句）不调本助手=「同境不计」语义写死
+                self.break_ok_settle(target, first, old_tier);
             } else {
                 self.log(
                     evf(1567, &[&(rd.name)])/* 原文：现实冲击{}境失败！真元反噬受轻伤——轮回镜护持，无死劫。 */,
@@ -14266,6 +14342,41 @@ impl Game {
         }
 
         self.sync_save();
+    }
+
+    // v1.16.42 low② 抽取：现实跨境破境 ok 臂结算段（照 v1.16.39+1 lingtian_year_gain
+    // 抽取先例）——行为零变更逐行平移，唯 comm_bump 挂点随段入助手使接线钉测可达
+    //（跨境成功率 p 封顶 0.99 永非确定，助手直调是唯一确定性驱动路，见
+    // v11642_comm_wire_tests）。rd 由 target 重derive（调用点原式
+    // `let rd = &REALMS[target]` 同源 :14187）；调用点唯一=act_break 跨境 ok 臂
+    //（1566 句之后）；同境进层 ok 臂（1564 句）不调本助手。1564/1566/1786 三句
+    // 与 banner/首登/道途卡伴生演出全部原样未动（回归钉 comm_hooks_static_pins）
+    fn break_ok_settle(&mut self, target: usize, first: bool, old_tier: Option<usize>) {
+        let rd = &REALMS[target];
+        // v1.16.28 江湖声望 drift 挂点③：破境（现实侧）+2（与模拟侧
+        // sim_do_break 成功臂同批同值——saturating 封顶 255）
+        self.meta.fame = self.meta.fame.saturating_add(2);
+        self.comm_bump(crate::data::COMM_BREAK); // v1.16.40 长老委托：破境而上 +1（现实 ok 臂——模拟侧破境不计，data.rs 头注写死）
+        self.show_banner(format!("突破 · {}境", rd.name), C_GOLD);
+        if first {
+            self.log(evtx(1793)/* 原文：【首登】现实中的你首次踏入此境！ */, C_GOLD);
+        }
+        self.burst(60, true);
+        self.play(crate::sounds::Which::Ascend);
+        self.check_ach_all();
+        // v1.16.8 章节书：现实首破境事实翻转点（第二章目标边沿）
+        self.check_chapters();
+        // v1.14.0 立绘焕新时刻：跨相破境 toast + 金环闪光（置于成就 toast
+        // 之后——toast 单槽后写胜，焕然词不被同帧成就播报顶掉）
+        if let Some(ot) = old_tier {
+            self.stage_awaken(ot, target);
+        }
+        // v1.12.0 P0 修复：跨境破入成行（realm 2）成功当帧弹道途卡——此前
+        // open_path_card 仅 resume_life 旧档补弹，会话内首次破境后三途五处
+        // 乘区全程空转；rmodal 被占时 open_path_card 自带 no-op，无需排队
+        if target == 2 {
+            self.open_path_card();
+        }
     }
 
     pub fn exchange_points(&mut self) {
@@ -14578,6 +14689,58 @@ impl Game {
         if let Some(n) = self.meta.neme.take() {
             self.revenge_win(n);
         }
+    }
+
+    // v1.16.42 low② 抽取：模拟反杀胜臂（apply_eff special=67 迎战 gen_range 胜分支）
+    // 结算段——行为零变更逐行平移，唯 comm_bump 挂点随段入助手使接线钉测可达
+    //（p clamp(0.05,0.95) 永非确定，助手直调是唯一确定性驱动路）。调用点唯一=
+    // special67 胜臂；neme 由调用点 take() 后传入（缺宿敌时的「魔修」兜底原样留在
+    // 调用点）。1522/1523 两句与 banner/续宿敌链伴生演出原样未动（回归钉
+    // comm_hooks_static_pins）。前置要求 self.sim=Some（production 调用点在模拟
+    // 播放期恒成立）
+    fn sim_neme_win_settle(&mut self, neme: Nemes) {
+        let reward_stones = (3000.0 * self.stone_scale(neme.realm)) as i64;
+
+        let reward_dy = 40 * (1 + neme.realm as i64);
+
+        {
+            let s = self.sim.as_mut().unwrap();
+
+            s.stones += reward_stones;
+
+            s.highlights
+                .push(format!("{}岁，阵斩宿敌{}", s.age as i32, neme.name));
+        }
+
+        self.meta.neme_slain += 1;
+
+        self.comm_bump(crate::data::COMM_NEME); // v1.16.40 长老委托：斩除宿敌 +1（模拟反杀臂——与 revenge_win 双挂点均计，data.rs 头注写死）
+
+        // v1.16.28 江湖声望 drift 挂点②：斩杀宿敌 +3（neme_slain 递增
+        // 两处同批同值——模拟反杀与现实寻仇；saturating 封顶 255）
+        self.meta.fame = self.meta.fame.saturating_add(3);
+
+        self.meta.dao_yun += reward_dy;
+
+        self.meta.sim_points += 2;
+
+        self.log(
+            evf(1522, &[&(neme.full())])/* 原文：【模拟中反杀】你循战意逆斩宿敌{}！现实中的你已悟得其招，宿敌授首。 */,
+            C_GOLD,
+        );
+
+        self.show_banner("宿敌授首！", C_GOLD);
+
+        self.log(
+            evf(1523, &[&(fmt_int(reward_stones)), &(reward_dy)])/* 原文：得灵石 {}（现实），道韵+{}，模拟点数+2。 */,
+            C_GOLD,
+        );
+
+        self.spawn_next_neme();
+
+        self.play(crate::sounds::Which::Ascend);
+
+        self.burst(60, true);
     }
 
     pub fn eat_pill(&mut self, id: usize) {
@@ -15478,6 +15641,8 @@ pub(crate) mod revenge_tests {
             ending_anim: 0.0,
 
             weather_anim: 0.0,
+
+            zoom_anim: 0.0,
 
             speed: 0,
 
@@ -19496,7 +19661,8 @@ mod event_batch_v1168_tests {
         // v1.16.37 单2 扩池 3（356 哑缶一声/357 同扎一篱/358 灶膛煨薯）→ 359 条
         // v1.16.38 单2 扩池 3（359 移竹当窗/360 灵仓亏空/361 熏笼共暖）→ 362 条
         // v1.16.40 单3 扩池 3（362 芦絮暖枕/363 同修暖榻/364 山摇地动）→ 365 条
-        assert_eq!(EVENTS.len(), 365);
+        // v1.16.43 单3 扩池 3（365 院墙夜塌/366 共扫叶径/367 檐冰垂光）→ 368 条
+        assert_eq!(EVENTS.len(), 368);
     }
 }
 
@@ -20106,10 +20272,18 @@ mod v11615_reward_and_pool_tests {
     // 基权 1105→1114（3×w3）；稀有 30 条 50 权不变 50/1114≈4.49%（v1.16.33
     // 4.485%/v1.16.34 4.46% 先例可容，勘察四风险 7 留档）；恶缘 71 条 249 权；
     // 常态池（w>0）mr 分布（330 条）0:45/1:63/2:56/3:38/4:40/5:34/6:29/7:25
+    // v1.16.43 单3 扩池批 3 条随批：院墙夜塌 365 w3 mr0 恶（恶缘 71→72 条
+    // 249→252 权——mr0 恶 290 误入猎套（段一末 id）后十四批未落全表最陈薄层）/
+    // 共扫叶径 366 w3 mr3（伴随白名单 35→36 第 36 条——mr3 伴随 210/240/321 三
+    // 条后十批未落全表最陈薄层）/檐冰垂光 367 w3 mr6（老年×伴双门控第 17 条——
+    // mr6 层仅 348 一条 v1.16.33 后七批未落最陈且并列最薄）；共 3 条零新键零资
+    // 产；总基权 1114→1123（3×w3）；稀有 30 条 50 权不变 50/1123≈4.45%（v1.16.37
+    // 4.56%/v1.16.40 4.49% 带内）；恶缘 72 条 252 权；常态池（w>0）mr 分布（333
+    // 条）0:46/1:63/2:56/3:39/4:40/5:34/6:30/7:25
     #[test]
     fn pool_ledger_recheck() {
         let total: i32 = EVENTS.iter().map(|&p| ev_w(p)).sum();
-        assert_eq!(total, 1114, "总基权漂移——照 data.rs v1.16.40 单3 扩池批注重算");
+        assert_eq!(total, 1123, "总基权漂移——照 data.rs v1.16.43 单3 扩池批注重算");
         let rare: Vec<(usize, i32)> = EVENTS
             .iter()
             .filter(|&&p| ev_w(p) > 0 && ev_w(p) <= crate::data::RARE_W)
@@ -20588,9 +20762,10 @@ mod v11617_pool_tests {
         // v1.16.37 单2 扩池 3 条（356..=358）同批随批注口径 356→359
         // v1.16.38 单2 扩池 3 条（359..=361）同批随批注口径 359→362
         // v1.16.40 单3 扩池 3 条（362..=364）同批随批注口径 362→365
-        assert_eq!(EVENTS.len(), 365);
-        assert_eq!(EVENT_NAMES.len(), 365);
-        assert_eq!(EVENT_BRIEF.len(), 365);
+        // v1.16.43 单3 扩池 3 条（365..=367）同批随批注口径 365→368
+        assert_eq!(EVENTS.len(), 368);
+        assert_eq!(EVENT_NAMES.len(), 368);
+        assert_eq!(EVENT_BRIEF.len(), 368);
         for id in 183..=204usize {
             assert_eq!(EVENTS_ROWS[id].0 as usize, id, "新增段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
@@ -20756,6 +20931,16 @@ mod v11617_pool_tests {
         // 占用故段十五顺延）
         for id in 362..=364usize {
             assert_eq!(EVENTS_ROWS[id].0 as usize, id, "v1.16.40 段十五 id 连续");
+            assert!(!EVENT_NAMES[id].is_empty());
+            assert!(!EVENT_BRIEF[id].is_empty());
+        }
+        // v1.16.43 单3 扩池 3 条段十六批段补钉（照段十五款新增勿替换——365..=367
+        // 三条 id==下标连续与名/简非空，批尾 367 封口勿写 ..=368 同上先例；段十六
+        // 首尾逐字钉另在 data.rs ev_tables_section_bounds 内容级防线；名/简第十六
+        // 段连号 N2761..2763/N2764..2766——段十五正文收编至 N2760 故段十六顺延；
+        // 第十九批润色 10 行 N 不变号真相源行直改与本钉无涉，batch22 另有 want 钉）
+        for id in 365..=367usize {
+            assert_eq!(EVENTS_ROWS[id].0 as usize, id, "v1.16.43 段十六 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
             assert!(!EVENT_BRIEF[id].is_empty());
         }
@@ -21117,6 +21302,154 @@ mod v11617_pool_tests {
         }
     }
 
+    // v1.16.43 单3 扩池 3 条（段十六 365..=367）卡面良构+门控抽检（照 batch20 款）：
+    // 365 恶散件直入/366 无伴归零+有伴 mr3 入池（realm 须≥3 过 mr 门）/367 双门控
+    // 四态抽检；卡面 title 双源/正文非空/两选项/366/367 Comp 卡正文钉名（文-脸
+    // 同源照 named_cards 款）/365 恶臂灵石负值收口/抉择 apply_eff 全链不 panic；
+    // 批尾 367 封口勿 ..=368 照 batch14/15 注；batch21 名顺延——batch19 已被段十
+    // 四占用、batch20 已被段十五占用；普通条目 special 恒 0（检定窗 75..=76 已收
+    // 官，无新检定卡）
+    #[test]
+    fn batch21_cards_well_formed() {
+        // 门控抽检：365 恶散件无门控（mr0 w3 直入池）
+        let mut g2 = sim_game(0, 40.0);
+        g2.recent_events.clear();
+        let (ws2, _) = g2.sim_event_weights(40.0, 0, false, false, false);
+        assert!(ws2[365] > 0.0, "365 恶散件无门控直入池");
+        // 门控抽检：366 伴随白名单（mr3）——无伴归零/有伴入池
+        let mut g1 = sim_game(3, 40.0);
+        g1.recent_events.clear();
+        let (ws1, _) = g1.sim_event_weights(40.0, 3, false, false, false);
+        assert_eq!(ws1[366], 0.0, "无伴 366 不入池");
+        g1.sim
+            .as_mut()
+            .unwrap()
+            .companion = Some(COMPANION_NAMES[0].to_string());
+        let (ws1, _) = g1.sim_event_weights(40.0, 3, false, false, true);
+        assert!(ws1[366] > 0.0, "有伴 366 入池");
+        // 门控抽检：367 双门控（mr6）——无伴/有伴未暮年归零、暮年有伴入池
+        let mut g3 = sim_game(6, 40.0);
+        g3.recent_events.clear();
+        let (ws3, _) = g3.sim_event_weights(40.0, 6, false, false, false);
+        assert_eq!(ws3[367], 0.0, "无伴 367 不入池");
+        g3.sim
+            .as_mut()
+            .unwrap()
+            .companion = Some(COMPANION_NAMES[0].to_string());
+        let (ws3, _) = g3.sim_event_weights(40.0, 6, false, false, true);
+        assert_eq!(ws3[367], 0.0, "有伴未暮年 367 不入池");
+        g3.sim.as_mut().unwrap().lifespan = g3.sim.as_ref().unwrap().age + 5.0;
+        let (ws3, _) = g3.sim_event_weights(40.0, 6, false, false, true);
+        assert!(ws3[367] > 0.0, "暮年有伴 367 入池");
+        // 卡面良构（366 有伴进卡；365 直进；367 暮年有伴进卡）
+        for id in [365usize, 366, 367] {
+            let mut g = match id {
+                366 => {
+                    let mut g = sim_game(3, 40.0);
+                    g.sim
+                        .as_mut()
+                        .unwrap()
+                        .companion = Some(COMPANION_NAMES[0].to_string());
+                    g
+                }
+                365 => sim_game(0, 40.0),
+                _ => {
+                    let mut g = sim_game(6, 40.0);
+                    {
+                        let s = g.sim.as_mut().unwrap();
+                        s.companion = Some(COMPANION_NAMES[0].to_string());
+                        s.lifespan = s.age + 5.0;
+                    }
+                    g
+                }
+            };
+            g.meta.chap_done = 0x1FF;
+            g.modal = None;
+            g.build_event(id);
+            let card = g
+                .modal
+                .as_ref()
+                .unwrap_or_else(|| panic!("事件 {} 无卡臂", id));
+            assert_eq!(card.title, EVENT_NAMES[id], "标题双源 id {}", id);
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两选项", id);
+            // 本批纪律：普通条目 special 恒 0（检定窗 75..=76 已收官，无新检定卡）
+            for (label, e) in &card.opts {
+                assert_eq!(e.special, 0, "事件 {} 选项「{}」special 非零", id, label);
+            }
+            if id != 365 {
+                assert!(
+                    card.text.contains(COMPANION_NAMES[0]),
+                    "事件 {} 正文须具名道侣（文-脸同源）",
+                    id
+                );
+                assert!(
+                    matches!(card.actor, Some(CardActor::Comp(_))),
+                    "事件 {} 须挂 Comp 立绘（照 362/363 模板）",
+                    id
+                );
+            } else {
+                // 365 恶臂灵石负值收口照 274/364 款（卡面「灵石-{}」与 e.stones
+                // 同源同号，恰一臂负值且 good=false）
+                let neg: Vec<_> = card.opts.iter().filter(|(_, e)| e.stones < 0).collect();
+                assert_eq!(neg.len(), 1, "365 恰一臂灵石负值");
+                assert!(!neg[0].1.good, "365 灵石臂 good=false");
+            }
+            g.choose_option(0); // apply_eff 全链不 panic（sync_save 仅置脏不落盘）
+        }
+    }
+
+    // v1.16.43 单3 扩池沿例（355/348/349/363 先例）：367 檐冰垂光 = 老年×伴双门控
+    // 第 17 条（mr6）——随批补四象限门控行为测试与白名单负断言（照
+    // dual_gate_361_four_quadrants 款：无伴×非老年/无伴×老年/有伴×非老年皆归零，
+    // 有伴×老年才入池；徽标走老年臂 gallery（v1.16.43 随批已登记），不入
+    // COMPANION 白名单——双门控卡非伴随卡，照 268 负断言口径）
+    #[test]
+    fn dual_gate_367_four_quadrants() {
+        // 象限 1：无伴 × 非老年 → 0（sim_game(6,..) 过 mr6 门——mr 层测试 realm
+        // 须过 mr 门照 dual_gate_361 注款）
+        let mut g = sim_game(6, 40.0);
+        g.recent_events.clear();
+        let (ws, _) = g.sim_event_weights(40.0, 6, false, false, false);
+        assert_eq!(ws[367], 0.0, "无伴非老年：367 不入池");
+        // 象限 2：无伴 × 老年（余量 5 载）→ 0
+        let mut g2 = sim_game(6, 40.0);
+        g2.recent_events.clear();
+        g2.sim.as_mut().unwrap().lifespan = g2.sim.as_ref().unwrap().age + 5.0;
+        let (ws2, _) = g2.sim_event_weights(40.0, 6, false, false, false);
+        assert_eq!(ws2[367], 0.0, "无伴老年：367 不入池");
+        // 象限 3：有伴 × 非老年 → 0
+        let mut g3 = sim_game(6, 40.0);
+        g3.recent_events.clear();
+        g3.sim
+            .as_mut()
+            .unwrap()
+            .companion = Some(COMPANION_NAMES[0].to_string());
+        let (ws3, _) = g3.sim_event_weights(40.0, 6, false, false, true);
+        assert_eq!(ws3[367], 0.0, "有伴非老年：367 不入池");
+        // 象限 4：有伴 × 老年 → 入池（正证）
+        let mut g4 = sim_game(6, 40.0);
+        g4.recent_events.clear();
+        {
+            let s = g4.sim.as_mut().unwrap();
+            s.companion = Some(COMPANION_NAMES[0].to_string());
+            s.lifespan = s.age + 5.0;
+        }
+        let (ws4, _) = g4.sim_event_weights(40.0, 6, false, false, true);
+        assert!(ws4[367] > 0.0, "有伴老年：367 入池");
+        // 白名单负断言（照 363 款）：双门控卡非伴随卡——212 在白名单内走伴随臂
+        // 的死模式勿混
+        assert!(
+            !COMPANION_EVENTS.contains(&367u16),
+            "367 双门控卡不得入 COMPANION 白名单"
+        );
+        // 366 反向正断言：伴随白名单第 36 条
+        assert!(
+            COMPANION_EVENTS.contains(&366u16),
+            "366 共扫叶径须入 COMPANION 白名单"
+        );
+    }
+
     // v1.16.36 low 清账沿例（355/348/349 先例）：363 同修暖榻 = 老年×伴双门控
     // 第 16 条（mr2）——随批补四象限门控行为测试与白名单负断言（照
     // dual_gate_361_four_quadrants 款：无伴×非老年/无伴×老年/有伴×非老年皆
@@ -21157,6 +21490,18 @@ mod v11617_pool_tests {
         // 白名单负断言：363 不入 COMPANION 白名单（双门控卡不是伴随卡——徽标
         // 走老年臂；对照 362 伴随卡在白名单内正断言）
         assert!(!COMPANION_EVENTS.contains(&363u16), "363 不入伴随白名单");
+    }
+
+    // v1.16.40 复审 low④ 清账（355/358/361 沿例无钉先例就此收口）：363 同修暖
+    // 榻老年臂徽标内容级回归钉（照 event_badges_derive b(348) 复审必修②钉款）
+    // ——漏登记落默认臂显「遭遇」（v1.16.26 已修漏登记类勿复刻）；367 檐冰垂光
+    // 系 v1.16.43 单3 新增老年臂面同批补钉，366 反向正断言伴随臂先命中
+    #[test]
+    fn event_badge_elder_arm_363_367() {
+        let b = crate::gallery::event_badge;
+        assert_eq!(b(363).0, "老年", "363 须走老年臂（不入白名单）");
+        assert_eq!(b(367).0, "老年", "367 须走老年臂（不入白名单）");
+        assert_eq!(b(366).0, "伴随", "366 伴随白名单走伴随臂（先命中）");
     }
 
     // 卡面良构：新 10 条标题双源/正文非空/两选项/抉择 apply_eff 全链不 panic
@@ -22348,7 +22693,9 @@ mod v11623_pool_tests {
         // →31（v1.16.33 批 344 同裱旧稿入列）→32（v1.16.35 单3 批 351 共拓崖铭入列）
         // →33（v1.16.37 单2 批 357 同扎一篱入列）
         // →34（v1.16.38 单2 批 359 移竹当窗入列）
-        assert_eq!(COMPANION_EVENTS.len(), 35, "伴随白名单 34→35");
+        // →35（v1.16.40 单3 批 362 芦絮暖枕入列）
+        // →36（v1.16.43 单3 批 366 共扫叶径入列）
+        assert_eq!(COMPANION_EVENTS.len(), 36, "伴随白名单 35→36");
     }
 }
 
@@ -22940,7 +23287,11 @@ mod v11626_pool_tests {
         assert!(COMPANION_EVENTS.contains(&357u16), "357 应入伴随白名单");
         // 白名单成员：359 入 COMPANION_EVENTS（v1.16.38 单2 批第 34 条）
         assert!(COMPANION_EVENTS.contains(&359u16), "359 应入伴随白名单");
-        assert_eq!(COMPANION_EVENTS.len(), 35, "伴随白名单 34→35");
+        // 白名单成员：362 入 COMPANION_EVENTS（v1.16.40 单3 批第 35 条）
+        assert!(COMPANION_EVENTS.contains(&362u16), "362 应入伴随白名单");
+        // 白名单成员：366 入 COMPANION_EVENTS（v1.16.43 单3 批第 36 条）
+        assert!(COMPANION_EVENTS.contains(&366u16), "366 应入伴随白名单");
+        assert_eq!(COMPANION_EVENTS.len(), 36, "伴随白名单 35→36");
     }
 
     // v1.16.30 伴随 321 门控收口（照 companion_gate_283 模式）：无伴不入池/
@@ -23466,6 +23817,43 @@ mod v11626_story_tests {
             let b = &EVENT_BRIEF[id];
             let n = b.chars().count();
             assert_eq!(b, want, "事件 {} 简语改写漂移（第十八批润色）", id);
+            assert!(
+                !b.is_empty() && n <= 18,
+                "事件 {} 简越 18 字预算: {} ({}字)",
+                id,
+                b,
+                n
+            );
+            assert!(b.contains(kw), "事件 {} 简画面化改写漂移: {}", id, b);
+        }
+    }
+
+    // v1.16.43 第十九批简语润色 10 条（改写即减字 −22 字 ≈ −66B raw：N 不变号
+    // 真相源行直改后重产 blob）——want 逐字 + ≤18 字预算 + kw 保词（批号顺延：
+    // batch18 段十四随批/batch19 第十七批/batch20 段十五随批/batch21 第十八批已
+    // 占用，本批=batch22；与卡批 batch21_cards_well_formed fn 全名不同域不冲突；
+    // kw 臂源：9 泉鸣N24/58 漩心N110（既有 kw 钉@11626_batch5 保词）/74 门生N146/
+    // 95 石棺N198/137 劫云N299/165 醒木N369（既有 kw 钉@11625 保词）/169 无脊N379
+    //（既有 kw 钉@11628_batch7 保词）/182 旧裘N412/209 拓碑吏N481（既有 kw 钉
+    // @11625 保词）/237 岁帖N543——10 id 全部无既有 want 钉，5 个既有 kw 钉改文
+    // 保词 contains 语义仍命中零改动）
+    #[test]
+    fn event_brief_11643_batch22_within_18() {
+        for (id, want, kw) in [
+            (9usize, "泉鸣如琴，灵气浓得化不开", "泉鸣"),        // N1120，臂 N24 verbatim
+            (58, "灵潮倒卷，漩心隐见闭死洞府", "漩心"),          // N1169，臂 N110 verbatim（kw 既有钉保词）
+            (74, "宿敌门生寻上门，报号或避锋", "门生"),          // N1185，臂 N146 verbatim
+            (95, "断崖石棺夜有翻书声，探或拜", "石棺"),          // N1206，臂 N198 verbatim
+            (137, "劫云垂而未落，茶棚照常添水", "劫云"),        // N1248，臂 N299 verbatim
+            (165, "醒木一拍：这名字一字改不得", "醒木"),        // N1276，臂 N369 verbatim（kw 既有钉保词）
+            (169, "书肆无脊之书，翻哪页读哪页", "无脊"),        // N1280，臂 N379 verbatim（kw 既有钉保词）
+            (182, "霜夜露重，与道侣灯下补旧裘", "旧裘"),        // N1293，臂 N412 verbatim
+            (209, "雨洇碑上名讳，拓碑吏催重铭", "拓碑吏"),      // N1320，臂 N481 verbatim（kw 既有钉保词）
+            (237, "岁帖上鞘：岁纳剑赋，或以剑代", "岁帖"),      // N1348，臂 N543 verbatim
+        ] {
+            let b = &EVENT_BRIEF[id];
+            let n = b.chars().count();
+            assert_eq!(b, want, "事件 {} 简语改写漂移（第十九批润色）", id);
             assert!(
                 !b.is_empty() && n <= 18,
                 "事件 {} 简越 18 字预算: {} ({}字)",
@@ -24904,10 +25292,13 @@ mod v11628_pool_tests {
     // v1.16.32 单3 扩池：白名单 29→30（339 岁暮并账入列）；
     // v1.16.35 单3 扩池：白名单 31→32（351 共拓崖铭入列）；
     // v1.16.37 单2 扩池：白名单 32→33（357 同扎一篱入列）；
-    // v1.16.38 单2 扩池：白名单 33→34（359 移竹当窗入列）
+    // v1.16.38 单2 扩池：白名单 33→34（359 移竹当窗入列）；
+    // v1.16.40 单3 扩池：白名单 34→35（362 芦絮暖枕入列）；
+    // v1.16.43 单3 扩池：白名单 35→36（366 共扫叶径入列）
     #[test]
     fn companion_whitelist_27() {
-        assert_eq!(COMPANION_EVENTS.len(), 35, "伴随白名单 34→35");
+        assert_eq!(COMPANION_EVENTS.len(), 36, "伴随白名单 35→36");
+        assert!(COMPANION_EVENTS.contains(&366u16), "366 应入伴随白名单");
         assert!(COMPANION_EVENTS.contains(&300u16), "300 应入伴随白名单");
         assert!(COMPANION_EVENTS.contains(&321u16), "321 应入伴随白名单");
         assert!(COMPANION_EVENTS.contains(&339u16), "339 应入伴随白名单");
@@ -25529,6 +25920,60 @@ mod v11640_anim_tests {
     }
 }
 
+// 剧情演出包⑬ 四开启口防漂移静态钉（照 title_recheck_pin_script_present 读仓先例）：
+// zoom 开启口共 4 处——charpanel PanelAct::Zoom / draw 模拟随行卡 / gallery 道侣·文狱
+// 两路，均 `g.zoom_art = Some(z);` 后同批置 `g.zoom_anim = 0.22;`（⑩「同批同改勿半改」
+// 纪律，漏一处=该入口无动画）。四口均为 draw 侧点按处理器不可自测直调（charpanel 口
+// 行为钉在 charpanel::zoom_overlay_tests），本钉以源文件结构断言全覆盖防漂移：
+// 逐口断言 zoom_art 置值行后 3 行内出现 zoom_anim 置值行，且三文件计数恰 1/1/2。
+// 漏改/错改/新增开启口未带计时（或新增非开启口误置值）任一即红。
+#[cfg(test)]
+mod v11641_zoom_anim_tests {
+    // 静态钉：三生产文件逐口结构断言
+    #[test]
+    fn zoom_open_sites_all_carry_anim() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        // (文件, 生产口数)：game.rs 的 zoom_art 置值为测试夹具不在此列
+        let plan = [
+            ("charpanel.rs", 1usize),
+            ("draw.rs", 1),
+            ("gallery.rs", 2),
+        ];
+        for (f, expect) in plan {
+            let src = std::fs::read_to_string(
+                std::path::Path::new(root).join("src").join(f),
+            )
+            .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", f, e));
+            let lines: Vec<&str> = src.lines().collect();
+            let mut sites = 0usize;
+            for idx in 0..lines.len() {
+                if lines[idx].contains("g.zoom_art = Some(") {
+                    sites += 1;
+                    let win: String = lines[idx..(idx + 4).min(lines.len())].join("\n");
+                    assert!(
+                        win.contains("g.zoom_anim = 0.22;"),
+                        "src/{} 第 {} 行 zoom 开启口未同批置 zoom_anim=0.22（演出包⑬勿半改）",
+                        f,
+                        idx + 1
+                    );
+                }
+            }
+            assert_eq!(
+                sites, expect,
+                "src/{} zoom 开启口数漂移：实得 {} 预期 {}——新增开启口须同批带 zoom_anim 置值并入本钉",
+                f, sites, expect
+            );
+        }
+    }
+
+    // 会话态默认 0（旧档载入天然无动画，照 weather_anim v11640_anim_tests 口径）
+    #[test]
+    fn zoom_anim_defaults_zero() {
+        let mut g = super::revenge_tests::game_with(super::Life::default(), None);
+        assert_eq!(g.zoom_anim, 0.0, "会话态默认 0（旧档载入口径）");
+    }
+}
+
 // v1.16.40 长老委托钉测：轮换确定性/非目标 no-op/达标边沿恰一次/复命数值与轮换
 // 推进/表完备性/显示纯推导。夹具照 v11640_hook_tests 自含副本+game_with 借用先例。
 // 挂点 8 处的接线由各挂点所在单口的行为测试既有覆盖（sect_quest/revenge_win 等），
@@ -25689,6 +26134,392 @@ mod v11640_comm_tests {
         assert_eq!(
             crate::data::evtx(crate::data::COMM_CLAIM_N as usize),
             "复命：贡献+{}，灵石+{}，模拟点数+{}"
+        );
+    }
+}
+
+// v1.16.42 上品委托钉测（勘察二主选 A，照 v11640_comm_tests 自含夹具+game_with
+// 借用先例）：节律表钉 + claim 上品双倍三币精确账钉 + log 数值自述写实账钉 +
+// 非上品恒常账钉 + 轮换后重算钉。零新状态零存档变更——纯派生谓词 comm_premium
+// 与 comm_claim 单点乘区同拍（done 自增仅在 claim 尾部）。
+#[cfg(test)]
+mod v11642_premium_tests {
+    use super::*;
+
+    use super::revenge_tests::game_with;
+
+    fn comm_game() -> Game {
+        game_with(Life::default(), None)
+    }
+
+    // 节律表钉：done 0..=20 恰 4/9/14/19 真（每 5 条第 5 条），其余恒假；
+    // 5 与 8 互素（LCM=40）：done∈[0,40) 恰 8 条上品复命、按派生下标均匀散布
+    // 全部 8 条委托各恰 1 次——全覆盖口径（每条委托终会轮到上品档）
+    #[test]
+    fn comm_premium_rhythm() {
+        for done in 0..=20u32 {
+            assert_eq!(
+                crate::data::comm_premium(done),
+                done % 5 == 4,
+                "节律偏移 done={}",
+                done
+            );
+        }
+        let seed = Meta::default().map_seed as usize;
+        let mut per_row = [0u32; 8];
+        for done in 0..40u32 {
+            if crate::data::comm_premium(done) {
+                per_row[(done as usize + seed) % 8] += 1;
+            }
+        }
+        assert!(
+            per_row.iter().all(|&h| h == 1),
+            "LCM=40 全覆盖：8 行各恰 1 次上品，实得 {:?}",
+            per_row
+        );
+        assert_eq!(per_row.iter().sum::<u32>(), 8);
+    }
+
+    // 上品复命：三币精确 ×2（贡献/灵石/点数——单点乘区）+ log 数值自述写实账
+    //（N2745 模板原样、实参=乘区后实值，禁载基值）+ done+1 轮换推进
+    #[test]
+    fn comm_claim_premium_doubles() {
+        let mut g = comm_game();
+        g.meta.comm_sel = 0; // 表行 0：rw 30/400/1
+        g.meta.comm_prog = crate::data::COMMISSIONS[0].target;
+        g.meta.comm_done = 4; // 第 5 条复命=上品档
+        let (contrib0, pts0) = (g.meta.sect_contrib, g.meta.sim_points);
+        let stones0 = g.life.as_ref().unwrap().stones;
+        g.comm_claim();
+        let c = crate::data::COMMISSIONS[0];
+        assert_eq!(
+            g.meta.sect_contrib,
+            contrib0 + c.rw_contrib * 2,
+            "上品贡献 ×2"
+        );
+        assert_eq!(
+            g.life.as_ref().unwrap().stones,
+            stones0 + c.rw_stones as i64 * 2,
+            "上品灵石 ×2"
+        );
+        assert_eq!(
+            g.meta.sim_points,
+            pts0 + c.rw_pts as i32 * 2,
+            "上品点数 ×2"
+        );
+        assert_eq!(g.meta.comm_done, 5, "轮换序数 +1");
+        // log 数值自述写实账：载 ×2 实值、不载基值
+        let last = g.log.last().expect("复命发金行");
+        assert!(
+            last.text.contains(&fmt_int(c.rw_stones as i64 * 2)),
+            "log 须载实发灵石 {}，实得 {}",
+            fmt_int(c.rw_stones as i64 * 2),
+            last.text
+        );
+        assert!(
+            !last.text.contains(&fmt_int(c.rw_stones as i64)),
+            "log 不得载基值 {}，实得 {}",
+            fmt_int(c.rw_stones as i64),
+            last.text
+        );
+    }
+
+    // 非上品恒常账：done=5（第 6 条，非上品档）复命恰 ×1（done=0 路径由既有
+    // comm_claim_pays_and_rotates 覆盖，此处补尾随档防乘区泄漏）
+    #[test]
+    fn comm_claim_non_premium_normal() {
+        let mut g = comm_game();
+        g.meta.comm_sel = 0;
+        g.meta.comm_prog = crate::data::COMMISSIONS[0].target;
+        g.meta.comm_done = 5;
+        let (contrib0, pts0) = (g.meta.sect_contrib, g.meta.sim_points);
+        let stones0 = g.life.as_ref().unwrap().stones;
+        g.comm_claim();
+        let c = crate::data::COMMISSIONS[0];
+        assert_eq!(g.meta.sect_contrib, contrib0 + c.rw_contrib, "非上品贡献恒常");
+        assert_eq!(
+            g.life.as_ref().unwrap().stones,
+            stones0 + c.rw_stones as i64,
+            "非上品灵石恒常"
+        );
+        assert_eq!(g.meta.sim_points, pts0 + c.rw_pts as i32, "非上品点数恒常");
+    }
+
+    // 轮换后重算：done 自增 1 谓词随节律翻转（UI 徽标与发奖同谓词=绘↔账同拍口径）
+    #[test]
+    fn comm_premium_recompute_after_rotation() {
+        assert!(crate::data::comm_premium(4), "第 5 条上品");
+        assert!(!crate::data::comm_premium(5), "复命后第 6 条非上品");
+        assert!(!crate::data::comm_premium(8), "第 9 条仍非上品");
+        assert!(crate::data::comm_premium(9), "第 10 条复上品");
+    }
+}
+
+// v1.16.42 勘察二 low② 清账：委托 8 挂点接线内容级钉测——「驱动真实触发函数 →
+// 断言 comm_prog +1；钳无关 kind 行重放 → 断言 no-op」双向口径，改错 kind/删挂点/
+// 挪出成功臂任一即红。6 条确定性直发（QUEST/DONGFU 走 world pub 口、GIFT 走 npc
+// pub 口、PILL 走 buy_pill、NEME 现实臂经 pub 冒烟口 debug_win_revenge 直驱
+// private revenge_win、BREAK 走抽取助手）+2 条 RNG 臂经抽取助手确定性直驱
+//（act_break 跨境 p 封顶 0.99/special67 p clamp 0.95 永非确定——抽取照 v1.16.39+1
+// lingtian_year_gain 先例，抽助手是唯一正路）。静态防漂移钉写死挂点计数与语义
+//（NEME 双臂均计/PILL 服丹不计/BREAK 同境不计/EXP 战获单口）。模组名 v11642
+//（v11641 前缀已被施工单一 zoom_anim 钉测占用，沿版本顺延）。
+#[cfg(test)]
+mod v11642_comm_wire_tests {
+    use super::*;
+
+    use super::revenge_tests::game_with;
+
+    fn comm_game() -> Game {
+        game_with(Life::default(), None)
+    }
+
+    fn comm_game_sim() -> Game {
+        let mut g = comm_game();
+        g.sim = Some(Life::default()); // sim_neme_win_settle 前置（照 sim_game 先例）
+        g
+    }
+
+    // 钳行助手：sel 直写有效下标+进度清零（comm_current 有效 sel 直用缓存口径）
+    fn clamp_row(g: &mut Game, row: usize) {
+        g.meta.comm_sel = row as u8;
+        g.meta.comm_prog = 0;
+    }
+
+    // 表行 kind↔下标对照（COMMISSIONS 声明序=QUEST×2/PILL/EXP/DONGFU/NEME/BREAK/GIFT，
+    // comm_table_pinned 已钉）：0=QUEST 2=PILL 3=EXP 4=DONGFU 5=NEME 6=BREAK 7=GIFT
+
+    // ① COMM_QUEST↔sect_quest（world.rs:186，spend_year 存活门后唯一成功路径）
+    #[test]
+    fn quest_hook_wiring() {
+        let mut g = comm_game();
+        g.life.as_mut().unwrap().sect = true;
+        clamp_row(&mut g, 0);
+        crate::world::sect_quest(&mut g);
+        assert_eq!(
+            g.meta.comm_prog, 1,
+            "sect_quest 成功路径须挂 COMM_QUEST +1"
+        );
+        clamp_row(&mut g, 2); // 无关 kind 行（COMM_PILL）重放同一触发
+        crate::world::sect_quest(&mut g);
+        assert_eq!(g.meta.comm_prog, 0, "无关 kind 行 no-op（挂点↔kind 双向）");
+    }
+
+    // ③ COMM_DONGFU↔dongfu_up（world.rs:505，灵石+贡献双扣款成功后）
+    #[test]
+    fn dongfu_hook_wiring() {
+        let mut g = comm_game();
+        clamp_row(&mut g, 4);
+        g.life.as_mut().unwrap().stones = 999_999;
+        g.meta.sect_contrib = 9_999;
+        crate::world::dongfu_up(&mut g, 0);
+        assert_eq!(g.meta.comm_prog, 1, "dongfu_up 成功须挂 COMM_DONGFU +1");
+        assert!(g.toast.is_some(), "target1 达标边沿 toast");
+        clamp_row(&mut g, 0);
+        g.meta.dongfu[0] = 0; // 设施/资源复位后重走同一成功路径
+        g.life.as_mut().unwrap().stones = 999_999;
+        g.meta.sect_contrib = 9_999;
+        crate::world::dongfu_up(&mut g, 0);
+        assert_eq!(g.meta.comm_prog, 0, "无关 kind 行 no-op");
+    }
+
+    // ⑥ COMM_GIFT↔gift_npc（npc.rs:344，扣款+add_fav 后）
+    #[test]
+    fn gift_hook_wiring() {
+        let mut g = comm_game();
+        clamp_row(&mut g, 7);
+        g.life.as_mut().unwrap().stones = 999_999;
+        crate::npc::gift_npc(&mut g, crate::npc::NPC_ELDER);
+        assert_eq!(g.meta.comm_prog, 1, "gift_npc 成功须挂 COMM_GIFT +1");
+        clamp_row(&mut g, 0);
+        g.life.as_mut().unwrap().stones = 999_999;
+        crate::npc::gift_npc(&mut g, crate::npc::NPC_ELDER);
+        assert_eq!(g.meta.comm_prog, 0, "无关 kind 行 no-op");
+    }
+
+    // ⑧ COMM_PILL↔buy_pill（game.rs:14716，现实购丹扣款+库存+1 后；服丹/模拟侧
+    // 不计语义=全仓 COMM_PILL bump 恰 1 处，静态钉写死）
+    #[test]
+    fn pill_hook_wiring() {
+        let mut g = comm_game();
+        clamp_row(&mut g, 2);
+        g.life.as_mut().unwrap().stones = 999_999;
+        g.buy_pill(0);
+        assert_eq!(g.meta.comm_prog, 1, "buy_pill 成功须挂 COMM_PILL +1");
+        clamp_row(&mut g, 0);
+        g.life.as_mut().unwrap().stones = 999_999;
+        g.buy_pill(0);
+        assert_eq!(g.meta.comm_prog, 0, "无关 kind 行 no-op");
+    }
+
+    // ⑦ COMM_NEME 现实臂↔revenge_win（game.rs:14544，private——经 pub 冒烟口
+    // debug_win_revenge 直驱，勿为测试扩可见面）
+    #[test]
+    fn neme_reality_hook_wiring() {
+        let mut g = comm_game();
+        clamp_row(&mut g, 5);
+        g.meta.neme = Some(Nemes {
+            title: "魔修",
+            name: "试敌".into(),
+            realm: 1,
+        });
+        g.debug_win_revenge();
+        assert_eq!(g.meta.comm_prog, 1, "revenge_win 须挂 COMM_NEME +1");
+        assert_eq!(g.meta.neme_slain, 1, "斩杀计数同段");
+        clamp_row(&mut g, 0); // spawn_next_neme 已自动补宿敌，直接重走
+        g.debug_win_revenge();
+        assert_eq!(g.meta.comm_prog, 0, "无关 kind 行 no-op");
+    }
+
+    // ⑤ COMM_BREAK↔break_ok_settle（抽取助手=跨境 ok 臂结算段；同境进层不计
+    // 由静态钉+调用点行序写死）
+    #[test]
+    fn break_hook_wiring() {
+        let mut g = comm_game();
+        clamp_row(&mut g, 6);
+        g.break_ok_settle(3, false, None);
+        assert_eq!(
+            g.meta.comm_prog, 1,
+            "跨境 ok 臂结算须挂 COMM_BREAK +1"
+        );
+        assert_eq!(g.meta.fame, 2, "声望 drift 挂点③ 同段");
+        assert!(g.banner.is_some(), "横幅伴生演出随段");
+        clamp_row(&mut g, 0);
+        g.break_ok_settle(3, false, None);
+        assert_eq!(g.meta.comm_prog, 0, "无关 kind 行 no-op");
+    }
+
+    // ④ COMM_NEME 模拟臂↔sim_neme_win_settle（抽取助手=special67 胜臂结算段；
+    // 「斩除宿敌」双臂均计=data.rs 头注写死语义）
+    #[test]
+    fn neme_sim_hook_wiring() {
+        let mut g = comm_game_sim();
+        clamp_row(&mut g, 5);
+        g.sim_neme_win_settle(Nemes {
+            title: "魔修",
+            name: "试敌".into(),
+            realm: 1,
+        });
+        assert_eq!(g.meta.comm_prog, 1, "模拟反杀臂须挂 COMM_NEME +1");
+        assert_eq!(g.meta.neme_slain, 1);
+        clamp_row(&mut g, 0);
+        g.sim_neme_win_settle(Nemes {
+            title: "魔修",
+            name: "试敌".into(),
+            realm: 1,
+        });
+        assert_eq!(g.meta.comm_prog, 0, "无关 kind 行 no-op");
+    }
+
+    // 全挂点静态防漂移钉（照 v11641_zoom_anim_tests 读仓先例）：挂点总数恰 8 +
+    // 逐 kind 计数（NEME=2 双臂均计；PILL/BREAK/EXP 唯一=服丹不计·同境不计·战获
+    // 单口语义写死）+ 抽取助手唯一调用点行序（跨境 1566→settle→1567；special67
+    // take→settle→1524）+ 1564/1566/1786/1522/1523 回归句在位（抽取逐行平移）。
+    // 计数扫描走生产区提取（照 font_cover_scan v1.16.38 修正款跳过规则：行首
+    // #[cfg(test)] 起至行首顶格 } 止——全部 cfg(test) 均为 mod/fn 统一形态），
+    // 本钉自身字面量不入扫描面
+    #[test]
+    fn comm_hooks_static_pins() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let game_src = std::fs::read_to_string(
+            std::path::Path::new(root).join("src").join("game.rs"),
+        )
+        .expect("读 src/game.rs");
+        let world_src = std::fs::read_to_string(
+            std::path::Path::new(root).join("src").join("world.rs"),
+        )
+        .expect("读 src/world.rs");
+        let npc_src = std::fs::read_to_string(
+            std::path::Path::new(root).join("src").join("npc.rs"),
+        )
+        .expect("读 src/npc.rs");
+        let prod = |src: &str| -> String {
+            let mut out = String::new();
+            let mut skip = false;
+            for line in src.lines() {
+                if line.starts_with("#[cfg(test)]") {
+                    skip = true;
+                    continue;
+                }
+                if skip {
+                    if line == "}" {
+                        skip = false;
+                    }
+                    continue;
+                }
+                out.push_str(line);
+                out.push('\n');
+            }
+            out
+        };
+        let game_p = prod(&game_src);
+        let all = format!("{}{}{}", game_p, prod(&world_src), prod(&npc_src));
+        let count = |hay: &str, needle: &str| hay.matches(needle).count();
+        assert_eq!(
+            count(&all, "comm_bump(crate::data::"),
+            8,
+            "委托挂点总数恰 8——增删挂点须同批更新本钉与 data.rs 头注"
+        );
+        let kinds: [(&str, usize); 7] = [
+            ("comm_bump(crate::data::COMM_QUEST)", 1),
+            ("comm_bump(crate::data::COMM_PILL)", 1),
+            ("comm_bump(crate::data::COMM_EXP)", 1),
+            ("comm_bump(crate::data::COMM_DONGFU)", 1),
+            ("comm_bump(crate::data::COMM_NEME)", 2),
+            ("comm_bump(crate::data::COMM_BREAK)", 1),
+            ("comm_bump(crate::data::COMM_GIFT)", 1),
+        ];
+        for (needle, n) in kinds {
+            assert_eq!(count(&all, needle), n, "{} 计数须恰 {}", needle, n);
+        }
+        // 行序钉锚行全在生产区（首现即生产位——test 区在后不干扰 position）
+        let lines: Vec<&str> = game_src.lines().collect();
+        let find = |needle: &str| -> usize {
+            lines
+                .iter()
+                .position(|l| l.contains(needle))
+                .unwrap_or_else(|| panic!("锚行缺失：{}", needle))
+        };
+        let l1566 = find("evf(1566");
+        let l1567 = find("evf(1567");
+        let l_settle = find("self.break_ok_settle(");
+        assert!(
+            l_settle > l1566 && l_settle < l1567,
+            "break_ok_settle 唯一调用点须在跨境 ok 臂内（1566..1567 句之间）"
+        );
+        let l1564 = find("evf(1564");
+        assert!(
+            l1564 < l1566,
+            "同境臂 1564 句须先于跨境 1566 句（act_break 分支序，其间无 settle=同境不计）"
+        );
+        let l_take = find("self.meta.neme.take().unwrap_or(crate::game::Nemes");
+        let l1524 = find("evf(1524");
+        let l_sim = find("self.sim_neme_win_settle(");
+        assert!(
+            l_sim > l_take && l_sim < l1524,
+            "sim_neme_win_settle 唯一调用点须在 special67 胜臂内（take 兜底之后、败句 1524 之前）"
+        );
+        for needle in ["evf(1564", "evf(1566", "evtx(1786", "evf(1522", "evf(1523"] {
+            assert!(
+                count(&game_p, needle) >= 1,
+                "回归句 {} 缺失——抽取平移不得丢句",
+                needle
+            );
+        }
+        // COMM_EXP 单口：bump 在 push_loot 体内（战获单口全 loot 臂覆盖）
+        let wlines: Vec<&str> = world_src.lines().collect();
+        let wfind = |needle: &str| -> usize {
+            wlines
+                .iter()
+                .position(|l| l.contains(needle))
+                .unwrap_or_else(|| panic!("world 锚行缺失：{}", needle))
+        };
+        let lp = wfind("fn push_loot");
+        let le = wfind("COMM_EXP");
+        let lx = wfind("pub fn exp_p");
+        assert!(
+            le > lp && le < lx,
+            "COMM_EXP bump 须在 push_loot 体内（挪进 exp_choose 具体臂即引入漏计）"
         );
     }
 }

@@ -707,6 +707,12 @@ async fn main() {
         if g.weather_anim > 0.0 {
             g.weather_anim = (g.weather_anim - dt).max(0.0);
         }
+        // 剧情演出包⑬ 鉴赏覆层入画计时递减（会话态，draw_zoom_overlay 相位反推
+        // 消费），照 weather_anim 主循环先例——覆层为模态独占屏（下层不绘），0.22s
+        // 一次性自灭，开启期任意点按即关（命中所见，无同帧竞争）
+        if g.zoom_anim > 0.0 {
+            g.zoom_anim = (g.zoom_anim - dt).max(0.0);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if debug {
             autopilot(&mut g, frame, &mut shots);
@@ -727,12 +733,12 @@ async fn main() {
 // 桌面侧代码零改动，冒烟链照旧。
 #[cfg(not(target_arch = "wasm32"))]
 fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
-    if frame % 120 == 30 && *shots < 67 {
+    if frame % 120 == 30 && *shots < 71 {
         let img = get_screen_data();
         let path = format!("shots/shot_{:03}.png", *shots);
         img.export_png(&path);
         *shots += 1;
-        if *shots >= 67 {
+        if *shots >= 71 {
             // v1.10.2：落盘去抖后 sync_save 只置脏，退出前必须显式 flush
             g.save_flush();
             std::process::exit(0);
@@ -995,6 +1001,58 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
                 }
                 _ => {}
             }
+        }
+        return;
+    }
+    // v1.16.41 演出包⑬⑭扩镜（67..69 置场，对应截图 067..069；勘察风险 8 目检锚：
+    // 鉴赏覆层入画动画 + 横幅落定震颤）。⑬两帧错开截图帧（截图在 %120==30）：
+    // 067 注入于 %120==24（截图前 6 帧≈0.1s → anim≈0.12，p≈0.45 入画中期——大图
+    // 半透+暗幕减淡+沉降+文字未满 α）；068 注入于 %120==0（截图前 30 帧≈0.5s >
+    // 0.22s 自灭 → p=1.0 稳态帧，与旧实现逐像素一致口径的实机取证）。069 横幅注入
+    // 于 %120==117（截图前 33 帧≈0.55s → banner 龄 0.55s：k≈0.229 落定震颤活跃域
+    // 中段、pop 已收敛 a=1；±1.2px 位移由 banner_sweep_tests 钉测保证，截图证渲染
+    // 无扰）。人物注入照 shot_030 范式（正式玩法不由此入账）
+    if *shots >= 67 && *shots <= 70 {
+        if *shots == 67 && frame % 120 == 24 {
+            g.scene = Scene::Reality;
+            g.panel = 5;
+            g.char_tab = 3;
+            let z = crate::game::ZoomArt::Npc(0);
+            crate::charpanel::prewarm_zoom_text(g, &z);
+            g.zoom_art = Some(z);
+            g.zoom_anim = 0.22;
+        }
+        if *shots == 68 && frame % 120 == 0 {
+            g.scene = Scene::Reality;
+            g.panel = 5;
+            g.char_tab = 3;
+            let z = crate::game::ZoomArt::Npc(0);
+            crate::charpanel::prewarm_zoom_text(g, &z);
+            g.zoom_art = Some(z);
+            g.zoom_anim = 0.22;
+        }
+        if *shots == 69 && frame % 120 == 117 {
+            g.scene = Scene::Reality;
+            g.zoom_art = None;
+            g.zoom_anim = 0.0;
+            g.show_banner(
+                format!("突破 · {}境", crate::data::REALMS[2].name),
+                crate::game::C_GOLD,
+            );
+        }
+        // v1.16.42 勘察二主选 A 扩镜（070 门中差事上品档）：指引面板第三签+钳表行 0
+        //+done=4（comm_premium 节律第 5 条=上品）——徽标「上品 · 报酬翻倍」金标+进度
+        // 行同帧入镜（照 24..32 面板巡检注入范式，正式玩法不由此入账）
+        if *shots == 70 && frame % 120 == 0 {
+            g.scene = Scene::Reality;
+            g.zoom_art = None;
+            g.zoom_anim = 0.0;
+            g.panel = 6;
+            g.guide_tab = 2;
+            g.meta.comm_sel = 0;
+            g.meta.comm_prog = 1; // 未达标态：进度行 1/2 入镜
+            g.meta.comm_done = 4; // 上品档：徽标入镜
+            crate::draw::prewarm_guide_panel(g);
         }
         return;
     }
