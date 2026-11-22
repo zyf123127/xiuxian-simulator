@@ -522,22 +522,60 @@ pub fn draw_banner(g: &Game) {
         // 剧情演出包⑭ 落定震颤：描边 4 向与主字同加 banner_tremor_dx（活跃域
         // k∈[0.10,0.40] 外恒 0=x 恒等旧实现；包络函数见上方批注）
         let tdx = banner_tremor_dx(k, *t);
-        for (dx, dy) in [(-2.0, 0.0), (2.0, 0.0), (0.0, -2.0), (0.0, 2.0)] {
-            txt_c(
-                text,
-                V_W * 0.5 + dx + tdx,
-                250.0 + dy,
-                size,
-                Color::new(0.05, 0.02, 0.1, 0.9 * a),
-            );
+        if k < SPREAD_END {
+            // 剧情演出包⑯ 逐字路径：字距 0.88×→1.0× 平方缓动展开（banner_spread）。
+            // 每字 x=整体左缘+前缀 measure+idx×extra（前缀复刻=macroquad draw_text_ex
+            // 内部纯 advance 累计同式——kern 恒 0 见 banner_spread 常量区批注；每字
+            // 再经 txt floor，与整串「起点 floor+内部浮点累计」口径差 <1px，切换帧
+            // k=SPREAD_END（spread 已收敛 1.0、extra 恰 0）≤1px 跳变备案可接受：
+            // 2.4s 一次性演出、α 满格瞬间）。⑭ 震颤 tdx 加在整体左缘（照 :528 旧式
+            // 与 dx 同级进锚点），描边 4 向与主字全程同加，相对几何不变。两段循环
+            // 与旧实现层序同构（先全部描边、后全部主字——主字恒盖描边之上，相邻字
+            // 覆盖语义零变化）；encode_utf8 栈缓冲零堆分配、chars() 迭代零分配，
+            // x 表栈数组一次计算（描边 4 向与主字共用，measure 调用 5n→n 次）。
+            // n>SPREAD_CHARS_CAP 走下方 else 旧整串路径（防御臂永不触发——文案
+            // 长度上界由 banner_charset_kerning_zero 一并钉住）。
+            let n = text.chars().count();
+            if n <= SPREAD_CHARS_CAP {
+                let extra = if n > 1 {
+                    w * (banner_spread(k) - 1.0) / (n - 1) as f32
+                } else {
+                    0.0
+                };
+                let lx = V_W * 0.5 + tdx - w * 0.5; // 中心锚定左缘（txt_c 中心锚显式展开）
+                let mut xs = [0.0f32; SPREAD_CHARS_CAP];
+                for (idx, (bi, _)) in text.char_indices().enumerate() {
+                    xs[idx] = lx + measure(&text[..bi], size) + idx as f32 * extra;
+                }
+                for (dx, dy) in [(-2.0, 0.0), (2.0, 0.0), (0.0, -2.0), (0.0, 2.0)] {
+                    for (idx, (_, ch)) in text.char_indices().enumerate() {
+                        let mut buf = [0u8; 4];
+                        txt(
+                            ch.encode_utf8(&mut buf),
+                            xs[idx] + dx,
+                            250.0 + dy,
+                            size,
+                            Color::new(0.05, 0.02, 0.1, 0.9 * a),
+                        );
+                    }
+                }
+                for (idx, (_, ch)) in text.char_indices().enumerate() {
+                    let mut buf = [0u8; 4];
+                    txt(
+                        ch.encode_utf8(&mut buf),
+                        xs[idx],
+                        250.0,
+                        size,
+                        Color::new(c.r, c.g, c.b, a),
+                    );
+                }
+            } else {
+                self_draw_banner_text(text, tdx, size, a, *c);
+            }
+        } else {
+            // 旧整串路径（k>=SPREAD_END 稳态）——逐字节原样未动，稳态逐像素红线锚
+            self_draw_banner_text(text, tdx, size, a, *c);
         }
-        txt_c(
-            text,
-            V_W * 0.5 + tdx,
-            250.0,
-            size,
-            Color::new(c.r, c.g, c.b, a),
-        );
         // 两侧装饰线（v1.8.0 A7：端点随 bx 收拢，不再横穿左栏）
         let ly = 250.0 + size as f32 * 0.5;
         let lw = (bw - w) * 0.5 - 20.0;
@@ -662,6 +700,68 @@ fn banner_tremor_dx(k: f32, t: f32) -> f32 {
 /// 震颤幅度（px）：包络峰值处最大水平位移（cfg(test) 钉测消费）
 const TREMOR_AMP: f32 = 1.2;
 
+// 剧情演出包⑯ 横幅主字字距展开（照 zoom_overlay_p 早退恒等先例）：入场淡入窗
+// k∈[0,SPREAD_END] 内主字/描边逐字绘制、字距自 0.88× 平方缓动展开至 1.0×——横幅
+// 大字「聚拢入画再展开落定」的力度感；k>=SPREAD_END 走旧整串绘制路径（代码分支
+// 恒等——比参数收敛更强的稳态保证，k>=END 后与旧实现逐像素一致）。稳态自证照
+// ⑪⑭同款：banner 2.4s 自灭，draw_banner 段在 if-let 之内——无 banner 帧（稳态）
+// 不落任何像素；动画窗内 α=k/0.12<1 且字距展开中，属演出形态。
+// 红线一（v1.9.25 字号档位 :480-484）：仅动 x 位置，size 全程取同一档位——逐字
+// 绘制的 (字符,字号) 缓存 key 与整串一致，show_banner 预热（game.rs:2158 弹出帧
+// 预热 {54,60,66,72} 全档）已覆盖，零新字形零图集重传。
+// 布局复刻前提（kerning 口径）：macroquad draw_text_ex 内部布局=advance 累计+
+// kern 偏移（vendor/macroquad/src/text.rs:434 total_width 累计含 kerning_offset），
+// 而 measure_text=纯 advance 累计（:206）——两者一致当且仅当 kern 恒 0。本工程
+// 字体 assets/font.ttf 无 kern 表（fonttools 实测表列无 kern），fontdue 仅解析
+// kern 表不读 GPOS（fontdue-0.9.4 src/table/ 唯有 kern.rs）→ horizontal_kern
+// map 恒 None → draw_text_ex 内 :384-386 unwrap_or(0.0) → kern 偏移恒 0——前缀
+// measure 与整串内部累计逐位同式（同字体同字号同 advance 同序累计）。钉测
+// banner_charset_kerning_zero 防字体重生成漂移：若 make_font.py 未来产出带 kern
+// 表的字体且含非零对，钉测红提醒本假设失效须重评（备选金尘粒子方案留勘察档）。
+/// 字距展开窗终点（k 阈）：与 α 淡入窗 0.12（draw_banner :473 字面量）同窗——
+/// α 满格与字距展开完成同刻切回整串路径（切换帧 spread 恒 1.0、extra 恒 0）。
+const SPREAD_END: f32 = 0.12;
+/// 字距初始收窄量（×(1−k/SPREAD_END)² 平方缓动）：k=0 时字距系数恰 0.88。
+const SPREAD_SHRINK: f32 = 0.12;
+
+/// 字距系数：k>=SPREAD_END 恒返 1.0（早退恒等路径，整串分支判据）；窗内
+/// 1.0−SPREAD_SHRINK×(1−k/SPREAD_END)²（k=0 恰 0.88 聚拢、窗内单调升、收敛 1.0）。
+#[inline]
+fn banner_spread(k: f32) -> f32 {
+    if k >= SPREAD_END {
+        return 1.0;
+    }
+    1.0 - SPREAD_SHRINK * (1.0 - k / SPREAD_END) * (1.0 - k / SPREAD_END)
+}
+
+/// 逐字路径 x 表栈数组容量（字符数上界）：横幅全部触发口文案实测最长 13 字符
+///（「山 河 换 幕 · X」X=五域域名 ≤4——上界由 banner_charset_kerning_zero 运行时
+/// 遍历 REALMS/MAP_THEMES/ENDINGS/CHAPTERS+固定短语逐一断言 ≤ 此值，表扩容文案
+/// 变长时钉测红提醒调容量，防御臂永不触发）。
+const SPREAD_CHARS_CAP: usize = 16;
+
+/// 旧整串主字绘制（描边 4 向+主字，⑯ 前唯一路径）——draw_banner 双路径共用抽体：
+/// 稳态分支（k>=SPREAD_END）与逐字防御臂（n>SPREAD_CHARS_CAP，永不触发）同走，
+/// 五处 txt_c 逐字节未动——稳态逐像素红线锚。
+fn self_draw_banner_text(text: &str, tdx: f32, size: u16, a: f32, c: Color) {
+    for (dx, dy) in [(-2.0, 0.0), (2.0, 0.0), (0.0, -2.0), (0.0, 2.0)] {
+        txt_c(
+            text,
+            V_W * 0.5 + dx + tdx,
+            250.0 + dy,
+            size,
+            Color::new(0.05, 0.02, 0.1, 0.9 * a),
+        );
+    }
+    txt_c(
+        text,
+        V_W * 0.5 + tdx,
+        250.0,
+        size,
+        Color::new(c.r, c.g, c.b, a),
+    );
+}
+
 // 剧情演出包⑫ 包络纯函数（cfg(test) 钉测消费，照 menu_danger_btn_hit 先例）：
 // anim 剩余秒 0.8→0（k=anim/0.8 随时间 1→0），前半程渐显后半程渐隐 env∈[0,1]，
 // 合成 α=WEATHER_TINT 表值/255×env；≤0 表示不画。
@@ -721,7 +821,10 @@ mod weather_veil_tests {
 // 本模组钉动画期常量口径。
 #[cfg(test)]
 mod banner_sweep_tests {
-    use super::{banner_sweep_phase, banner_tremor_dx, SWEEP_CORE_A, SWEEP_HALO_A, TREMOR_AMP};
+    use super::{
+        banner_spread, banner_sweep_phase, banner_tremor_dx, SPREAD_CHARS_CAP, SPREAD_END,
+        SPREAD_SHRINK, SWEEP_CORE_A, SWEEP_HALO_A, TREMOR_AMP,
+    };
 
     // 相位端点与值域：k=0 起扫左缘；k∈[0,1] 全域相位 [0,1)
     #[test]
@@ -844,6 +947,185 @@ mod banner_sweep_tests {
                 );
             }
         }
+    }
+
+    // 剧情演出包⑯ 字距展开钉测：k=0 恰 0.88 聚拢 / k>=SPREAD_END 恒 1.0（早退恒等
+    // 路径，含端点 0.12——切换帧两侧同值）/窗内严格单调升 / 常量口径（SPREAD_END
+    // 与 α 淡入窗 0.12 同窗、SPREAD_SHRINK 同值 0.12）。
+    #[test]
+    fn banner_spread_envelope() {
+        assert!(
+            (banner_spread(0.0) - 0.88).abs() < 1e-6,
+            "k=0 应恰 0.88 聚拢，实得 {}",
+            banner_spread(0.0)
+        );
+        // 早退恒等臂：k=SPREAD_END 端点与窗后全域恒 1.0（整串分支判据同值）
+        for k in [SPREAD_END, 0.5f32, 1.0] {
+            assert_eq!(
+                banner_spread(k),
+                1.0,
+                "k={} 应走早退恒等路径（整串分支判据）",
+                k
+            );
+        }
+        // 窗内严格单调升（0.12 等 13 步）：0.88 → 1.0
+        let mut prev = 0.0f32;
+        for step in 0..=12usize {
+            let k = SPREAD_END * step as f32 / 12.0;
+            let s = banner_spread(k);
+            assert!(s > prev, "窗内应严格单调升：step={} s={} prev={}", step, s, prev);
+            prev = s;
+        }
+        assert!((prev - 1.0).abs() < 1e-6, "窗尾应收敛 1.0，实得 {}", prev);
+        // 常量口径：SPREAD_END 与 α 淡入窗同窗（draw.rs draw_banner :473 字面量 0.12）
+        assert_eq!(SPREAD_END, 0.12);
+        assert_eq!(SPREAD_SHRINK, 0.12);
+    }
+
+    // 剧情演出包⑯ 布局复刻前提钉（两钉一体）：
+    // ① kerning 全零——macroquad draw_text_ex 内部布局=advance 累计+kern 偏移
+    //   （vendor/macroquad/src/text.rs:434），measure_text=纯 advance（:206），逐字
+    //   前缀 measure 复刻成立当且仅当 kern 恒 0。fontdue 仅解析 kern 表不读 GPOS
+    //   （fontdue-0.9.4 src/table/ 唯有 kern.rs），本字体 assets/font.ttf 无 kern 表
+    //   （fonttools 实测）——此处用同一 fontdue（Cargo.toml dev-dep 与 vendor
+    //   macroquad 同版 0.9）解析同一 ttf，对横幅全部触发口文案字符集两两查询恒 0。
+    //   若未来 make_font.py 产出带 kern 表字体且含非零对，本钉测红提醒布局假设
+    //   失效须重评（备选金尘粒子方案留勘察档）。
+    // ② 文案长度上界——横幅全部触发口动态文案最长 ≤ SPREAD_CHARS_CAP（逐字路径
+    //   x 表栈数组容量；超出走防御臂整串路径，钉测在此保证防御臂永不触发）。
+    #[test]
+    fn banner_charset_kerning_zero() {
+        let font = fontdue::Font::from_bytes(
+            include_bytes!("../assets/font.ttf").as_ref(),
+            fontdue::FontSettings::default(),
+        )
+        .expect("字体解析失败");
+        // 横幅全部触发口动态文案源（照 draw_banner 10+ 口并集）+ 固定短语
+        let mut src = String::from("飞 升 成 仙现 实 飞 升血 仇 得 报宿敌授首！突破 · 境结 局 · 《》");
+        for r in crate::data::REALMS.iter() {
+            src.push_str(r.name); // 「突破 · {name}境」
+        }
+        for t in crate::data::MAP_THEMES.iter() {
+            src.push_str(t.name()); // 「山 河 换 幕 · {name}」
+        }
+        for e in crate::game::ENDINGS.iter() {
+            src.push_str(e.name()); // 「结 局 · 《{name}》」
+        }
+        for c in crate::data::CHAPTERS.iter() {
+            src.push_str(c.num());
+            src.push_str(c.name()); // 「{num} · {name}」
+        }
+        // ② 文案长度上界钉：全部触发口最长文案（含标点/空格）≤ SPREAD_CHARS_CAP
+        let mut max_len = 0usize;
+        for r in crate::data::REALMS.iter() {
+            max_len = max_len.max(format!("突破 · {}境", r.name).chars().count());
+        }
+        for t in crate::data::MAP_THEMES.iter() {
+            max_len = max_len.max(format!("山 河 换 幕 · {}", t.name()).chars().count());
+        }
+        for e in crate::game::ENDINGS.iter() {
+            max_len = max_len.max(format!("结 局 · 《{}》", e.name()).chars().count());
+        }
+        for c in crate::data::CHAPTERS.iter() {
+            max_len = max_len.max(format!("{} · {}", c.num(), c.name()).chars().count());
+        }
+        max_len = max_len.max("飞 升 成 仙".chars().count());
+        max_len = max_len.max("现 实 飞 升".chars().count());
+        max_len = max_len.max("血 仇 得 报".chars().count());
+        max_len = max_len.max("宿敌授首！".chars().count());
+        assert!(
+            max_len <= SPREAD_CHARS_CAP,
+            "横幅文案最长 {} 字符超 SPREAD_CHARS_CAP={}——防御臂将触发，须调容量",
+            max_len,
+            SPREAD_CHARS_CAP
+        );
+        // ① 字符集两两 kern 查询恒 0（None=无 kern 项 / Some(0)=零值项——对布局
+        // 等价；非零值即红）。集合去重控规模（≈150 字 → <20000 查询，瞬时）
+        let uniq: std::collections::BTreeSet<char> = src.chars().collect();
+        let cs: Vec<char> = uniq.into_iter().collect();
+        for (a_idx, a) in cs.iter().enumerate() {
+            for b in cs.iter() {
+                // 单向 a→b 全查（含同字对）；对称对由 b→a 轮次自然覆盖
+                if a == b {
+                    continue;
+                }
+                let k = font.horizontal_kern(*a, *b, 72.0).unwrap_or(0.0);
+                assert_eq!(
+                    k, 0.0,
+                    "kern 非零：{:?}→{:?} = {}——⑯ 前缀 measure 布局假设失效",
+                    a, b, k
+                );
+            }
+        }
+    }
+
+    // 剧情演出包⑯ 双路径结构静态钉（施工单四补面，照 game.rs comm_hooks_static_pins
+    // fs 读源+计数/锚行款）：draw_banner 双路径判据/旧整串路径抽体/前缀 measure
+    // 复刻消费点/震颤 tdx 加性关系/零分配面/α 淡入窗同窗六面锚——结构性防漂移：
+    // ①双路径判据 `if k < SPREAD_END {` 恰 1（删分支即稳态走逐字=非恒等）；
+    // ②self_draw_banner_text 调用恰 2（防御臂+稳态臂共用抽体——抽体即旧实现逐字
+    // 节，少一处=某臂改写；多于 2=新增臂未经稳态评估）；③前缀 measure 复刻消费点
+    // 恰 1；④震颤 tdx 加在整体左缘（⑭加性关系保持）；⑤encode_utf8 栈缓冲恰 2
+    //（描边/主字两循环——新增堆分配即红）；⑥α 淡入窗字面量 `if k < 0.12 {` 恰 1
+    // 在位——SPREAD_END 常量钉 0.12 与此同窗（banner_spread_envelope 已钉常量值），
+    // 改 α 窗不同步 SPREAD_END 即切换帧不在 α 满格点。
+    #[test]
+    fn spread_dual_path_static_pins() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(
+            std::path::Path::new(root).join("src").join("draw.rs"),
+        )
+        .expect("读 src/draw.rs");
+        // prod 剔 cfg(test) 区（照 comm_hooks_static_pins 款——test 区含同款字符串
+        // 会污染计数）
+        let mut prod = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            prod.push_str(line);
+            prod.push('\n');
+        }
+        let count = |hay: &str, needle: &str| hay.matches(needle).count();
+        assert_eq!(
+            count(&prod, "if k < SPREAD_END {"),
+            1,
+            "⑯ 双路径判据须恰 1（draw_banner 主字段）"
+        );
+        assert_eq!(
+            count(&prod, "self_draw_banner_text(text, tdx, size, a, *c);"),
+            2,
+            "旧整串路径抽体调用须恰 2（逐字防御臂+稳态臂）"
+        );
+        assert_eq!(
+            count(&prod, "lx + measure(&text[..bi], size)"),
+            1,
+            "前缀 measure 复刻消费点须恰 1（x 表一次计算）"
+        );
+        assert_eq!(
+            count(&prod, "V_W * 0.5 + tdx - w * 0.5"),
+            1,
+            "⑭ 震颤 tdx 须加在整体左缘（中心锚定左缘锚行）"
+        );
+        assert_eq!(
+            count(&prod, "ch.encode_utf8(&mut buf),"),
+            2,
+            "encode_utf8 栈缓冲须恰 2（描边/主字两循环——新增堆分配即红）"
+        );
+        assert_eq!(
+            count(&prod, "let a = if k < 0.12 {"),
+            1,
+            "α 淡入窗字面量锚行须在位——与 SPREAD_END=0.12 同窗（切换帧 α 满格点）"
+        );
+        assert_eq!(SPREAD_END, 0.12, "SPREAD_END 常量与 α 窗同值（同窗判据）");
     }
 }
 
@@ -3582,6 +3864,9 @@ pub fn prewarm_guide_panel(g: &Game) {
     prewarm_text("进度", &[14]);
     prewarm_text("上品 · 报酬翻倍", &[14]);
     prewarm_text("·上品", &[14]);
+    // 剧情可玩性·委托称号：第三签进度行右挂目标指引串同批预热（复命口
+    // comm_claim 同款；prog_txt n/10 档由 prewarm_chapter_view @14 预热兜底）
+    prewarm_text("差事十全", &[14]);
     prewarm_chapter_view(g);
 }
 
@@ -3779,6 +4064,23 @@ fn draw_comm_view(g: &mut Game) {
             C_CYAN,
         );
     }
+    // 剧情可玩性·委托称号（勘二主选）：进度行右侧同行挂「差事十全」目标指引
+    // ——零版式位移照上品徽标同行右挂先例：进度态左段「进度 x/y」止于 x≈300、
+    // 达标态金句 9 字 @16 止于 x≈314，挂点 x=560 起无碰撞；「差事十全」4 字 @14
+    // ≈62px + prog_txt n/10 ≈45px 至 x≈688，卡内右缘余量足。n/10 走 prog_txt
+    // 静态查表（分母 10 全档 prewarm_chapter_view @14 预热+PANEL_WARM_CHARS×
+    // UI_SIZES 兜底）零 format! 零分配；满十单后恒 10/10 转金——称号页佩戴指路
+    //（授权/佩戴走 set_worn_title 18 臂）。字形双口预热（prewarm_guide_panel/
+    // comm_claim）。
+    let t_earned = g.meta.comm_done >= 10;
+    let t_col = if t_earned { C_GOLD } else { C_DIM };
+    txt("差事十全", 560.0, 320.0, 14, t_col);
+    txt(
+        prog_txt((g.meta.comm_done as u32).min(10), 10),
+        632.0,
+        320.0, 14,
+        t_col,
+    );
     if button(170.0, 360.0, 240.0, 54.0, "交差", None, done) {
         g.comm_claim();
     }

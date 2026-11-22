@@ -733,12 +733,12 @@ async fn main() {
 // 桌面侧代码零改动，冒烟链照旧。
 #[cfg(not(target_arch = "wasm32"))]
 fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
-    if frame % 120 == 30 && *shots < 71 {
+    if frame % 120 == 30 && *shots < 74 {
         let img = get_screen_data();
         let path = format!("shots/shot_{:03}.png", *shots);
         img.export_png(&path);
         *shots += 1;
-        if *shots >= 71 {
+        if *shots >= 74 {
             // v1.10.2：落盘去抖后 sync_save 只置脏，退出前必须显式 flush
             g.save_flush();
             std::process::exit(0);
@@ -1053,6 +1053,52 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
             g.meta.comm_prog = 1; // 未达标态：进度行 1/2 入镜
             g.meta.comm_done = 4; // 上品档：徽标入镜
             crate::draw::prewarm_guide_panel(g);
+        }
+        return;
+    }
+    // 剧情演出包⑯⑮+委托称号目检扩镜（照 027/067/069 注入先例，正式玩法不由此
+    // 入账）：071=横幅逐字窗中段帧（注入 frame%120==26 拍点前 4 帧，k≈0.03 字距
+    // 展开中）；072=鉴赏覆层动画中期帧（注入 %120==29 直写 zoom_anim=0.127，拍帧
+    // p≈0.5 沉降+轻摆峰值域；覆层模态独占早退无残影）；073=成就·称号页
+    // panel=5+char_tab=2+comm_done=10——格 19『差事十全』earned 金边态入镜（右栏
+    // 20 格版式 row6 col1 x=880 y=570 底 630<页脚）。三块包 return 块（照 67..=70
+    // 款）：隔断本函数下方镜头编排的「panel!=0 且 frame%60==0 强关面板」分支——
+    // 073 拍点距注入若 ≥60 帧会被强关（首跑实测踩中改 return 化）；073 注入帧
+    // 同帧清 banner/zoom 残余保称号页纯净入镜。
+    if *shots >= 71 && *shots <= 73 {
+        if *shots == 71 && frame % 120 == 26 {
+            // 清 070 第三签残留（return 化后面板状态跨 shot 延续）——横幅主界面
+            // 纯净入镜（照 069 块 zoom/anim 清场先例）
+            g.rmodal = None;
+            g.scene = Scene::Reality;
+            g.panel = 0;
+            g.submenu = None;
+            g.zoom_art = None;
+            g.zoom_anim = 0.0;
+            g.show_banner(
+                format!("突破 · {}境", crate::data::REALMS[2].name),
+                crate::game::C_GOLD,
+            );
+        }
+        if *shots == 72 && frame % 120 == 29 {
+            g.scene = Scene::Reality;
+            g.panel = 5;
+            g.char_tab = 3;
+            let z = crate::game::ZoomArt::Npc(0);
+            crate::charpanel::prewarm_zoom_text(g, &z);
+            g.zoom_art = Some(z);
+            g.zoom_anim = 0.127;
+        }
+        if *shots == 73 && frame % 120 == 0 {
+            g.rmodal = None;
+            g.scene = Scene::Reality;
+            g.panel = 5;
+            g.char_tab = 2;
+            g.zoom_art = None;
+            g.zoom_anim = 0.0;
+            g.banner = None;
+            g.meta.comm_done = 10;
+            crate::charpanel::prewarm_title_page();
         }
         return;
     }

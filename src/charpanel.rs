@@ -395,6 +395,18 @@ const ZOOM_ANIM_T: f32 = 0.22;
 const ZOOM_SINK: f32 = 4.0;
 /// 名牌/档次/提示文字层滞后秒（照③立绘滞后 0.05s 分层入画先例）
 const ZOOM_TEXT_LAG: f32 = 0.05;
+/// 剧情演出包⑮ 入画轻摆幅度（px）：0.22s 入画窗内立绘大图水平正弦轻摆、随
+/// (1−p)² 平方包络衰减落定——动画期「轻晃落定」的呼吸感；稳态 dx 恰 0 与旧实现
+/// 逐像素一致（zoom_breath_dx 早退恒等路径）。几何守卫：覆层大图手写 contain 上限
+/// dw≤min(550·ar, V_W−120)=1160（draw_zoom_overlay :472），左右缘余量
+/// ≥(1280−1160)/2=60px，1.2px 摆动无越界（V_W=1280 game.rs:19）；摆仅动 x 不动
+/// y——底缘 650+4=654<V_H 既有钉（zoom_constants_and_geometry）原样不动。
+const ZOOM_BREATH_AMP: f32 = 1.2;
+/// 轻摆周期数（0.22s 入画窗内完整周期数）：取 1.5——sin 相位 p·TAU·1.5，p=1 时恰
+/// sin(1.5·TAU)=0（稳态归零无残偏）、p=0 时 sin(0)=0（开启帧无跳入），中段 p≈0.5
+/// 相位 sin(1.5π)=−1 峰值域，与 (1−p)² 包络相乘后峰值≈0.63px（非满幅）——摆幅
+/// 随入画进度衰减，落定半周期整无残偏。
+const ZOOM_BREATH_CYC: f32 = 1.5;
 
 /// 覆层入场进度 p∈[0,1]：anim 剩余秒 0.22→0 → p 0→1（0=开启帧全暗无图、1=稳态），
 /// 相位反推照 draw.rs modal_anim 先例（k=1−t/T 同构）。稳态恒等路径：anim<=0 直返
@@ -420,6 +432,23 @@ fn zoom_overlay_text_a(anim: f32) -> f32 {
     (((ZOOM_ANIM_T - anim) - ZOOM_TEXT_LAG) / (ZOOM_ANIM_T - ZOOM_TEXT_LAG)).clamp(0.0, 1.0)
 }
 
+/// 剧情演出包⑮ 立绘入画轻摆 dx（照 zoom_overlay_p 早退恒等路径纪律）：anim<=0
+/// 直返 0.0——稳态帧 x 恒等旧实现（早退恒等路径，非 clamp 浮点巧合）；动画期
+/// dx=AMP×(1−p)²×sin(p·TAU·CYC)：开启帧 p=0 恰 0（sin 0）、稳态 p=1 恰 0（1.5
+/// 周期整相位归零），平方包络随入画进度衰减、中段起振（峰值≈0.63px）。零新状态
+/// （复用 zoom_anim 相位，不新增计时器）、零分配、零新字形。
+#[inline]
+fn zoom_breath_dx(anim: f32) -> f32 {
+    if anim <= 0.0 {
+        return 0.0;
+    }
+    let p = zoom_overlay_p(anim);
+    ZOOM_BREATH_AMP
+        * (1.0 - p)
+        * (1.0 - p)
+        * (p * std::f32::consts::TAU * ZOOM_BREATH_CYC).sin()
+}
+
 // 鉴赏覆层（模态独占输入，照 rmodal/ending_show 早退先例）：全屏暗幕 + 立绘 contain
 // 大图（高 550 收进、底边 y=650 居中，较卡内立绘放大约 1.8 倍）+ 名牌（名字 24 /
 // 档次 16 居中）+ 底缘提示。任意点按关闭；开启帧由入口 prewarm_zoom_text 灌字形，
@@ -427,7 +456,9 @@ fn zoom_overlay_text_a(anim: f32) -> f32 {
 // 剧情演出包⑬ 入画动效（照①模板+③分层+⑧沉降，zoom_anim 0.22→0 四开启口置值、
 // 主循环递减）：相位反推 p（0=开启帧→1=稳态，zoom_overlay_p），立绘 y 沉降
 // ZOOM_SINK×(1−p)²（⑧ art_sink 同款）、tint α=p、暗幕 α=244×p、文字层滞后 0.05s
-// 淡入（zoom_overlay_text_a）。稳态自证：zoom_anim==0（会话态默认/旧档载入/0.22s
+// 淡入（zoom_overlay_text_a）；演出包⑮ 加入画轻摆——x 加
+// zoom_breath_dx（AMP 1.2px×(1−p)²×sin(p·TAU·1.5)，仅动画窗有值，稳态 dx 恰 0）。
+// 稳态自证：zoom_anim==0（会话态默认/旧档载入/0.22s
 // 走完/覆层已关）→ p 恰 1.0、ta 恰 1.0（纯函数早退恒等路径，非 clamp 浮点巧合），
 // 全部消费量与旧实现逐像素一致。几何红线：覆层大图维持本函数手写 contain，勿改走
 // npc_portrait_box_a——其内嵌 npc_clip_band（charpanel.rs:229-235 域 116..616）会把
@@ -473,9 +504,14 @@ pub fn draw_zoom_overlay(g: &mut Game) {
     let dh = dw / ar;
     // 沉降仅加在 y（⑧ 同款平方缓动）；x/尺寸/源矩形原样，稳态 sink 恰 0
     let sink = ZOOM_SINK * (1.0 - p) * (1.0 - p);
+    // 剧情演出包⑮ 入画轻摆：仅动 x 加 zoom_breath_dx（anim<=0 早退恒 0=x 恒等旧
+    // 实现；y 沉降/尺寸/源矩形/tint 原样，照⑭「仅动 x 位置」语言——⑬沉降通道与
+    // ⑮摆动通道同函数加性叠加，无绘制序变化）。几何守卫：左右缘余量 ≥60px≫1.2px
+    // 摆幅（ZOOM_BREATH_AMP 批注），动画期无越界。动画期照常可点：尾部点按关闭
+    // 判定未动，命中=所见（1.2px 偏移不影响点按域语义）
     draw_texture_ex(
         &t,
-        (V_W - dw) * 0.5,
+        (V_W - dw) * 0.5 + zoom_breath_dx(g.zoom_anim),
         650.0 - dh + sink,
         Color::new(1.0, 1.0, 1.0, p), // 稳态 p=1 → {1,1,1,1} 与 WHITE 逐分量恒等
         DrawTextureParams {
@@ -2135,6 +2171,9 @@ fn draw_relic_page(g: &Game) -> Option<PanelAct> {
 //   格 16   → 值 15（弑神者，earned = neme_slain >= 3）
 //   格 17   → 值 16（v1.16.10 章节称号·雨夜执印者，earned = chap_done bit0 即首章已了）
 //   格 18   → 值 17（v1.16.15 全卷称号·执笔人，earned = endings_seen == 0b1111 四结局全览）
+//   格 19   → 值 18（剧情可玩性·委托称号·差事十全，earned = comm_done >= 10 累计复命十单）
+//     几何自证：格 19 落 row6 col1（x=880 y=570 底 630<页脚 636，3×7=21 容量
+//     尚余 1 格——后续再加须照 v1.16.15 版式手术重做，本轮勿一次加满）
 fn title_cell(c: usize) -> (&'static str, i32, bool) {
     let g_name = |v: usize| realm_title(v);
     match c {
@@ -2142,19 +2181,21 @@ fn title_cell(c: usize) -> (&'static str, i32, bool) {
         16 => ("弑神者", 15, false),
         17 => ("雨夜执印者", 16, false),
         18 => ("执笔人", 17, false),
+        19 => ("差事十全", 18, false),
         c => (g_name(c - 1), (c - 1) as i32, false),
     }
 }
 
 // v1.16.15 成就·称号页全量字形预热单口（照 prewarm_book_record 单口语言）：
-// 首开帧（Tab(2) 执行帧）一次灌齐 19 格名+页头/页签静态串——格 18『执笔人』为
-// 新静态名，未达成档（endings_seen 未满最常见态）也画灰行，漏灌则首开帧冷
-// 栅格化触发 2048² 图集整图重传。动态值（境界称号名/页脚提示）源自静态表
-// 且经人物页/结算屏常显已热，不入本口
+// 首开帧（Tab(2) 执行帧）一次灌齐全格名+页头/页签静态串——格 18『执笔人』/
+// 格 19『差事十全』（剧情可玩性·委托称号）为新静态名，未达成档（endings_seen
+// 未满/comm_done 不足十单最常见态）也画灰行，漏灌则首开帧冷栅格化触发 2048²
+// 图集整图重传。动态值（境界称号名/页脚提示）源自静态表且经人物页/结算屏
+// 常显已热，不入本口
 pub fn prewarm_title_page() {
     prewarm_text("成就", &[18]);
     prewarm_text("称号（点击佩戴）", &[18]);
-    for c in 0..19usize {
+    for c in 0..20usize {
         let (name, _, _) = title_cell(c);
         prewarm_text(name, &[14]);
     }
@@ -2185,21 +2226,24 @@ fn draw_ach_title_page(g: &Game) -> Option<PanelAct> {
         }
     }
 
-    // 右：称号 3 列 × 7 行 19 格（v1.16.15 格 18 执笔人破 18 满格：步进 78→70、
-    // 格高 64→60 三处常量同改——行 6 y=570..630 仍在页脚 y636 之上，行间隙 10px）
+    // 右：称号 3 列 × 7 行 20 格（v1.16.15 格 18 执笔人破 18 满格：步进 78→70、
+    // 格高 64→60 三处常量同改——行 6 y=570..630 仍在页脚 y636 之上，行间隙 10px；
+    // 剧情可玩性·委托称号扩格 19『差事十全』占 row6 col1，21 容量尚余 1 格）
     txt("称号（点击佩戴）", 760.0, 118.0, 18, C_GOLD);
     let worn = g.meta.worn_title;
     let neme_slain = g.meta.neme_slain;
     let best_realm = g.meta.best_realm;
     let chap_done = g.meta.chap_done;
     let endings_seen = g.meta.endings_seen;
-    for c in 0..19usize {
+    let comm_done = g.meta.comm_done;
+    for c in 0..20usize {
         let (name, val, _) = title_cell(c);
         let earned = match c {
             0 => true,
             16 => neme_slain >= 3,
             17 => chap_done & 1 != 0, // v1.16.10 章节称号：首章「雨夜执印」已了
             18 => endings_seen == 0b1111, // v1.16.15 全卷称号：四结局全览
+            19 => comm_done >= 10, // 剧情可玩性·委托称号：累计复命满十单
             _ => best_realm >= (c - 1),
         };
         let col = c % 3;
@@ -2785,6 +2829,9 @@ mod zoom_overlay_tests {
         let w = Color::new(1.0, 1.0, 1.0, zoom_overlay_p(0.0));
         assert_eq!((w.r, w.g, w.b, w.a), (1.0, 1.0, 1.0, 1.0), "tint 稳态=WHITE 逐分量");
         assert_eq!(C_GOLD.a * zoom_overlay_text_a(0.0), C_GOLD.a, "文字基色 α 稳态恒等");
+        // 演出包⑮ 消费侧恒等扩断言：稳态轻摆 dx 恰 0——大图 x=(V_W−dw)*0.5+0
+        // 恒等旧实现（早退恒等路径）
+        assert_eq!(zoom_breath_dx(0.0), 0.0, "⑮ 稳态轻摆 dx 恰 0——x 恒等旧实现");
     }
 
     // 开启帧端点+滞后边界：anim=0.22 → p=0（全暗无图）、ta=0（文字未现）；滞后窗
@@ -2865,5 +2912,104 @@ mod zoom_overlay_tests {
         exec_panel_act(&mut g, PanelAct::Zoom(ZoomArt::Comp(0)));
         assert!(g.zoom_art.is_some());
         assert_eq!(g.zoom_anim, 0.22, "道侣开启口同款置值");
+    }
+
+    // 剧情演出包⑮ 入画轻摆钉测（照 draw.rs tremor_envelope_ends_and_bounds 款）：
+    // 稳态恰 0（早退恒等路径）/开启帧 p=0 恰 0（sin 相位两端归零）/全域 |dx|≤AMP
+    // 有界/中段实际起振（最大 |dx|>AMP/2，理论峰≈0.63px 落 p≈0.23）/常量口径+
+    // 几何守卫（contain 上限下左右缘余量 60px≫摆幅，动画期无越界）。
+    #[test]
+    fn zoom_breath_ends_and_bounds() {
+        // 稳态两臂：会话态默认/0.22s 走完/负值防御——dx 恒 0 恒等旧实现（稳态逐像素）
+        assert_eq!(zoom_breath_dx(0.0), 0.0, "稳态 dx 恰 0（早退恒等路径）");
+        assert_eq!(zoom_breath_dx(-0.1), 0.0, "负值防御臂同恒等");
+        // 开启帧端点：anim=ZOOM_ANIM_T → p=0 → sin(0)=0 恰 0（无跳入）
+        assert_eq!(zoom_breath_dx(ZOOM_ANIM_T), 0.0, "开启帧 p=0 sin(0) 恰 0");
+        // 全域 61 步采样（anim 0.22→0 对应 p=step/60）：|dx|≤1.2 有界；动画窗内
+        // 应实际起振（p≈0.23 包络×相位峰值域，最大 |dx|>AMP/2）
+        let mut max_abs = 0.0f32;
+        for step in 0..=60usize {
+            let anim = ZOOM_ANIM_T * (1.0 - step as f32 / 60.0);
+            let dx = zoom_breath_dx(anim);
+            assert!(
+                dx.abs() <= ZOOM_BREATH_AMP + 1e-6,
+                "p={} dx={} 超幅 {}",
+                step as f32 / 60.0,
+                dx,
+                ZOOM_BREATH_AMP
+            );
+            max_abs = max_abs.max(dx.abs());
+        }
+        assert!(
+            max_abs > ZOOM_BREATH_AMP * 0.5,
+            "动画窗内应实际起振，最大 |dx|={}",
+            max_abs
+        );
+        // 收尾幅度再钉：p≈0.955（anim=0.01）时 sin 相位非整周期（≈sin 0.864π），
+        // 但平方包络 (1−p)²≈0.002 已把摆幅压入亚毫像素——落定前无可见残摆
+        let tail = zoom_breath_dx(0.01).abs();
+        assert!(
+            tail < 0.01,
+            "收尾帧摆幅应被包络压入亚毫像素，实得 {}",
+            tail
+        );
+        // 常量口径 + 几何守卫：摆幅应远小于大图左右缘余量 60px
+        //（contain 上限 dw≤V_W−120 → 余量 (V_W−dw)/2≥60，1.2px 摆动无越界）
+        assert_eq!(ZOOM_BREATH_AMP, 1.2);
+        assert_eq!(ZOOM_BREATH_CYC, 1.5);
+        assert!(ZOOM_BREATH_AMP < 60.0, "摆幅应远小于左右缘余量 60px");
+    }
+
+    // 剧情演出包⑮ 消费点静态钉（施工单四补面，照 game.rs comm_hooks_static_pins
+    // fs 读源+计数款）：draw_zoom_overlay 大图 x 消费点单点锚（移除轻摆即红）+
+    // 纯函数早退恒等路径锚+常量行锚。稳态恒等逐项钉已在 zoom_envelope_steady_
+    // identity（dx 恰 0 消费侧行）与 zoom_breath_ends_and_bounds（包络全域）覆盖；
+    // ⑬款「开启口置值钉」对本包不适用——⑮零新状态零新开启口（复用 zoom_anim
+    // 相位，开启口置值由既有 zoom_open_act_sets_anim 与 v11641 静态钉覆盖）。
+    #[test]
+    fn breath_consumer_static_pin() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(
+            std::path::Path::new(root).join("src").join("charpanel.rs"),
+        )
+        .expect("读 src/charpanel.rs");
+        // prod 剔 cfg(test) 区（照款——本测试自身含同款字符串会污染计数）
+        let mut prod = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            prod.push_str(line);
+            prod.push('\n');
+        }
+        let count = |hay: &str, needle: &str| hay.matches(needle).count();
+        assert_eq!(
+            count(&prod, "(V_W - dw) * 0.5 + zoom_breath_dx(g.zoom_anim),"),
+            1,
+            "⑮ 大图 x 消费点须恰 1（draw_zoom_overlay）——移除轻摆即红"
+        );
+        assert_eq!(
+            count(&prod, "fn zoom_breath_dx(anim: f32) -> f32 {"),
+            1,
+            "轻摆纯函数须恰 1"
+        );
+        assert_eq!(
+            count(&prod, "const ZOOM_BREATH_AMP: f32 = 1.2;"),
+            1,
+            "摆幅常量行须在位"
+        );
+        assert_eq!(
+            count(&prod, "const ZOOM_BREATH_CYC: f32 = 1.5;"),
+            1,
+            "周期常量行须在位"
+        );
     }
 }

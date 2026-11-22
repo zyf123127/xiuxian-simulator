@@ -1,6 +1,6 @@
 [package]
 name = "xiuxian"
-version = "1.16.43"
+version = "1.16.44"
 edition = "2021"
 
 [dependencies]
@@ -36,6 +36,13 @@ macroquad = { version = "0.4", features = ["audio"] }
 # miniz_oxide 0.9.1 解码链。
 [dev-dependencies]
 image = { version = "0.24", default-features = false, features = ["png"] }
+
+# 演出包⑯ 布局复刻前提钉测专用（draw.rs banner_charset_kerning_zero）：版本与
+# vendor/macroquad 内部依赖一致（0.9 → Cargo.lock 已有 0.9.4 同实例）——macroquad
+# draw_text_ex 的 kern 偏移来自 fontdue horizontal_kern（vendor/macroquad/src/
+# text.rs:384-386），本钉测用同一 fontdue 解析同一 assets/font.ttf 复现同一 kern
+# 数据面。仅测试编译，不进 wasm release 产物。
+fontdue = "0.9"
 
 # v1.16.23 减包刀①：vendor png 0.17.16（vendor patch 先例 macroquad/miniquad）。
 # 上游 pin miniz_oxide "0.8"+simd；实际勘察修正：png 0.17.16 源码仅 doc comment

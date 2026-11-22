@@ -71,6 +71,7 @@ COMPANION = {53, 54, 55, 82, 83, 84, 156, 157, 158, 182, 183, 184, 185, 203,
              210, 211, 212, 225, 226, 240, 241, 257, 262, 272, 283, 293, 300,
              321, 327, 339, 344, 351, 357, 359, 362,
              366}  # v1.16.43 单3 +366 共扫叶径（mr3 有伴第 4 条，game.rs:80 同批）
+COMPANION.add(370)  # v1.16.44 +370 同制新历（mr0 有伴第 4 条，game.rs:80 同批）
 mr0_nocomp = sorted([(i, w) for i, (_, w, m, _) in enumerate(ev) if w > 0 and m == 0 and i not in COMPANION], key=lambda t: -t[1])
 top4_nc = sum(w for _, w in mr0_nocomp[:4])
 tot_nc = sum(w for _, w in mr0_nocomp)
