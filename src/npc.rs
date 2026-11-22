@@ -232,7 +232,23 @@ pub fn choose_roption(g: &mut Game, i: usize) {
 
 // 现实侧效果结算（对照模拟侧 apply_eff——全作用于 g.life / g.meta）。
 // 借用纪律：life.as_mut 圈在小作用域，日志在块外。
-fn apply_reff(g: &mut Game, e: &Eff) {
+// v1.16.45：改 pub(crate)——现实邂逅卡 choose_rencounter 亦经本口结算；
+// special==17（同页天成认下臂）前置独占臂调 Game::bond_life_companion 落现实
+// life 三分支（v1.16.45 多道侣——现实侧唯一结缘口），eff.msg 自述行先行出账，
+// 结缘无净变动故不走下方净账/自述通道（early return 照游戏侧惯例）。
+pub(crate) fn apply_reff(g: &mut Game, e: &Eff) {
+    // v1.16.45 special17 结缘臂（前置独占）：掷名照模拟侧 special17 掷名口
+    // gen_range（卡面立绘与掷名无涉照 28 臂注释纪律；缝页缘 feng_* 仅模拟侧，
+    // 现实侧独立掷名不触缝页账）。check_chapters 在 bond 内 first 边沿已调，
+    // 本臂不重复。
+    if e.special == 17 {
+        for m in &e.msg {
+            g.log(m.clone(), crate::game::C_GOLD);
+        }
+        let idx = macroquad::rand::gen_range(0, crate::data::COMPANION_NAMES.len());
+        g.bond_life_companion(idx);
+        return;
+    }
     let mut logs: Vec<(String, macroquad::prelude::Color)> = Vec::new();
     // v1.16.21 抉择后果可见化（现实侧）：净变动差值——块内快照/块尾求差，块外
     // 聚合成行（灵石/道心/气运/寿元此前静默；修为已单独记账、道韵/贡献无 clamp

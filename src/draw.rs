@@ -42,6 +42,17 @@ fn click_debounced(mx: f32, my: f32) -> bool {
     true
 }
 
+// 演出包⑰-2 底栏九钮入画 stagger 相位纯函数（照 weather_veil_alpha 包络先例
+// draw.rs:765 款——draw_reality 底栏与钉测单测共用，e=进行度 T−bar_anim）：
+// ((e−k×0.03)/0.03).clamp(0,1)，9 槽错峰步进 30ms。稳态 e=T=0.27 → 相位=9−k≥1.0
+// clamp 恰 1.0（k=8 时恰 (0.27−0.24)/0.03=1.0 精确命中、k<8 走 clamp 收敛——
+// fade(c,1.0) 逐比特恒等，⑦ clamp 收敛红线同款）；开帧 e=0 全 0.0；窗内按槽位
+// 错峰显影。
+#[inline]
+pub(crate) fn bar_stagger_a(e: f32, k: usize) -> f32 {
+    ((e - k as f32 * 0.03) / 0.03).clamp(0.0, 1.0)
+}
+
 pub fn button(
     x: f32,
     y: f32,
@@ -95,6 +106,15 @@ pub fn button_a_accent(
     // 按压态用 is_mouse_button_down（持续态）而非 pressed（边沿）——手指还压着
     // 与「点了立即弹开」视觉可辨；仅影响底色/内衬线，命中与点击判定不变
     let press = hot && enabled && is_mouse_button_down(MouseButton::Left);
+    // v1.16.45 演出包⑰-1 按压下沉：press 持续态时四个绘制口（填充/描边/主副标/
+    // 内衬）整体 y+2——press=false 帧 dy=0 布尔门控恒等（稳态逐像素=旧实现，非
+    // clamp 浮点巧合）；press 由 is_mouse_button_down 持续态驱动，动画期=按压
+    // 持续期，松开即还原——零新状态零计时零分配零新字形（颜色不变）。命中矩形
+    // :94 原值不动（按压期 2px 偏移照⑮「1.2px 偏移不影响点按域语义」先例
+    // charpanel.rs:509-511 口径），与既有按压语言（底色提亮+内衬高亮线）组成完整
+    // 下沉视觉。helper 外三处下划线（周天 draw.rs 底栏/模拟速度钮/charpanel 页签）
+    // 不随位移——按压持续期 ≤0.3s 内 2px 瞬时错位，勘察判可接受留档。
+    let dy = if press { 2.0 } else { 0.0 };
     let base = if !enabled {
         Color::from_rgba(38, 32, 56, 225)
     } else if press {
@@ -104,10 +124,10 @@ pub fn button_a_accent(
     } else {
         Color::from_rgba(56, 42, 86, 235)
     };
-    draw_rectangle(x, y, w, h, fade(base, a));
+    draw_rectangle(x, y + dy, w, h, fade(base, a));
     draw_rectangle_lines(
         x,
-        y,
+        y + dy,
         w,
         h,
         2.0,
@@ -124,10 +144,10 @@ pub fn button_a_accent(
         ),
     );
     if press {
-        // 内缩 2px 的高亮内衬：按压「陷下去」的视觉锚点（纯矩形零分配）
+        // 内缩 2px 的高亮内衬：按压「陷下去」的视觉锚点（纯矩形零分配；随 dy 同步）
         draw_rectangle_lines(
             x + 2.0,
-            y + 2.0,
+            y + 2.0 + dy,
             w - 4.0,
             h - 4.0,
             1.0,
@@ -138,7 +158,7 @@ pub fn button_a_accent(
         txt_c(
             label,
             x + w * 0.5,
-            y + h * 0.5 - 17.0,
+            y + dy + h * 0.5 - 17.0,
             20,
             fade(
                 // v1.8.0 A6：禁用主标 C_DIM→(184,178,196)，与可用态层级拉开
@@ -153,7 +173,7 @@ pub fn button_a_accent(
         txt_c(
             s,
             x + w * 0.5,
-            y + h - 26.0, 14,
+            y + dy + h - 26.0, 14,
             fade(
                 if enabled {
                     C_DIM
@@ -168,7 +188,7 @@ pub fn button_a_accent(
         txt_c(
             label,
             x + w * 0.5,
-            y + h * 0.5 - 11.0,
+            y + dy + h * 0.5 - 11.0,
             18,
             fade(
                 // v1.8.0 A6：禁用主标同上
@@ -1511,6 +1531,14 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     let x0 = 36.0;
     let by = 620.0;
     let bh = 88.0;
+    // 演出包⑰-2 底栏九钮入画 stagger：进行度 e=T−bar_anim（0→T），各钮相位
+    // ((e−k×0.03)/0.03).clamp(0,1)——稳态 bar_anim==0 → e=T → 相位=9−k≥1.0 clamp
+    // 恰 1.0，fade(c,1.0) 逐比特恒等（⑦ clamp 收敛红线同款 draw.rs:2736 先例）；
+    // 命中不乘 α 照⑦「动画期照常可点，命中=所见」口径（button_a_accent 内部判定
+    // 不走 α），0.27s 窗内透明但可点；α 走颜色不入字形缓存口零重栅格化，稳态快
+    // 路径零分配。漏置触发口=该入口无动画优雅降级不破稳态（勘察风险栏 5）。
+    let bar_e = crate::game::BAR_ANIM_T - g.bar_anim;
+    let bar_a = |k: usize| bar_stagger_a(bar_e, k);
     let sub_open = g.submenu.is_some();
     let pts_ok = g.meta.sim_points >= g.sim_cost();
     // v1.7.0：山穷水尽时按钮改引广告（点了进 start_draft → start_ad）
@@ -1520,7 +1548,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     } else {
         Some(format!("推演一生 · {} 点", g.sim_cost()))
     };
-    if button(
+    if button_a_accent(
         x0,
         by,
         bw,
@@ -1528,6 +1556,8 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "开始模拟",
         sim_sub.as_deref(),
         pts_ok || stuck,
+        false,
+        bar_a(0),
     ) {
         // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
         // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
@@ -1540,7 +1570,17 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     }
     {
         // v1.6.0 B：修炼弹层（统一入口 open_sub 打开帧门闩，防未来回归）
-        if button(x0 + (bw + gap), by, bw, bh, "修炼", Some("闭关 · 破境"), true) {
+        if button_a_accent(
+            x0 + (bw + gap),
+            by,
+            bw,
+            bh,
+            "修炼",
+            Some("闭关 · 破境"),
+            true,
+            false,
+            bar_a(1),
+        ) {
             // v1.15.0 同上：弹层开着时点修炼 = 关弹层（同帧重开同层，观感不变）
             if sub_open {
                 crate::menu::close_sub(g);
@@ -1549,7 +1589,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
             crate::menu::open_sub(g, crate::menu::Sub::Cult);
         }
     }
-    if button(
+    if button_a_accent(
         x0 + (bw + gap) * 2.0,
         by,
         bw,
@@ -1557,6 +1597,8 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "山河图",
         Some("世界地图 · M"),
         true,
+        false,
+        bar_a(2),
     ) {
         // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
         // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
@@ -1567,7 +1609,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         g.play(crate::sounds::Which::Page);
         crate::world::open_world(g);
     }
-    if button(
+    if button_a_accent(
         x0 + (bw + gap) * 3.0,
         by,
         bw,
@@ -1575,6 +1617,8 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "坊市",
         Some("丹药 · 藏经 · 兑换"),
         true,
+        false,
+        bar_a(3),
     ) {
         // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
         // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
@@ -1585,7 +1629,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         g.panel = 1;
         g.play(crate::sounds::Which::Page);
     }
-    if button(
+    if button_a_accent(
         x0 + (bw + gap) * 4.0,
         by,
         bw,
@@ -1593,6 +1637,8 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "行囊",
         Some("丹药 · 法宝 · 行装"),
         true,
+        false,
+        bar_a(4),
     ) {
         // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
         // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
@@ -1603,7 +1649,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         g.panel = 2;
         g.play(crate::sounds::Which::Page);
     }
-    if button(
+    if button_a_accent(
         x0 + (bw + gap) * 5.0,
         by,
         bw,
@@ -1611,6 +1657,8 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "人物",
         Some("长老 · 商人 · 道侣"),
         true,
+        false,
+        bar_a(5),
     ) {
         // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
         // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
@@ -1622,7 +1670,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         g.char_tab = 3; // v1.6.0 D：直入人物页
         g.play(crate::sounds::Which::Page);
     }
-    if button(
+    if button_a_accent(
         x0 + (bw + gap) * 6.0,
         by,
         bw,
@@ -1630,6 +1678,8 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "角色",
         Some("C 键查看"),
         true,
+        false,
+        bar_a(6),
     ) {
         // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
         // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
@@ -1646,7 +1696,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         // 寻仇必成修复：可用性收敛到 revenge_ready 单口（重伤禁手 + 实力悬殊禁手）
         if g.revenge_ready() {
             let p = g.revenge_p();
-            if button(
+            if button_a_accent(
                 x0 + (bw + gap) * 7.0,
                 by,
                 bw,
@@ -1654,6 +1704,8 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
                 "寻仇",
                 Some(&format!("{:.0}% · {}", p * 100.0, neme.name)),
                 true,
+                false,
+                bar_a(7),
             ) {
                 // v1.15.0 同底栏语义：弹层开着时点寻仇 = 关弹层并执行
                 if sub_open {
@@ -1662,7 +1714,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
                 g.play(crate::sounds::Which::Click);
                 g.act_revenge();
             }
-        } else if button(
+        } else if button_a_accent(
             x0 + (bw + gap) * 7.0,
             by,
             bw,
@@ -1670,9 +1722,11 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
             "寻仇",
             Some(g.revenge_disabled_text()),
             false,
+            false,
+            bar_a(7),
         ) {
         }
-    } else if button(
+    } else if button_a_accent(
         x0 + (bw + gap) * 7.0,
         by,
         bw,
@@ -1680,6 +1734,8 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "宿敌已清",
         Some("静待新敌"),
         false,
+        false,
+        bar_a(7),
     ) {
     }
     // v1.9.25 周天吐纳（槽 8）：现实自动修炼开关——开启态金色下划线高亮，
@@ -1690,7 +1746,7 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     } else {
         "自动闭关 · 关"
     };
-    if button(
+    if button_a_accent(
         x0 + (bw + gap) * 8.0,
         by,
         bw,
@@ -1698,6 +1754,8 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         "周天",
         Some(auto_sub),
         true,
+        false,
+        bar_a(8),
     ) {
         // v1.15.0 底栏点击语义：弹层开着时点底栏 = 关弹层并同击执行（旧版
         // && !sub_open 直接吞点击——玩家忘了弹层开着时怎么点底栏都"没反应"，
@@ -1723,7 +1781,14 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
         g.sync_save();
     }
     if auto_on {
-        draw_rectangle(x0 + (bw + gap) * 8.0, by + bh - 3.0, bw, 3.0, C_GOLD);
+        // 演出包⑰-2 勿半改：外置下划线与槽 8 钮体同批乘 stagger α（显影同步）
+        draw_rectangle(
+            x0 + (bw + gap) * 8.0,
+            by + bh - 3.0,
+            bw,
+            3.0,
+            fade(C_GOLD, bar_a(8)),
+        );
     }
 
     // 面板
@@ -1784,10 +1849,12 @@ fn render_top(g: &Game, l: &Life) {
     );
     draw_texture(&crate::art::art().icon_yun, 960.0, 15.0, WHITE);
     txt(&fmt_int(g.meta.dao_yun), 980.0, 15.0, 16, C_GOLD);
-    txt_r("烙印", 1148.0, 15.0, 16, C_GOLD_D);
-    txt_r("帮助", 1216.0, 15.0, 16, C_GOLD_D);
-    draw_rectangle_lines(1086.0, 8.0, 62.0, 36.0, 1.5, C_GOLD_D);
-    draw_rectangle_lines(1154.0, 8.0, 62.0, 36.0, 1.5, C_GOLD_D);
+    // v1.16.45 bug② 根因修复：删除 v1.0.0 起遗留的第二份顶栏标签（txt_r 烙印/
+    // 帮助 16px 暗金右对齐两行 + draw_rectangle_lines 1086/1154 两行 legacy 1.5px
+    // 钮框）——与下方 button() 自绘 2px 金框+白 18px 居中标签同位叠画，鬼影字
+    //（16/18 两档 measure 差错位凸出的「印/助」右部框形部件）透过 α235 底框只剩
+    // ~7.8% 即玩家所见「字旁浅浅方框」。四行无任何逻辑消费，删除零像素差（button
+    // 本体四调用保留不动；静态钉 ghost_label_removed_pins 反向钉四真钮防误删）。
 }
 
 fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
@@ -2753,11 +2820,15 @@ pub fn draw_modal_card(g: &mut Game) {
         // v1.10.2 成行择道：道途卡抉择走 choose_path（rmodal_npc 为 None，
         // 不得落入 choose_roption——那会因 npc None 静默 return 使卡挂死）
         // v1.12.1 终战卡同理单列：choose_ending（rmodal_npc 亦为 None）
+        // v1.16.45 现实邂逅卡同理单列：choose_rencounter（rmodal_npc 亦为 None，
+        // 认下臂 special17 经 apply_reff → bond_life_companion 落现实 life）
         let kind = g.rmodal.as_ref().map(|c| c.kind);
         if kind == Some(crate::game::CardKind::Path) {
             g.choose_path(i as u8 + 1);
         } else if kind == Some(crate::game::CardKind::Finale) {
             g.choose_ending(i);
+        } else if kind == Some(crate::game::CardKind::Rencounter) {
+            g.choose_rencounter(i);
         } else if g.scene == Scene::Sim {
             g.choose_option(i);
         } else {

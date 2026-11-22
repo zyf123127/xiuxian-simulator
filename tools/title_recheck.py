@@ -127,6 +127,8 @@ def main():
     seg15 = parse_const(data_txt, "EV_SEG15")
     # v1.16.44 扩段十七：EV_SEG16=368 快照段界（v1.16.43 单3 预建本批引用）
     seg16 = parse_const(data_txt, "EV_SEG16")
+    # v1.16.45 施工单三扩段十八：EV_SEG17=371 快照段界（v1.16.44 预建本批引用）
+    seg17 = parse_const(data_txt, "EV_SEG17")
     b1 = parse_inc_base("TXT_NAME_BASE")
     b2 = parse_inc_base("TXT_NAME2_BASE")
     b3 = parse_inc_base("TXT_NAME3_BASE")
@@ -150,6 +152,8 @@ def main():
     b16 = parse_inc_base("TXT_NAME16_BASE")
     # v1.16.44 扩段十七：段十七基址 TXT_NAME17_BASE
     b17 = parse_inc_base("TXT_NAME17_BASE")
+    # v1.16.45 施工单三扩段十八：段十八基址 TXT_NAME18_BASE
+    b18 = parse_inc_base("TXT_NAME18_BASE")
 
     # id -> 名段 N 映射（与 data.rs EvTable base8+base9 双段九段连寻同口径）
     def name_n(eid):
@@ -216,7 +220,13 @@ def main():
         if eid < seg16:
             return b16 + (eid - seg15)
         # v1.16.44 段十七：EV_SEG16=368 快照段界，段十七基址 TXT_NAME17_BASE
-        return b17 + (eid - seg16)
+        #（v1.16.45：段十七分支由无卫语句末段 return 改带 if eid<seg17 卫语句
+        # ——段十八开设后段十七不再末段；新增分支勿替换本行——v1.16.33 段八
+        # 分支被整行顶替先例红线）
+        if eid < seg17:
+            return b17 + (eid - seg16)
+        # v1.16.45 段十八：EV_SEG17=371 快照段界，段十八基址 TXT_NAME18_BASE
+        return b18 + (eid - seg17)
 
     # 钉B：名段覆盖断言（真相源逐条可解析、非空、行号=N）
     src_lines = SRC.read_text(encoding="utf-8").splitlines()
@@ -259,14 +269,16 @@ def main():
                         (365, "院墙夜塌"), (366, "共扫叶径"),
                         (367, "檐冰垂光"),
                         (368, "暖阁晒背"), (369, "漏刻无声"),
-                        (370, "同制新历")):
+                        (370, "同制新历"),
+                        (371, "牒案翻旧"), (372, "堂前领差"),
+                        (373, "残页对笔")):
         if names.get(_eid) != _want:
             raise SystemExit("FATAL 钉B-2 名段内容钉失败: id%d → %r (期望 %r)"
                              % (_eid, names.get(_eid), _want))
     # v1.16.39 遗留清账：段十二/十三/十四补中钉（354/357/360）——首尾钉升全钉，
     # 段八起 24 卡逐卡内容钉全覆盖（v1.16.38 low「360 居中未单钉」清账；
     # 354/357 同批补齐，三段连钉与段九/十/十一全卡钉口径对齐）
-    print("OK 钉B-2 段八..段十七内容钉全钉 ✓（338/343/344/348/349/350/351/352/353/354/355/356/357/358/359/360/361/362/363/364/365/366/367/368/369/370）")
+    print("OK 钉B-2 段八..段十八内容钉全钉 ✓（338/343/344/348/349/350/351/352/353/354/355/356/357/358/359/360/361/362/363/364/365/366/367/368/369/370/371/372/373）")
 
     game_lines = GAME.read_text(encoding="utf-8").splitlines()
     st, en = build_event_span(game_lines)

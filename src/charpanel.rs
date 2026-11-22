@@ -339,15 +339,40 @@ pub(crate) fn npc_portrait_box_a(
 
 // 「放大」徽标：立绘盒右下角 58×22（badge 需 AI 立绘实际存在才显示，调用方判定；
 // npc_row_vis 防滚动越缘）。人物页 (220,418) / 图鉴 (150,188)。
+// 演出包⑱-1 hover 提亮判定纯函数（照 menu_danger_btn_hit 单口先例 draw.rs:1193
+// ——绘制与单测共用，几何同源不分叉）：点在徽标矩形内即 hot。
+pub(crate) fn zoom_badge_hot(mx: f32, my: f32, bx: f32, by: f32) -> bool {
+    mx >= bx && mx <= bx + 58.0 && my >= by && my <= by + 22.0
+}
+
 pub(crate) fn zoom_badge(x: f32, y: f32, box_w: f32, bottom_off: f32) {
     let bx = x + box_w - 58.0;
     let by = y + bottom_off - 26.0;
     if !npc_row_vis(by) {
         return;
     }
-    draw_rectangle(bx, by, 58.0, 22.0, Color::from_rgba(14, 10, 26, 215));
-    draw_rectangle_lines(bx, by, 58.0, 22.0, 1.0, C_GOLD_D);
-    txt_c("放大", bx + 29.0, by + 3.0, 14, C_GOLD_D);
+    // 演出包⑱-1 hover 提亮：非 hover 帧三色恒等旧实现（稳态逐像素不变）；hover
+    // 帧底/边/字三色提亮（颜色不入字形缓存 key——动色零重栅格化，draw.rs:709
+    // 字号档位红线不触）。零新状态零计时零分配；各调用方 zoom 点按命中区不动
+    //（徽标是纯视觉提示，hover 只改色不改命中语义）。
+    let (mx, my) = crate::cam::mouse();
+    let hot = zoom_badge_hot(mx, my, bx, by);
+    let (bg, line, tc) = if hot {
+        (
+            Color::from_rgba(36, 26, 58, 228),
+            C_GOLD,
+            C_GOLD,
+        )
+    } else {
+        (
+            Color::from_rgba(14, 10, 26, 215),
+            C_GOLD_D,
+            C_GOLD_D,
+        )
+    };
+    draw_rectangle(bx, by, 58.0, 22.0, bg);
+    draw_rectangle_lines(bx, by, 58.0, 22.0, 1.0, line);
+    txt_c("放大", bx + 29.0, by + 3.0, 14, tc);
 }
 
 // 同页人鉴赏档次取值：当前道侣显 Life.comp_fav 实时值，历世卡显初识档（图鉴口径）
@@ -403,9 +428,10 @@ const ZOOM_TEXT_LAG: f32 = 0.05;
 /// y——底缘 650+4=654<V_H 既有钉（zoom_constants_and_geometry）原样不动。
 const ZOOM_BREATH_AMP: f32 = 1.2;
 /// 轻摆周期数（0.22s 入画窗内完整周期数）：取 1.5——sin 相位 p·TAU·1.5，p=1 时恰
-/// sin(1.5·TAU)=0（稳态归零无残偏）、p=0 时 sin(0)=0（开启帧无跳入），中段 p≈0.5
-/// 相位 sin(1.5π)=−1 峰值域，与 (1−p)² 包络相乘后峰值≈0.63px（非满幅）——摆幅
-/// 随入画进度衰减，落定半周期整无残偏。
+/// sin(1.5·TAU)=0（稳态归零无残偏）、p=0 时 sin(0)=0（开启帧无跳入）。上轮复审
+/// low③ 峰值口径改准（数值扫描 10001 点实测）：包络×相位乘积峰 |dx|=0.8597px
+/// 落 p≈0.141（非 p≈0.5 相位极值点——(1−p)² 包络随 p 衰减把峰拉向开启端），
+/// 摆幅随入画进度衰减，落定半周期整无残偏。
 const ZOOM_BREATH_CYC: f32 = 1.5;
 
 /// 覆层入场进度 p∈[0,1]：anim 剩余秒 0.22→0 → p 0→1（0=开启帧全暗无图、1=稳态），
@@ -435,7 +461,8 @@ fn zoom_overlay_text_a(anim: f32) -> f32 {
 /// 剧情演出包⑮ 立绘入画轻摆 dx（照 zoom_overlay_p 早退恒等路径纪律）：anim<=0
 /// 直返 0.0——稳态帧 x 恒等旧实现（早退恒等路径，非 clamp 浮点巧合）；动画期
 /// dx=AMP×(1−p)²×sin(p·TAU·CYC)：开启帧 p=0 恰 0（sin 0）、稳态 p=1 恰 0（1.5
-/// 周期整相位归零），平方包络随入画进度衰减、中段起振（峰值≈0.63px）。零新状态
+/// 周期整相位归零），平方包络随入画进度衰减、中段起振（峰值 0.8597px@p≈0.141，
+/// 上轮复审 low③ 口径改准——数值扫描实测，非 p≈0.5 相位极值点）。零新状态
 /// （复用 zoom_anim 相位，不新增计时器）、零分配、零新字形。
 #[inline]
 fn zoom_breath_dx(anim: f32) -> f32 {
@@ -1268,17 +1295,16 @@ fn draw_comp_page(g: &mut Game) -> Option<PanelAct> {
 
     // ---------- 缘谱十一行（整行剔除；行首 32×32 小像走 comp_tex_capped 限流口，
     // 未识行零纹理查询——见 draw_bond_row / 本页头注释红线口径）----------
-    let cur_comp: Option<usize> = l.and_then(|x| {
-        x.companion
-            .as_deref()
-            .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn))
-    });
+    // v1.16.45 多道侣：行「当前」判定改 Life::has_comp_idx 单源口（主伴+副伴同权
+    // 高亮/可鉴赏）——原 cur_comp==Some(i) 只覆盖主伴
+    let cur_of = |x: &Life, i: usize| x.has_comp_idx(i);
     for i in 0..COMPANION_NAMES.len() {
         let y = NPC_VIEW_Y0 + COMP_CARD_H + COMP_GAP + i as f32 * COMP_ROW_STEP - scroll;
         if y >= NPC_VIEW_Y1 || y + COMP_ROW_H <= NPC_VIEW_Y0 {
             continue;
         }
-        draw_bond_row(g, i, y, cur_comp == Some(i), best);
+        let cur = l.is_some_and(|x| cur_of(x, i));
+        draw_bond_row(g, i, y, cur, best);
         // v1.16.20 立绘沉浸续作③（缘谱行头像点按鉴赏）：行首 32×32 槽命中 →
         // Zoom(Comp(i))（照主卡鉴赏 hit :1146 同语言，命中传出经 exec_panel_act
         // 单口执行）。门全与行内小像显示同源不分叉：行已识（bond_row_known——
@@ -1294,7 +1320,7 @@ fn draw_comp_page(g: &mut Game) -> Option<PanelAct> {
             && my >= y + 7.0
             && my <= y + 39.0
             && npc_row_vis(y + 7.0)
-            && bond_row_known(g.meta.comp_bonds[i], cur_comp == Some(i))
+            && bond_row_known(g.meta.comp_bonds[i], cur)
             && crate::art::art().comp_tex_capped(i).is_some()
         {
             act = Some(PanelAct::Zoom(crate::game::ZoomArt::Comp(i)));
@@ -1438,10 +1464,34 @@ fn draw_comp_main_card(
                     C_DIM,
                 );
             }
+            // v1.16.45 多道侣副伴行：extra 空不显示（稳态与旧实现逐像素一致）；有则
+            // 历世行下一行 N2798『另有同页：{名} · {名}（情谊随主页）』——副伴无独立
+            // 好感（comp_fav 单值共享 v1.6.0 D 既定语义），措辞在行内说清避免口径
+            // 分裂（照 v1.16.18 指纹法修口径先例）。主卡立绘/情谊/双修全沿主伴不动
+            //（60+ 单值读点零手术）；副伴进缘谱行看账（行「当前」判定 has_comp_idx）
+            let extra_names = l.map(|x| x.comp_extra.join(" · ")).unwrap_or_default();
+            let extra_shift = if extra_names.is_empty() { 0.0 } else { 26.0 };
+            if !extra_names.is_empty() && npc_row_vis(y + 240.0) {
+                txt(
+                    &evf(2798, &[&(extra_names.as_str()) as &dyn core::fmt::Display])/* 原文：另有同页：{}（情谊随主页） */,
+                    col,
+                    y + 240.0, 14,
+                    C_DIM,
+                );
+            }
             // 识人小传：道侣槽共通段（首段结缘保底，段2/3 随情谊 40/70 解锁，照 :895 口径）
+            // v1.16.45：副伴行占位时下移一行（26px 行距）——extra 空时 y+240 原样零位移
             let cseg = tale_unlocked(cfav).max((g.meta.companion_lives >= 1) as usize);
-            if cseg > 0 && npc_row_vis(y + 240.0) {
-                wrap_draw(comp_tale(cseg - 1), col, y + 240.0, 14, 640.0, 22.0, C_TEXT);
+            if cseg > 0 && npc_row_vis(y + 240.0 + extra_shift) {
+                wrap_draw(
+                    comp_tale(cseg - 1),
+                    col,
+                    y + 240.0 + extra_shift,
+                    14,
+                    640.0,
+                    22.0,
+                    C_TEXT,
+                );
             }
             // 双修共进钮 340×60（底对齐 y+358 照赠礼钮；整钮可见才可点；执行口
             // act_dual_cult 内部再全门控校验——按钮仅 UI 门）
@@ -2916,7 +2966,8 @@ mod zoom_overlay_tests {
 
     // 剧情演出包⑮ 入画轻摆钉测（照 draw.rs tremor_envelope_ends_and_bounds 款）：
     // 稳态恰 0（早退恒等路径）/开启帧 p=0 恰 0（sin 相位两端归零）/全域 |dx|≤AMP
-    // 有界/中段实际起振（最大 |dx|>AMP/2，理论峰≈0.63px 落 p≈0.23）/常量口径+
+    // 有界/中段实际起振（最大 |dx|>AMP/2，理论峰 0.8597px 落 p≈0.141——上轮
+    // low③ 口径改准）/常量口径+
     // 几何守卫（contain 上限下左右缘余量 60px≫摆幅，动画期无越界）。
     #[test]
     fn zoom_breath_ends_and_bounds() {
@@ -2926,7 +2977,8 @@ mod zoom_overlay_tests {
         // 开启帧端点：anim=ZOOM_ANIM_T → p=0 → sin(0)=0 恰 0（无跳入）
         assert_eq!(zoom_breath_dx(ZOOM_ANIM_T), 0.0, "开启帧 p=0 sin(0) 恰 0");
         // 全域 61 步采样（anim 0.22→0 对应 p=step/60）：|dx|≤1.2 有界；动画窗内
-        // 应实际起振（p≈0.23 包络×相位峰值域，最大 |dx|>AMP/2）
+        // 应实际起振（p≈0.141 包络×相位乘积峰值域——上轮 low③ 口径改准，
+        // 最大 |dx|>AMP/2）
         let mut max_abs = 0.0f32;
         for step in 0..=60usize {
             let anim = ZOOM_ANIM_T * (1.0 - step as f32 / 60.0);
@@ -3011,5 +3063,169 @@ mod zoom_overlay_tests {
             1,
             "周期常量行须在位"
         );
+    }
+}
+
+// ================= 演出包⑰-2/⑱-1 稳态与包络钉测（照 zoom_overlay_tests 先例） =================
+// 钉面：⑰-2 stagger 相位纯函数（稳态全 1.0/开帧全 0/窗内单调/全域有界/槽位序）
+// + ⑰-1 按压下沉静态钉（dy 通道布尔门控四口在位）+ ⑱-1 zoom_badge_hot 纯函数
+// （矩形内外/边缘/实测徽标几何）。模组名 v11646（v11645 前缀已被施工单一占用，
+// 按本批顺延照 v11644_comm_title_tests 注款）。
+#[cfg(test)]
+mod v11646_button_fx_tests {
+    use super::*;
+
+    // ── ⑰-2 stagger 相位：稳态恒等（bar_anim==0 → e=T → 全 1.0） ──
+    #[test]
+    fn bar_stagger_steady_identity() {
+        let t = crate::game::BAR_ANIM_T;
+        for k in 0..9usize {
+            let a = crate::draw::bar_stagger_a(t, k);
+            assert_eq!(
+                a, 1.0,
+                "稳态槽 {} 相位须恰 1.0（clamp 收敛红线——非浮点巧合）",
+                k
+            );
+            assert_eq!(
+                a.to_bits(),
+                1.0f32.to_bits(),
+                "槽 {} 逐比特恒等（fade(c,1.0) 精确性前提）",
+                k
+            );
+        }
+    }
+
+    // ── ⑰-2 开帧全 0 + 窗内槽位序单调（k 大者后显影）+ 全域有界 ──
+    #[test]
+    fn bar_stagger_open_zero_and_ordered() {
+        // 开帧 e=0：全 0.0（含 k=0——首钮也待 30ms 后起显）
+        for k in 0..9usize {
+            assert_eq!(crate::draw::bar_stagger_a(0.0, k), 0.0, "开帧槽 {}", k);
+        }
+        // 中段 e=T/2：槽位序单调不增（k 越大相位越靠后），且 k=0 已显影、k=8 未起
+        let e = crate::game::BAR_ANIM_T * 0.5;
+        let mut prev = 2.0f32;
+        for k in 0..9usize {
+            let a = crate::draw::bar_stagger_a(e, k);
+            assert!(a <= prev, "槽 {} 相位须随槽位不增", k);
+            prev = a;
+            assert!((0.0..=1.0).contains(&a), "槽 {} 有界", k);
+        }
+        assert!(crate::draw::bar_stagger_a(e, 0) > 0.0, "e=T/2 槽 0 已显影");
+        assert_eq!(
+            crate::draw::bar_stagger_a(e, 8),
+            0.0,
+            "e=T/2 槽 8 未起（错峰窗未到）"
+        );
+        // 全域扫描有界（61 步照 zoom_breath_ends_and_bounds 先例款）
+        for step in 0..=60usize {
+            let e = crate::game::BAR_ANIM_T * (step as f32 / 60.0);
+            for k in 0..9usize {
+                let a = crate::draw::bar_stagger_a(e, k);
+                assert!((0.0..=1.0).contains(&a), "e={} 槽 {} 越界", e, k);
+            }
+        }
+    }
+
+    // ── ⑰-1 按压下沉静态钉：dy 通道布尔门控 + 四绘制口随动（纯排版级源码钉，
+    // 稳态自证=press=false 时 dy 恒 0 布尔门控，非 clamp 巧合） ──
+    #[test]
+    fn press_sink_static_pins() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src =
+            std::fs::read_to_string(std::path::Path::new(root).join("src").join("draw.rs"))
+                .expect("读 src/draw.rs");
+        // 行首 #[cfg(test)] 起至行首顶格 } 止滤测试区（照 comm_hooks_static_pins prod 款）
+        let mut prod = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            prod.push_str(line);
+            prod.push('\n');
+        }
+        let count = |needle: &str| prod.matches(needle).count();
+        assert_eq!(
+            count("let dy = if press { 2.0 } else { 0.0 };"),
+            1,
+            "⑰-1 dy 通道定义恰 1 处（布尔门控恒等——press=false 帧 dy=0 稳态逐像素）"
+        );
+        assert_eq!(count("draw_rectangle(x, y + dy, w, h, fade(base, a))"), 1, "填充口随动");
+        assert_eq!(
+            count("y + 2.0 + dy,"),
+            1,
+            "按压内衬口随动（与既有「陷下去」锚点同批位移）"
+        );
+        assert_eq!(count("y + dy + h * 0.5 - 17.0"), 1, "带副标主标口随动");
+        assert_eq!(count("y + dy + h - 26.0"), 1, "带副标副标口随动");
+        assert_eq!(count("y + dy + h * 0.5 - 11.0"), 1, "无副标主标口随动");
+        // 命中判定行不含 dy（按压期命中域原值——⑮ 点按域语义先例）
+        assert_eq!(
+            count("let hot = mx >= x && mx <= x + w && my >= y && my <= y + h;"),
+            1,
+            "命中矩形原值不动（hot 判定零 dy）"
+        );
+    }
+
+    // ── ⑰-2 底栏九钮接线静态钉：bar_stagger_a 消费恰 10 调用 + 周天下划线同批 α ──
+    #[test]
+    fn bar_stagger_wiring_pins() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src =
+            std::fs::read_to_string(std::path::Path::new(root).join("src").join("draw.rs"))
+                .expect("读 src/draw.rs");
+        let mut prod = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            prod.push_str(line);
+            prod.push('\n');
+        }
+        let count = |needle: &str| prod.matches(needle).count();
+        assert_eq!(
+            count("bar_a("),
+            12,
+            "底栏九钮 stagger 接线恰 12 处（8 槽单调用+寻仇槽三态 3=11 个 button 消费+周天下划线 1 同批 α）"
+        );
+        assert_eq!(
+            count("fade(C_GOLD, bar_a(8))"),
+            1,
+            "周天金下划线与槽 8 同批乘 α（勿半改红线）"
+        );
+    }
+
+    // ── ⑱-1 zoom_badge_hot：实测徽标几何（人物页 (220,418)/图鉴 (150,188)）内外/边缘 ──
+    #[test]
+    fn zoom_badge_hot_geometry() {
+        // 人物页徽标：bx=220-58=162, by=418-26=392（58×22）
+        let (bx, by) = (162.0f32, 392.0f32);
+        assert!(super::zoom_badge_hot(bx, by, bx, by), "左上角边缘含");
+        assert!(super::zoom_badge_hot(bx + 58.0, by + 22.0, bx, by), "右下角边缘含");
+        assert!(super::zoom_badge_hot(bx + 29.0, by + 11.0, bx, by), "中心含");
+        assert!(!super::zoom_badge_hot(bx + 58.1, by + 11.0, bx, by), "右缘外拒");
+        assert!(!super::zoom_badge_hot(bx + 29.0, by + 22.1, bx, by), "下缘外拒");
+        assert!(!super::zoom_badge_hot(bx - 0.1, by, bx, by), "左缘外拒");
+        assert!(!super::zoom_badge_hot(bx, by - 0.1, bx, by), "上缘外拒");
+        // 图鉴徽标几何同式
+        let (gx, gy) = (150.0f32 - 58.0, 188.0f32 - 26.0);
+        assert!(super::zoom_badge_hot(gx + 29.0, gy + 11.0, gx, gy), "图鉴徽标中心含");
+        assert!(!super::zoom_badge_hot(gx + 58.1, gy, gx, gy), "图鉴徽标右缘外拒");
     }
 }

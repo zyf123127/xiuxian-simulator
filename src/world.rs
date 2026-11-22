@@ -70,6 +70,8 @@ pub fn close_world(g: &mut Game) {
         return;
     }
     g.scene = Scene::Reality;
+    // 演出包⑰-2 置值口 4/5（世界图收束进现实行动层）
+    g.bar_anim = crate::game::BAR_ANIM_T;
     g.sync_save();
 }
 
@@ -887,6 +889,8 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                         g.play(crate::sounds::Which::Page);
                         g.scene = Scene::Reality;
                         g.panel = 1;
+                        // 演出包⑰-2 置值口 5/5（世界图节点打开坊市回行动层）
+                        g.bar_anim = crate::game::BAR_ANIM_T;
                     }
                 }
                 NODE_RUINS => {

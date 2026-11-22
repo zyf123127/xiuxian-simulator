@@ -269,6 +269,9 @@ fn life_text(l: &Life) -> String {
         "Lcomp={}\n",
         l.companion.as_deref().unwrap_or("")
     ));
+    // v1.16.45 多道侣：副伴名单（上限 COMP_MAX-1=2；伴名无空格，空格分隔照
+    // Lflags/Ltrack 多值先例）。additive-only：旧档缺键 → 空表零迁移。
+    s.push_str(&format!("Lcomps={}\n", l.comp_extra.join(" ")));
     s.push_str(&format!("Lequip={:?}\n", l.equipped));
     // v1.8.0 E：法宝灵纹等级（旧档缺键 → 全 0）
     s.push_str(&format!("Lrlv={:?}\n", l.relic_lv));
@@ -559,6 +562,29 @@ fn parse_save(text: &str) -> Meta {
                 } else {
                     Some(v.trim().to_string())
                 };
+            }
+            // v1.16.45 多道侣：副伴名单回读（缺键 → 空表零迁移照 Lpath/Lsxy 先例）。
+            // 清洗照 Lrlv clamp 先例：仅收 COMPANION_NAMES 内成员（坏名剔除）、去重
+            // （首现序——伴列是结缘顺序语义，禁 sort）、剔与主伴重名（主伴优先）、
+            // 超量截断 ≤ COMP_MAX-1
+            "Lcomps" => {
+                let mut extras: Vec<String> = Vec::new();
+                for n in v.split_whitespace() {
+                    if !crate::data::COMPANION_NAMES.contains(&n) {
+                        continue;
+                    }
+                    if Some(n) == life.companion.as_deref() {
+                        continue;
+                    }
+                    if extras.iter().any(|x| x == n) {
+                        continue;
+                    }
+                    extras.push(n.to_string());
+                    if extras.len() >= crate::game::COMP_MAX - 1 {
+                        break;
+                    }
+                }
+                life.comp_extra = extras;
             }
             "Lequip" => {
                 life.equipped = nums(v).iter().map(|&x| x as usize).collect();
@@ -991,6 +1017,65 @@ Lstat=30 50 40 20 100\nLrelics=[0, 4, 2, 7, 1]\nLpills=[0, 0, 0, 0, 0, 0]\nLloc=
             .collect::<Vec<_>>()
             .join("\n");
         assert_eq!(parse_save(&old).life.unwrap().companion, None);
+    }
+
+    // v1.16.45 多道侣：Lcomps= 回环 / 旧档缺键空表（零迁移照 Lsxy 先例）/
+    // 坏名清洗（仅收 COMPANION_NAMES 内成员）/ 主伴重名剔除（主伴优先）/
+    // 去重（首现序）/ 超量截断 ≤ COMP_MAX-1
+    #[test]
+    fn lcomps_roundtrip_clean_and_cap() {
+        let mut m = Meta::default();
+        let mut l = Life::default();
+        l.companion = Some("闻人未晚".to_string());
+        l.comp_extra = vec!["洛书遥".to_string(), "桑落".to_string()];
+        m.life = Some(l);
+        let text = save_text(&m);
+        assert!(text.contains("Lcomps=洛书遥 桑落\n"));
+        let l2 = parse_save(&text).life.unwrap();
+        assert_eq!(
+            l2.comp_extra,
+            vec!["洛书遥".to_string(), "桑落".to_string()],
+            "回环逐名相等"
+        );
+
+        // 旧档缺 Lcomps → 空表（历史版本从未落盘副伴，旧档行为不变）
+        let old: String = text
+            .lines()
+            .filter(|l| !l.starts_with("Lcomps="))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(parse_save(&old).life.unwrap().comp_extra.is_empty());
+
+        // 坏名清洗：表外名剔除、表内名保留（照 Lrlv clamp 清洗先例）
+        let dirty = text.replace("Lcomps=洛书遥 桑落\n", "Lcomps=无名氏 桑落 鬼笔生 洛书遥\n");
+        assert_eq!(
+            parse_save(&dirty).life.unwrap().comp_extra,
+            vec!["桑落".to_string(), "洛书遥".to_string()],
+            "坏名剔除+表内名保留首现序"
+        );
+
+        // 主伴重名剔除（主伴优先）+ 去重 + 超量截断 ≤ COMP_MAX-1
+        let heavy = text.replace(
+            "Lcomps=洛书遥 桑落\n",
+            "Lcomps=闻人未晚 闻人未晚 洛书遥 桑落 阮栖梧\n",
+        );
+        assert_eq!(
+            parse_save(&heavy).life.unwrap().comp_extra,
+            vec!["洛书遥".to_string(), "桑落".to_string()],
+            "主伴重名剔除+去重+截断恒 2"
+        );
+
+        // 无主伴时 Lcomps 照收（旧档缺 Lcomp 键伴表独立解析不互斥）
+        let mut m2 = Meta::default();
+        let mut l3 = Life::default();
+        l3.comp_extra = vec!["谢迟".to_string()];
+        m2.life = Some(l3);
+        let t3 = save_text(&m2);
+        assert!(t3.contains("Lcomps=谢迟\n"));
+        assert_eq!(
+            parse_save(&t3).life.unwrap().comp_extra,
+            vec!["谢迟".to_string()]
+        );
     }
 
     // v1.12.0 换皮迁移：旧档宿敌名号按同下标映射新名（真档样例 neme=旧名号 萧绝尘 3）

@@ -1798,7 +1798,7 @@ pub const ORIGINS: [OriginDef; 6] = [
 // 轮盘路径纳秒级）；行可读形态与 tools/tables_recheck.py、ledger_recheck.py 的
 // 4 元组解析口径零变（表行仍是 (id,w,mr,good)）；打包无损性由 game.rs
 // events_bitfield_pack_lossless 全表逐行钉测兜底（w>63/mr>7 当场红）。
-pub const N_EVENTS: usize = 371;
+pub const N_EVENTS: usize = 374;
 /// 名/简 textpack 段一条数（v1.16.26 末态；段二自 v1.16.27 扩池起连号追加）
 const EV_SEG1: usize = 291;
 /// 名/简 textpack 段二条数（v1.16.27 末态；段三自 v1.16.28 扩池起连号追加）。
@@ -1917,12 +1917,16 @@ const EV_SEG15: usize = 365;
 /// 转移到下方 EV_SEG17（预期勿消）
 const EV_SEG16: usize = 368;
 
-/// 名/简 textpack 段十七条数界（v1.16.44 扩池末态 371=N_EVENTS 快照；下批扩池开
-/// 段十八时 N_EVENTS 增长，本常量冻结段十七上沿——len17 唯一正确写法=EV_SEG17−
-/// EV_SEG16 段界常量差）。本批先行引入快照常量（字节效应 0，扩池段十八开工前把
-/// 末段差写法钉死）——dead_code 警告按 v1.16.36 EV_SEG12 先例**预期持续到段十八
-/// 开工**，非本轮缺陷，勿消
+/// 名/简 textpack 段十七条数界（v1.16.45 施工单三段十八开工批：EV_SEG17 由快照
+/// 预建转兑现——len17 两功能落点改差 (EV_SEG17−EV_SEG16)，本常量冻结段十七上沿）
 const EV_SEG17: usize = 371;
+
+/// 名/简 textpack 段十八条数界（v1.16.45 施工单三扩池末态 374=N_EVENTS 快照；下批
+/// 扩池开段十九时 N_EVENTS 增长，本常量冻结段十八上沿——len18 唯一正确写法=
+/// EV_SEG18−EV_SEG17 段界常量差，届时改差）。本批先行引入快照常量（字节效应 0，
+/// 扩池段十九开工前把末段差写法钉死）——dead_code 警告按 v1.16.36 EV_SEG12 先例
+/// **预期持续到段十九开工**，非本轮缺陷，勿消
+const EV_SEG18: usize = 374;
 
 pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
     (0, 12, 0, true),  // 灵草满坡
@@ -2847,6 +2851,20 @@ pub const EVENTS_ROWS: [(u16, u8, u8, bool); N_EVENTS] = [
                         // 历是岁首合制历书旧页撕新页写面，「新历/历书/岁首」全
                         // 池 0——「历」字面撞来历/历年复合词不同义照 365 先例；
                         // 原拟「同订历书」订撞主线书成系统「合订」面改「制」）
+    (371, 3, 7, false), // 牒案翻旧（v1.16.45 施工单三段十八：mr7 恶散件——恶缘
+                        // mr7 层 6 条全恶层最薄+mr7 常态池 26 条全表次薄（364
+                        // 后两批未落）；文狱职牒线深化（勘察五主1）；总基权
+                        // 1130→1139 第三副本 tools/ledger_recheck.py 同批；题
+                        // 避 191 文狱退牒（勘察五弃「文狱翻牒」改「翻旧」面））
+    (372, 3, 6, true),  // 堂前领差（mr6 善散件——善散件 350 后九批未落、mr6 层
+                        // 30 条次薄；玄诚长老第九卡 CardActor::Npc(0) 照 337
+                        // 先例（勘察五主2，正文钉名⟺Npc(0) 同源纪律）；门中
+                        // 差事 v1.16.40 comm 系统叙事深化，纯叙事读既有态零
+                        // 新键；非道侣门控非老年非天气照红线 1 避让）
+    (373, 3, 5, true),  // 残页对笔（mr5 善散件——善散件 330 后十批未落、mr5 层
+                        // 34 条；书稿/故人线深化（勘察五主3）：旧稿堆认出故
+                        // 人早年批注笔迹隔页对答；正文照施工单三③口径 2 段
+                        // （反斜杠 n 分段）放宽卡面行数（tall 版式零新代码））
 ];
 
 const fn pack_ev(r: (u16, u8, u8, bool)) -> u16 {
@@ -3042,10 +3060,12 @@ pub struct EvTable {
     // EV_SEG15——EV_SEG16=368 快照预建，下批扩段十七时改差）
     base16: u16,
     len16: u16,
-    // v1.16.44 扩段十七：base17/len17 双段登记（len17 末段差写法 N_EVENTS−
-    // EV_SEG16——EV_SEG17=371 快照预建，下批扩段十八时改差）
+    // v1.16.45 施工单三扩段十八：base18/len18 双段登记（len18 末段差写法
+    // N_EVENTS−EV_SEG17——EV_SEG18=374 快照预建，下批扩段十九须改差）
     base17: u16,
     len17: u16,
+    base18: u16,
+    len18: u16,
 }
 
 impl EvTable {
@@ -3085,6 +3105,8 @@ impl EvTable {
             (self.base16, self.len16),
             // v1.16.44 扩段十七：只加一行 segs（base17/len17），累减循环自动续寻
             (self.base17, self.len17),
+            // v1.16.45 施工单三扩段十八：只加一行 segs（base18/len18），累减循环自动续寻
+            (self.base18, self.len18),
         ];
         let mut k = i;
         for seg_k in segs.iter() {
@@ -3121,6 +3143,8 @@ impl EvTable {
             + self.len16 as usize
             // v1.16.44 扩段十七：len() 总长和随段扩一行
             + self.len17 as usize
+            // v1.16.45 施工单三扩段十八：len() 总长和随段扩一行
+            + self.len18 as usize
     }
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -3233,7 +3257,12 @@ pub static EVENT_NAMES: EvTable = EvTable {
     base16: TXT_NAME16_BASE as u16,
     len16: (EV_SEG16 - EV_SEG15) as u16,
     base17: TXT_NAME17_BASE as u16,
-    len17: (N_EVENTS - EV_SEG16) as u16,
+    // v1.16.45 施工单三：len17 由末段差写法改段界常量差兑现（EV_SEG17 快照转
+    // 实用）+base18/len18 双段登记（len18 新末段差写法 N_EVENTS−EV_SEG17，下批
+    // 扩段十九须改差）
+    len17: (EV_SEG17 - EV_SEG16) as u16,
+    base18: TXT_NAME18_BASE as u16,
+    len18: (N_EVENTS - EV_SEG17) as u16,
 };
 
 
@@ -3295,7 +3324,10 @@ pub static EVENT_BRIEF: EvTable = EvTable {
     base16: TXT_BRIEF16_BASE as u16,
     len16: (EV_SEG16 - EV_SEG15) as u16,
     base17: TXT_BRIEF17_BASE as u16,
-    len17: (N_EVENTS - EV_SEG16) as u16,
+    // v1.16.45 施工单三：len17 改差兑现+base18/len18 双段登记（同上注口径）
+    len17: (EV_SEG17 - EV_SEG16) as u16,
+    base18: TXT_BRIEF18_BASE as u16,
+    len18: (N_EVENTS - EV_SEG17) as u16,
 };
 
 
@@ -4482,8 +4514,9 @@ mod text_tests {
         // v1.16.40 单3 扩池：+ 段十五 3 = 365
         // v1.16.43 单3 扩池：+ 段十六 3 = 368
         // v1.16.44 扩池：+ 段十七 3 = 371
-        assert_eq!(EVENT_NAMES.len(), 371);
-        assert_eq!(EVENT_BRIEF.len(), 371);
+        // v1.16.45 施工单三扩池：+ 段十八 3 = 374
+        assert_eq!(EVENT_NAMES.len(), 374);
+        assert_eq!(EVENT_BRIEF.len(), 374);
         assert_eq!(EVENT_NAMES.get(0), Some("灵草满坡"));
         assert_eq!(EVENT_NAMES.get(290), Some("误入猎套"));
         assert_eq!(EVENT_BRIEF.get(0), Some("满坡灵草露水未干，采满一筐"));
@@ -4620,9 +4653,18 @@ mod text_tests {
         assert_eq!(EVENT_NAMES.get(370), Some("同制新历"));
         assert_eq!(EVENT_BRIEF.get(368), Some("暖阁晒背，轮流向阳"));
         assert_eq!(EVENT_BRIEF.get(370), Some("旧页撕去，新历同写"));
-        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=371）
-        assert_eq!(EVENT_NAMES.get(371), None);
-        assert_eq!(EVENT_BRIEF.get(371), None);
+        // 段十八（v1.16.45 施工单三扩池 3 条，TXT_NAME18_BASE=2801/TXT_BRIEF18_BASE=
+        // 2804，手写名/简连号段先于正文收编——施工单一/二占 N2794..2800（多道侣
+        // 文案 7 行）故段十八顺延 2801/2804）：len17 漂移唯一内容级防线——首尾
+        // 逐字钉，len17 写 N_EVENTS−EV_SEG16 静默吞段十八时在此必红（EV_SEG17=371
+        // 快照兜底；v1.16.45 len17 已改差兑现，本钉即改差内容级防线）
+        assert_eq!(EVENT_NAMES.get(371), Some("牒案翻旧"));
+        assert_eq!(EVENT_NAMES.get(373), Some("残页对笔"));
+        assert_eq!(EVENT_BRIEF.get(371), Some("旧牒重验，你的名字在列"));
+        assert_eq!(EVENT_BRIEF.get(373), Some("故人批注隔页应答，笔谈一夜"));
+        // 越界 None（旧 [&str; N].get 同款语义；扩池后界=374）
+        assert_eq!(EVENT_NAMES.get(374), None);
+        assert_eq!(EVENT_BRIEF.get(374), None);
         assert_eq!(EVENT_NAMES.get(usize::MAX), None);
     }
 
@@ -4761,7 +4803,7 @@ mod text_tests {
         // CHAPTERS：intro/open/reward_note/couplet 单值连号 + lore (ns,len) 对
         assert_eq!(
             CHAPTERS[0].intro(),
-            "雨夜乱葬岗，你从尸堆里爬出来，手里攥着一枚方印——印身无字，只有层层叠叠被划掉的痕迹。识海里有个累坏了的少年嗓音：你的名字是错的，天写错了。——先推演一生，看看错在哪里。"
+            "雨夜乱葬岗，你从尸堆里爬出来，手里攥着一枚方印——印身无字，只有层层叠叠被划掉的痕迹。你试着数那些划痕，数到第七层就乱了：每一层底下都压着另一层，像一册写了十万遍仍没写对的书。识海里有个累坏了的少年嗓音：你的名字是错的，天写错了。它不肯说来历，只把一笔旧账推到你面前——先推演一生，看看错在哪里。"
         );
         assert_eq!(CHAPTERS[0].open(), "方印无字，你有十万稿可写。");
         assert_eq!(CHAPTERS[0].reward_note(), "章成之礼：道韵 +50");

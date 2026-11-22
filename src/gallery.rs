@@ -255,11 +255,10 @@ pub fn draw_gallery_page(g: &mut Game) {
     let (mx, my) = crate::cam::mouse();
     let scroll = g.npc_scroll;
     // 当前道侣下标（已识判定的运行时纯推导半边；None = 此生未结缘）
-    let cur_comp: Option<usize> = g.life.as_ref().and_then(|l| {
-        l.companion
-            .as_deref()
-            .and_then(|cn| COMPANION_NAMES.iter().position(|&n| n == cn))
-    });
+    // v1.16.45 多道侣：当前卡判定改 Life::has_comp_idx 单源口（主伴+副伴同权——
+    // 副伴卡亦显实时情谊/可鉴赏；comp_fav 单值共享语义照 N2798 专页行口径）。
+    // 借用纪律：is_some_and 短借即还（循环体内 g.play 可变借用不与 life 借用
+    // 相交——闭包持 g 借用会横跨循环撞 E0502）
 
     // ---------- 上半部：同页人 10 卡（整卡剔除：首开 ≤3、滚动峰值 ≤4 卡在画，立绘查询随剔除跳过）----------
     for i in 0..COMPANION_NAMES.len() {
@@ -267,9 +266,10 @@ pub fn draw_gallery_page(g: &mut Game) {
         if y >= GAL_VIEW_Y1 || y + GAL_CARD_H <= GAL_VIEW_Y0 {
             continue;
         }
-        draw_gal_comp_card(g, i, y, cur_comp == Some(i));
+        let cur = g.life.as_ref().is_some_and(|x| x.has_comp_idx(i));
+        draw_gal_comp_card(g, i, y, cur);
         // v1.16.1 点立绘放大（已识真图才开；v1.16.2 盒加大：176..396 × y+12..y+268）
-        let known = g.meta.comp_bonds[i] > 0 || cur_comp == Some(i);
+        let known = g.meta.comp_bonds[i] > 0 || cur;
         if tap
             && known
             && crate::art::art().comp_tex(i).is_some()

@@ -713,6 +713,12 @@ async fn main() {
         if g.zoom_anim > 0.0 {
             g.zoom_anim = (g.zoom_anim - dt).max(0.0);
         }
+        // 演出包⑰-2 底栏九钮 stagger 计时递减（会话态，draw_reality 底栏九钮相位
+        // α 消费），照 zoom_anim 主循环先例——稳态 anim==0 时各钮 clamp 收敛 1.0
+        // 逐像素恒等（零成本快路径），0.27s 窗内逐钮错峰显影
+        if g.bar_anim > 0.0 {
+            g.bar_anim = (g.bar_anim - dt).max(0.0);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if debug {
             autopilot(&mut g, frame, &mut shots);
@@ -733,12 +739,12 @@ async fn main() {
 // 桌面侧代码零改动，冒烟链照旧。
 #[cfg(not(target_arch = "wasm32"))]
 fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
-    if frame % 120 == 30 && *shots < 74 {
+    if frame % 120 == 30 && *shots < 76 {
         let img = get_screen_data();
         let path = format!("shots/shot_{:03}.png", *shots);
         img.export_png(&path);
         *shots += 1;
-        if *shots >= 74 {
+        if *shots >= 76 {
             // v1.10.2：落盘去抖后 sync_save 只置脏，退出前必须显式 flush
             g.save_flush();
             std::process::exit(0);
@@ -1059,7 +1065,8 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
     // 剧情演出包⑯⑮+委托称号目检扩镜（照 027/067/069 注入先例，正式玩法不由此
     // 入账）：071=横幅逐字窗中段帧（注入 frame%120==26 拍点前 4 帧，k≈0.03 字距
     // 展开中）；072=鉴赏覆层动画中期帧（注入 %120==29 直写 zoom_anim=0.127，拍帧
-    // p≈0.5 沉降+轻摆峰值域；覆层模态独占早退无残影）；073=成就·称号页
+    // p≈0.42 沉降+轻摆起振段（轻摆峰值在 p≈0.141，见 zoom_breath_dx 注——上轮
+    // low③ 口径改准）；覆层模态独占早退无残影）；073=成就·称号页
     // panel=5+char_tab=2+comm_done=10——格 19『差事十全』earned 金边态入镜（右栏
     // 20 格版式 row6 col1 x=880 y=570 底 630<页脚）。三块包 return 块（照 67..=70
     // 款）：隔断本函数下方镜头编排的「panel!=0 且 frame%60==0 强关面板」分支——
@@ -1099,6 +1106,34 @@ fn autopilot(g: &mut Game, frame: u32, shots: &mut u32) {
             g.banner = None;
             g.meta.comm_done = 10;
             crate::charpanel::prewarm_title_page();
+        }
+        return;
+    }
+    // 演出包⑰ 目检扩镜（照 071-073 return 化先例，正式玩法不由此入账）：
+    // 074=底栏九钮 stagger 中期帧（注入 %120==26 直写 bar_anim 余值≈T×0.7，
+    // 拍点 30 前递减 4 帧 dt≈0.067s → e≈0.15 前 4 钮显影/槽 4 半透/槽 5..8 未起
+    // 错峰入镜）；075=stagger 稳态对照帧（bar_anim=0 恒等基线——底栏全显影
+    // 逐像素=旧实现的目检自证）。两块包 return 化同 071-073 款隔断强关分支。
+    if *shots >= 74 && *shots <= 75 {
+        if *shots == 74 && frame % 120 == 26 {
+            g.rmodal = None;
+            g.scene = Scene::Reality;
+            g.panel = 0;
+            g.submenu = None;
+            g.zoom_art = None;
+            g.zoom_anim = 0.0;
+            g.banner = None;
+            g.bar_anim = crate::game::BAR_ANIM_T * 0.7;
+        }
+        if *shots == 75 && frame % 120 == 26 {
+            g.rmodal = None;
+            g.scene = Scene::Reality;
+            g.panel = 0;
+            g.submenu = None;
+            g.zoom_art = None;
+            g.zoom_anim = 0.0;
+            g.banner = None;
+            g.bar_anim = 0.0;
         }
         return;
     }

@@ -115,6 +115,21 @@ pub const COMPANION_EVENTS: [u16; 37] = [
          // 同批）
 ];
 
+// v1.16.45 多道侣（上限 3）：同页不止一纸——主伴 companion 单槽语义零动（60+
+// 单值读点零手术），副伴入 comp_extra（上限 COMP_MAX-1=2，满编 FIFO 轮替最旧）。
+// 全部伴数判定走 Life 单源小口 comp_full()/comp_names()/has_comp_idx（防第三份
+// 推导漂移）；comp_fav 仍单值共享（v1.6.0 D 既定语义：好感挂玩家体系不挂人名）。
+pub const COMP_MAX: usize = 3;
+
+// v1.16.45 现实侧邂逅概率（唯一推岁口 advance_time 每耗岁一次 roll）：2%/载 →
+// 期望 50 载一遇；伴数满编（comp_full）不再 roll。纯运行期常量，零存档零 RNG 态。
+pub const RE_ENCOUNTER_P: f32 = 0.02;
+
+// 演出包⑰-2 底栏九钮入画 stagger 错峰窗总长（9 钮×30ms 相位步进）：五置值口
+// 置 bar_anim=此值，主循环递减到 0；稳态 0 时各钮相位 (T−i×0.03)/0.03=9−i≥1.0
+// clamp 恰 1.0（⑦ clamp 收敛红线同款）。会话态不进存档（bar_anim 字段批注）。
+pub const BAR_ANIM_T: f32 = 0.27;
+
 // v1.16.7 置链臂 special 槽位段：20..=31（apply_eff 链裁决据此区分「重写链态」
 // 与「本次抉择即链终局」）。v1.16.8 续编：28/29=链4（灯楼谜约）两段推进、
 // 30/31=链5（傩面还愿）双分支；检定臂自 32 起（32 青灯三问/33 墨叟一问/
@@ -527,6 +542,10 @@ pub enum CardKind {
     Path,   // v1.10.2 成行择道：choose_path 抉择（三途分流；副标由 draw_modal_card 特判）
     Finale, // v1.12.1 终卷四结局：choose_ending 抉择（问笔终战独占卡；新变体是硬前置——
             // 现有三路分派 else 落 choose_roption，rmodal_npc=None 时静默挂死）
+    Rencounter, // v1.16.45 现实侧邂逅卡（advance_time 推岁口 roll）：choose_rencounter
+                // 抉择（rmodal_npc=None 与道途/终战同理——新变体是硬前置，否则落
+                // choose_roption 因 npc None 静默挂死）。卡面复用同页天成版式
+                //（CardActor::Comp 立绘 + N670 正文），零新渲染路径
 }
 
 // v1.16.3 邂逅卡立绘：卡面主角（模拟侧「同页天成」/现实侧好感事件）——
@@ -650,6 +669,11 @@ pub struct Life {
 
     pub companion: Option<String>, // 道侣（模拟结缘；v1.6.0 遗泽可带回现实）
 
+    // v1.16.45 多道侣：副伴名单（上限 COMP_MAX-1=2；主伴 companion 保持首位语义
+    // 不动——单槽读点零手术）。结缘口 special17 与现实侧 bond_life_companion 共用
+    // 三分支判定；存档键 Lcomps=（空格分隔，缺键→空表零迁移）
+    pub comp_extra: Vec<String>,
+
     pub comp_fav: i32, // v1.6.0 D：道侣好感 0..=100（结缘起步 25，只升不降）
 
     pub pending_break: Option<(usize, f32)>, // 模拟抉择：(目标境界, 蓄势加成)
@@ -734,6 +758,8 @@ impl Default for Life {
 
             companion: None,
 
+            comp_extra: Vec::new(),
+
             comp_fav: 0,
 
             pending_break: None,
@@ -752,6 +778,54 @@ impl Default for Life {
 
             sx_year: 0,
         }
+    }
+}
+
+impl Life {
+    // v1.16.45 多道侣单源小口（防第三份推导漂移）：伴满判定 / 伴名全列 /
+    // 某同页人是否在伴（主伴或副伴）。主伴 companion 单槽语义零动。
+    pub fn comp_full(&self) -> bool {
+        self.companion.is_some() && self.comp_extra.len() >= COMP_MAX - 1
+    }
+
+    // 生产读点本轮未用（UI 展示位走 comp_extra.join 单独拼副伴行——主伴主卡
+    // 既有单值读点零手术）；钉测 comp_names().len() 计数消费。照 npc.rs
+    // add_comp_fav 「定稿 API 保留」先例挂 allow 防构建 warning。
+    #[allow(dead_code)]
+    pub fn comp_names(&self) -> Vec<&str> {
+        let mut v: Vec<&str> = Vec::with_capacity(COMP_MAX);
+        if let Some(cn) = self.companion.as_deref() {
+            v.push(cn);
+        }
+        for name in &self.comp_extra {
+            v.push(name.as_str());
+        }
+        v
+    }
+
+    pub fn has_comp_idx(&self, i: usize) -> bool {
+        let Some(cn) = crate::data::COMPANION_NAMES.get(i) else {
+            return false;
+        };
+        self.companion.as_deref() == Some(*cn)
+            || self.comp_extra.iter().any(|x| x == cn)
+    }
+
+    // 结缘三分支单源口（模拟侧 special17 与现实侧 bond_life_companion 共用）：
+    // 返回落位与被轮替的旧名。主伴空→主伴位；主伴有未满→extra 尾；满编→extra[0]
+    // FIFO 轮替。comp_fav/gallery 等账面由调用点各自记账，本口只动伴名槽位。
+    pub fn bond_slot(&mut self, cn: &str) -> (bool, Option<String>) {
+        if self.companion.is_none() {
+            self.companion = Some(cn.to_string());
+            return (true, None);
+        }
+        if self.comp_extra.len() < COMP_MAX - 1 {
+            self.comp_extra.push(cn.to_string());
+            return (false, None);
+        }
+        let old = self.comp_extra[0].clone();
+        self.comp_extra[0] = cn.to_string();
+        (false, Some(old))
     }
 }
 
@@ -1345,6 +1419,15 @@ pub struct Game {
     // 唯一零动效的全屏立绘主时刻，开启帧已有 prewarm_zoom_text 事件口，照⑫新增
     // 计时器先例成本极低（翻转理由备案，复审据此核对）
     pub zoom_anim: f32,
+
+    // 演出包②-2 底栏九钮入画 stagger：进现实行动层五口（begin_mortal/resume_life/
+    // finish_inherit/close_world/世界图打开坊市）置 BAR_ANIM_T=0.27→0（draw_reality
+    // 底栏九钮消费）。照上方 zoom_anim 口径：会话态不进存档（save.rs 零
+    // 引用），旧档载入天然 0 不误触；漏置触发口=该入口无动画优雅降级不破稳态
+    // （勘察风险栏 5）；递减挂主循环照 modal_anim/weather_anim/zoom_anim 的 main.rs
+    // 先例。稳态收敛：anim==0 → 各钮相位 (T−0−i×0.03)/0.03=9−i≥1.0 clamp 恰 1.0（⑦
+    // clamp 收敛红线同款），fade(c,1.0) 逐比特恒等
+    pub bar_anim: f32,
 
     pub speed: usize, // 模拟速度 0暂停 1慢 2快 3跳过
 
@@ -1946,6 +2029,8 @@ impl Game {
 
             zoom_anim: 0.0,
 
+            bar_anim: 0.0,
+
             speed: 2,
 
             acc: 0.0,
@@ -2300,6 +2385,10 @@ impl Game {
         // v1.16.8 章节书：转生入世事实翻转点（首世=第一章转生目标边沿）
         self.check_chapters();
 
+        // 演出包⑰-2 底栏九钮入画 stagger：进现实行动层置值口 1/5（BAR_ANIM_T
+        // 错峰窗 0.27s，draw_reality 底栏九钮消费；会话态照 zoom_anim 口径）
+        self.bar_anim = crate::game::BAR_ANIM_T;
+
         // v1.16.10 新手首世一次性提示（sy= bit2）：首入现实指路一句——顶部金框是
         // 当前目标、「任务」钮随时查看（教会横带+任务钮双入口）。闩仅首世（lives==1）
         // 置位；置于本函数尾——visit_region 初至/check_chapters 的 toast 在前，单槽
@@ -2353,6 +2442,8 @@ impl Game {
         // 此处兜底显式已至但未记的区域——已置位则为 no-op）
         self.visit_region(true);
         self.scene = Scene::Reality;
+        // 演出包⑰-2 置值口 2/5（承接前缘进现实行动层）
+        self.bar_anim = crate::game::BAR_ANIM_T;
         self.log("轮回镜微亮，前缘未了。", C_TEXT);
         self.sync_taodie(); // v1.12.1 讨牒旧档首检：neme_slain>0 自动补齐职牒（零迁移）
         // v1.10.2 离线闭关：恢复即结算（收益先入账内存，落盘交收功/去抖/pagehide）
@@ -3958,6 +4049,19 @@ impl Game {
             // v1.16.35 单3 扩池 31→32）
             if !comp && COMPANION_EVENTS.contains(&(id as u16)) {
                 ww = 0.0;
+            }
+
+            // v1.16.45 遭遇放宽（独立单 if 照 sect/lingmai 同点纪律，异门勿并）：
+            // 有伴且伴数未满（COMP_MAX-1 副伴位有余）时，同页天成（28）权重 ×5——
+            // 修复「确立道侣后无法再遇其他女角色」：基权 5 在 1139 总池下低境年遇率
+            // 仅 ~0.07%，期望间隔千载级，一世难逢；运行期乘区不动 EVENTS_ROWS（28
+            // 基权恒 5，pool_ledger_recheck pin total==1139 红线）。满编恢复 w5 原样
+            // （不再勾新缘）；弹卡后满编不撤卡——乘区只影响入池判定。
+            if id == 28 && comp {
+                let full = self.sim.as_ref().map_or(true, |s| s.comp_full());
+                if !full {
+                    ww *= 5.0;
+                }
             }
 
             // v1.16.8 章节联动事件：主线章节达成（施工单1章节书系统 chap_done 位掩码）
@@ -11417,7 +11521,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = evf(2784, &[&(cn) as &dyn core::fmt::Display])/* 原文：冬日晌午，暖阁里晒得人昏昏欲眠。你与{}把竹椅拖到窗下，一人一头，轮流把背交给日头——阁外霜风打转，阁内暖得不像冬天。 */;
+                card.text = evf(2784, &[&(cn) as &dyn core::fmt::Display])/* 原文：冬日晌午，暖阁里晒得人昏昏欲眠。你与{}把竹椅拖到窗下，一人一头，轮流把背交给日头——阁外霜风打转，阁内暖得不像冬天。*/;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
@@ -11439,7 +11543,7 @@ impl Game {
                 // 新臂+副标「漏停一问」手写行 N2783；「漏刻/滴漏/更漏/铜壶」全池
                 // 0；「无声」字面撞 212 简语「落雪无声」不同义照 365「径」共存
                 // 先例注明；纯检定散件无链勿动链窗；stage 恒 None 照 329/356）
-                card.text = evtx(2787)/* 原文：借宿的古观里有一具旧漏刻，滴了不知多少年。夜半你起身添水，发现它停了——水面平得像镜，最后一滴悬在漏眼上，不肯落下。 */.to_string();
+                card.text = evtx(2787)/* 原文：借宿的古观里有一具旧漏刻，滴了不知多少年。夜半你起身添水，发现它停了——水面平得像镜，最后一滴悬在漏眼上，不肯落下。*/.to_string();
                 let mut e1 = Eff::new();
                 e1.special = 77;
                 e1.good = false;
@@ -11471,7 +11575,7 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = evf(2791, &[&(cn) as &dyn core::fmt::Display])/* 原文：岁首开笔，你与{}合制一本新历——去岁的旧页一张张撕下，今年的日子两人分头写。 */;
+                card.text = evf(2791, &[&(cn) as &dyn core::fmt::Display])/* 原文：岁首开笔，你与{}合制一本新历——去岁的旧页一张张撕下，今年的日子两人分头写。*/;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
@@ -11485,6 +11589,68 @@ impl Game {
                     evtx(2793)/* 原文：你把撕下的旧页收进匣底——新历从头写，旧页也要有处安放。气运+1 */.to_string(),
                 ];
                 card.opts.push(("旧页入匣".into(), e2));
+            }
+            371 => {
+                // v1.16.45 施工单三扩池段十八：mr7 恶散件——恶缘 mr7 层 6 条全
+                // 恶层最薄+mr7 常态池 26 条次薄（364 后两批未落）；文狱职牒线深
+                // 化（勘察五主1）：岁末翻旧牒重验已成之牒。总基权 1130→1139 同批
+                // pool_ledger_recheck；题材避 191 文狱退牒（勘察五弃「文狱翻牒」
+                // 改「翻旧」面）；正文照施工单三③口径 2 段（tall 版式零新代码）
+                card.text = evtx(2807)/* 原文：文狱岁末翻旧牒，你名下一张已成之牒被抽中重验——验的是当年那一刀，有没有砍在错写的行上。
+牵牒的吏员面无表情，只把牒面转向你：名实不符者，追回造化；自证清白者，礼送出堂。 */.into();
+                let mut e1 = Eff::new();
+                // 打点消案：负灵石照 5014 先例（stone_scale 乘区——mr7 案值厚）
+                e1.stones = -((4000.0 * ss) as i64);
+                e1.msg = vec![
+                    evf(2808, &[&(fmt_int((4000.0 * ss) as i64)) as &dyn core::fmt::Display])/* 原文：你把一袋灵石压在案头，吏员掂了掂分量，旧牒归档——无人再翻。灵石-{} */,
+                ];
+                card.opts.push(("上下打点".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = -1.0;
+                e2.qi_pct = 0.08;
+                e2.good = false;
+                e2.msg = vec![
+                    evtx(2809)/* 原文：你逐行自辩，句句落在实处——吏员收牒，提笔勾去「复查」二字。气运-1，修为+8% */.into(),
+                ];
+                card.opts.push(("当堂自辩".into(), e2));
+            }
+            372 => {
+                // v1.16.45 施工单三扩池段十八：mr6 善散件——善散件 350 后九批
+                // 未落、mr6 层 30 条次薄；玄诚长老第九卡 CardActor::Npc(0) 照
+                // 337 先例（正文钉名⟺Npc(0) 同源纪律）；门中差事 v1.16.40 comm
+                // 系统叙事深化，纯叙事读既有态零新键；非道侣门控非老年非天气
+                card.actor = Some(CardActor::Npc(0));
+                card.text = evtx(2810)/* 原文：交差归来，玄诚长老在堂前验了你的差事簿，朱笔勾讫。\n他另取一册新差压在你面前：「门中下一步怎么走，看的是差事簿的厚薄——厚一分，说话就响一分。」 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(2811)/* 原文：你接过新差簿——长老颔首：「下一件差事，已在簿上等着你。」道心+2 */.into(),
+                ];
+                card.opts.push(("领下新差".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(2812)/* 原文：你说手中事未了，暂不敢领。长老不恼：「簿在堂前，随时来取。」气运+1 */.into(),
+                ];
+                card.opts.push(("婉言辞差".into(), e2));
+            }
+            373 => {
+                // v1.16.45 施工单三扩池段十八：mr5 善散件——善散件 330 后十批
+                // 未落、mr5 层 34 条；书稿/故人线深化（勘察五主3）：旧稿堆认出
+                // 故人早年批注笔迹，隔页对答一代人的注脚
+                card.text = evtx(2813)/* 原文：旧稿堆里翻出一页残稿，页脚一行批注的笔迹——你认得，是故人早年的字。\n你在页脚接着写了一行，把稿子放回原处。次日再翻，批注下面多了一行新的：字迹依旧，话却是新答的。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 3.0;
+                e1.msg = vec![
+                    evtx(2814)/* 原文：你与那笔迹隔着纸页对答半宿，像隔着一场旧梦。道心+3 */.into(),
+                ];
+                card.opts.push(("隔页对答".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(2815)/* 原文：你把残稿收进匣底，与旧历页放作一处——有些对话，不必等回音。气运+1 */.into(),
+                ];
+                card.opts.push(("收入匣底".into(), e2));
             }
 
             _ => {}
@@ -11708,6 +11874,13 @@ impl Game {
             17 => {
                 // 结为道侣。v1.12.1 同页人·三生缝页：掷名 40% 缘定缝页人——未定名时
                 // 定名初缝，已定名时强制重逢；初缝/离页重逢各补一行史笔
+                // v1.16.45 多道侣：槽位判定改走 Life::bond_slot 单源口（与现实侧
+                // bond_life_companion 同源防漂移）——主伴空→主伴位（原路径语义零动，
+                // first/companion_lives/成就/章节边沿全原样）；主伴有且副伴位有余→
+                // 入 comp_extra；满编→FIFO 轮替最旧副伴（N2795 显性 slog，旧实现
+                // 是静默顶替主伴——「确立后无法再遇」修复本体）。缝页掷名/highlights
+                // /gallery_bond 逐行不动；first 语义陷阱：companion_lives/check_ach/
+                // check_chapters 只许主伴 None→Some 边沿触发（副伴结缘不计数）。
                 let roll = gen_range(0, COMPANION_NAMES.len());
                 let (idx, feng_new) = if self.meta.feng_bn == crate::data::FENG_UNSET {
                     if gen_range(0.0, 1.0) < 0.4 {
@@ -11725,12 +11898,14 @@ impl Game {
                 let prev = self.sim.as_ref().unwrap().companion.clone();
                 let feng_re = !feng_new && self.feng_reunion(prev.as_deref(), cn);
 
-                let first = {
+                let (first, slot, evicted) = {
                     let s = self.sim.as_mut().unwrap();
 
                     let first = s.companion.is_none();
 
-                    s.companion = Some(cn.to_string());
+                    // v1.16.45：原 s.companion = Some(cn.to_string()) 单槽覆写改
+                    // 三分支单源口（缩进层级不变，替换一行调用）
+                    let (slot, evicted) = s.bond_slot(cn);
 
                     // v1.6.0 D 应修②：好感只升不降——sim Life 由现实克隆（launch_sim）带入
                     // comp_fav，直接赋 25 会让遗泽等来源的高好感倒退（如 1.30 档→1.20）。
@@ -11745,7 +11920,7 @@ impl Game {
                         s.highlights.push(evf(1517, &[&(s.age as i32), &(cn)])/* 原文：{}岁，与{}同页重逢——撕开的页，又缝上了 */);
                     }
 
-                    first
+                    (first, slot, evicted)
                 };
                 if first {
                     self.meta.companion_lives += 1;
@@ -11757,17 +11932,40 @@ impl Game {
                     self.check_chapters();
                 }
                 // v1.16.0 交游图鉴：结缘即录入（唯一写入口 gallery_bond；无论是否 first——
-                // 重逢/换道侣亦记历世同页一次；quit_sim_redraft 重掷不回退本账）
+                // 重逢/换道侣亦记历世同页一次；quit_sim_redraft 重掷不回退本账。
+                // v1.16.45：副伴/轮替落位亦记——历世缘谱账与槽数解耦）
                 self.gallery_bond(idx);
-                self.slog(
-                    evf(2607, &[&(cn) as &dyn core::fmt::Display, &(crate::data::Fmt0((crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0)) as &dyn core::fmt::Display])/* 原文：你与{}缝作同页！修炼速度+{}%，心魔有抚。 */,
-                    C_GOLD,
-                );
-                // v1.16.18 搭车⑤：结缘瞬间 toast（sim 侧 toast 槽 draw.rs:1741 已渲染）。
-                // 与上行 slog 同帧双通道是文案分工：slog=信箱记账留痕，toast=当场提示。
-                // 单槽后写胜：会顶掉同帧 check_ach(22) 成就 toast（成就 log 仍留），
-                // banner 槽让给 check_chapters 章节横幅（本臂只动 toast 不动 banner）
-                self.toast(format!("与{}缝作同页", cn), C_PURPLE);
+                // slog/toast 按落位分流（原单路径 2607 + toast 只在主伴位语义成立；
+                // 副伴/轮替走新句 N2794..2797——双通道文案分工照原注）
+                if slot {
+                    self.slog(
+                        evf(2607, &[&(cn) as &dyn core::fmt::Display, &(crate::data::Fmt0((crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0)) as &dyn core::fmt::Display])/* 原文：你与{}缝作同页！修炼速度+{}%，心魔有抚。 */,
+                        C_GOLD,
+                    );
+                    // v1.16.18 搭车⑤：结缘瞬间 toast（sim 侧 toast 槽 draw.rs:1741 已渲染）。
+                    // 与上行 slog 同帧双通道是文案分工：slog=信箱记账留痕，toast=当场提示。
+                    // 单槽后写胜：会顶掉同帧 check_ach(22) 成就 toast（成就 log 仍留），
+                    // banner 槽让给 check_chapters 章节横幅（本臂只动 toast 不动 banner）
+                    self.toast(format!("与{}缝作同页", cn), C_PURPLE);
+                } else if let Some(old) = evicted {
+                    self.slog(
+                        evf(2795, &[&(old.as_str()) as &dyn core::fmt::Display, &(cn) as &dyn core::fmt::Display])/* 原文：{}的页渐疏，{}另缝一页——同页仍止三纸。 */,
+                        C_GOLD,
+                    );
+                    self.toast(
+                        evf(2797, &[&(old.as_str()) as &dyn core::fmt::Display, &(cn) as &dyn core::fmt::Display])/* 原文：{}的页渐疏，与{}另缝同页 */,
+                        C_PURPLE,
+                    );
+                } else {
+                    self.slog(
+                        evf(2794, &[&(cn) as &dyn core::fmt::Display])/* 原文：你与{}另缝一页——同页不止一纸，情谊随主页共长。 */,
+                        C_GOLD,
+                    );
+                    self.toast(
+                        evf(2796, &[&(cn) as &dyn core::fmt::Display])/* 原文：与{}另缝同页 */,
+                        C_PURPLE,
+                    );
+                }
             }
             18 => {
                 // 宗门大比夺魁
@@ -12264,7 +12462,8 @@ impl Game {
                         s.dao = (s.dao - 2.0).max(0.0);
                     }
 
-                        self.slog(
+                    // v1.16.45 上轮复审 low① 顺手清账：败臂 slog 行缩进错排（24 格多排 8 格）正为 20 格——纯排版零行为变化
+                    self.slog(
                         evtx(2700)/* 原文：你答到一半嗓音哑了，瓦缶那声余响闷在裂口里，你心口也跟着一滞。（轻伤，道心-2） */,
                         C_RED,
                     );
@@ -13534,12 +13733,21 @@ impl Game {
                 life.luck = (life.luck + 8.0).min(100.0);
                 // v1.6.0 D：道侣遗泽单义——有伴才承接（comp_fav = max(现实,模拟) + 10）；
                 // 无伴时维持原「道心+8 气运+8」文案
+                // v1.16.45 承伴不顶替：现实主伴空→原样置主伴；主伴已有且同名→重逢
+                // 槽位不动；主伴已有且异名→模拟主伴入 comp_extra 副伴位（bond_slot
+                // 单源口：未满尾插/满编 FIFO 轮替 extra[0]；同名已在 extra 原位不动
+                // ——重逢不重复入列），comp_fav=max 语义不动（好感挂玩家体系）
                 let comp = sr.comp.clone();
                 if let Some(cn) = &comp {
                     let fav = (sr.comp_fav.max(life.comp_fav) + INHERIT_LEGACY_FAV)
                         .min(NPC_FAV_MAX);
                     life.comp_fav = fav;
-                    life.companion = Some(cn.clone());
+                    if life.companion.is_none() || life.companion.as_deref() == Some(cn.as_str())
+                    {
+                        life.companion = Some(cn.clone());
+                    } else if !life.comp_extra.iter().any(|x| x == cn) {
+                        life.bond_slot(cn);
+                    }
                     msg = evf(1553, &[&(cn), &(INHERIT_LEGACY_FAV)])/* 原文：道侣遗泽：{}随你魂归现实，情谊不减（好感+{}）。道心 +8，气运 +8。 */;
                 } else {
                     msg = evtx(1777)/* 原文：道侣遗泽：道心 +8，气运 +8（永久） */.to_string();
@@ -13562,6 +13770,9 @@ impl Game {
 
     pub fn finish_inherit(&mut self) {
         self.scene = Scene::Reality;
+
+        // 演出包⑰-2 置值口 3/5（遗泽收束进现实行动层）
+        self.bar_anim = crate::game::BAR_ANIM_T;
 
         self.sim_result = None;
 
@@ -13776,6 +13987,118 @@ impl Game {
             C_GOLD,
         );
         self.play(crate::sounds::Which::Ascend);
+        self.sync_save();
+    }
+
+    // ================= v1.16.45 多道侣：现实侧结缘单口 =================
+    // 现实邂逅卡（advance_time 推岁口 roll → rmodal）「认下」臂落点：三分支槽位
+    // 判定走 Life::bond_slot 单源口（与模拟侧 special17 同源防漂移）——主伴空→
+    // 主伴位（first 边沿 companion_lives/check_ach(22/26)/check_chapters 照
+    // special17 原样，只许主伴 None→Some 边沿触发，副伴结缘不计数——成就「三度
+    // 结缘」与第六章目标防灌水）；主伴有未满→extra 尾；满编→FIFO 轮替。掷名照
+    // 模拟侧 special17 掷名口 gen_range（卡面立绘与掷名无涉照 28 臂注释纪律；
+    // 缝页缘 feng_* 仅模拟侧——现实侧独立掷名不触缝页账）。gallery_bond 无论何
+    // 槽都记（唯一写入口纪律）。log/toast 复用模拟侧同 N 文案（N2607/2794/2795/
+    // 2796/2797 + N2799 主伴 toast 单源不设第二份句）。
+    pub fn bond_life_companion(&mut self, idx: usize) {
+        let k = idx.min(COMPANION_NAMES.len() - 1);
+        let cn = COMPANION_NAMES[k];
+        let (first, slot, evicted) = {
+            let Some(l) = self.life.as_mut() else {
+                return;
+            };
+            let first = l.companion.is_none();
+            let (slot, evicted) = l.bond_slot(cn);
+            // comp_fav 单值共享（v1.6.0 D 既定语义）：结缘起步 max 25 照模拟侧
+            l.comp_fav = l.comp_fav.max(COMPANION_BOND_FAV);
+            (first, slot, evicted)
+        };
+        if first {
+            self.meta.companion_lives += 1;
+            self.check_ach(22);
+            if self.meta.companion_lives >= 3 {
+                self.check_ach(26);
+            }
+            // v1.16.8 章节书：首结缘事实翻转点（第六章目标边沿）
+            self.check_chapters();
+        }
+        self.gallery_bond(k);
+        if slot {
+            self.log(
+                evf(2607, &[&(cn) as &dyn core::fmt::Display, &(crate::data::Fmt0((crate::npc::comp_cult_mult(COMPANION_BOND_FAV) - 1.0) * 100.0)) as &dyn core::fmt::Display])/* 原文：你与{}缝作同页！修炼速度+{}%，心魔有抚。 */,
+                C_GOLD,
+            );
+            self.toast(
+                evf(2799, &[&(cn) as &dyn core::fmt::Display])/* 原文：与{}结为道侣 */,
+                C_PURPLE,
+            );
+        } else if let Some(old) = evicted {
+            self.log(
+                evf(2795, &[&(old.as_str()) as &dyn core::fmt::Display, &(cn) as &dyn core::fmt::Display])/* 原文：{}的页渐疏，{}另缝一页——同页仍止三纸。 */,
+                C_GOLD,
+            );
+            self.toast(
+                evf(2797, &[&(old.as_str()) as &dyn core::fmt::Display, &(cn) as &dyn core::fmt::Display])/* 原文：{}的页渐疏，与{}另缝同页 */,
+                C_PURPLE,
+            );
+        } else {
+            self.log(
+                evf(2794, &[&(cn) as &dyn core::fmt::Display])/* 原文：你与{}另缝一页——同页不止一纸，情谊随主页共长。 */,
+                C_GOLD,
+            );
+            self.toast(
+                evf(2796, &[&(cn) as &dyn core::fmt::Display])/* 原文：与{}另缝同页 */,
+                C_PURPLE,
+            );
+        }
+        self.play(crate::sounds::Which::Ding);
+    }
+
+    // v1.16.45 现实邂逅卡构造（advance_time roll 命中时装配）：卡面复用模拟侧
+    // 同页天成版式——标题 EVENT_NAMES[28] 单源查表、正文 N670、立绘
+    // CardActor::Comp(ci)（卡面文本名与立绘下标同源同掷）；认下臂 special=17
+    //（经 apply_reff special17 臂 → bond_life_companion 落现实 life），婉拒臂
+    // dao+5 照 28 臂 e2 原样（文案 N0/evtx(0) 复用）。零新渲染路径零新立绘。
+    fn rencounter_card() -> EventCard {
+        let ci = gen_range(0, COMPANION_NAMES.len());
+        let cn = COMPANION_NAMES[ci];
+        let mut card = EventCard {
+            kind: CardKind::Rencounter,
+            title: EVENT_NAMES[28].into(),
+            text: evf(670, &[&(cn)])/* 原文：晒书日，{}于书摊间递来半页残稿：「两页相贴，缝作同页——可愿？」墨迹在缝口咬合，私语轻得像纸响：这页等了好久。 */,
+            opts: Vec::new(),
+            actor: Some(CardActor::Comp(ci)),
+            rare: false,
+            stage: None,
+            cat: None,
+            scene: None,
+            brk: false,
+        };
+        let mut e1 = Eff::new();
+        e1.special = 17;
+        e1.msg = vec![evf(671, &[&(cn)])/* 原文：缝口在指下咬合，一缕暖意顺纸脊漫上指尖——{}的名字与你的落在同一行。 */];
+        card.opts.push(("认下这页".into(), e1));
+        let mut e2 = Eff::new();
+        e2.dao = 5.0;
+        e2.msg = vec![evtx(0)/* 原文：你婉拒道：「一页未成，何以同页。」道心+5 */.into()];
+        card.opts.push(("专注于道".into(), e2));
+        card
+    }
+
+    // v1.16.45 现实邂逅卡抉择口（draw_modal_card 分派臂唯一入口；rmodal 独占模态
+    // 照道途/终战卡先例，rmodal_npc 同生共死照 choose_roption 先例）。认下
+    //（special17）经 apply_reff special17 臂 → bond_life_companion；婉拒走 reff
+    // 常规消费（dao+5）。
+    pub fn choose_rencounter(&mut self, i: usize) {
+        let card = self.rmodal.take();
+        self.rmodal_npc = None;
+        let Some(card) = card else {
+            return;
+        };
+        let Some((_, eff)) = card.opts.into_iter().nth(i) else {
+            return;
+        };
+        crate::npc::apply_reff(self, &eff);
         self.sync_save();
     }
 
@@ -14137,6 +14460,27 @@ impl Game {
                 evf(1563, &[&(full), &(REALMS[r.min(14)].name)])/* 原文：风声传来：{}闭关数载，已晋入{}境！ */,
                 C_RED,
             );
+        }
+        // v1.16.45 现实侧邂逅 roll（结构性补缺——此前现实推岁/赶路/任务/远征全链
+        // 零随机女角色遭遇系统，结缘只能「模拟结缘→遗泽回流」）：life 存在 && 伴数
+        // 未满（Life::comp_full 单源口）&& RE_ENCOUNTER_P/载 → 邂逅卡挂 rmodal
+        //（同页天成版式复用，认下走 bond_life_companion 三分支）。借用纪律照宿敌
+        // neme_up 先例：块内收集，块外置卡；rmodal 被占（道途/终战/好感卡悬空）时
+        // 整次 roll 静默跳过照 open_path_card 卫语句口径，不挤占模态槽。弹卡后满编
+        // 不撤卡——概率只影响入池判定（措辞纪律照 4077 注）。
+        let mut rencounter = false;
+        if self.rmodal.is_none() {
+            let full = self.life.as_ref().map_or(true, |l| l.comp_full());
+            rencounter = !full && gen_range(0.0, 1.0) < RE_ENCOUNTER_P;
+        }
+        if rencounter {
+            self.rmodal = Some(Self::rencounter_card());
+            self.rmodal_npc = None; // 邂逅卡不归属 NPC（Rencounter 分派单列照道途/终战先例）
+            self.log(
+                evtx(2800)/* 原文：赶路途中偶逢书摊，一名女子递来半页残稿——同页之约，且听分说。 */,
+                C_GOLD,
+            );
+            self.play(crate::sounds::Which::Ding);
         }
     }
 
@@ -15807,6 +16151,8 @@ pub(crate) mod revenge_tests {
             weather_anim: 0.0,
 
             zoom_anim: 0.0,
+
+            bar_anim: 0.0,
 
             speed: 0,
 
@@ -18359,6 +18705,11 @@ mod chain_event_tests {
             (368, false, None),
             (369, true, None),
             (370, false, None),
+            // v1.16.45 施工单三段十八三行（371 恶散件/372 Npc 散件/373 散件——
+            // w3 均不入稀有桶照款，stage 恒 None 非链段）
+            (371, false, None),
+            (372, false, None),
+            (373, false, None),
         ] {
             g.modal = None;
             g.build_event(id);
@@ -19841,7 +20192,8 @@ mod event_batch_v1168_tests {
         // v1.16.40 单3 扩池 3（362 芦絮暖枕/363 同修暖榻/364 山摇地动）→ 365 条
         // v1.16.43 单3 扩池 3（365 院墙夜塌/366 共扫叶径/367 檐冰垂光）→ 368 条
         // v1.16.44 扩池 3（368 暖阁晒背/369 漏刻无声/370 同制新历）→ 371 条
-        assert_eq!(EVENTS.len(), 371);
+        // v1.16.45 施工单三扩池 3（371 牒案翻旧/372 堂前领差/373 残页对笔）→ 374 条
+        assert_eq!(EVENTS.len(), 374);
     }
 }
 
@@ -20458,10 +20810,17 @@ mod v11615_reward_and_pool_tests {
     // 表最陈薄层）；共 3 条零新键零资产；总基权 1123→1130（1×w1+2×w3）；恶缘
     // 72 条 252 权不变；常态池（w>0）mr 分布（336 条）
     // 0:47/1:63/2:57/3:39/4:40/5:34/6:30/7:26
+    // v1.16.45 施工单三扩池批 3 条随批：牒案翻旧 371 w3 mr7 恶（恶缘 72→73 条
+    // 252→255 权——mr7 恶 364 后两批未落全恶层最薄 6 条；勘察五主1 文狱职牒线）/
+    // 堂前领差 372 w3 mr6 善（玄诚第九卡 Npc(0)——mr6 善散件 350 后九批未落）/
+    // 残页对笔 373 w3 mr5 善（mr5 善散件 330 后十批未落）；共 3 条零新键零资产
+    // 照勘察五提名全落；总基权 1130→1139（3×w3）；稀有 31 条 51 权不变
+    // 51/1139≈4.48% 守带；常态池（w>0）mr 分布（339 条）
+    // 0:47/1:63/2:57/3:39/4:40/5:35/6:31/7:27
     #[test]
     fn pool_ledger_recheck() {
         let total: i32 = EVENTS.iter().map(|&p| ev_w(p)).sum();
-        assert_eq!(total, 1130, "总基权漂移——照 data.rs v1.16.44 扩池批注重算");
+        assert_eq!(total, 1139, "总基权漂移——照 data.rs v1.16.45 施工单三扩池批注重算");
         let rare: Vec<(usize, i32)> = EVENTS
             .iter()
             .filter(|&&p| ev_w(p) > 0 && ev_w(p) <= crate::data::RARE_W)
@@ -20942,9 +21301,10 @@ mod v11617_pool_tests {
         // v1.16.40 单3 扩池 3 条（362..=364）同批随批注口径 362→365
         // v1.16.43 单3 扩池 3 条（365..=367）同批随批注口径 365→368
         // v1.16.44 扩池 3 条（368..=370）同批随批注口径 368→371
-        assert_eq!(EVENTS.len(), 371);
-        assert_eq!(EVENT_NAMES.len(), 371);
-        assert_eq!(EVENT_BRIEF.len(), 371);
+        // v1.16.45 施工单三扩池 3 条（371..=373）同批随批注口径 371→374
+        assert_eq!(EVENTS.len(), 374);
+        assert_eq!(EVENT_NAMES.len(), 374);
+        assert_eq!(EVENT_BRIEF.len(), 374);
         for id in 183..=204usize {
             assert_eq!(EVENTS_ROWS[id].0 as usize, id, "新增段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
@@ -21130,6 +21490,15 @@ mod v11617_pool_tests {
         // 二委托称号可佩句占 N2776 故段十七顺延）
         for id in 368..=370usize {
             assert_eq!(EVENTS_ROWS[id].0 as usize, id, "v1.16.44 段十七 id 连续");
+            assert!(!EVENT_NAMES[id].is_empty());
+            assert!(!EVENT_BRIEF[id].is_empty());
+        }
+        // v1.16.45 施工单三扩池 3 条段十八批段补钉（照段十七款新增勿替换——
+        // 371..=373 三条 id==下标连续与名/简非空，批尾 373 封口勿写 ..=374 同上
+        // 先例；名/简第十八段连号 N2801..2803/N2804..2806——施工单一/二占
+        // N2794..2800（多道侣文案 7 行）故段十八顺延）
+        for id in 371..=373usize {
+            assert_eq!(EVENTS_ROWS[id].0 as usize, id, "v1.16.45 段十八 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
             assert!(!EVENT_BRIEF[id].is_empty());
         }
@@ -27091,5 +27460,717 @@ mod v11644_pool_tests {
         let mut e = Eff::new();
         e.special = 77;
         assert_eq!(e.eff_desc(), "漏停一问", "槽 77 副标应启用「漏停一问」");
+    }
+}
+
+// ================= v1.16.45 多道侣 + 现实邂逅 + bug② 遗留视觉清理 钉测 =================
+// 照 v11642_premium_tests 先例（自含夹具 + use super::revenge_tests::game_with）。
+// 钉面：①连认上限/FIFO 轮替/first 边沿防灌水 ②遭遇乘区三态（基权表零改动）
+// ③基权 pin（防误改 EVENTS_ROWS 破 pool_ledger_recheck）④遗泽承伴不顶替
+// ⑤apply_reff special17 现实结缘三分支 ⑥feng/neme 与多伴零耦合（行为+静态双钉）
+// ⑦现实邂逅卡构造与分派接线 ⑧bug② 鬼影标签删除静态钉（正向删净+反向四真钮在位）
+#[cfg(test)]
+mod v11645_comp_multi_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // 照 gallery_bond_chain_tests::bond_card 构卡法（special=17 单选项认下卡）
+    fn bond_card() -> EventCard {
+        let mut e = Eff::new();
+        e.special = 17;
+        EventCard {
+            kind: CardKind::Npc,
+            actor: None,
+            rare: false,
+            stage: None,
+            cat: None,
+            scene: None,
+            brk: false,
+            title: "同页天成".into(),
+            text: "两页相贴，缝作同页——可愿？".into(),
+            opts: vec![("认下这页".into(), e)],
+        }
+    }
+
+    // 从 sim.highlights 尾行解析本次结缘名（1515/1516/1517 三行共通「岁，与X…」
+    // 前缀；X=COMPANION_NAMES 内 2-4 字名无标点）——掷名随机下取确定值防 flaky
+    fn last_bond_name(highlights: &[String]) -> String {
+        let h = &highlights[highlights.len() - 1];
+        let t = h.split_once("岁，与").expect("结缘行含「岁，与」").1;
+        for end in ["缝作同页", "初缝三生之页", "同页重逢"] {
+            if let Some((name, _)) = t.split_once(end) {
+                return name.to_string();
+            }
+        }
+        panic!("结缘行无已知尾式：{}", h);
+    }
+
+    // ── G1 连认上限/FIFO 轮替/first 边沿 ──
+    #[test]
+    fn multi_bond_cap_and_eviction() {
+        let mut g = game_with(Life::default(), None);
+        g.sim = Some(Life::default());
+        for _k in 0..3 {
+            g.modal = Some(bond_card());
+            g.choose_option(0);
+        }
+        {
+            let s = g.sim.as_ref().unwrap();
+            assert!(s.companion.is_some(), "3 认后主伴在位");
+            assert_eq!(s.comp_extra.len(), 2, "3 认后副伴恰 2（上限 COMP_MAX-1）");
+            assert_eq!(s.comp_names().len(), COMP_MAX, "伴总数恒 3");
+        }
+        assert_eq!(
+            g.meta.comp_bonds.iter().sum::<u8>(),
+            3,
+            "历世缘谱账累计不回退"
+        );
+        assert_eq!(
+            g.meta.companion_lives, 1,
+            "companion_lives 只在主伴 None→Some 边沿 +1（副伴结缘不计数防成就灌水）"
+        );
+        // 第 4 认：FIFO 轮替——总数恒 3、extra[0] 恰为本认掷出名、历世账继续累计
+        g.modal = Some(bond_card());
+        g.choose_option(0);
+        let cn = last_bond_name(&g.sim.as_ref().unwrap().highlights);
+        let s = g.sim.as_ref().unwrap();
+        assert_eq!(s.comp_names().len(), COMP_MAX, "第 4 认总数仍恒 3");
+        assert_eq!(
+            s.comp_extra[0], cn,
+            "满编认下=extra[0] FIFO 轮替（最旧副伴出列，新名入首槽）"
+        );
+        assert_eq!(g.meta.comp_bonds.iter().sum::<u8>(), 4, "轮替亦记历世账");
+        assert_eq!(
+            g.meta.companion_lives, 1,
+            "轮替不触 first 边沿（companion_lives 恒 1）"
+        );
+    }
+
+    // ── G2 遭遇乘区三态：无伴=基权 5 / 有伴未满=恰 25 / 满编=恰 5 ──
+    // luck=40 使 good 乘区 (1.0+(40-40)/120)=1.0、region0 event_mult=1.0——
+    // 三态断言落在纯基权×本乘区基线（既有 luck/区域乘区与 28 无关恒同乘）
+    #[test]
+    fn encounter_boost_gate() {
+        let g = sim_game(5, 40.0);
+        let (ws, _) = g.sim_event_weights(40.0, 5, false, false, false);
+        assert_eq!(ws[ev_pos(28)], 5.0, "无伴=基权原样（乘区不触发）");
+
+        let mut g2 = sim_game(5, 40.0);
+        {
+            let s = g2.sim.as_mut().unwrap();
+            s.companion = Some(COMPANION_NAMES[0].to_string());
+        }
+        let (ws2, _) = g2.sim_event_weights(40.0, 5, false, false, true);
+        assert_eq!(ws2[ev_pos(28)], 25.0, "有伴未满：28 权重恰 ×5");
+
+        let mut g3 = sim_game(5, 40.0);
+        {
+            let s = g3.sim.as_mut().unwrap();
+            s.companion = Some(COMPANION_NAMES[0].to_string());
+            s.comp_extra = vec![
+                COMPANION_NAMES[1].to_string(),
+                COMPANION_NAMES[2].to_string(),
+            ];
+        }
+        let (ws3, _) = g3.sim_event_weights(40.0, 5, false, false, true);
+        assert_eq!(ws3[ev_pos(28)], 5.0, "满编恢复基权（不再勾新缘）");
+
+        // 副伴 1 条（未满）同享乘区——判定走 comp_full 单源口非 extra 空判
+        let mut g4 = sim_game(5, 40.0);
+        {
+            let s = g4.sim.as_mut().unwrap();
+            s.companion = Some(COMPANION_NAMES[3].to_string());
+            s.comp_extra = vec![COMPANION_NAMES[4].to_string()];
+        }
+        let (ws4, _) = g4.sim_event_weights(40.0, 5, false, false, true);
+        assert_eq!(ws4[ev_pos(28)], 25.0, "1 副伴未满仍 ×5");
+    }
+
+    // ── G3 基权 pin：EVENTS_ROWS[28] 行零改动（防误改基权破 pool_ledger_recheck
+    // total==1130/稀有 51 的静态钉，不与该 pin 重复求和） ──
+    #[test]
+    fn base_weight_pin_unchanged() {
+        assert_eq!(
+            EVENTS_ROWS[28],
+            (28, 5, 1, true),
+            "28 同页天成基权恒 5——放宽只许 sim_event_weights 运行期乘区"
+        );
+    }
+
+    // ── G4 遗泽承伴不顶替：主伴空→主伴位 / 异名→extra 尾插 / 满编→FIFO 轮替；
+    // comp_fav=max(现实,模拟)+10 语义不动 ──
+    fn inherit_game(life_comp: Option<&str>, extras: Vec<&str>, sim_comp: &str) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut l = Life::default();
+        l.companion = life_comp.map(String::from);
+        l.comp_extra = extras.iter().map(|s| s.to_string()).collect();
+        l.comp_fav = 20;
+        g.life = Some(l);
+        g.sim_result = Some(SimResult {
+            cause: "寿终".into(),
+            total_dy: 0,
+            max_realm: 3,
+            age: 90.0,
+            years: 74,
+            qi_gain: 0.0,
+            tech: 0,
+            relic: None,
+            stones: 0,
+            pills: [0; 6],
+            highlights: Vec::new(),
+            comp: Some(sim_comp.to_string()),
+            comp_fav: 30,
+            story: None,
+        });
+        g.inherit_opts = vec![8];
+        g
+    }
+
+    #[test]
+    fn inherit_no_overwrite() {
+        // 主伴空 → 原样置主伴（原路径语义零动）
+        let mut g = inherit_game(None, vec![], COMPANION_NAMES[5]);
+        g.take_inherit(0);
+        let l = g.life.as_ref().unwrap();
+        assert_eq!(l.companion.as_deref(), Some(COMPANION_NAMES[5]));
+        assert!(l.comp_extra.is_empty());
+        assert_eq!(l.comp_fav, 40, "max(30,20)+10 语义不动");
+
+        // 主伴已有且异名 → 模拟主伴入 extra 尾（companion 不顶替）
+        let mut g2 = inherit_game(Some(COMPANION_NAMES[0]), vec![], COMPANION_NAMES[5]);
+        g2.take_inherit(0);
+        let l2 = g2.life.as_ref().unwrap();
+        assert_eq!(
+            l2.companion.as_deref(),
+            Some(COMPANION_NAMES[0]),
+            "主伴不顶替"
+        );
+        assert_eq!(l2.comp_extra, vec![COMPANION_NAMES[5].to_string()]);
+        assert_eq!(l2.comp_fav, 40);
+
+        // 满编（主伴+2 副伴）→ extra[0] FIFO 轮替、总数恒 3
+        let mut g3 = inherit_game(
+            Some(COMPANION_NAMES[0]),
+            vec![COMPANION_NAMES[1], COMPANION_NAMES[2]],
+            COMPANION_NAMES[5],
+        );
+        g3.take_inherit(0);
+        let l3 = g3.life.as_ref().unwrap();
+        assert_eq!(l3.companion.as_deref(), Some(COMPANION_NAMES[0]));
+        assert_eq!(l3.comp_extra.len(), COMP_MAX - 1, "满编总数恒 3");
+        assert_eq!(
+            l3.comp_extra[0],
+            COMPANION_NAMES[5],
+            "extra[0] 轮替为模拟主伴"
+        );
+        assert_eq!(l3.comp_fav, 40);
+
+        // 主伴与模拟主伴同名 → 重逢槽位不动（不重复入列）
+        let mut g4 = inherit_game(Some(COMPANION_NAMES[5]), vec![], COMPANION_NAMES[5]);
+        g4.take_inherit(0);
+        let l4 = g4.life.as_ref().unwrap();
+        assert_eq!(l4.companion.as_deref(), Some(COMPANION_NAMES[5]));
+        assert!(l4.comp_extra.is_empty(), "重逢不重复入列");
+    }
+
+    // ── G5 现实结缘：apply_reff special17 前置臂 → bond_life_companion 三分支 +
+    // first 边沿（companion_lives/check_chapters 只在主伴 None→Some） ──
+    #[test]
+    fn reality_bond_via_reff() {
+        // 主伴空：认下 → 现实主伴落位 + first 边沿
+        let mut g = game_with(Life::default(), None);
+        let mut e = Eff::new();
+        e.special = 17;
+        e.msg = vec!["缝口咬合".to_string()];
+        crate::npc::apply_reff(&mut g, &e);
+        let l = g.life.as_ref().unwrap();
+        assert!(l.companion.is_some(), "special17 落现实主伴");
+        assert!(l.comp_extra.is_empty());
+        assert_eq!(l.comp_fav, COMPANION_BOND_FAV, "结缘起步 25");
+        assert_eq!(g.meta.companion_lives, 1, "first 边沿 companion_lives+1");
+        assert_eq!(
+            g.meta.comp_bonds.iter().sum::<u8>(),
+            1,
+            "gallery_bond 记账"
+        );
+        assert!(
+            g.log.iter().any(|m| m.text.contains("缝口咬合")),
+            "eff.msg 自述行先行出账"
+        );
+
+        // 主伴已有：认下 → extra 尾插，companion_lives 不再 +1（副伴不计数）
+        let mut g2 = game_with(Life::default(), None);
+        {
+            let l = g2.life.as_mut().unwrap();
+            l.companion = Some(COMPANION_NAMES[0].to_string());
+        }
+        g2.meta.companion_lives = 1;
+        crate::npc::apply_reff(&mut g2, &e);
+        let l2 = g2.life.as_ref().unwrap();
+        assert_eq!(
+            l2.companion.as_deref(),
+            Some(COMPANION_NAMES[0]),
+            "主伴不顶替"
+        );
+        assert_eq!(l2.comp_extra.len(), 1, "副伴入 extra");
+        assert_eq!(g2.meta.companion_lives, 1, "副伴结缘不触 first 边沿");
+        assert_eq!(g2.meta.comp_bonds.iter().sum::<u8>(), 1, "副伴亦记历世账");
+
+        // 满编：认下 → extra[0] FIFO 轮替（总数恒 3）
+        let mut g3 = game_with(Life::default(), None);
+        {
+            let l = g3.life.as_mut().unwrap();
+            l.companion = Some(COMPANION_NAMES[0].to_string());
+            l.comp_extra = vec![
+                COMPANION_NAMES[1].to_string(),
+                COMPANION_NAMES[2].to_string(),
+            ];
+        }
+        crate::npc::apply_reff(&mut g3, &e);
+        let l3 = g3.life.as_ref().unwrap();
+        assert_eq!(l3.comp_names().len(), COMP_MAX, "总数恒 3");
+        assert_eq!(l3.comp_extra.len(), COMP_MAX - 1, "满编不越限");
+    }
+
+    // ── G6 feng/neme 与多伴零耦合 ──
+    #[test]
+    fn feng_and_neme_untouched() {
+        // 行为钉：feng_reunion 判定只依赖 prev（主伴名）与 feng_bn——comp_extra
+        // 内容不影响输出（多伴变体与单伴变体同值；feng_bn/feng_blv 仅沿缝页人）
+        let mut g = game_with(Life::default(), None);
+        g.meta.feng_bn = 1; // 缝页人=洛书遥
+        g.sim = Some(Life::default());
+        let s = g.sim.as_ref().unwrap();
+        assert!(
+            g.feng_reunion(Some(COMPANION_NAMES[0]), COMPANION_NAMES[1]),
+            "主伴≠缝页人 → 重逢真（与单伴语义一致）"
+        );
+        assert!(
+            !g.feng_reunion(Some(COMPANION_NAMES[1]), COMPANION_NAMES[1]),
+            "缝页人在同页（主伴位）→ 不重逢"
+        );
+        let _ = s;
+        // 多伴变体：comp_extra 非空不改变判定（feng 只沿主伴 prev 与缝页人）
+        let mut g2 = game_with(Life::default(), None);
+        g2.meta.feng_bn = 1;
+        g2.sim = Some(Life::default());
+        {
+            let s2 = g2.sim.as_mut().unwrap();
+            s2.companion = Some(COMPANION_NAMES[0].to_string());
+            s2.comp_extra = vec![
+                COMPANION_NAMES[2].to_string(),
+                COMPANION_NAMES[3].to_string(),
+            ];
+        }
+        let prev = g2.sim.as_ref().unwrap().companion.clone();
+        assert!(
+            g2.feng_reunion(prev.as_deref(), COMPANION_NAMES[1]),
+            "多伴下缝页人重逢判定不变"
+        );
+        assert!(
+            !g2.feng_reunion(prev.as_deref(), COMPANION_NAMES[2]),
+            "副伴非缝页人 → 不重逢（feng_blv 只沿缝页人）"
+        );
+
+        // 静态钉：sim_neme/act_revenge/sim_neme_win_settle 函数体零 companion/
+        // comp_extra/comp_fav 引用（恶缘线与多道侣零耦合防回归）
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src =
+            std::fs::read_to_string(std::path::Path::new(root).join("src").join("game.rs"))
+                .expect("读 src/game.rs");
+        let lines: Vec<&str> = src.lines().collect();
+        let fn_body = |name: &str| -> String {
+            let start = lines
+                .iter()
+                .position(|l| {
+                    (l.trim_start().starts_with("fn ")
+                        || l.trim_start().starts_with("pub fn "))
+                        && l.contains(name)
+                })
+                .unwrap_or_else(|| panic!("找不到 fn {}", name));
+            // 从签名行下一行起收集，遇下一同缩进 fn 行（4 空格缩进方法）即止
+            let mut body = String::new();
+            for l in lines.iter().skip(start + 1) {
+                if l.starts_with("    fn ") || l.starts_with("    pub fn ") {
+                    break;
+                }
+                body.push_str(l);
+                body.push('\n');
+            }
+            body
+        };
+        for name in [
+            "sim_neme(&mut self)",
+            "act_revenge(&mut self)",
+            "sim_neme_win_settle(&mut self,",
+        ] {
+            let body = fn_body(name);
+            assert!(
+                !body.contains("companion")
+                    && !body.contains("comp_extra")
+                    && !body.contains("comp_fav"),
+                "{} 函数体不得引用伴字段（恶缘线与多道侣零耦合）",
+                name
+            );
+        }
+    }
+
+    // ── G7 现实邂逅卡构造与分派接线 ──
+    #[test]
+    fn rencounter_card_wiring() {
+        let card = Game::rencounter_card();
+        assert!(matches!(card.kind, CardKind::Rencounter), "新 kind 独占分派");
+        // 卡面立绘与文本名同源同掷（照 28 臂纪律：正文含掷出名、立绘 Comp(ci)）
+        if let Some(CardActor::Comp(ci)) = card.actor {
+            assert!(ci < COMPANION_NAMES.len());
+            assert!(
+                card.text.contains(COMPANION_NAMES[ci]),
+                "卡面文本名与立绘下标同源"
+            );
+        } else {
+            panic!("邂逅卡须挂 Comp 立绘（零新立绘红线）");
+        }
+        assert_eq!(card.title, EVENT_NAMES[28], "标题单源查表 28");
+        assert_eq!(card.opts.len(), 2);
+        assert_eq!(card.opts[0].1.special, 17, "认下臂 special17");
+        assert_eq!(card.opts[1].1.dao, 5.0, "婉拒臂 dao+5 照 28 臂");
+        // advance_time 装配锚行序：fn advance_time < rencounter 卡挂载 < fn ach_progress
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src =
+            std::fs::read_to_string(std::path::Path::new(root).join("src").join("game.rs"))
+                .expect("读 src/game.rs");
+        let lines: Vec<&str> = src.lines().collect();
+        let find = |needle: &str| -> usize {
+            lines
+                .iter()
+                .position(|l| l.contains(needle))
+                .unwrap_or_else(|| panic!("锚行缺失：{}", needle))
+        };
+        let t0 = find("pub fn advance_time");
+        let t1 = find("self.rmodal = Some(Self::rencounter_card())");
+        let t2 = find("pub fn ach_progress");
+        assert!(
+            t0 < t1 && t1 < t2,
+            "邂逅 roll 挂 advance_time 尾段（唯一推岁口）"
+        );
+        // draw.rs 分派臂在位（Rencounter → choose_rencounter，rmodal_npc=None 语义）
+        let dsrc =
+            std::fs::read_to_string(std::path::Path::new(root).join("src").join("draw.rs"))
+                .expect("读 src/draw.rs");
+        assert!(
+            dsrc.contains("CardKind::Rencounter) {")
+                && dsrc.contains("g.choose_rencounter(i);"),
+            "draw_modal_card 分派臂须单列 Rencounter"
+        );
+    }
+
+    // ── G8 bug② 静态钉：鬼影标签删净 + 四真钮在位（prod() 滤 cfg(test) 照
+    // comm_hooks_static_pins 先例——测试字符串自身不入扫描面） ──
+    #[test]
+    fn ghost_label_removed_pins() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src =
+            std::fs::read_to_string(std::path::Path::new(root).join("src").join("draw.rs"))
+                .expect("读 src/draw.rs");
+        let mut out = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        let count = |needle: &str| out.matches(needle).count();
+        // 正向钉：遗留鬼影四行删净（v1.0.0 起的第二份顶栏标签 + legacy 1.5px 钮框）
+        assert_eq!(count("txt_r(\"烙印\""), 0, "鬼影「烙印」须删净");
+        assert_eq!(count("txt_r(\"帮助\""), 0, "鬼影「帮助」须删净");
+        assert_eq!(
+            count("draw_rectangle_lines(1086.0"),
+            0,
+            "legacy 1.5px 烙印钮框须删净"
+        );
+        assert_eq!(
+            count("draw_rectangle_lines(1154.0"),
+            0,
+            "legacy 1.5px 帮助钮框须删净"
+        );
+        // 反向钉：四真钮调用各恰 1（防顺手多删）
+        assert_eq!(
+            count("button(1018.0, 8.0, 62.0, 36.0, \"任务\""),
+            1,
+            "任务真钮在位"
+        );
+        assert_eq!(
+            count("button(1086.0, 8.0, 62.0, 36.0, \"烙印\""),
+            1,
+            "烙印真钮在位"
+        );
+        assert_eq!(
+            count("button(1154.0, 8.0, 62.0, 36.0, \"帮助\""),
+            1,
+            "帮助真钮在位"
+        );
+        assert_eq!(
+            count("button(1222.0, 8.0, 58.0, 36.0, \"主页\""),
+            1,
+            "主页真钮在位"
+        );
+    }
+}
+
+// ================= 演出包⑰-2 底栏 stagger 双保险钉测（照 v11640/v11641 款） =================
+// 行为钉：三 game.rs 置值口（begin_mortal/resume_life/finish_inherit）实调断言
+// bar_anim=BAR_ANIM_T，且非触发路径（默认夹具/换幕）不置位；静态钉：五生产口
+// 逐口 3 行窗结构断言（game.rs 计 3 / world.rs 计 2，照 v11641_zoom_anim_tests
+// plan 数组款——漏改/错改/新增口未带计时即红；autopilot 置场非正式玩法不列计）。
+#[cfg(test)]
+mod v11646_bar_anim_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    // ── 行为钉：三口置值 + 会话态默认 0 ──
+    #[test]
+    fn bar_anim_sites_set_and_default_zero() {
+        // 默认夹具：会话态天然 0（旧档载入口径）
+        let g = game_with(Life::default(), None);
+        assert_eq!(g.bar_anim, 0.0, "会话态默认无动画");
+        let mut g = game_with(Life::default(), None);
+        g.begin_mortal();
+        assert_eq!(g.bar_anim, BAR_ANIM_T, "begin_mortal 置值口 1/5");
+        let mut g2 = game_with(Life::default(), None);
+        g2.resume_life();
+        assert_eq!(g2.bar_anim, BAR_ANIM_T, "resume_life 置值口 2/5");
+        let mut g3 = game_with(Life::default(), None);
+        g3.finish_inherit();
+        assert_eq!(g3.bar_anim, BAR_ANIM_T, "finish_inherit 置值口 3/5");
+    }
+
+    // ── 静态钉：五生产口逐口 3 行窗（game.rs 计 3 / world.rs 计 2） ──
+    #[test]
+    fn bar_anim_sites_all_carry_anim() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let plan = [("game.rs", 3usize), ("world.rs", 2)];
+        for (f, expect) in plan {
+            let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(f))
+                .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", f, e));
+            // prod 滤测试区（照 ghost_label_removed_pins 款——本钉自身 needle 行
+            // 位于 cfg(test) 内不入扫描面，否则自计数漂移）
+            let mut prod = String::new();
+            let mut skip = false;
+            for line in src.lines() {
+                if line.starts_with("#[cfg(test)]") {
+                    skip = true;
+                    continue;
+                }
+                if skip {
+                    if line == "}" {
+                        skip = false;
+                    }
+                    continue;
+                }
+                prod.push_str(line);
+                prod.push('\n');
+            }
+            let lines: Vec<&str> = prod.lines().collect();
+            let mut sites = 0usize;
+            for idx in 0..lines.len() {
+                let l = lines[idx];
+                let is_site = (f == "game.rs"
+                    && (l.contains("self.bar_anim = crate::game::BAR_ANIM_T")
+                        || l.contains("self.bar_anim = BAR_ANIM_T")))
+                    || (f == "world.rs" && l.contains("g.bar_anim = crate::game::BAR_ANIM_T"));
+                if is_site {
+                    sites += 1;
+                    // 置值行本身即锚（无需 3 行窗——行为钉已验值；此处断言行存在性）
+                }
+            }
+            assert_eq!(
+                sites, expect,
+                "src/{} bar_anim 置值口数漂移：实得 {} 预期 {}——新增进现实行动层入口须同批带 bar_anim 置值并入本钉",
+                f, sites, expect
+            );
+        }
+    }
+
+    // ── 稳态收敛静态钉：draw.rs 底栏相位消费行经 bar_stagger_a 单口（闭包直算式
+    // 不得回归——纯函数单测前提） ──
+    #[test]
+    fn bar_stagger_via_pure_fn() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join("draw.rs"))
+            .expect("读 src/draw.rs");
+        assert!(
+            src.contains("let bar_a = |k: usize| bar_stagger_a(bar_e, k);"),
+            "底栏相位必须经 bar_stagger_a 纯函数单口（钉测相位断言前提）"
+        );
+        assert!(
+            !src.contains("(bar_e - k as f32 * 0.03) / 0.03).clamp"),
+            "底栏相位不得退回闭包内直算式（纯函数单口纪律）"
+        );
+    }
+}
+
+// ================= v1.16.45 施工单三扩池段十八 + 剧情加长 + 第二十一批润色 钉测 =================
+#[cfg(test)]
+mod v11646_pool_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    // ── 段十八三卡良构：id==下标连续、≥2 ≤3 选项、标题/正文非空、选首项不 panic ──
+    #[test]
+    fn seg18_cards_well_formed() {
+        let mut g = game_with(Life::default(), None);
+        g.sim = Some(Life::default());
+        for id in 371..=373usize {
+            assert_eq!(EVENTS_ROWS[id].0 as usize, id, "段十八 id 连续");
+            g.modal = None;
+            g.build_event(id);
+            let card = g.modal.as_ref().unwrap();
+            assert!(!card.title.is_empty(), "id {} 标题非空", id);
+            assert!(!card.text.is_empty(), "id {} 正文非空", id);
+            assert!(
+                card.opts.len() >= 2 && card.opts.len() <= 3,
+                "id {} 选项数 {} 越界",
+                id,
+                card.opts.len()
+            );
+            g.choose_option(0); // apply_eff 全链不 panic（sync_save 仅置脏不落盘）
+        }
+    }
+
+    // ── 段十八权重/门控钉：三行 (id,w,mr,good) 表钉 + realm 达标入池抽验 ──
+    #[test]
+    fn seg18_weight_and_gate_pins() {
+        assert_eq!(
+            EVENTS_ROWS[371],
+            (371, 3, 7, false),
+            "371 牒案翻旧=mr7 恶（恶缘 mr7 层最薄缺口）"
+        );
+        assert_eq!(
+            EVENTS_ROWS[372],
+            (372, 3, 6, true),
+            "372 堂前领差=mr6 善+玄诚 Npc(0)"
+        );
+        assert_eq!(
+            EVENTS_ROWS[373],
+            (373, 3, 5, true),
+            "373 残页对笔=mr5 善"
+        );
+        // 入池抽验（照 companion_events_gated_by_companion 直调式）：realm≥mr 入池
+        let g = sim_game(7, 100.0);
+        let (ws, _) = g.sim_event_weights(100.0, 7, false, false, false);
+        for id in [371usize, 372, 373] {
+            assert!(ws[id] > 0.0, "realm7 时事件 {} 应入池", id);
+        }
+        // mr 门控下限抽验：realm5 时 371（mr7）不入池
+        let g2 = sim_game(5, 100.0);
+        let (ws2, _) = g2.sim_event_weights(100.0, 5, false, false, false);
+        assert_eq!(ws2[371], 0.0, "realm5 时 mr7 卡不入池");
+        // 卡面主角同源钉：372 正文钉名⟺Npc(0)（照 337 区纪律）
+        let mut g3 = game_with(Life::default(), None);
+        g3.sim = Some(Life::default());
+        g3.modal = None;
+        g3.build_event(372);
+        let c = g3.modal.as_ref().unwrap();
+        assert!(
+            matches!(c.actor, Some(CardActor::Npc(0))),
+            "372 卡面主角须玄诚 Npc(0)"
+        );
+        assert!(c.text.contains("玄诚长老"), "372 正文钉名⟺Npc(0) 同源");
+        // ③口径钉：三卡正文 2 段（反斜杠 n 分段——剧情加长直改面，防回退单段）
+        for id in 371..=373usize {
+            g3.modal = None;
+            g3.build_event(id);
+            let t = &g3.modal.as_ref().unwrap().text;
+            assert!(t.contains('\n'), "id {} 正文须 2 段（剧情加长③口径）", id);
+            // 2 段各 ≤58 字（tall 版式 4 wrap 行预算代理——字数钉+打包目检兜底）
+            let segs: Vec<&str> = t.split('\n').collect();
+            assert_eq!(segs.len(), 2, "id {} 段数须恰 2", id);
+            for (k, seg) in segs.iter().enumerate() {
+                let n = seg.chars().count();
+                assert!(
+                    n <= 58,
+                    "id {} 段 {} 越 58 字预算: {} ({}字)",
+                    id,
+                    k,
+                    seg,
+                    n
+                );
+            }
+        }
+    }
+
+    // ── 第二十一批简语润色（batch25）：want 逐字 + ≤18 + kw 保词（照 batch24 款）──
+    #[test]
+    fn event_brief_11646_batch25_polish_within_18() {
+        for (id, want, kw) in [
+            (242usize, "新渠按契分水，旧约压案头", "旧约"),   // N1353，kw 既有钉保词
+            (238, "单子出了损，手印找上门", "手印"),          // N1349，kw 臂 verbatim
+            (194, "仙籍册另有个你，在北域行医", "北域"),      // N1305，kw 既有钉保词
+            (193, "后辈摆证道台，请不动前辈", "证道台"),      // N1304，kw 臂 verbatim
+            (180, "云阶千级，拾级或阶下观人", "云阶"),        // N1291，kw 臂 verbatim
+            (175, "雨夜伞铺，老匠只修凡伞", "凡伞"),          // N1286，kw 臂 verbatim
+            (166, "官册空一格野地，草高过批注", "官册"),      // N1277，kw 既有钉保词
+            (161, "白鹿踏雪过涧，循迹或长揖", "白鹿"),        // N1272，kw 臂 verbatim
+            (152, "循存根到药庐，赎箫或止步", "存根"),        // N1263，kw 臂 verbatim
+            (110, "宿敌倾巢寻账，火把围谷", "火把"),          // N1221，kw 既有钉保词
+        ] {
+            let b = &EVENT_BRIEF[id];
+            let n = b.chars().count();
+            assert_eq!(b, want, "事件 {} 简语改写漂移（第二十一批润色）", id);
+            assert!(
+                !b.is_empty() && n <= 18,
+                "事件 {} 简越 18 字预算: {} ({}字)",
+                id,
+                b,
+                n
+            );
+            assert!(b.contains(kw), "事件 {} 简画面化改写漂移: {}", id, b);
+        }
+    }
+
+    // ── 章节引子加长预算钉（剧情加长主案①方案 A：intro 原地直改——下界防回退
+    // 旧短文、上界防穿 4 行版式（draw.rs 章节书 intro wrap 600px ≤4 行≈37 字/行
+    // ×4=148 字预算）） ──
+    #[test]
+    fn chapter_intro_prelude_budget() {
+        assert_eq!(CHAPTERS.len(), 9);
+        // 循环变量照仓内 k 惯例（勿用 i——施工单五收尾纪律复核逮住照抄先例的 i）
+        for (k, ch) in CHAPTERS.iter().enumerate() {
+            let n = ch.intro().chars().count();
+            assert!(
+                (100..=148).contains(&n),
+                "章 {} intro 越加长预算 [100,148]: {} ({}字)——上界防穿 4 行版式、下界防回退旧短文",
+                k,
+                ch.intro(),
+                n
+            );
+        }
     }
 }

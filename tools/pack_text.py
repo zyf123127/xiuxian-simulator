@@ -181,6 +181,13 @@ BRIEF16_BASE_MANIFEST = 2764
 NAME17_BASE_MANIFEST = 2777
 BRIEF17_BASE_MANIFEST = 2780
 
+# v1.16.45 施工单三扩池起：段十七（3 条）满员后新批连号追加为段十八（3 条：名
+# 2801..=2803/简 2804..=2806，真相源手写连号段先于正文 N2807..——v1.16.45 施工
+# 单一/二占用 N2794..2800（多道侣文案 7 行）故段十八顺延 2801/2804——与 data.rs
+# EV_SEG17=371 差写法兑现（len17 改差）/EV_SEG18=374 快照预建同批登记）
+NAME18_BASE_MANIFEST = 2801
+BRIEF18_BASE_MANIFEST = 2804
+
 dry = '--dry-run' in sys.argv
 collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测用；表收编后自动幂等）
 # v1.16.29 单1（wasm 源级减包）三刀开关——均 append-only 旧 N 不变号，逐刀可量测：
@@ -998,7 +1005,8 @@ def table_bases_from_inc():
                  'TXT_NAME14_BASE', 'TXT_BRIEF14_BASE',
                  'TXT_NAME15_BASE', 'TXT_BRIEF15_BASE',
                  'TXT_NAME16_BASE', 'TXT_BRIEF16_BASE',
-                 'TXT_NAME17_BASE', 'TXT_BRIEF17_BASE')
+                 'TXT_NAME17_BASE', 'TXT_BRIEF17_BASE',
+                 'TXT_NAME18_BASE', 'TXT_BRIEF18_BASE')
                 + BASE_KEYS_TABLES2):
             mm = re.search(r'pub static %s: u32 = (\d+);' % key, txt)
             if mm:
@@ -2123,6 +2131,13 @@ if name_base is not None:
 if brief_base is not None:
     inc += emit_base('TXT_BRIEF17_BASE',
                      inc_bases.get('TXT_BRIEF17_BASE', BRIEF17_BASE_MANIFEST))
+# v1.16.45 段十八基址（同段十七款：首轮 emit manifest 手分、此后回读 .inc 幂等）
+if name_base is not None:
+    inc += emit_base('TXT_NAME18_BASE',
+                     inc_bases.get('TXT_NAME18_BASE', NAME18_BASE_MANIFEST))
+if brief_base is not None:
+    inc += emit_base('TXT_BRIEF18_BASE',
+                     inc_bases.get('TXT_BRIEF18_BASE', BRIEF18_BASE_MANIFEST))
 # v1.16.29 刀B 整表基址（首轮 emit 收编 N 段基址；此后每次运行从 .inc 回读重发，
 # 与段一/二/三同款幂等——非 --tables2 运行也不许丢基址，否则 include! 断链）
 for bk2 in BASE_KEYS_TABLES2:
