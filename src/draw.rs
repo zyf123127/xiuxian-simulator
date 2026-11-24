@@ -207,7 +207,13 @@ pub fn button_a_accent(
             y + 2.0,
             w - 4.0,
             1.0,
-            fade(Color::from_rgba(214, 200, 244, 255), 0.25 * a),
+            // v1.16.48 复查①（勘察六唯一真发现）：禁用态顶光同批弱化 0.25→0.10
+            //（金饰=可点语言全局自洽；enabled 钮逐比特不动、禁用非 hover 帧本就
+            // 零像素；v11650_ux_pins_tests 顶光 needle 同批改勿半改）
+            fade(
+                Color::from_rgba(214, 200, 244, 255),
+                (if enabled { 0.25 } else { 0.10 }) * a,
+            ),
         );
         // v1.16.47 按钮花样延伸（勘察六花样 A）：hot 态内缩四角金角饰——照
         // panel_card 角饰语言（:296-320 四角 L 形 C_GOLD fade）但内缩 2px 画在
@@ -216,7 +222,11 @@ pub fn button_a_accent(
         // if/else 互斥照花样 B 钉口径防按压帧双饰叠加；非 hot 帧零像素逐像素=旧
         // 实现；色 C_GOLD 勿复用花样 B 的 214,200,244（钉 needle 唯一性）；零状态
         // 零分配零新字形
-        let jgold = fade(C_GOLD, 0.5 * a);
+        // v1.16.48 复查①（勘察六唯一真发现）：hot 判定（:131）无 enabled 门控
+        // ——禁用钮 hover 帧曾照样画金角饰 α0.5 与花样 C「可望不可点弱反馈」
+        // 语义相抵。弱化分档：enabled 0.5 逐比特不动、禁用 0.15（弱存在仅可辨
+        // 非可用）；press 分支互斥不动；禁用非 hover 帧本就零像素稳态不变
+        let jgold = fade(C_GOLD, (if enabled { 0.5 } else { 0.15 }) * a);
         let jleg = 10.0f32;
         let jt = 2.0f32;
         for (ax, ay, adx, ady) in [
@@ -263,7 +273,15 @@ pub fn button_a_accent(
             y + dy + h - 26.0, 14,
             fade(
                 if enabled {
-                    C_DIM
+                    // v1.16.48 按钮花样 C（勘察六提名三）：选项钮 hot 副标提色
+                    // C_DIM→C_CYAN——hover 零状态反馈（非 hot 帧逐像素不变；颜
+                    // 色不入字形缓存 key 零重栅格化零新字形；禁用臂弱反馈色不
+                    // 动保持分层）
+                    if hot {
+                        C_CYAN
+                    } else {
+                        C_DIM
+                    }
                 } else {
                     // v1.8.0 A6：禁用副标提亮（152,148,168→178,172,192）
                     Color::from_rgba(178, 172, 192, 255)
@@ -2177,6 +2195,21 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
     let total_w = n as f32 * cw + (n as f32 - 1.0) * gap;
     let x0 = V_W * 0.5 - total_w * 0.5;
     let (mx, my) = crate::cam::mouse();
+    // 演出包㉓ 天赍落笔·镜纹荡漾：卡片区金纹矩形环脉冲（共用 brk_veil_a 三角
+    // 包络；draft_pact==0 早退不落像素逐比特恒等——回镜页兜底口，主可见面在
+    // draw_sim 首段金环；勘察三双挂建议）。与⑨..㉒错开：Draft 页此前零演出包
+    // 触达，触发（launch_sim 落笔）/区域（卡片区环）/语义（天赍落笔）三异
+    let dp_a = 0.12 * brk_veil_a((g.draft_pact / crate::game::DRAFT_PACT_T).clamp(0.0, 1.0));
+    if dp_a > 0.0 {
+        draw_rectangle_lines(
+            x0 - 14.0,
+            156.0,
+            total_w + 28.0,
+            ch + 28.0,
+            2.0,
+            fade(C_GOLD, dp_a),
+        );
+    }
     let draft = g.draft.clone();
     for (i, &t) in draft.iter().enumerate() {
         let card = &TALENTS[t];
@@ -2285,6 +2318,14 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
     let Some(s) = g.sim.as_ref() else { return };
     let tribbing = s.trib.is_some();
     draw_bg(art);
+    // 演出包㉓ 天赍落笔·镜纹荡漾：落笔入画金环（launch_sim 落笔帧即切本场景，
+    // 本口为主可见面；0.9s 全屏内缩金环一次性脉冲，draft_pact==0 早退逐比特恒
+    // 等——勘察三双挂建议的主口）。与⑨..㉒错开：触发（落笔）/区域（全屏环）/
+    // 语义（天赍落笔）三异，与⑲ brk 门控金辉（彼卡开门控常驻）全异
+    let dp_a = 0.12 * brk_veil_a((g.draft_pact / crate::game::DRAFT_PACT_T).clamp(0.0, 1.0));
+    if dp_a > 0.0 {
+        draw_rectangle_lines(16.0, 16.0, V_W - 32.0, V_H - 32.0, 2.0, fade(C_GOLD, dp_a));
+    }
     if !tribbing {
         draw_sky_life(g);
     }
@@ -3019,6 +3060,15 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     draw_bg(art);
     draw_rectangle(0.0, 0.0, V_W, V_H, Color::from_rgba(10, 6, 20, 235));
     draw_motes(g);
+    // 演出包㉔ 遗泽拾取·魂光拾遗：拾取时刻金辉脉冲（共用 brk_veil_a 三角包络；
+    // inh_spark==0 早退不落像素逐比特恒等；覆层独占分支 return 早退时不消费
+    // 不破稳态——递减走主循环，重新可见时包络自然衰减）。与⑨..㉒错开：Inherit
+    // 页既有演出仅⑰-2 置值口与静态小像，无拾取时刻动效，触发（take_inherit
+    // 八分支收敛出口）/区域（此生卡描边）/语义（魂光拾遗）三异
+    let is_a = 0.12 * brk_veil_a((g.inh_spark / crate::game::INH_SPARK_T).clamp(0.0, 1.0));
+    if is_a > 0.0 {
+        draw_rectangle_lines(58.0, 82.0, 424.0, 484.0, 2.0, fade(C_GOLD, is_a));
+    }
     // v1.16.13 终局页『本稿遭遇』列表/回味覆层早退独占（照 zoom_art/ev_recall 先例
     // ——下层不绘不响应；Scene::Inherit 无 Reality 面板跳转路径，finish_inherit 是
     // 唯一出口，跳面板会静默弃未选继承项，故落页内覆层而非跳转）
@@ -5194,22 +5244,26 @@ mod v11650_ux_pins_tests {
             "多道侣二：伴名 C_PURPLE 段恰 1（照缘谱行名色语言）"
         );
         let draw_p = prod_of("draw.rs");
+        // v1.16.48 复查① 同批改 needle：jgold α 按 enabled 分档（0.5/0.15）——
+        // 禁用态 hover 金角饰弱化（金饰=可点语言自洽），恰 1 口径不变
         assert_eq!(
-            draw_p.matches("let jgold = fade(C_GOLD, 0.5 * a);").count(),
+            draw_p
+                .matches("let jgold = fade(C_GOLD, (if enabled { 0.5 } else { 0.15 }) * a);")
+                .count(),
             1,
-            "花样 A：hot 态角饰金 α 单口恰 1（C_GOLD 勿复用花样 B 色值）"
+            "花样 A+复查①：hot 态角饰金 α 分档单口恰 1（C_GOLD 勿复用花样 B 色值）"
+        );
+        // v1.16.48 复查① 同批：禁用态顶光弱化 0.25→0.10（needle 由旧单值改分档
+        // 形态唯一短锚——多行 fade 结构以单行分档表达式为锚防跨行失配）
+        assert_eq!(
+            draw_p.matches("(if enabled { 0.25 } else { 0.10 }) * a").count(),
+            1,
+            "花样 B+复查①：顶光分档形态恰 1（禁用 hover 弱化同批）"
         );
         assert_eq!(
             draw_p.matches("for (ax, ay, adx, ady) in [").count(),
             1,
             "花样 A：四角 L 形元组循环恰 1（照 panel_card 角饰语言小号款）"
-        );
-        assert_eq!(
-            draw_p
-                .matches("fade(Color::from_rgba(214, 200, 244, 255), 0.25 * a)")
-                .count(),
-            1,
-            "花样 B 既有顶光 needle 恰 1（花样 A 同批未污染其唯一性）"
         );
         assert_eq!(
             draw_p
@@ -5225,5 +5279,162 @@ mod v11650_ux_pins_tests {
             1,
             "花样 D：音效 toggle on 态下划线恰 1"
         );
+    }
+}
+
+// ================= v1.16.48 演出包㉓㉔+UX 细节钉测 =================
+// 模组名注：v11645..v11651 前缀均已被占用（占用链全账见上方 v11650_neme_veil_
+// tests 头注与 game.rs 段二十一区头注——v11650 三模组在 draw.rs、
+// v11651_charcount_pins_tests 在 game.rs）；v11652 已被 v11652_seg21_tests
+//（game.rs，同轮施工单二段二十一扩池批）占用——本批钉测模块名顺延 v11653，内
+// 容版本以本头注为准（占用链纪律：每模组头注可独立回溯全链；本头注措辞刻意避
+// 开 prod 扫描 needle 字样照 ㉑ 头注款）。
+// 钉面：㉓ 置值恰 1+位点序（launch_sim 两早退之后）/常量恰 1/字段恰 1/递减恰 1/
+// α 双口恰 2（draw_draft 卡环+draw_sim 金环）/早退门恰 2/save.rs 零引用/无第二
+// 包络；㉔ 置值恰 1+位点序（四早退末位 life 缺之后、出口 remove 之前）/常量恰 1/
+// 字段恰 1/递减恰 1/α 口恰 1/早退门恰 1/save.rs 零引用/无第二包络——七钉照
+// v11650 两模组款
+#[cfg(test)]
+mod v11653_draft_pact_tests {
+    fn prod_of(fname: &str) -> String {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(fname))
+            .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", fname, e));
+        let mut out = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn draft_pact_static_pins() {
+        let game_p = prod_of("game.rs");
+        assert_eq!(
+            game_p.matches("pub const DRAFT_PACT_T: f32 = 0.9;").count(),
+            1,
+            "㉓ 常量恰 1（照 NEME_VEIL/QI_BREATH 款带窗长头注）"
+        );
+        assert_eq!(game_p.matches("pub draft_pact: f32,").count(), 1, "㉓ 字段恰 1");
+        let set_needle = "self.draft_pact = DRAFT_PACT_T;";
+        assert_eq!(game_p.matches(set_needle).count(), 1, "㉓ 置值口恰 1（launch_sim 成功段单口）");
+        let early_at = game_p
+            .find("if self.picked.is_empty() || self.meta.sim_points < self.sim_cost() {")
+            .expect("㉓ launch_sim 头部早退在位");
+        let set_at = game_p.find(set_needle).expect("㉓ 置值行在位");
+        assert!(
+            set_at > early_at,
+            "㉓ 位点序：置值须在 picked 空/点数不足两早退之后（照㉒ set>died 款防挪外层）"
+        );
+        assert_eq!(
+            game_p.matches("fn draft_pact_a").count(),
+            0,
+            "㉓ 无第二包络（共用 brk_veil_a 单源勿双写）"
+        );
+        let save_p = prod_of("save.rs");
+        assert_eq!(save_p.matches("draft_pact").count(), 0, "㉓ 会话态不进存档（save.rs 零引用）");
+        let main_p = prod_of("main.rs");
+        assert_eq!(
+            main_p.matches("if g.draft_pact > 0.0 {").count(),
+            1,
+            "㉓ 递减早退门恰 1"
+        );
+        assert_eq!(
+            main_p.matches("g.draft_pact = (g.draft_pact - dt).max(0.0);").count(),
+            1,
+            "㉓ 递减行恰 1（主循环照 weather_anim 先例）"
+        );
+        let draw_p = prod_of("draw.rs");
+        assert_eq!(
+            draw_p
+                .matches("0.12 * brk_veil_a((g.draft_pact / crate::game::DRAFT_PACT_T)")
+                .count(),
+            2,
+            "㉓ α 双口恰 2（draw_draft 卡环+draw_sim 金环——新增消费口须并入本钉）"
+        );
+        assert_eq!(draw_p.matches("if dp_a > 0.0 {").count(), 2, "㉓ 早退门恰 2（稳态零像素）");
+    }
+}
+
+#[cfg(test)]
+mod v11653_inh_spark_tests {
+    fn prod_of(fname: &str) -> String {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(fname))
+            .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", fname, e));
+        let mut out = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn inh_spark_static_pins() {
+        let game_p = prod_of("game.rs");
+        assert_eq!(
+            game_p.matches("pub const INH_SPARK_T: f32 = 1.0;").count(),
+            1,
+            "㉔ 常量恰 1"
+        );
+        assert_eq!(game_p.matches("pub inh_spark: f32,").count(), 1, "㉔ 字段恰 1");
+        let set_needle = "self.inh_spark = INH_SPARK_T;";
+        assert_eq!(game_p.matches(set_needle).count(), 1, "㉔ 置值口恰 1（八分支收敛唯一出口单口）");
+        let early_at = game_p
+            .find("let Some(life) = self.life.as_mut() else {")
+            .expect("㉔ take_inherit 四早退末位（life 缺）在位");
+        let exit_at = game_p.find("self.inherit_opts.remove(i);").expect("㉔ 出口 remove 行在位");
+        let set_at = game_p.find(set_needle).expect("㉔ 置值行在位");
+        assert!(
+            set_at > early_at && set_at < exit_at,
+            "㉔ 位点序：置值须在四早退（picked 满/opts 缺/sim_result 缺/life 缺）之后、出口 remove 之前（防挪进单分支）"
+        );
+        assert_eq!(
+            game_p.matches("fn inh_spark_a").count(),
+            0,
+            "㉔ 无第二包络（共用 brk_veil_a 单源勿双写）"
+        );
+        let save_p = prod_of("save.rs");
+        assert_eq!(save_p.matches("inh_spark").count(), 0, "㉔ 会话态不进存档（save.rs 零引用）");
+        let main_p = prod_of("main.rs");
+        assert_eq!(main_p.matches("if g.inh_spark > 0.0 {").count(), 1, "㉔ 递减早退门恰 1");
+        assert_eq!(
+            main_p.matches("g.inh_spark = (g.inh_spark - dt).max(0.0);").count(),
+            1,
+            "㉔ 递减行恰 1"
+        );
+        let draw_p = prod_of("draw.rs");
+        assert_eq!(
+            draw_p
+                .matches("0.12 * brk_veil_a((g.inh_spark / crate::game::INH_SPARK_T)")
+                .count(),
+            1,
+            "㉔ α 口恰 1（draw_inherit 此生卡描边——新增消费口须并入本钉）"
+        );
+        assert_eq!(draw_p.matches("if is_a > 0.0 {").count(), 1, "㉔ 早退门恰 1（稳态零像素）");
     }
 }

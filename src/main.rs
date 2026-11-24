@@ -732,6 +732,18 @@ async fn main() {
         if g.qi_breath > 0.0 {
             g.qi_breath = (g.qi_breath - dt).max(0.0);
         }
+        // 演出包㉓ 天赍落笔·镜纹荡漾计时递减（会话态，draw_draft 卡片区金纹环 +
+        // draw_sim 首段金环共用包络消费），照 qi_breath 主循环先例——0.9s 一次性
+        // 自灭（回镜页再入时若仍有残窗由 draw_draft 兜底口消费）
+        if g.draft_pact > 0.0 {
+            g.draft_pact = (g.draft_pact - dt).max(0.0);
+        }
+        // 演出包㉔ 遗泽拾取·魂光拾遗计时递减（会话态，draw_inherit 此生卡金辉
+        // 描边共用包络消费），照 qi_breath 主循环先例——1.0s 一次性自灭；覆层
+        // 独占分支早退不消费不破稳态（重新可见时包络自然衰减）
+        if g.inh_spark > 0.0 {
+            g.inh_spark = (g.inh_spark - dt).max(0.0);
+        }
         // 剧情演出包⑬ 鉴赏覆层入画计时递减（会话态，draw_zoom_overlay 相位反推
         // 消费），照 weather_anim 主循环先例——覆层为模态独占屏（下层不绘），0.22s
         // 一次性自灭，开启期任意点按即关（命中所见，无同帧竞争）

@@ -133,6 +133,9 @@ def main():
     seg18 = parse_const(data_txt, "EV_SEG18")
     # v1.16.47 段二十扩池：EV_SEG19=377 快照段界（v1.16.46 段十九预建本批引用）
     seg19 = parse_const(data_txt, "EV_SEG19")
+    # v1.16.48 段二十一扩池：EV_SEG20=380 快照段界（v1.16.47 段二十预建本批引用）
+    seg20 = parse_const(data_txt, "EV_SEG20")
+    seg21 = parse_const(data_txt, "EV_SEG21")
     b1 = parse_inc_base("TXT_NAME_BASE")
     b2 = parse_inc_base("TXT_NAME2_BASE")
     b3 = parse_inc_base("TXT_NAME3_BASE")
@@ -162,6 +165,8 @@ def main():
     b19 = parse_inc_base("TXT_NAME19_BASE")
     # v1.16.47 段二十扩池：段二十基址 TXT_NAME20_BASE
     b20 = parse_inc_base("TXT_NAME20_BASE")
+    # v1.16.48 段二十一扩池：段二十一基址 TXT_NAME21_BASE
+    b21 = parse_inc_base("TXT_NAME21_BASE")
 
     # id -> 名段 N 映射（与 data.rs EvTable base8+base9 双段九段连寻同口径）
     def name_n(eid):
@@ -245,8 +250,14 @@ def main():
         # 段八分支被整行顶替先例红线）
         if eid < seg19:
             return b19 + (eid - seg18)
-        # v1.16.47 段二十：EV_SEG19=377 快照段界，段二十基址 TXT_NAME20_BASE
-        return b20 + (eid - seg19)
+        # v1.16.48 段二十一：EV_SEG20=380 快照段界，段二十基址 TXT_NAME20_BASE
+        #（v1.16.48 段二十一：段二十分支由无卫语句末段 return 改带 if eid<seg20
+        # 卫语句——段二十一开设后段二十不再末段；新增分支勿替换本行——v1.16.33
+        # 段八分支被整行顶替先例红线）
+        if eid < seg20:
+            return b20 + (eid - seg19)
+        # v1.16.48 段二十一：EV_SEG21=383 快照段界，段二十一基址 TXT_NAME21_BASE
+        return b21 + (eid - seg20)
 
     # 钉B：名段覆盖断言（真相源逐条可解析、非空、行号=N）
     src_lines = SRC.read_text(encoding="utf-8").splitlines()
@@ -296,14 +307,17 @@ def main():
                         (376, "空阶一蝶"),
                         # v1.16.47 段二十扩池：三新元组追加（旧行零替换照款）
                         (377, "晒书使巡"), (378, "巷尾淘井"),
-                        (379, "夜渡加价")):
+                        (379, "夜渡加价"),
+                        # v1.16.48 段二十一扩池：三新元组追加（旧行零替换照款）
+                        (380, "补行代笔"), (381, "页脚账浅"),
+                        (382, "退稿索酬")):
         if names.get(_eid) != _want:
             raise SystemExit("FATAL 钉B-2 名段内容钉失败: id%d → %r (期望 %r)"
                              % (_eid, names.get(_eid), _want))
     # v1.16.39 遗留清账：段十二/十三/十四补中钉（354/357/360）——首尾钉升全钉，
     # 段八起 24 卡逐卡内容钉全覆盖（v1.16.38 low「360 居中未单钉」清账；
     # 354/357 同批补齐，三段连钉与段九/十/十一全卡钉口径对齐）
-    print("OK 钉B-2 段八..段二十内容钉全钉 ✓（338/343/344/348/349/350/351/352/353/354/355/356/357/358/359/360/361/362/363/364/365/366/367/368/369/370/371/372/373/374/375/376/377/378/379）")
+    print("OK 钉B-2 段八..段二十一内容钉全钉 ✓（338/343/344/348/349/350/351/352/353/354/355/356/357/358/359/360/361/362/363/364/365/366/367/368/369/370/371/372/373/374/375/376/377/378/379/380/381/382）")
 
     game_lines = GAME.read_text(encoding="utf-8").splitlines()
     st, en = build_event_span(game_lines)
@@ -383,11 +397,12 @@ def main():
     # v1.16.46 段十九随批补齐滞后：原 OK 行段界仅列到 seg16/基址仅列到 b17
     #（v1.16.45 批未随批 +1 的存量滞后），本批一次补到全现势 seg1..seg18/b1..b19
     # v1.16.47 段二十：随批 +1 到 seg1..seg19/b1..b20（照 v1.16.46 补齐口径）
+    # v1.16.48 段二十一：随批 +1 到 seg1..seg20/b1..b21（照 v1.16.47 口径）
     print(
-        "OK 钉B 名段覆盖 ✓（N_EVENTS=%d 段界 %d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d 基址 %d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d）"
+        "OK 钉B 名段覆盖 ✓（N_EVENTS=%d 段界 %d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d 基址 %d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d）"
         % (n_events, seg1, seg2, seg3, seg4, seg5, seg6, seg7, seg8, seg9, seg10,
-           seg11, seg12, seg13, seg14, seg15, seg16, seg17, seg18, seg19,
-           b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16, b17, b18, b19, b20)
+           seg11, seg12, seg13, seg14, seg15, seg16, seg17, seg18, seg19, seg20,
+           b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16, b17, b18, b19, b20, b21)
     )
     print("title_recheck 全绿")
 

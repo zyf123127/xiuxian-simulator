@@ -1497,6 +1497,19 @@ fn draw_comp_main_card(
                 let seg_suf = "（情谊随主页）";
                 txt(seg_suf, sx, y + 240.0, 14, C_DIM);
                 sx += measure(seg_suf, 14);
+                // v1.16.48 多道侣④ 提名一（勘察六）：满编前一手提示——尚余一纸
+                // 态（extra.len()==COMP_MAX-2=1）行尾接排 C_DIM「 · 再缝即满编」，
+                // 满编尾警告（seg4）的前置预告链补全；仅中间态新像素（extra 空
+                // 整行不画不变/满编态走 seg4 原位不变/单伴态无此行）；字面量 7
+                // 字照 seg_pre/seg_suf 同函数先例，字形 prewarm 样例串灌（:1858
+                // 区）；行宽预算 col..1080 约 47 字，追加 8 字位不溢出零版式位移
+                if l.map_or(false, |x| {
+                    x.comp_extra.len() == crate::game::COMP_MAX - 2 && !x.comp_full()
+                }) {
+                    let seg_nf = " · 再缝即满编";
+                    txt(seg_nf, sx, y + 240.0, 14, C_DIM);
+                    sx += measure(seg_nf, 14);
+                }
                 if let Some(nm) = fifo_warn {
                     let seg4 = evf(2831, &[&(nm) as &dyn core::fmt::Display])/* 原文：再缝则{}页渐疏 */;
                     txt(&format!(" · {}", seg4), sx, y + 240.0, 14, C_GOLD_D);
@@ -1768,14 +1781,26 @@ fn draw_bond_row(g: &Game, i: usize, y: f32, cur: bool, best: usize) {
                             .first()
                             .map_or(false, |n| *n == COMPANION_NAMES[i])
                 });
+                let after_tag = tx + measure(tag, 14) + 6.0;
+                // 行标串单 let（本钉 needle 恰 1 口径：txt/measure 两消费点共用）
+                let pg_str = "· 页渐疏";
                 if lead_next {
-                    txt(
-                        "· 页渐疏",
-                        tx + measure(tag, 14) + 6.0,
-                        y + 24.0,
-                        14,
-                        C_GOLD_D,
-                    );
+                    txt(pg_str, after_tag, y + 24.0, 14, C_GOLD_D);
+                }
+                // v1.16.48 多道侣④ 提名二（勘察六）：multi 态 cur 行 tag 后接排
+                // 「情谊 N」C_DIM——与图鉴卡（gallery.rs:796 区 cur 卡实时情谊）
+                // 同信息同权对齐（独立副伴情谊账=存档红线不做，共享值展示补齐）；
+                // 数据 s.comp_fav 现成零存档键；『情』『谊』已在 PANEL_WARM_
+                // CHARS（ui.rs）零新字形；满编态页渐疏行标原位不动、情谊段接排
+                // 其尾 +8（满编既有像素零变化）；单伴态 multi=false 本块不进逐像
+                // 素不变；行内左列止 ~350、情谊段 <60px 不触右缘徽标 1084 位
+                let fav_x = if lead_next {
+                    after_tag + measure(pg_str, 14) + 8.0
+                } else {
+                    after_tag
+                };
+                if let Some(s) = g.sim.as_ref() {
+                    txt(&format!("情谊 {}", s.comp_fav), fav_x, y + 24.0, 14, C_DIM);
                 }
             }
         } else if known {
@@ -1855,6 +1880,10 @@ pub(crate) fn prewarm_comp_page() {
     prewarm_text(evtx(2569)/* 原文：当前：双修加成 ×0.00（结缘起步+20%，只升不降） */, &[14]);
     prewarm_text(evtx(2570)/* 原文：结缘起步情谊 25（双修 +20%），道侣赠礼事件再 +5。 */, &[14]);
     prewarm_text("放大", &[14]);
+    // v1.16.48 多道侣④ 提名一：满编前一手提示样例串灌字形（照「放大」字面量
+    // prewarm 款——『即』『满』『编』若不在既有点位也由 make_font 字面量扫描面
+    // 自动收，双保险）
+    prewarm_text(" · 再缝即满编", &[14]);
     // v1.16.46 段十九批 多道侣行 @14 静态字集样例串（照 2569/2570 动态 format!
     // 行先例：N2798 副伴行 + N2831 满编预告行模板字形；副伴名 @14 沿 N2798 行
     // 现状冷栅格化一次口径，样例串灌模板字防首开冷栅格化）
