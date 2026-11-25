@@ -121,6 +121,12 @@ _SEG19 = 377
 # v1.16.48 段二十一扩段二十一：EV_SEG20=380 快照段界（v1.16.47 段二十预建本
 # 批引用；段二十 len20 本批改差兑现——_seg_rows 段二十块同步改有界）
 _SEG20 = 380
+# v1.16.49 段二十二扩段二十二：EV_SEG21=383 快照段界（v1.16.48 段二十一预建本
+# 批引用；段二十一 len21 本批改差兑现——_seg_rows 段二十一块同步改有界）
+_SEG21 = 383
+# v1.16.49 段二十二开设：EV_SEG22=386 快照段界（本批预建下批引用；照 v1.16.48
+# 修直纪律 _SEGN=EV_SEGN 一一对应，勿把新 N_EVENTS 写进 _SEG）
+_SEG22 = 386
 # v1.16.36 单5 low 清账：对账段数常量（段一..段十五）——标签行随此动态写，
 # 下批扩段十六时随批 +1（勘察建议「随段数常量动态改写」款）
 # v1.16.40 单3 扩段十五：SEGS_COUNT 14→15 随批
@@ -130,7 +136,8 @@ _SEG20 = 380
 # v1.16.46 段十九扩池：SEGS_COUNT 18→19 随批
 # v1.16.47 段二十扩池：SEGS_COUNT 19→20 随批
 # v1.16.48 段二十一扩池：SEGS_COUNT 20→21 随批
-SEGS_COUNT = 21
+# v1.16.49 段二十二扩池：SEGS_COUNT 21→22 随批
+SEGS_COUNT = 22
 _name2 = re.search(r"pub static TXT_NAME2_BASE: u32 = (\d+);", inc)
 _brief2 = re.search(r"pub static TXT_BRIEF2_BASE: u32 = (\d+);", inc)
 _name3 = re.search(r"pub static TXT_NAME3_BASE: u32 = (\d+);", inc)
@@ -227,11 +234,16 @@ _name21 = re.search(r"pub static TXT_NAME21_BASE: u32 = (\d+);", inc)
 _brief21 = re.search(r"pub static TXT_BRIEF21_BASE: u32 = (\d+);", inc)
 name21_base = int(_name21.group(1)) if _name21 else None
 brief21_base = int(_brief21.group(1)) if _brief21 else None
+# v1.16.49 段二十二扩池：段二十二基址（.inc 回读同款）
+_name22 = re.search(r"pub static TXT_NAME22_BASE: u32 = (\d+);", inc)
+_brief22 = re.search(r"pub static TXT_BRIEF22_BASE: u32 = (\d+);", inc)
+name22_base = int(_name22.group(1)) if _name22 else None
+brief22_base = int(_brief22.group(1)) if _brief22 else None
 
 
 def _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, base9,
               base10, base11, base12, base13, base14, base15, base16, base17,
-              base18, base19, base20, base21, n):
+              base18, base19, base20, base21, base22, n):
     """段一 0..min(n,291) + 段二..段十四续号（扩池批）；返回行号列表"""
     out = [base + i for i in range(min(n, _SEG1))]
     if n > _SEG1:
@@ -319,18 +331,24 @@ def _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, base9,
         out += [base20 + k for k in range(min(n, _SEG20) - _SEG19)]
     if n > _SEG20:
         assert base21 is not None, "扩池后段二十一基址缺失（pack_text.py 未登记）"
-        # v1.16.48 段二十一开设：段二十一无界末段（下批扩段二十二时改有界）
-        out += [base21 + k for k in range(n - _SEG20)]
+        # v1.16.49 段二十二红线②：段二十一由无界末段改有界（段二十二开设后段
+        # 二十一不再是末段——旧行为 n−_SEG20 在扩池后会把段二十二行错读进段二
+        # 十一）
+        out += [base21 + k for k in range(min(n, _SEG21) - _SEG20)]
+    if n > _SEG21:
+        assert base22 is not None, "扩池后段二十二基址缺失（pack_text.py 未登记）"
+        # v1.16.49 段二十二开设：段二十二无界末段（下批扩段二十三时改有界）
+        out += [base22 + k for k in range(n - _SEG21)]
     return out
 brief_base = int(re.search(r"pub static TXT_BRIEF_BASE: u32 = (\d+);", inc).group(1))
 
 tables = {}
-for tname, base, base2, base3, base4, base5, base6, base7, base8, base9, base10, base11, base12, base13, base14, base15, base16, base17, base18, base19, base20, base21 in (
-        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base, name6_base, name7_base, name8_base, name9_base, name10_base, name11_base, name12_base, name13_base, name14_base, name15_base, name16_base, name17_base, name18_base, name19_base, name20_base, name21_base),
-        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base, brief6_base, brief7_base, brief8_base, brief9_base, brief10_base, brief11_base, brief12_base, brief13_base, brief14_base, brief15_base, brief16_base, brief17_base, brief18_base, brief19_base, brief20_base, brief21_base)):
+for tname, base, base2, base3, base4, base5, base6, base7, base8, base9, base10, base11, base12, base13, base14, base15, base16, base17, base18, base19, base20, base21, base22 in (
+        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base, name6_base, name7_base, name8_base, name9_base, name10_base, name11_base, name12_base, name13_base, name14_base, name15_base, name16_base, name17_base, name18_base, name19_base, name20_base, name21_base, name22_base),
+        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base, brief6_base, brief7_base, brief8_base, brief9_base, brief10_base, brief11_base, brief12_base, brief13_base, brief14_base, brief15_base, brief16_base, brief17_base, brief18_base, brief19_base, brief20_base, brief21_base, brief22_base)):
     entries = []
     for n in _seg_rows(base, base2, base3, base4, base5, base6, base7, base8,
-                       base9, base10, base11, base12, base13, base14, base15, base16, base17, base18, base19, base20, base21, n_events):
+                       base9, base10, base11, base12, base13, base14, base15, base16, base17, base18, base19, base20, base21, base22, n_events):
         assert n in rows, f"{tname} 段缺行 N={n}（基址漂移/收编段不齐）"
         val = decode_raw(rows[n])
         assert val is not None, f"{tname} N={n} 不可解码"
@@ -344,7 +362,7 @@ for tname, base, base2, base3, base4, base5, base6, base7, base8, base9, base10,
           "base9", base9, "base10", base10, "base11", base11, "base12", base12,
           "base13", base13, "base14", base14, "base15", base15, "base16", base16,
           "base17", base17, "base18", base18, "base19", base19,
-          "base20", base20, "base21", base21,
+          "base20", base20, "base21", base21, "base22", base22,
           "rows", len(entries), "aligned:",
           # v1.16.48：aligned 去硬编码 380 改随 N_EVENTS 动态（380 硬编码在
           # 扩池批每轮过期，且曾掩盖 _SEG 错位巧合——对账本身即行数全等断言）
@@ -403,9 +421,13 @@ for tname in ("EVENT_NAMES", "EVENT_BRIEF"):
         # 形态——本批改差兑现 (EV_SEG20−EV_SEG19)，正则 \w+ - \w+ 两形态通吃）
         # v1.16.48 段二十一扩段二十一：base21/len21 双段登记随批（len21 末段差
         # 写法形态）
+        # v1.16.49 段二十二扩段二十二：base22/len22 双段登记随批（len22 末段差
+        # 写法形态——len21 本批改差兑现 (EV_SEG21−EV_SEG20)，正则 \w+ - \w+ 两
+        # 形态通吃）
         r"\s*base19: \w+ as u16," + _C + r"\s*len19: \(?\w+ - \w+\)? as u16," + _C +
         r"\s*base20: \w+ as u16," + _C + r"\s*len20: \(?\w+ - \w+\)? as u16," + _C +
-        r"\s*base21: \w+ as u16," + _C + r"\s*len21: \(?\w+ - \w+\)? as u16,\s*\};"
+        r"\s*base21: \w+ as u16," + _C + r"\s*len21: \(?\w+ - \w+\)? as u16," + _C +
+        r"\s*base22: \w+ as u16," + _C + r"\s*len22: \(?\w+ - \w+\)? as u16,\s*\};"
     )
     m = re.search(pat, src)
     assert m, f"{tname} EvTable 声明缺失"

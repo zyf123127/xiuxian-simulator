@@ -813,6 +813,28 @@ pub fn draw_weather_veil(g: &Game, x: f32, y: f32, w: f32, h: f32) {
 // if-let 外不落像素）。
 /// 流光相位：k∈[0,1]（k=(1−t/2.4) spawn 时 0、自灭时 1）→ sawtooth 相位 [0,1)，
 /// 2.4s 内恰回卷一次（k≈0.8333 处归零重来）；流光 x = bx + 相位×(bw−60)。
+// 演出包㉖ 远征启程·霞光启幡（世界图消费口，world.rs draw_world 调用）：exp_start
+// 成功段单口置值 exp_depart=1.2→0，本口画霞光横线自上而下竖向扫过地图画布一次
+//——位置线性下移（prog 0→1 顶→底）+共用 brk_veil_a 三角包络首尾淡入出（单源
+// 勿双写）。签名照 draw_weather_veil (g,x,y,w,h) 款由调用方传地图画布域；置于
+// ⑫ draw_weather_veil 口之后绘制不改动既有叠序。exp_depart<=0 或包络 α==0 早退
+// 不落像素，稳态逐像素不变；exp_done/途中 exp_choose 不置值=每远征仅启程一口
+//（语义=「启程」非「战果」，v11656 钉面写死）。金色取 C_GOLD（game.rs 常量，
+// fade 同族）；与⑪底带流光（横带循环）/⑫天气氛围（全画布叠色）方向/区域/语义三异
+pub fn draw_depart_beam(g: &Game, x: f32, y: f32, w: f32, h: f32) {
+    let ed = g.exp_depart;
+    if ed <= 0.0 {
+        return;
+    }
+    let a = 0.14 * brk_veil_a((ed / crate::game::EXP_DEPART_T).clamp(0.0, 1.0));
+    if a <= 0.0 {
+        return;
+    }
+    let prog = 1.0 - ed / crate::game::EXP_DEPART_T; // 0→1 顶→底（ed 自 T 递减）
+    let yy = y + prog * (h - 10.0);
+    draw_rectangle(x, yy, w, 2.0, fade(C_GOLD, a));
+}
+
 #[inline]
 fn banner_sweep_phase(k: f32) -> f32 {
     (k * 1.2) % 1.0
@@ -2287,13 +2309,17 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
         }
     }
     let ready = !g.picked.is_empty();
-    if button(
+    // v1.16.49 按钮花样 A（勘察六提名·墨蘸好点亮）：落笔钮 ready 门控 accent
+    //——选定第一张天赋瞬间描边 C_GOLD_D→C_GOLD；未选态 accent=false 与旧实现
+    // 逐比特一致（button→button_accent 委托先例照 :107-109 款，稳态零像素变更）
+    if button_accent(
         V_W * 0.5 - 140.0,
         540.0,
         280.0,
         52.0,
         "落 笔",
         Some("开始此世模拟"),
+        ready,
         ready,
     ) {
         g.play(crate::sounds::Which::Ding);
@@ -2318,14 +2344,13 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
     let Some(s) = g.sim.as_ref() else { return };
     let tribbing = s.trib.is_some();
     draw_bg(art);
-    // 演出包㉓ 天赍落笔·镜纹荡漾：落笔入画金环（launch_sim 落笔帧即切本场景，
-    // 本口为主可见面；0.9s 全屏内缩金环一次性脉冲，draft_pact==0 早退逐比特恒
-    // 等——勘察三双挂建议的主口）。与⑨..㉒错开：触发（落笔）/区域（全屏环）/
-    // 语义（天赍落笔）三异，与⑲ brk 门控金辉（彼卡开门控常驻）全异
-    let dp_a = 0.12 * brk_veil_a((g.draft_pact / crate::game::DRAFT_PACT_T).clamp(0.0, 1.0));
-    if dp_a > 0.0 {
-        draw_rectangle_lines(16.0, 16.0, V_W - 32.0, V_H - 32.0, 2.0, fade(C_GOLD, dp_a));
-    }
+    // v1.16.49 ㉓遮蔽修复（勘察六 finding① 根因闭环）：全屏金环原绘于此处
+    //（draw_bg 之后），被下方顶栏 (0,0,V_W,52) 与日志面板 (8,68,1264,612) 依
+    // 绘制序覆盖——环仅底缘全线+两侧 76px 短须可见，与原注释「主可见面」意图
+    // 不符；本批整块挪至日志面板绘制之后、问笔演出层之前（仍在 draw_modal_card
+    // 之下，见下 :log 段尾）。稳态 draft_pact==0 早退逐比特不变，唯脉冲 0.9s 内
+    // 环线全程可见；v11653「α 双口恰 2」钉不受挪位影响（needle 计数与位置无关），
+    // 位点序防回挪钉见 v11656_veil_sim_ring_unoccluded_pin
     if !tribbing {
         draw_sky_life(g);
     }
@@ -2418,6 +2443,18 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
             area_y + 10.0 + i as f32 * line_h, 16,
             ll.color,
         );
+    }
+    // 演出包㉓ 天赍落笔·镜纹荡漾：落笔入画金环（launch_sim 落笔帧即切本场景，
+    // 本口为主可见面；0.9s 全屏内缩金环一次性脉冲，draft_pact==0 早退逐比特恒
+    // 等——勘察三双挂建议的主口）。与⑨..㉒错开：触发（落笔）/区域（全屏环）/
+    // 语义（天赍落笔）三异，与⑲ brk 门控金辉（彼卡开门控常驻）全异。
+    // v1.16.49 ㉓遮蔽修复：本块自 draw_bg 之后原位挪至日志面板绘制完之后——
+    // 环线不再被顶栏/日志面板覆盖，脉冲 0.9s 内全环可见；问笔演出层（tribbing
+    // 暗角）在本口之后绘仍在其上，与原叠序一致（落笔帧 trib 必空，两态无重叠
+    // 场景；挪位理由与逐比特论证见 draw_bg 后的批注）
+    let dp_a = 0.12 * brk_veil_a((g.draft_pact / crate::game::DRAFT_PACT_T).clamp(0.0, 1.0));
+    if dp_a > 0.0 {
+        draw_rectangle_lines(16.0, 16.0, V_W - 32.0, V_H - 32.0, 2.0, fade(C_GOLD, dp_a));
     }
     // 问笔演出
     if tribbing {
@@ -3495,6 +3532,19 @@ fn draw_shop(g: &mut Game) {
     } else if g.shop_tab == 0 {
         for i in 0..6 {
             let y = 192.0 + i as f32 * 78.0;
+            // 演出包㉕ 坊市成交·金铃涟漪（v1.16.49）：购丹成交后丹药阁六行金色
+            // 下划线按行错峰显影——共用 brk_veil_a 包络，相位按行 −i×0.05 照
+            // bond_mote_a 折相位款（单源勿双写；i 越大相位越低越早走完脉冲=自
+            // 顶向下涟漪余晖）。market_ping==0 → 全行 α=0 早退不落像素，稳态
+            // 逐像素不变；行底 y+58 距下行内容（y+78−6）净空 14px 无叠画
+            let mp_a = 0.12
+                * brk_veil_a(
+                    ((g.market_ping / crate::game::MARKET_PING_T) - i as f32 * 0.05)
+                        .clamp(0.0, 1.0),
+                );
+            if mp_a > 0.0 {
+                draw_rectangle(160.0, y + 58.0, 880.0, 1.5, fade(C_GOLD, mp_a));
+            }
             let p = &PILLS[i];
             let price = g.pill_price(i);
             draw_texture(&crate::art::art().icon_pill, 160.0, y - 6.0, WHITE);
@@ -5436,5 +5486,211 @@ mod v11653_inh_spark_tests {
             "㉔ α 口恰 1（draw_inherit 此生卡描边——新增消费口须并入本钉）"
         );
         assert_eq!(draw_p.matches("if is_a > 0.0 {").count(), 1, "㉔ 早退门恰 1（稳态零像素）");
+    }
+}
+
+// ================= v1.16.49 演出包㉕㉖+UX 沉浸感批钉测 =================
+// 模组名注：v11652 已被 v11652_seg21_tests（game.rs，段二十一扩池批）占用、
+// v11653 已被 v11653_draft_pact_tests/v11653_inh_spark_tests（draw.rs，演出包
+// ㉓㉔批）占用、v11654 已被 v11654_len_batch_tests（game.rs，剧情加长批）占用、
+// v11655 已被 v11655_seg22_tests（game.rs，段二十二扩池批）占用——勘察三提名
+// 时 v11655 尚空闲、施工单二先行落位，本批钉测模块名顺延 v11656，内容版本以本
+// 头注 v1.16.49 为准（占用链纪律照 draw.rs:5286-5291 款；措辞避开消费面扫描
+// 子串，照 ㉑ 头注款防自指）。
+// 钉面：①㉕ 坊市成交·金铃涟漪契约链（常量/字段/置值恰 1+位点序照㉓款/save.rs
+// 零引用/递减恰 1/消费口恰 1+早退门恰 1）②㉖ 远征启程·霞光启幡契约链（同款
+// +exp_done/途中步不置值钉面写死）③㉓遮蔽修复位点序（勘察六 finding① 根因闭
+// 环：sim 口须在日志面板底之后——防回挪；v11653「α 双口恰 2」照旧不受挪位影
+// 响）④UX 沉浸感三件静态钉（遗泽承伴轮替文案闭环/道侣页 cur 行同页世接排/落
+// 笔钮 ready 门控 accent）
+#[cfg(test)]
+mod v11656_market_depart_tests {
+    fn prod_of(fname: &str) -> String {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(fname))
+            .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", fname, e));
+        // 行首 #[cfg(test)] 起至行首顶格 } 止滤测试区（照 v11653 prod 款——
+        // 不滤则本模组自身 needle 定义行入 matches 面致计数自指，初版已踩：
+        // ring needle 数出 4（生产 2+v11653 def 1+本模组 def 1）
+        let mut out = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
+    }
+
+    // ── ㉕ 坊市成交·金铃涟漪契约链（照 v11653_draft_pact 款七钉） ──
+    #[test]
+    fn market_ping_static_pins() {
+        let game_p = prod_of("game.rs");
+        assert_eq!(
+            game_p.matches("pub const MARKET_PING_T: f32 = 0.9;").count(),
+            1,
+            "㉕ 常量恰 1（照 ㉓ DRAFT_PACT_T 款带窗长头注）"
+        );
+        assert_eq!(game_p.matches("pub market_ping: f32,").count(), 1, "㉕ 字段恰 1");
+        let set_needle = "self.market_ping = crate::game::MARKET_PING_T;";
+        assert_eq!(
+            game_p.matches(set_needle).count(),
+            1,
+            "㉕ 置值口恰 1（buy_pill 成功段单口）"
+        );
+        let early_at = game_p
+            .find("crate::npc::NPC_MERCHANT, MERCHANT_BUY_FAV")
+            .expect("㉕ buy_pill 成交好感行在位（购丹特有锚，全文件恰 1）");
+        let set_at = game_p.find(set_needle).expect("㉕ 置值行在位");
+        assert!(
+            set_at > early_at,
+            "㉕ 位点序：置值须在成交处理链（灵石不足早退之后的成交段）之后（照 ㉓ set>early 款防挪外层；早期锚若 !can 串非购丹独占改用本特有锚）"
+        );
+        assert_eq!(
+            game_p.matches("pub fn market_ping_a").count(),
+            0,
+            "㉕ 无第二包络（共用 brk_veil_a 单源勿双写）"
+        );
+        let save_p = prod_of("save.rs");
+        assert_eq!(
+            save_p.matches("market_ping").count(),
+            0,
+            "㉕ 会话态不进存档（save.rs 零引用）"
+        );
+        let main_p = prod_of("main.rs");
+        assert_eq!(
+            main_p.matches("if g.market_ping > 0.0 {").count(),
+            1,
+            "㉕ 递减早退门恰 1"
+        );
+        assert_eq!(
+            main_p.matches("g.market_ping = (g.market_ping - dt).max(0.0);").count(),
+            1,
+            "㉕ 递减行恰 1（主循环照 qi_breath 先例）"
+        );
+        let draw_p = prod_of("draw.rs");
+        assert_eq!(
+            draw_p
+                .matches("g.market_ping / crate::game::MARKET_PING_T")
+                .count(),
+            1,
+            "㉕ 消费口恰 1（丹药阁六行循环内单口——扩藏经阁/点数页须三置值口并并入本钉）"
+        );
+        assert_eq!(draw_p.matches("if mp_a > 0.0 {").count(), 1, "㉕ 早退门恰 1（稳态零像素）");
+    }
+
+    // ── ㉖ 远征启程·霞光启幡契约链（置值口在 world.rs，prod 任意文件名照 v11653 款） ──
+    #[test]
+    fn exp_depart_static_pins() {
+        let world_p = prod_of("world.rs");
+        let set_needle = "g.exp_depart = crate::game::EXP_DEPART_T;";
+        assert_eq!(world_p.matches(set_needle).count(), 1, "㉖ 置值口恰 1（exp_start 成功段单口）");
+        let exped_at = world_p
+            .find("g.world.exp = Some(Exped {")
+            .expect("㉖ exp=Some 启程行在位");
+        let set_at = world_p.find(set_needle).expect("㉖ 置值行在位");
+        assert!(
+            set_at > exped_at,
+            "㉖ 位点序：置值须在三早退后的 exp=Some 之后（防挪早退前）"
+        );
+        // 语义写死：exp_done/途中 exp_choose 均不置值（每远征仅启程一口）——
+        // 全文件置值口恰 1 已由上行断言覆盖，此注为后人扩口红线留档
+        let game_p = prod_of("game.rs");
+        assert_eq!(
+            game_p.matches("pub const EXP_DEPART_T: f32 = 1.2;").count(),
+            1,
+            "㉖ 常量恰 1"
+        );
+        assert_eq!(game_p.matches("pub exp_depart: f32,").count(), 1, "㉖ 字段恰 1");
+        let save_p = prod_of("save.rs");
+        assert_eq!(save_p.matches("exp_depart").count(), 0, "㉖ 会话态不进存档（save.rs 零引用）");
+        let main_p = prod_of("main.rs");
+        assert_eq!(
+            main_p.matches("if g.exp_depart > 0.0 {").count(),
+            1,
+            "㉖ 递减早退门恰 1"
+        );
+        assert_eq!(
+            main_p.matches("g.exp_depart = (g.exp_depart - dt).max(0.0);").count(),
+            1,
+            "㉖ 递减行恰 1"
+        );
+        let draw_p = prod_of("draw.rs");
+        assert_eq!(
+            draw_p.matches("ed / crate::game::EXP_DEPART_T").count(),
+            2,
+            "㉖ 消费口恰 2（draw_depart_beam 内 α 与 prog 双算同源同一口——新增消费口须并入本钉）"
+        );
+        assert_eq!(draw_p.matches("if ed <= 0.0 {").count(), 1, "㉖ 早退门恰 1（稳态零像素）");
+        assert_eq!(
+            world_p
+                .matches("crate::draw::draw_depart_beam(g, 8.0, 60.0, 1264.0, 480.0);")
+                .count(),
+            1,
+            "㉖ 世界图调用恰 1（置于⑫ draw_weather_veil 口之后不动既有叠序）"
+        );
+    }
+
+    // ── ㉓遮蔽修复位点序（勘察六 finding①：sim 口须在日志面板底之后，防回挪） ──
+    #[test]
+    fn veil_sim_ring_unoccluded_pin() {
+        let draw_p = prod_of("draw.rs");
+        let ring_needle = "0.12 * brk_veil_a((g.draft_pact / crate::game::DRAFT_PACT_T)";
+        assert_eq!(
+            draw_p.matches(ring_needle).count(),
+            2,
+            "㉓ α 双口恰 2（打稿卡环+sim 金环——v11653 同款计数，挪位不改面）"
+        );
+        let log_needle = "Color::from_rgba(14, 10, 26, 220)";
+        assert_eq!(
+            draw_p.matches(log_needle).count(),
+            1,
+            "㉓ 日志面板底色行恰 1（位点序锚）"
+        );
+        let log_at = draw_p.find(log_needle).expect("㉓ 日志底行在位");
+        let ring_sim_at = draw_p.rfind(ring_needle).expect("㉓ sim 口在位");
+        assert!(
+            ring_sim_at > log_at,
+            "㉓ 遮蔽修复位点序：sim 金环口须在日志面板绘制之后（勘察六 finding① 防回挪——回挪即环被顶栏/日志面板覆盖复位旧伪影）"
+        );
+    }
+
+    // ── UX 沉浸感三件静态钉（多道侣两提名+落笔 accent） ──
+    #[test]
+    fn ux_immersive_pins() {
+        let game_p = prod_of("game.rs");
+        assert_eq!(
+            game_p.matches("let (_, evicted) = life.bond_slot(cn);").count(),
+            1,
+            "多道侣提名一：遗泽臂轮替取回恰 1（sim/现实两臂既有款不动）"
+        );
+        assert_eq!(
+            game_p
+                .matches("evf(2795, &[&(old.as_str()) as &dyn core::fmt::Display, &(cn) as &dyn core::fmt::Display])")
+                .count(),
+            3,
+            "多道侣提名一：轮替同串恰 3（sim 28 臂/现实邂逅臂/遗泽臂——文案三通道闭环）"
+        );
+        let char_p = prod_of("charpanel.rs");
+        assert_eq!(
+            char_p.matches("情谊 {} · 同页 {} 世").count(),
+            1,
+            "多道侣提名二：cur 行同页世接排恰 1（multi 态限定，复用既有字集零新字形）"
+        );
+        let draw_p = prod_of("draw.rs");
+        assert_eq!(
+            draw_p.matches("Some(\"开始此世模拟\"),\n        ready,\n        ready,").count(),
+            1,
+            "按钮花样 A：落笔钮 ready 门控 accent 恰 1（未选态逐比特一致照 button 委托先例）"
+        );
     }
 }

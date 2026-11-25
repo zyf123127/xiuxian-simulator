@@ -756,6 +756,16 @@ async fn main() {
         if g.bar_anim > 0.0 {
             g.bar_anim = (g.bar_anim - dt).max(0.0);
         }
+        // 演出包㉕ 坊市成交·金铃涟漪计时递减（会话态，draw_shop 丹药阁六行下划
+        // 线错峰显影共用包络消费），照 qi_breath 主循环先例——0.9s 一次性自灭
+        if g.market_ping > 0.0 {
+            g.market_ping = (g.market_ping - dt).max(0.0);
+        }
+        // 演出包㉖ 远征启程·霞光启幡计时递减（会话态，draw_world 地图画布霞光
+        // 横线竖扫共用包络消费），照 qi_breath 主循环先例——1.2s 一次性自灭
+        if g.exp_depart > 0.0 {
+            g.exp_depart = (g.exp_depart - dt).max(0.0);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if debug {
             autopilot(&mut g, frame, &mut shots);

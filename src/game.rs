@@ -159,6 +159,22 @@ pub const DRAFT_PACT_T: f32 = 0.9;
 // 款。主循环递减，draw_inherit 此生卡金辉描边脉冲消费，共用 brk_veil_a 包络
 pub const INH_SPARK_T: f32 = 1.0;
 
+// 演出包㉕ 坊市成交·金铃涟漪窗总长：buy_pill 成功段单口置 market_ping=此值
+//（灵石不足早退之后才置——钉测位点序断言守锚勿上移；sync_save 之前置值不影响
+// 落档）。消费单口：draw_shop 丹药阁六行金色下划线按行错峰显影（共用 brk_veil_a
+// 三角包络，相位按行 −i×0.05 照 bond_mote_a 折相位款——单源勿双写）；藏经阁/
+// 点数兑换两页暂不消费（首轮 buy_pill 单口控面照勘察三建议，扩页须三置值口并
+// 入钉测照㉑两置值口先例）。主循环递减
+pub const MARKET_PING_T: f32 = 0.9;
+
+// 演出包㉖ 远征启程·霞光启幡窗总长：exp_start 成功段单口置 exp_depart=此值
+//（exp 已在/不在秘境/spend_year 失败三早退之后才置——钉测位点序断言守锚勿上
+// 移；exp_done/途中 exp_choose 不置值，语义=「启程」非「战果」，钉面写死防后
+// 人顺手扩）。消费单口：draw_world 地图画布霞光横线自上而下竖扫一次（draw.rs
+// draw_depart_beam 消费，共用 brk_veil_a 包络，置于⑫ draw_weather_veil 口之后
+// 不改动既有叠序）。主循环递减
+pub const EXP_DEPART_T: f32 = 1.2;
+
 // v1.16.7 置链臂 special 槽位段：20..=31（apply_eff 链裁决据此区分「重写链态」
 // 与「本次抉择即链终局」）。v1.16.8 续编：28/29=链4（灯楼谜约）两段推进、
 // 30/31=链5（傩面还愿）双分支；检定臂自 32 起（32 青灯三问/33 墨叟一问/
@@ -1503,6 +1519,19 @@ pub struct Game {
     // clamp 收敛红线同款），fade(c,1.0) 逐比特恒等
     pub bar_anim: f32,
 
+    // 演出包㉕ 坊市成交·金铃涟漪：buy_pill 成功段单口置 MARKET_PING_T=0.9→0
+    //（draw_shop 丹药阁六行金色下划线按行错峰显影消费；成交即回坊市面板稳态）。
+    // 照上方 bar_anim 口径：会话态不进存档（save.rs 零引用），旧档载入天然 0
+    // 不误触；递减挂主循环照 qi_breath 的 main.rs 先例
+    pub market_ping: f32,
+
+    // 演出包㉖ 远征启程·霞光启幡：exp_start 成功段单口置 EXP_DEPART_T=1.2→0
+    //（draw_world 地图画布霞光横线竖扫消费——draw.rs draw_depart_beam 口；
+    // exp_done/途中步不置值=每远征仅启程一口）。照上方 bar_anim 口径：会话态
+    // 不进存档（save.rs 零引用），旧档载入天然 0 不误触；exp_start 经 spend_year
+    // 可与⑫ weather_anim 同帧置值——独立会话态互不干扰（⑫备案款）
+    pub exp_depart: f32,
+
     pub speed: usize, // 模拟速度 0暂停 1慢 2快 3跳过
 
     pub acc: f32,
@@ -2112,6 +2141,10 @@ impl Game {
             zoom_anim: 0.0,
 
             bar_anim: 0.0,
+
+            market_ping: 0.0,
+
+            exp_depart: 0.0,
 
             speed: 2,
 
@@ -10204,7 +10237,10 @@ impl Game {
                 // 单1 减包腾量后按分级补位；题材照交托回望域，避 89 薪火相托/
                 // 215 灶火留谱/227 半檐躲雨/291 换窗新纸：喂雀是冬日堤上与
                 // 雀群的老友面）
-                card.text = evtx(1841)/* 原文：大雪封了堤，雀群躲在石缝里不叫。你每天抓一把谷来喂雀，撒在同一块石头上——它们等的是你，不止是谷。 */.into();
+                // v1.16.49 段四加长批：intro N1841 直改不变号（46→84 字，[70,90]
+                // 运行期钉见 v11655_seg22_tests seg4_15_lengthened_budget），原文
+                // 注释双源同步照 v11654 款
+                card.text = evtx(1841)/* 原文：大雪封了堤，河堤上静得只剩风声，雀群缩在石缝里不叫，也不散。你每天抓一把谷来喂雀，撒在同一块石头上，撒完退开几步——日子久了你看明白，它们等的是你这个人，不止是那把谷。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
@@ -10222,7 +10258,8 @@ impl Game {
                 // v1.16.29 扩池：老年层（同 309 批注十二条；题材避 170 炉暖旧器/
                 // 198 窗前晒卷/297 重缝冬衣：重缝旧席是补缀母题的坐卧面，
                 // 补席如补书）
-                card.text = evtx(1844)/* 原文：睡了几十年的旧席散了边。你坐在檐下拆开重补，补席如补书——料还是旧料，手却记得当年的活，做到掌灯才收尾。 */.into();
+                // v1.16.49 段四加长批：intro N1844 直改不变号（53→81 字），注释双源同步照 v11654 款
+                card.text = evtx(1844)/* 原文：睡了几十年的旧席散了边，苇秆断了好几根，边口的线一扯就秃。你坐在檐下拆开重补，补席如补书——料还是旧料，手却记得当年的活，起头压边收尾，一样不乱，做到掌灯才收针。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
@@ -10240,7 +10277,8 @@ impl Game {
                 // v1.16.29 扩池：mr5 善（mr5 最薄层 26→27 补位；题材避 91 仙门
                 // 论道/169 书肆新声/211 云上放灯/247 雾锁仙市/283 纵马霜原/
                 // 304 代书家信：下山买茶是高境界与凡人队的错位面）
-                card.text = evtx(1847)/* 原文：你下山赶集，排在凡人队尾买春茶。掌柜问你修为，你摆手：茶要紧。半城人见过你排队，没见过你飞。 */.into();
+                // v1.16.49 段四加长批：intro N1847 直改不变号（47→81 字），注释双源同步照 v11654 款
+                card.text = evtx(1847)/* 原文：你下山赶集，排在凡人队尾买春茶，前头孩童回头看了你好几眼。掌柜一边包茶一边问你修为，你摆摆手：茶要紧，别的不要紧。半城人见过你排队，没见过你飞——茶香一路跟着你上山。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
@@ -10260,7 +10298,8 @@ impl Game {
                 // 275 寄剑西窗/282 霜泉淬锋/301 霜窗描枝：雪水研墨是霜天
                 // 写意的文房面）
                 card.actor = Some(CardActor::Npc(2));
-                card.text = evtx(1850)/* 原文：宁清霜收了半盏檐雪，搁在炉边化开：雪水研墨，墨色最静。她推来半锭墨——你的字，也该有个冬天的样子。 */.into();
+                // v1.16.49 段四加长批：intro N1850 直改不变号（50→72 字），注释双源同步照 v11654 款
+                card.text = evtx(1850)/* 原文：宁清霜收了半盏檐雪，搁在炉边慢慢化开，化净了才兑进砚池：雪水研墨，墨色最静，写急字也不躁。她推来半锭新墨——你的字，也该有个冬天的样子，慢慢写。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
@@ -10279,7 +10318,8 @@ impl Game {
                 // Npc(n) 照 248/292/301 口径；题材避 271 柜前压价/281 柜后传眼/
                 // 295 符价压市：第三本账直连 NPC_TALES[1] 人情账母题）
                 card.actor = Some(CardActor::Npc(1));
-                card.text = evtx(1853)/* 原文：盘库夜，胡掌柜从柜底抽出第三本账推给你看——不记银钱，记人情：谁欠谁一句实话，谁替谁垫过秤。你的名字在头一页。 */.into();
+                // v1.16.49 段四加长批：intro N1853 直改不变号（52→77 字），注释双源同步照 v11654 款
+                card.text = evtx(1853)/* 原文：盘库夜，万宝楼打了烊，胡掌柜点了灯，从柜底抽出第三本账推给你看——不记银钱，记人情：谁欠谁一句实话，谁替谁垫过秤，谁的白条押了三年没赎。你的名字在头一页。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
@@ -10297,7 +10337,8 @@ impl Game {
                 // v1.16.29 扩池：mr3 善（mr3 常态补位 31→32；题材避 102 涸河
                 // 龙祠/144 渡蚁桥/210 雨檐听铃/240 药圃赌芽/246 松风问琴/
                 // 305 灵窖渗漏：折梅探病是梅与探望的人情面）
-                card.text = evtx(1856)/* 原文：檐下梅枝头一回开。邻家老人起不来床，你折梅一枝送去，插在粗陶碗里——满屋药味里，就这一缕是甜的。 */.into();
+                // v1.16.49 段四加长批：intro N1856 直改不变号（50→73 字），注释双源同步照 v11654 款
+                card.text = evtx(1856)/* 原文：檐下那株老梅枝头一回开，开得冷淡又干净。邻家老人起不来床，你折梅一枝送去，插在粗陶碗里，摆在枕边——满屋药味里，就这一缕是甜的，老人睁眼先看见它。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
@@ -10316,7 +10357,8 @@ impl Game {
                 // ≈4.48% 守勘察带内；w1 先例 15 仙人遗府/57 无面镜客/73 纸人
                 // 夜行；题材避 224 坠星动冢/284 枯莲夜雨/303 雷纹入纸：琅函
                 // 倒页直连琅函/未竟稿母题，守世纪律不触破境裁决）
-                card.text = evtx(1859)/* 原文：夜半无风，琅函那边送出一页残纸，正落在你未写完的稿上——纸上无字，只有一道折痕，像被读过千遍又放回。 */.into();
+                // v1.16.49 段四加长批：intro N1859 直改不变号（51→70 字），注释双源同步照 v11654 款
+                card.text = evtx(1859)/* 原文：夜半无风，灯焰都直，琅函那边自己送出一页残纸，飘飘落在你未写完的稿上——纸上无字，只有一道旧折痕，折口磨得发了毛，像被读过千遍又舍不得放回。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
@@ -10334,7 +10376,8 @@ impl Game {
                 // v1.16.29 扩池：mr4 恶（恶缘 9→10 条；mr4 恶现 6 条最薄档；
                 // 题材避 105 古戍点兵/130 引魂幡影/147 货栈灵鼠/238 行会追赔/
                 // 245 滩头讹偿/294 假丹换真：药童卷方是熟人造成的失窃面）
-                card.text = evtx(1862)/* 原文：药童不见了，柜里三张老丹方跟着没了——窗绳打着结，是连夜走的。明日半城药铺，就会挂出你的方子。 */.into();
+                // v1.16.49 段四加长批：intro N1862 直改不变号（49→75 字），注释双源同步照 v11654 款
+                card.text = evtx(1862)/* 原文：一早进柜，药童不见了，柜里三张老丹方跟着没了——窗绳解下来打着结，铺盖卷走空，是连夜走的。明日半城药铺，就会挂出你的方子，落你的名字——偷方子的人，替你扬名。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.05;
                 e1.good = false;
@@ -10354,7 +10397,9 @@ impl Game {
                 // 91 仙门论道/169 书肆新声/211 云上放灯/247 雾锁仙市/283 纵马
                 // 霜原/304 代书家信/311 下山买茶：崖灯照径是高处的人做低处事
                 // 的灯火面）
-                card.text = evtx(1881)/* 原文：危崖转角最险，夜归的山民常在此失足。你凿壁悬起一盏风灯，添满三夜灯油——高处的人做低处的事，不费修为，费心。 */.into();
+                // v1.16.49 段五加长批：intro N1881 直改不变号（51→71 字，[70,90]
+                // 运行期钉见 v11657_len5_17_tests），注释双源同步照 v11654 款
+                card.text = evtx(1881)/* 原文：危崖转角最险，夜归的山民常在此失足，年年都有人摔折了脚。你凿壁悬起一盏风灯，添满三夜灯油，风大就再添——高处的人做低处的事，不费修为，费的是心。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
@@ -10372,7 +10417,8 @@ impl Game {
                 // v1.16.30 扩池：mr5 恶（恶缘常规 64→65 条；mr5 恶现 6 条薄层
                 // +1 摊薄；题材避 186/200 仙籍勾误/235/254/266/295 符价压市：
                 // 云路设卡是云上亦有买路财的市侩面）
-                card.text = evtx(1884)/* 原文：御云赶路，前方浮牌拦云：此段云路已被包下，过云一次，灵石三枚。云上什么时候，也开始收钱了。 */.into();
+                // v1.16.49 段五加长批：intro N1884 直改不变号（45→70 字全批最薄卡），注释双源同步
+                card.text = evtx(1884)/* 原文：御云赶路，前方一面浮牌拦云：此段云路已被包下，过云一次，灵石三枚，童叟无欺。天上什么时候，也开始收钱了——你摸了摸钱袋，忽然想念地面的土路。 */.into();
                 let mut e1 = Eff::new();
                 e1.stones_pct = -0.05;
                 e1.good = false;
@@ -10394,7 +10440,8 @@ impl Game {
                 // 补名/273 扫阶拾规/292 讲堂补席/302 晨钟校音：烛下问疑是
                 // 规条之外的学者面）
                 card.actor = Some(CardActor::Npc(0));
-                card.text = evtx(1887)/* 原文：殿里烛火将尽，玄诚长老翻出自己年轻时的批注问你：这一处，你看得出错在哪吗？他等这个答案，等了六十年。 */.into();
+                // v1.16.49 段五加长批：intro N1887 直改不变号（50→72 字），注释双源同步
+                card.text = evtx(1887)/* 原文：殿里烛火将尽，玄诚长老从架上翻出自己年轻时的批注，指着一处问你：这一处，你看得出错在哪吗？他等这个答案，等了六十年——这份等待比你的年纪还长。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
@@ -10415,7 +10462,8 @@ impl Game {
                 // 试锋/275 寄剑西窗/282 霜泉淬锋/301 霜窗描枝/312 雪水研墨：
                 // 雪里拾稿是初雪与初稿的相识面）
                 card.actor = Some(CardActor::Npc(2));
-                card.text = evtx(1890)/* 原文：一阵风把你未干的稿纸掀进雪里。宁清霜一张张拾起，拍去雪粒，按内容排好次序递还：「这篇，该接着上句写。」 */.into();
+                // v1.16.49 段五加长批：intro N1890 直改不变号（52→72 字），注释双源同步
+                card.text = evtx(1890)/* 原文：一阵夜风把你未干的稿纸掀进雪里，白纸白雪一时分不清。宁清霜一张张拾起，拍去雪粒，按内容排好次序递还：「这篇，该接着上句写。」她的袖口落满了雪。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 1.0;
                 e1.msg = vec![
@@ -10445,7 +10493,8 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = evf(1893, &[&(cn)])/* 原文：头锅春茶出炉，你与{}各分一罐封好，封条上各写各的心思：你的写「勿早开」，另一罐写「等谁来」。 */;
+                // v1.16.49 段五加长批：intro N1893 直改不变号（45→71 字含伴名），{} 占位保留注释双源同步
+                card.text = evf(1893, &[&(cn)])/* 原文：头锅春茶出炉，满屋都是新香。你与{}各分一罐封好，封条上各写各的心思：你的写「勿早开」，另一罐写「等谁来」——两道封条并排贴着，像两句话。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
@@ -10474,7 +10523,8 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = evf(1896, &[&(cn)])/* 原文：老树年年落果，今年你与{}树下捡了满袖。你咬一口递过去，换回来时少了一口——牙口不如从前，味道倒比从前足。 */;
+                // v1.16.49 段五加长批：intro N1896 直改不变号（52→78 字含伴名），注释双源同步
+                card.text = evf(1896, &[&(cn)])/* 原文：老树年年落果，今年结得格外多，压弯的枝扫着屋檐，你与{}在树下捡了满满一袖。你咬一口递过去，换回来时少了一口——牙口不如从前，味道倒比从前足，甜是一样的甜。 */;
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
@@ -10492,7 +10542,8 @@ impl Game {
                 // 不写寿元将尽不触破境裁决，照 270 窟灯未熄/287 千鹤过山模板；
                 // 题材避 211 云上放灯/241 踏云题字/300 晨课互校/306 抄经赠邻：
                 // 云上迎雪是雪往高处落的倒景面）
-                card.text = evtx(1899)/* 原文：你在云海之上接住一片往上落的雪——低处的雪要升到高处，得借一辈子的风。凉意散尽，掌心留下一点人间的暖。 */.into();
+                // v1.16.49 段五加长批：intro N1899 直改不变号（49→70 字），注释双源同步
+                card.text = evtx(1899)/* 原文：你在云海之上接住一片往上落的雪——低处的雪要升到高处，得借一辈子的风。凉意散尽之后，掌心留下一点人间的暖，像谁隔着千座山，托你带给高处的人。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 2.0;
                 e1.msg = vec![
@@ -10512,7 +10563,8 @@ impl Game {
                 // 独苗摊薄；纯效果散件无 special 勿动窗位；题材避 15 仙人遗府/
                 // 57 无面镜客/73 纸人夜行/303 雷纹入纸/315 琅函倒页：旧卷
                 // 新墨是未竟稿母题的时间错格面）
-                card.text = evtx(1902)/* 原文：藏书楼最深一层，你在百年前的旧卷里认出自己的字迹——一笔不差，连涂改的位置都相同，落款年份，却在你出生之前。 */.into();
+                // v1.16.49 段五加长批：intro N1902 直改不变号（54→72 字），注释双源同步
+                card.text = evtx(1902)/* 原文：藏书楼最深一层，你在百年前的旧卷里认出自己的字迹——一笔不差，连涂改的位置都相同，而落款年份，却在你出生之前。你合上卷子，指尖半天没有回暖。 */.into();
                 let mut e1 = Eff::new();
                 e1.dao = 3.0;
                 e1.msg = vec![
@@ -11427,7 +11479,9 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = evf(2752, &[&(cn) as &dyn core::fmt::Display])/* 原文：滩头芦花开了，你与{}收了几穗芦絮，晒透晒干，缝作一只新枕——枕上去，满耳都是水边的秋天。 */;
+                // v1.16.49 段十五加长批：intro N2752 直改不变号（45→74 字含伴名，
+                // [70,90] 运行期钉见 v11655_seg22_tests），{} 占位保留，注释双源同步
+                card.text = evf(2752, &[&(cn) as &dyn core::fmt::Display])/* 原文：滩头芦花开了，白絮连成一片，风一过就漫天飞。你与{}收了几穗最鼓的芦絮，摊在竹匾里晒透晒干，夜里一针一针缝作新枕——枕上去，满耳都是水边的秋天。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
@@ -11461,7 +11515,8 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = evf(2755, &[&(cn) as &dyn core::fmt::Display])/* 原文：窗外落了头一场霜，屋里灯还亮着。你与{}把旧榻挪到炉边，摊开两卷手稿同修——旧年批注念一句，炉火应一声。 */;
+                // v1.16.49 段十五加长批：intro N2755 直改不变号（45→73 字含伴名），注释双源同步
+                card.text = evf(2755, &[&(cn) as &dyn core::fmt::Display])/* 原文：窗外落了头一场霜，窗纸泛白，屋里的灯还亮着。你与{}把旧榻挪到炉边，摊开两卷手稿同修——旧年批注念一句，炉火噼啪应一声，夜就这样不知不觉深了。 */;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
@@ -11484,7 +11539,8 @@ impl Game {
                 // 沙暴藏窟（mr2 洞窟机遇）：山摇地动是地动毁路灾后面不同义；
                 // 散件不挂脸；简语原拟「簌簌/纷纷」cmap 外字改「梁尘落案」；
                 // 灵石数臂照 274/360 款 e.stones=-g + 灵石-{} 模板）
-                card.text = evtx(2758)/* 原文：后半夜山摇地动，梁上积尘落了满案。天亮出门看，后山塌了半边坡，泥石埋了下山小半条路——运粮的脚夫都堵在了道上。 */.to_string();
+                // v1.16.49 段十五加长批：intro N2758 直改不变号（54→74 字），注释双源同步
+                card.text = evtx(2758)/* 原文：后半夜山摇地动，梁上积尘落了满案，案上茶盏盖都跳了跳。天亮出门看，后山塌了半边坡，泥石埋了下山小半条路——运粮的脚夫连人带骡都堵在了道上，进退不得。 */.to_string();
                 let g = (20.0 * ss) as i64;
                 let mut e1 = Eff::new();
                 e1.stones = -g;
@@ -11670,7 +11726,10 @@ impl Game {
                     .position(|&n| n == cn)
                     .unwrap_or(0);
                 card.actor = Some(CardActor::Comp(ci));
-                card.text = evf(2791, &[&(cn) as &dyn core::fmt::Display])/* 原文：岁首开笔，你与{}合制一本新历——去岁的旧页一张张撕下，今年的日子两人分头写。*/;
+                // v1.16.49 随批零散加长：intro N2791 直改不变号（39→70 字含伴名
+                // ——静态 39/运行 41 系全池单卡最薄，勘察四随批零散提名兑现），
+                // {} 占位保留注释双源同步
+                card.text = evf(2791, &[&(cn) as &dyn core::fmt::Display])/* 原文：岁首开笔，你与{}合制一本新历——去岁的旧页一张张撕下，折痕里还夹着去年的雪；今年的日子两人分头写，谁也不替谁定，写满一页才许翻过篇去。*/;
                 let mut e1 = Eff::new();
                 e1.comp_fav = crate::data::COMPANION_GIFT_FAV;
                 e1.dao = 1.0;
@@ -11963,6 +12022,73 @@ impl Game {
                     evtx(2863)/* 原文：你把稿子摊开当面念了一段——字字合规矩，退稿退得没道理。来人没了话说，卷子你留下自用。气运-1，修为+8% */.into(),
                 ];
                 card.opts.push(("当面念稿".into(), e2));
+            }
+            383 => {
+                // v1.16.49 段二十二开设扩池：mr1 善散件——mr1 层 310 后约十九批
+                // 未落全表最陈薄层；题材照 GameBook B 表③留档「描名起稿」兑现，
+                // §3.4 十万稿线散件；special79 检定窗三批一条节奏续未轮到留档；
+                // 无门控散件无新机制臂；总基权同批 1164→1173；正文照施工单三③
+                // 口径 2 段（tall 版式零新代码）
+                card.text = evtx(2870)/* 原文：废稿堆里拣出一张，作者把名字一笔划死，纸都划破了——稿子却写得好，段段见功夫。\n你把划掉的名字一笔一笔描清，照着名字重新誊起一份稿——名字是稿子的脸面，脸面不能没。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(2871)/* 原文：描完名字再誊全篇，末行签上那个名字——稿子齐齐整整，像它本来就该有的样子。道心+2 */.into(),
+                ];
+                card.opts.push(("照名誊全".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(2872)/* 原文：你只把名字描清，稿子先收进匣底——等一个配得上它的机缘，再让它出门。气运+1 */.into(),
+                ];
+                card.opts.push(("描名收稿".into(), e2));
+            }
+            384 => {
+                // v1.16.49 段二十二开设扩池：mr3 善散件——mr3 层 374 三纸同檐后
+                // 三批未落；玄诚长老第十卡 CardActor::Npc(0) 照 372 先例（正文
+                // 钉名⟺Npc(0) 同源纪律）；散件呼应 N1699 藏经阁半卷暗钩不触书
+                // 狱主链；「晒卷」与 377 晒书使巡共用「晒」字面不同义（门内晒卷
+                // 防潮 vs 官制巡曝抽勘）照 365「径」先例；无门控散件无新机制臂；
+                // 总基权同批 1164→1173；正文照施工单三③口径 2 段（tall 版式零
+                // 新代码）
+                card.actor = Some(CardActor::Npc(0));
+                card.text = evtx(2873)/* 原文：连日晴，玄诚长老把藏经阁的卷子搬出来晒——竹架一排排，他亲自翻页，晒完一卷点一卷。\n高架最深处那半卷原样摆着，晒架没它的份。你多看了一眼，长老只说：那卷不晒，潮着才留得住字。 */.into();
+                let mut e1 = Eff::new();
+                e1.dao = 2.0;
+                e1.msg = vec![
+                    evtx(2874)/* 原文：你帮着翻晒到日头偏西——长老说，卷子记得谁的手劲。道心+2 */.into(),
+                ];
+                card.opts.push(("帮晒一晌".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = 1.0;
+                e2.msg = vec![
+                    evtx(2875)/* 原文：你收回目光，替长老把晒架扶正——有些卷子不是给晒的，是给等的。气运+1 */.into(),
+                ];
+                card.opts.push(("不碰那半卷".into(), e2));
+            }
+            385 => {
+                // v1.16.49 段二十二开设扩池：mr7 恶散件——恶 mr7 层 371/375/379/
+                // 382 后每批一条节奏第五条全恶层最薄维持；石罚 3000×ss 照 371/
+                // 375/379/382 mr7 案值厚先例（stone_scale 乘区）；「盗售」字面与
+                // 371 打点/382 索酬不同义共存照 365「径」先例；无门控散件无新机
+                // 制臂；总基权同批 1164→1173；正文照施工单三③口径 2 段（tall 版
+                // 式零新代码）
+                card.text = evtx(2876)/* 原文：一个生人拿着卷废稿上门，说是重金从书佣手里买的——那稿是你的笔迹，篓底偷出去的废稿。\n废稿当真稿卖了高价，人家要个说法——要么双倍赎回，要么当场拆穿你自己收自己的贼赃。 */.into();
+                let mut e1 = Eff::new();
+                // 双倍赎卷：负灵石照 5014/371/375/379/382 先例（stone_scale 乘区）
+                e1.stones = -((3000.0 * ss) as i64);
+                e1.msg = vec![
+                    evf(2877, &[&(fmt_int((3000.0 * ss) as i64)) as &dyn core::fmt::Display])/* 原文：你双倍出钱把废稿赎回来——废纸卖出真稿价，贼是书佣，亏是您的。灵石-{} */,
+                ];
+                card.opts.push(("双倍赎卷".into(), e1));
+                let mut e2 = Eff::new();
+                e2.luck = -1.0;
+                e2.qi_pct = 0.08;
+                e2.good = false;
+                e2.msg = vec![
+                    evtx(2878)/* 原文：你当面对笔拆穿——买主面上难看，废稿撕了喂火。传出去，人人都知你的篓底养过贼。气运-1，修为+8% */.into(),
+                ];
+                card.opts.push(("当场拆穿".into(), e2));
             }
 
             _ => {}
@@ -14096,7 +14222,19 @@ impl Game {
                     {
                         life.companion = Some(cn.clone());
                     } else if !life.comp_extra.iter().any(|x| x == cn) {
-                        life.bond_slot(cn);
+                        // v1.16.49 多道侣提名一（勘察六）：遗泽承伴 FIFO 轮替静默
+                        // 闭环——原 bond_slot 返回值整弃，现实满编时旧副伴被顶替
+                        // 零反馈（sim 侧 28 臂 N2795 slog+现实邂逅臂 N2795 双通道
+                        // 齐备唯此处哑）；取回 evicted 有则补 log 同串（零新字形，
+                        // log 不预热走讨牒先例）。take_inherit 位点序不受影响
+                        //（inh_spark 置值在本块之后不变，v11653 位点序钉照旧成立）
+                        let (_, evicted) = life.bond_slot(cn);
+                        if let Some(old) = evicted {
+                            self.log(
+                                evf(2795, &[&(old.as_str()) as &dyn core::fmt::Display, &(cn) as &dyn core::fmt::Display])/* 原文：{}的页渐疏，{}另缝一页——同页仍止三纸。 */,
+                                C_GOLD,
+                            );
+                        }
                     }
                     msg = evf(1553, &[&(cn), &(INHERIT_LEGACY_FAV)])/* 原文：道侣遗泽：{}随你魂归现实，情谊不减（好感+{}）。道心 +8，气运 +8。 */;
                 } else {
@@ -15763,6 +15901,10 @@ impl Game {
 
         self.play(crate::sounds::Which::Coin);
 
+        // 演出包㉕ 坊市成交·金铃涟漪：成交段单口置值（灵石不足早退之后才达此
+        // 处——钉测位点序断言守锚勿上移；sync_save 之前置值不影响落档）
+        self.market_ping = crate::game::MARKET_PING_T;
+
         self.sync_save();
     }
 
@@ -16531,6 +16673,10 @@ pub(crate) mod revenge_tests {
             zoom_anim: 0.0,
 
             bar_anim: 0.0,
+
+            market_ping: 0.0,
+
+            exp_depart: 0.0,
 
             speed: 0,
 
@@ -20586,7 +20732,8 @@ mod event_batch_v1168_tests {
         // v1.16.46 段十九扩池 3（374 三纸同檐/375 同页生隙/376 空阶一蝶）→ 377 条
         // v1.16.47 段二十扩池 3（377 晒书使巡/378 巷尾淘井/379 夜渡加价）→ 380 条
         // v1.16.48 段二十一扩池 3（380 补行代笔/381 页脚账浅/382 退稿索酬）→ 383 条
-        assert_eq!(EVENTS.len(), 383);
+        // v1.16.49 段二十二扩池 3（383 描名起稿/384 檐下晒卷/385 废稿盗售）→ 386 条
+        assert_eq!(EVENTS.len(), 386);
     }
 }
 
@@ -21239,10 +21386,22 @@ mod v11615_reward_and_pool_tests {
     // v1.16.46 直接先例）；总基权 1155→1164；稀有 32 条 52 权不变 52/1164
     // ≈4.47% 守带续守（v1.16.47 4.50% 先例）；常态池（w>0）mr 分布（348 条）
     // 0:47/1:63/2:58/3:40/4:41/5:36/6:33/7:30
+    // v1.16.49 段二十二开设扩池批 3 条随批：描名起稿 383 w3 mr1 善（mr1 层 310 后
+    // 约十九批未落全表最陈薄层；GameBook B 表③留档兑现，§3.4 十万稿线散件）/
+    // 檐下晒卷 384 w3 mr3 善（mr3 层 374 三纸同檐后三批未落；玄诚长老第十卡
+    // Npc(0) 照 372 先例，呼应 N1699 半卷暗钩不触书狱主链）/废稿盗售 385 w3 mr7
+    // 恶（恶 mr7 371/375/379/382 后每批一条节奏第五条全恶层最薄维持；恶缘 76→77
+    // 条 264→267 权）；special79 检定窗三批一条节奏（76@v1.16.37/77@v1.16.44/
+    // 78@v1.16.47）续未轮到留档——special79=晒书使×收册人组队问题材预留约
+    // v1.16.50 批落（GameBook §四/:289 口径），三卡全散件零新机制臂；共 3 条零
+    // 新键零资产照勘察二提名全落（A 案 3×w3 全不入稀有照 v1.16.46 直接先例）；
+    // 总基权 1164→1173；稀有 32 条 52 权不变 52/1173≈4.43% 守带续守（v1.16.48
+    // 4.47% 先例）；常态池（w>0）mr 分布（351 条）
+    // 0:47/1:64/2:58/3:41/4:41/5:36/6:33/7:31
     #[test]
     fn pool_ledger_recheck() {
         let total: i32 = EVENTS.iter().map(|&p| ev_w(p)).sum();
-        assert_eq!(total, 1164, "总基权漂移——照 data.rs v1.16.48 段二十一扩池批注重算");
+        assert_eq!(total, 1173, "总基权漂移——照 data.rs v1.16.49 段二十二扩池批注重算");
         let rare: Vec<(usize, i32)> = EVENTS
             .iter()
             .filter(|&&p| ev_w(p) > 0 && ev_w(p) <= crate::data::RARE_W)
@@ -21727,9 +21886,10 @@ mod v11617_pool_tests {
         // v1.16.46 段十九扩池 3 条（374..=376）同批随批注口径 374→377
         // v1.16.47 段二十扩池 3 条（377..=379）同批随批注口径 377→380
         // v1.16.48 段二十一扩池 3 条（380..=382）同批随批注口径 380→383
-        assert_eq!(EVENTS.len(), 383);
-        assert_eq!(EVENT_NAMES.len(), 383);
-        assert_eq!(EVENT_BRIEF.len(), 383);
+        // v1.16.49 段二十二扩池 3 条（383..=385）同批随批注口径 383→386
+        assert_eq!(EVENTS.len(), 386);
+        assert_eq!(EVENT_NAMES.len(), 386);
+        assert_eq!(EVENT_BRIEF.len(), 386);
         for id in 183..=204usize {
             assert_eq!(EVENTS_ROWS[id].0 as usize, id, "新增段 id 连续");
             assert!(!EVENT_NAMES[id].is_empty());
@@ -25351,10 +25511,14 @@ mod v11629_pool_tests {
             assert_eq!(card.title, EVENT_NAMES[id], "标题双源 id {}", id);
             assert!(!card.text.is_empty());
             assert!(card.opts.len() >= 2, "事件 {} 至少两选项", id);
+            // v1.16.49 段四加长批随批放宽：段级预算 ≤60→≤90——8 卡 intro 直改
+            // 单段 [70,90] 照 v11654 款（tall 版式 92px 3 行安全线内 ≤96 静态；
+            // [70,90] 下限+运行期钉见 v11655_seg22_tests seg4_15_lengthened_budget，
+            // 双钉互补：本钉护上沿、彼钉护区间）
             for (si, seg) in card.text.split('\n').enumerate() {
                 assert!(
-                    seg.chars().count() <= 60,
-                    "事件 {} 第 {} 段超 ≤60 预算：{}",
+                    seg.chars().count() <= 90,
+                    "事件 {} 第 {} 段超 ≤90 预算：{}",
                     id,
                     si + 1,
                     seg
@@ -25633,8 +25797,11 @@ mod v11628_pool_tests {
         );
     }
 
-    // v1.16.30 扩池 8 条良构：标题双源/正文非空且段≤60/两选项/special 恒 0/
-    // 抉择全链不 panic（立绘钉 319=Npc(0) 320=Npc(2) 321/322=Comp；散件不挂脸）
+    // v1.16.30 扩池 8 条良构：标题双源/正文非空且段≤60（v1.16.49 段五加长批
+    // 随批放宽 ≤90——8 卡 intro 直改单段 [70,90] 照 v11654/v11655 款，区间钉
+    // 见 v11657_len5_17_tests，双钉互补照施工单四 batch8 修法）/两选项/special
+    // 恒 0/抉择全链不 panic（立绘钉 319=Npc(0) 320=Npc(2) 321/322=Comp；散件
+    // 不挂脸）
     #[test]
     fn batch11_cards_well_formed() {
         for id in 317..=324usize {
@@ -25653,8 +25820,8 @@ mod v11628_pool_tests {
             for (si, seg) in card.text.split('\n').enumerate() {
                 let n = seg.chars().count();
                 assert!(
-                    n <= 60,
-                    "事件 {} 第 {} 段 {} 字超 ≤60 预算：{}",
+                    n <= 90,
+                    "事件 {} 第 {} 段 {} 字超 ≤90 预算：{}",
                     id,
                     si + 1,
                     n,
@@ -29324,10 +29491,13 @@ mod v11652_seg21_tests {
             0,
             "旧 len20 末段差写法零残留（扩池静默错位红线）"
         );
+        // v1.16.49 段二十二：len21 由末段差写法改段界常量差兑现（EV_SEG21 快照转
+        // 实用）——旧「(N_EVENTS - EV_SEG20) 恰 2」断言随批退场改零残留看守，
+        // len21 改差恰 2/len22 末段差恰 2 新态钉落 v11655_seg22_tests（照批间滚动先例）
         assert_eq!(
-            data.matches("(N_EVENTS - EV_SEG20)").count(),
-            2,
-            "len21 新末段差写法恰 2（下批扩段二十二须改差）"
+            data.matches("N_EVENTS - EV_SEG20").count(),
+            0,
+            "旧 len21 末段差写法零残留（v1.16.49 改差兑现）"
         );
         // special79 留档批零扩槽旁证：SPECIAL_SUB 声明在位且无 80 槽扩槽
         //（needle 用 concat 拼接防自指——本钉测源码行自身不入 matches 面，照
@@ -29376,6 +29546,213 @@ mod v11654_len_batch_tests {
             assert!(
                 (70..=90).contains(&n),
                 "段十一/十二/十三加长批 id {} 字数预算 [70,90] 漂移: {} 字（下批再改此批卡须同步本钉）",
+                id,
+                n
+            );
+        }
+    }
+}
+
+// ================= v1.16.49 段二十二开设扩池+段四/段十五加长批钉测 =================
+// 模组名注：v11649 前缀已被 v11649_seg20_tests（game.rs）占用、v11650 前缀已被
+// v11650_neme_veil/v11650_qi_breath/v11650_ux_pins 三模组（draw.rs）占用、
+// v11651 前缀已被 v11651_charcount_pins_tests（game.rs）占用、v11652 已被
+// v11652_seg21_tests（game.rs，段二十一扩池批）占用、v11653 已被
+// v11653_draft_pact_tests/v11653_inh_spark_tests（draw.rs，演出包㉓㉔批）占用、
+// v11654 已被 v11654_len_batch_tests（game.rs，剧情加长批）占用——本批钉测模块
+// 名顺延 v11655，内容版本以本头注 v1.16.49 为准（占用链纪律：每模组头注可独立
+// 回溯全链，照 v11652 头注款）。
+// 钉面：①段二十二三卡良构（id 383..385 连续/A 案 3×w3 全不入稀有/mr 1/3/7 层
+// 各一/标题双源查表/≥2 选项/正文 2 段各 ≤58 字/三卡零 special 照散件口径/384
+// CardActor::Npc(0)+正文钉名「玄诚长老」同源纪律/385 石罚负值照 382 款+opt2
+// good=false/stage 恒 None）②mr 三层无门控入池+374 副伴门不动旁证 ③len21 改差
+// 兑现源码钉（(EV_SEG21 - EV_SEG20) 恰 2 处/len22 新末段差 (N_EVENTS - EV_SEG21)
+// 恰 2/N_EVENTS - EV_SEG20 零残留——EV_SEG22 快照转实用的静态看守；v11652 旧
+// 「(N_EVENTS - EV_SEG20) 恰 2」断言随批退场照批间滚动先例）④段四 8 卡（309..316）
+// +段十五 3 卡（362/363/364）加长批 intro 运行期 [70,90] 字数钉（{} 换伴名后真
+// 实渲染字符数，照 v11654 text_len_of 款）；special79 负钉照勘察二裁定本批零触
+// 碰——v11652 :SPECIAL_SUB 零扩槽钉照旧成立
+#[cfg(test)]
+mod v11655_seg22_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    fn sim_game(realm: usize, luck: f32) -> Game {
+        let mut g = game_with(Life::default(), None);
+        let mut s = Life::default();
+        s.realm = realm;
+        s.luck = luck;
+        g.sim = Some(s);
+        g
+    }
+
+    fn text_len_of(id: usize) -> usize {
+        let mut g = game_with(Life::default(), None);
+        g.sim = Some(Life::default());
+        g.modal = None;
+        g.build_event(id);
+        g.modal.as_ref().unwrap().text.chars().count()
+    }
+
+    // ── 段二十二三卡良构（照 seg21_cards_well_formed 款，三卡全散件零检定） ──
+    #[test]
+    fn seg22_cards_well_formed() {
+        let mut g = game_with(Life::default(), None);
+        g.sim = Some(Life::default());
+        for (id, want_mr) in [(383usize, 1u8), (384, 3), (385, 7)] {
+            assert_eq!(EVENTS_ROWS[id].0 as usize, id, "段二十二 id 连续");
+            assert_eq!(EVENTS_ROWS[id].1, 3, "段二十二 id {} 基权（A 案 3×w3）", id);
+            assert_eq!(EVENTS_ROWS[id].2, want_mr, "段二十二 id {} mr 层", id);
+            g.modal = None;
+            g.build_event(id);
+            let card = g.modal.as_ref().unwrap();
+            assert_eq!(card.title, EVENT_NAMES[id], "标题双源 id {}", id);
+            assert!(!card.text.is_empty());
+            assert!(card.opts.len() >= 2, "事件 {} 至少两选项", id);
+            assert!(!card.rare, "id {} w3 不入稀有（RARE_W=2）", id);
+            assert!(card.stage.is_none(), "id {} stage 恒 None（非链段）", id);
+            // ③口径钉：正文 2 段各 ≤58 字（tall max_h=120px=2+2 行代理，照
+            // seg21 款）
+            let segs: Vec<&str> = card.text.split('\n').collect();
+            assert_eq!(segs.len(), 2, "id {} 段数须恰 2", id);
+            for (k, seg) in segs.iter().enumerate() {
+                let n = seg.chars().count();
+                assert!(n <= 58, "id {} 段 {} 越 58 字预算: {} ({}字)", id, k, seg, n);
+            }
+            // 散件口径钉：六 opt 全零 special（special79 留档批零检定接线）
+            for (ok, oe) in card.opts.iter() {
+                assert_eq!(oe.special, 0, "id {} opt {} 散件零 special", id, ok);
+            }
+        }
+        // 384 玄诚第十卡特征（照 372 同源纪律：CardActor::Npc(0) ⟺ 正文钉名）
+        g.modal = None;
+        g.build_event(384);
+        let card = g.modal.as_ref().unwrap();
+        assert!(
+            matches!(card.actor, Some(CardActor::Npc(0))),
+            "384 玄诚长老卡须挂 CardActor::Npc(0)（正文钉名⟺Npc(0) 同源）"
+        );
+        assert!(
+            card.text.contains("玄诚长老"),
+            "384 正文钉名「玄诚长老」缺失（Npc(0) 同源纪律）"
+        );
+        // 383/385 纯散件零挂脸旁证（Npc(0) 仅 384 一卡）
+        for id in [383usize, 385] {
+            g.modal = None;
+            g.build_event(id);
+            assert!(
+                g.modal.as_ref().unwrap().actor.is_none(),
+                "id {} 纯散件不挂脸（Npc(0) 仅 384）",
+                id
+            );
+        }
+        // 385 恶卡特征（照 382 mr7 案值厚款：opt1 石罚负值/opt2 气运负+good=false）
+        g.modal = None;
+        g.build_event(385);
+        let card = g.modal.as_ref().unwrap();
+        assert!(card.opts[0].1.stones < 0, "385 opt1 石罚负值");
+        assert!(
+            card.opts[1].1.luck < 0.0 && !card.opts[1].1.good,
+            "385 opt2 气运负值+good=false"
+        );
+    }
+
+    // ── mr 三层无门控入池 + len21 改差兑现源码钉 ──
+    #[test]
+    fn seg22_pool_gates_and_len21_pin() {
+        for (mr, id) in [(1usize, 383usize), (3, 384), (7, 385)] {
+            let g = sim_game(mr, 100.0);
+            let (ws, _) = g.sim_event_weights(100.0, mr, false, false, false);
+            assert!(ws[id] > 0.0, "{} 无门控 mr{} 层入池", id, mr);
+        }
+        // 对照：374 副伴门仍在——本批零新增门控旁证（照 seg20/seg21_pool_gates 款）
+        let mut g3 = sim_game(3, 100.0);
+        if let Some(s) = g3.sim.as_mut() {
+            s.companion = Some(COMPANION_NAMES[0].to_string());
+        }
+        let (ws3, _) = g3.sim_event_weights(100.0, 3, false, false, true);
+        assert_eq!(ws3[374], 0.0, "374 副伴门仍在（本批未动既有门控）");
+        // len21 改差兑现源码钉：两表 len21 均为段界差、旧末段差写法零残留
+        let root = env!("CARGO_MANIFEST_DIR");
+        let data = std::fs::read_to_string(std::path::Path::new(root).join("src").join("data.rs"))
+            .expect("读 src/data.rs");
+        assert_eq!(
+            data.matches("(EV_SEG21 - EV_SEG20)").count(),
+            2,
+            "len21 改差兑现恰 2（NAME/BRIEF 两表——EV_SEG21 快照转实用）"
+        );
+        assert_eq!(
+            data.matches("N_EVENTS - EV_SEG20").count(),
+            0,
+            "旧 len21 末段差写法零残留（扩池静默错位红线）"
+        );
+        assert_eq!(
+            data.matches("(N_EVENTS - EV_SEG21)").count(),
+            2,
+            "len22 新末段差写法恰 2（下批扩段二十三须改差）"
+        );
+    }
+
+    // ── 段四 8 卡+段十五 3 卡加长批字数钉（intro 直改不变号） ──
+    #[test]
+    fn seg4_15_lengthened_budget() {
+        // 段四 309..316（8 卡）+段十五 362/363/364（3 卡）intro 运行期 [70,90]：
+        // {} 换伴名后真实渲染字符数（362/363 evf 单段带伴名），照 v11654
+        // text_len_of 款；下批再改此批卡须同步本钉
+        for id in [
+            309usize, 310, 311, 312, 313, 314, 315, 316, 362, 363, 364,
+        ] {
+            let n = text_len_of(id);
+            assert!(
+                (70..=90).contains(&n),
+                "段四/段十五加长批 id {} 字数预算 [70,90] 漂移: {} 字",
+                id,
+                n
+            );
+        }
+    }
+}
+
+// ================= v1.16.49 剧情加长批（段五 8 卡+段十七 370 单卡）字数钉 =================
+// 模组名注：v11652 已被 v11652_seg21_tests（game.rs，段二十一扩池批）占用、
+// v11653 已被 v11653_draft_pact_tests/v11653_inh_spark_tests（draw.rs，演出包
+// ㉓㉔批）占用、v11654 已被 v11654_len_batch_tests（game.rs，段十一/十二/十三
+// 加长批）占用、v11655 已被 v11655_seg22_tests（game.rs，段二十二扩池+段四/十
+// 五加长批）占用、v11656 已被 v11656_market_depart_tests（draw.rs，演出包㉕㉖+
+// UX 沉浸感批）占用——勘察四提名时 v11655 尚空闲、施工单二/四先行落位，本批
+// 钉测模块名顺延 v11657，内容版本以本头注 v1.16.49 为准（占用链纪律照 v11654
+// 头注款）。
+// 钉面：段五整段 8 卡（317..324）+段十七 370 单卡 intro 运行期 [70,90] 照
+// v11654 text_len_of 款（{} 换伴名后真实渲染字符数，单段不加段——tall 版式
+// 92px 3 行安全线内 ≤96 静态）；真相源 N1881/1884/1887/1890/1893/1896/1899/
+// 1902/2791 九行直改不变号（append-only 行直改照段三/段十四先例）、臂内 9 处
+// 原文注释双源同步；四早退/special/检定结构零触碰
+#[cfg(test)]
+mod v11657_len5_17_tests {
+    use super::revenge_tests::game_with;
+    use super::*;
+
+    fn text_len_of(id: usize) -> usize {
+        let mut g = game_with(Life::default(), None);
+        g.sim = Some(Life::default());
+        g.modal = None;
+        g.build_event(id);
+        g.modal.as_ref().unwrap().text.chars().count()
+    }
+
+    #[test]
+    fn seg5_17_lengthened_budget() {
+        // 段五 317..324（8 卡：1881 崖灯/1884 云路/1887 烛下问疑/1890 雪里拾稿/
+        // 1893 同封新茶/1896 树下尝果/1899 云上迎雪/1902 旧卷新墨）+段十七 370
+        // 同制新历（N2791 全池单卡最薄 39 字随批零散加长兑现）：{} 换伴名后真实
+        // 渲染字符数（1893/1896/370 evf 单段带伴名），下批再改此批卡须同步本钉
+        for id in [
+            317usize, 318, 319, 320, 321, 322, 323, 324, 370,
+        ] {
+            let n = text_len_of(id);
+            assert!(
+                (70..=90).contains(&n),
+                "段五/段十七加长批 id {} 字数预算 [70,90] 漂移: {} 字",
                 id,
                 n
             );

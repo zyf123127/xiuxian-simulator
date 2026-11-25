@@ -298,6 +298,10 @@ pub fn exp_start(g: &mut Game) {
         loot: Vec::new(),
     });
     g.exp_p_cache = None; // v1.16.21 P8 胜率副标缓存随新远征清（步号可重复防串）
+    // 演出包㉖ 远征启程·霞光启幡：成功段单口置值（exp 已在/不在秘境/spend_year
+    // 失败三早退之后才达此处——钉测位点序断言守锚勿上移；exp_done/途中
+    // exp_choose 不置值=每远征仅启程一口，语义=「启程」非「战果」）
+    g.exp_depart = crate::game::EXP_DEPART_T;
     g.log(evtx(1817)/* 原文：你踏入落霞秘境，霞光在身后合拢——远征开始了。 */, C_CYAN);
     g.play(crate::sounds::Which::Page);
     g.sync_save();
@@ -595,6 +599,11 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     // 地图画布区与上行既有 WEATHER_TINT 通道同域——脉冲=新天气叠色「落定」的回声；
     // anim<=0 或晴（表值 α=0）早退不落像素，稳态逐像素不变
     crate::draw::draw_weather_veil(g, 8.0, 60.0, 1264.0, 480.0);
+    // 演出包㉖ 远征启程·霞光启幡（世界图消费口，v1.16.49）：exp_start 成功段单口
+    // 置值 exp_depart→draw_depart_beam 霞光横线自上而下竖扫地图画布一次；置于
+    // ⑫ draw_weather_veil 口之后不改动既有叠序；exp_depart<=0 早退不落像素稳态
+    // 逐像素不变（exp_start 经 spend_year 可与⑫同帧置值——独立会话态互不干扰）
+    crate::draw::draw_depart_beam(g, 8.0, 60.0, 1264.0, 480.0);
     // v1.5.0 水面波光：河面流光 5 点（map_river_y 取图像系坐标，屏幕 x 需 -8 校正）
     for k in 0..5 {
         let sx = ((g.time * 46.0 + k as f32 * 253.0) % 1264.0) + 8.0;

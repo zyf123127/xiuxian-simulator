@@ -1800,7 +1800,20 @@ fn draw_bond_row(g: &Game, i: usize, y: f32, cur: bool, best: usize) {
                     after_tag
                 };
                 if let Some(s) = g.sim.as_ref() {
-                    txt(&format!("情谊 {}", s.comp_fav), fav_x, y + 24.0, 14, C_DIM);
+                    // v1.16.49 多道侣提名二（勘察六）：cur 行情谊段再接排历世同页
+                    // 次数——「此人历世缝过几回」原需抬头找合计行，现在行内一眼
+                    // 可读；措辞复用下方 :1807「曾同页 N 世」既有字集（同/页/世
+                    // +中点照上方行标中点款）零新字形；仅 multi 态 cur 行新增
+                    // 段，单伴/无伴态逐像素不变；行内左列止 ~350+接排 <70px 不触
+                    // 右缘徽标 1084 位（照上方已验证口径；注内措辞避开 v11650
+                    // ux 钉 needle 字面——prod 扫描计数自指防自红）
+                    txt(
+                        &format!("情谊 {} · 同页 {} 世", s.comp_fav, bonds),
+                        fav_x,
+                        y + 24.0,
+                        14,
+                        C_DIM,
+                    );
                 }
             }
         } else if known {
