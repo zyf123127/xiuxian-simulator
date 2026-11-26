@@ -188,6 +188,8 @@ fn draw_panel_chrome_act(g: &Game) -> Option<PanelAct> {
         }
         if g.char_tab == i as u8 {
             draw_rectangle(x, 108.0, 98.0, 3.0, C_GOLD);
+            // UX 批：选中条左端 12px 加亮段（三组页签同批同语，同 draw.rs 坊市口批注）
+            draw_rectangle(x, 108.0, 12.0, 3.0, Color::from_rgba(255, 244, 200, 255));
         }
     }
     None
@@ -1970,7 +1972,15 @@ fn draw_overview(g: &Game, l: &Life) {
     let frac = (l.qi / need) as f32;
     txt("修为", 170.0, 392.0, 14, C_DIM);
     bar_glow(220.0, 394.0, 180.0, 14.0, frac, C_CYAN, g.time);
-    txt(&format!("{:.0}%", frac * 100.0), 412.0, 392.0, 14, C_TEXT);
+    // UX 文案沉浸（勘察六③真出戏口，v1.16.50）：修为满（qi 超蓄 frac≥1.0）时
+    // 以「圆满」替换「{:.0}%」直出 143% 类数字；左标签「修为」已有故两字足义、
+    // 同位等宽零溢出；frac<1.0 走原百分数逐像素不变；与 draw.rs 左栏口同批同
+    // 语义（满则圆满）防半改
+    if frac >= 1.0 {
+        txt("圆满", 412.0, 392.0, 14, C_TEXT);
+    } else {
+        txt(&format!("{:.0}%", frac * 100.0), 412.0, 392.0, 14, C_TEXT);
+    }
     // 寿元条
     txt("寿元", 170.0, 452.0, 14, C_DIM);
     bar(

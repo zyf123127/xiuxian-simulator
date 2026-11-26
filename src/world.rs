@@ -535,6 +535,11 @@ pub fn exp_quit(g: &mut Game) {
             g.log(format!("· {}", s), C_TEXT);
         }
     }
+    // 演出包㉗ 远征收手·霞光合拢（v1.16.50）：收敛口单口置值（loot 空/非两 log
+    // 分支共用本口照㉔「八分支收敛唯一出口」款——链中收手与链尾归返一笔同账），
+    // exp=Some 仍在时置值=「霞光重新合拢」演出先于结算清场；exp_return<=0 早退
+    // 不落像素稳态逐像素不变（draw.rs draw_return_beam 消费）
+    g.exp_return = crate::game::EXP_RETURN_T;
     g.world.exp = None;
     g.exp_p_cache = None; // v1.16.21 P8 缓存随远征终了清
     g.sync_save();
@@ -604,6 +609,11 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     // ⑫ draw_weather_veil 口之后不改动既有叠序；exp_depart<=0 早退不落像素稳态
     // 逐像素不变（exp_start 经 spend_year 可与⑫同帧置值——独立会话态互不干扰）
     crate::draw::draw_depart_beam(g, 8.0, 60.0, 1264.0, 480.0);
+    // 演出包㉗ 远征收手·霞光合拢（世界图消费口，v1.16.50）：exp_quit 收敛口单口
+    // 置值 exp_return→draw_return_beam 霞光横线自下而上竖扫地图画布一次（与㉖
+    // 顶→底反向=「霞光重新合拢」语义，C_CYAN 色异照三异论证款）；置于㉖ 口之后
+    // 不改动既有叠序；exp_return<=0 早退不落像素稳态逐像素不变
+    crate::draw::draw_return_beam(g, 8.0, 60.0, 1264.0, 480.0);
     // v1.5.0 水面波光：河面流光 5 点（map_river_y 取图像系坐标，屏幕 x 需 -8 校正）
     for k in 0..5 {
         let sx = ((g.time * 46.0 + k as f32 * 253.0) % 1264.0) + 8.0;
@@ -717,7 +727,16 @@ pub fn draw_world(g: &mut Game, art: &Art) {
         );
         if hot {
             draw_circle_lines(nx, ny, r + 5.0, 1.5, C_GOLD);
-            draw_circle_lines(nx, ny, r + 9.0, 1.0, Color::new(1.0, 0.85, 0.5, 0.5));
+            // UX 批：选中外圈 α 呼吸（0.35+0.15×sin，与节点圈 r 脉动同语言——内圈
+            // r+5 保持静态满金作「选中锚」，仅外圈动；常驻屏呼吸型照 world.rs:705
+            // 先例；零新状态零分配）
+            draw_circle_lines(
+                nx,
+                ny,
+                r + 9.0,
+                1.0,
+                Color::new(1.0, 0.85, 0.5, 0.35 + 0.15 * (g.time * 2.4).sin()),
+            );
         }
         draw_texture_ex(
             &art.map_icons[i],
@@ -1176,6 +1195,12 @@ pub fn draw_world(g: &mut Game, art: &Art) {
         draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.6));
         panel_card(240.0, 140.0, 800.0, 420.0);
         txt_c("落 霞 秘 境 · 远 征", 640.0, 170.0, 24, C_GOLD);
+        // 演出包㉖ 增强（勘察六② B 案，v1.16.50）：覆盖层全屏暗罩曾把画布霞幡压至
+        // 约 40% 亮度致 1.2s 演出主体被盖（观感非伪影）——标题绘制后于面板域内补
+        // 一次 draw_depart_beam（「霞光扫过远征卷轴」语义，同函数同包络零新状态；
+        // ed<=0 早退不落像素稳态逐像素不变；v11656「世界图调用恰 1」needle 为全参
+        // 精确串不受本口影响，本口钉面落 v11659）
+        crate::draw::draw_depart_beam(g, 240.0, 140.0, 800.0, 420.0);
         if exp_done(g) {
             // 链尾：只渲染 loot + 收手归返
             txt_c("远 征 完 成", 640.0, 206.0, 16, C_GREEN);
@@ -1204,10 +1229,18 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             // 步进点
             for k in 0..len {
                 let x = 640.0 - (len as f32 - 1.0) * 14.0 + k as f32 * 28.0;
+                // UX 批：cur 点半径微脉动（5.0+0.8×sin，照 world.rs:705 世界图节点
+                // 圈常驻脉动先例——状态屏常驻呼吸型非稳态回归型；仅 cur 点动，
+                // done/todo 点保持静态保层级；零新状态零分配零字形）
+                let r = if k == cur {
+                    5.0 + 0.8 * (g.time * 2.6).sin()
+                } else {
+                    5.0
+                };
                 draw_circle(
                     x,
                     206.0,
-                    5.0,
+                    r,
                     if k < cur {
                         C_GOLD
                     } else if k == cur {
@@ -1227,6 +1260,16 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             // 步号自愈，不影响 exp_choose 结算（结算直算不走缓存）。若日后键扩维
             // （realm/body/luck/dao 派生 power），勿漏 kind 与 map_region（risk 读
             // region_mech(g.meta.map_region)，漏维=漂移换壳）
+            // v1.16.49 复审 low 裁定留档（远征胜算>100% 饱和显示·改判关闭·零代码
+            // 改动）：目检所称「胜算约982%」当前工作区不可复现——本副标 p0/p1 单口
+            // exp_p 返回值 .clamp(0.05,0.95)（world.rs:337，自 v1.4.0 466c0a9 在，
+            // clamp 语义勿动），显示恒 ≤「胜算约95%」；其余两路胜率显示同封顶：
+            // 宿敌遭遇卡 p clamp(0.05,0.95)（game.rs:3863→evf 2605/2606）、寻仇
+            // revenge_p clamp(0.0,0.95)（game.rs:15583→world.rs:958/charpanel.rs:
+            // 2123/draw.rs:1852）。全仓「胜算约」文案仅 evf 2613/2614/2605/2606 四处
+            // +钉测 game.rs:23295，无第五显示位——故不按封顶文案改造（改造将产出
+            // p≥1.0 永不可达死分支，零收益），维持存量；目检侧若后续补得可复现
+            // 截图/步骤，按新锚点重启重勘，不能则正式销账。
             if g.exp_p_cache.as_ref().map_or(true, |(c, _, _)| *c != cur) {
                 let (p0, p1) = if let Some(l) = g.life.as_ref() {
                     let risk = region_mech(g.meta.map_region).exped_risk;

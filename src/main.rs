@@ -766,6 +766,18 @@ async fn main() {
         if g.exp_depart > 0.0 {
             g.exp_depart = (g.exp_depart - dt).max(0.0);
         }
+        // 演出包㉗ 远征收手·霞光合拢计时递减（会话态，draw_world 地图画布霞光
+        // 横线自下而上竖扫共用包络消费），照 exp_depart 主循环先例——1.0s 一次
+        // 性自灭；exp_quit 经 sync_save 落档但演出为会话态不进存档
+        if g.exp_return > 0.0 {
+            g.exp_return = (g.exp_return - dt).max(0.0);
+        }
+        // 演出包㉘ 离闭归来·结算卡浮现计时递减（会话态，draw_offline_card 暗幕
+        // α 淡入相位反推消费），照 zoom_anim 主循环先例——0.22s 一次性自灭；
+        // 稳态 anim==0 → 暗幕 α 恒等 0.78 逐像素不变
+        if g.offline_anim > 0.0 {
+            g.offline_anim = (g.offline_anim - dt).max(0.0);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if debug {
             autopilot(&mut g, frame, &mut shots);

@@ -835,6 +835,27 @@ pub fn draw_depart_beam(g: &Game, x: f32, y: f32, w: f32, h: f32) {
     draw_rectangle(x, yy, w, 2.0, fade(C_GOLD, a));
 }
 
+// 演出包㉗ 远征收手·霞光合拢（v1.16.50）：exp_quit 收敛口单口置值 exp_return，
+// 世界图消费（world.rs draw_depart_beam 调用口之后同域绘制不改动既有叠序）。
+// 与㉖ 三异：方向自下而上（「霞光重新合拢」照 world.rs exp_quit 出秘境句语义）、
+// 颜色 C_CYAN（与⑫天气/㉒呼吸同色系但区域/方向/语义三异照㉖论证款）、触发口
+// （收手非启程）。er<=0 或包络 α==0 早退不落像素，稳态逐像素不变；exp_quit 是
+// 唯一置值口（exp_start/exp_choose 均不置值=每远征仅收手一口，v11659 钉面写死）。
+// 结构照 draw_depart_beam 同款（共用 brk_veil_a 包络单源勿双写）
+pub fn draw_return_beam(g: &Game, x: f32, y: f32, w: f32, h: f32) {
+    let er = g.exp_return;
+    if er <= 0.0 {
+        return;
+    }
+    let a = 0.14 * brk_veil_a((er / crate::game::EXP_RETURN_T).clamp(0.0, 1.0));
+    if a <= 0.0 {
+        return;
+    }
+    let prog = 1.0 - er / crate::game::EXP_RETURN_T; // 0→1 底→顶（er 自 T 递减）
+    let yy = y + (1.0 - prog) * (h - 10.0);
+    draw_rectangle(x, yy, w, 2.0, fade(C_CYAN, a));
+}
+
 #[inline]
 fn banner_sweep_phase(k: f32) -> f32 {
     (k * 1.2) % 1.0
@@ -2061,7 +2082,16 @@ fn render_left(g: &Game, l: &Life, art: &Art, show_neme: bool) {
     if qb_a > 0.0 {
         draw_rectangle_lines(26.0, 272.0, LEFT_W - 36.0, 24.0, 2.0, fade(C_CYAN, qb_a));
     }
-    let qlabel = evf(2615, &[&(fmt_num(l.qi)) as &dyn core::fmt::Display, &(fmt_num(need)) as &dyn core::fmt::Display, &(crate::data::Fmt0((frac * 100.0) as f64)) as &dyn core::fmt::Display])/* 原文：修为 {}/{}（{}%） */;
+    // UX 文案沉浸（勘察六③真出戏口，v1.16.50）：修为满（qi 超蓄 frac≥1.0）时
+    // 以「修为圆满」替换「修为 {}/{}（{}%）」——百分数直出 143% 类数字出戏；
+    // 圆满语汇照既有事件文案「你修为圆满」款；「修/为/圆/满」四字均入 PANEL_WARM_
+    // CHARS 常驻档（ui.rs 实测）零冷栅格化；frac<1.0 走原查表逐像素不变；与
+    // charpanel 口同批同语义（满则圆满）防半改
+    let qlabel = if frac >= 1.0 {
+        "修为圆满".to_string()
+    } else {
+        evf(2615, &[&(fmt_num(l.qi)) as &dyn core::fmt::Display, &(fmt_num(need)) as &dyn core::fmt::Display, &(crate::data::Fmt0((frac * 100.0) as f64)) as &dyn core::fmt::Display])/* 原文：修为 {}/{}（{}%） */
+    };
     txt_c(
         &qlabel,
         cx + 1.0,
@@ -3126,7 +3156,17 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     txt_c("草 稿 退 回", V_W * 0.5, 56.0, 28, C_GOLD);
     // 左：此生摘要
     panel_card(60.0, 84.0, 420.0, 480.0);
-    txt("此 生", 84.0, 116.0, 20, C_GOLD);
+    // UX 批：拾取窗内「此 生」标题字色随㉔同源包络向亮金插值（零新状态复用 is_a；
+    // t=归一化包络 [0,1]，is_a==0 → t=0 → 各分量逐比特恒等 C_GOLD 稳态不变；
+    // 纯算术插值不入字形缓存零重栅格化）
+    let life_t = (is_a / 0.12).clamp(0.0, 1.0);
+    let c_life = Color::new(
+        C_GOLD.r + (1.0 - C_GOLD.r) * 0.35 * life_t,
+        C_GOLD.g + (1.0 - C_GOLD.g) * 0.35 * life_t,
+        C_GOLD.b + (1.0 - C_GOLD.b) * 0.35 * life_t,
+        C_GOLD.a,
+    );
+    txt("此 生", 84.0, 116.0, 20, c_life);
     // v1.16.20 立绘沉浸续作①（继承屏伴小像）：此生同行者在左卡右上角显影——
     // 判定与结局页谢幕像/随行小像同源（sr.comp 名账 → COMPANION_NAMES 位置，
     // SimResult 会话态零新键）。独占屏（继承）直查 comp_tex 1 槽（红线口径：
@@ -3469,6 +3509,9 @@ fn draw_shop(g: &mut Game) {
         }
         if g.shop_tab == i as u8 {
             draw_rectangle(x, 108.0, 150.0, 3.0, C_GOLD);
+            // UX 批：选中条左端 12px 加亮段（坊市/行囊/角色页三组页签同批同语防
+            // 半改；零状态纯新增像素照花样 D 先例口径；原位叠画不改选中条本体）
+            draw_rectangle(x, 108.0, 12.0, 3.0, Color::from_rgba(255, 244, 200, 255));
         }
     }
     if g.shop_tab == 2 {
@@ -3536,14 +3579,20 @@ fn draw_shop(g: &mut Game) {
             // 下划线按行错峰显影——共用 brk_veil_a 包络，相位按行 −i×0.05 照
             // bond_mote_a 折相位款（单源勿双写；i 越大相位越低越早走完脉冲=自
             // 顶向下涟漪余晖）。market_ping==0 → 全行 α=0 早退不落像素，稳态
-            // 逐像素不变；行底 y+58 距下行内容（y+78−6）净空 14px 无叠画
+            // 逐像素不变；行底 y+58 距下行内容（y+78−6）净空 14px 无叠画。
+            // UX 伪影修复①（勘察六 v1.16.50）：末行 i=5 的线 y+58=640..641.5 落
+            // 底部提示行（txt y=636 基线带≈630.8..651.0）字形带内——成交后金线
+            // 横穿灰字（文字后画盖线、字间透线），故末行不画线（其余行逐像素不
+            // 变；嵌套 if 保「早退门」needle 字面照 v11656 钉面）
             let mp_a = 0.12
                 * brk_veil_a(
                     ((g.market_ping / crate::game::MARKET_PING_T) - i as f32 * 0.05)
                         .clamp(0.0, 1.0),
                 );
             if mp_a > 0.0 {
-                draw_rectangle(160.0, y + 58.0, 880.0, 1.5, fade(C_GOLD, mp_a));
+                if i < 5 {
+                    draw_rectangle(160.0, y + 58.0, 880.0, 1.5, fade(C_GOLD, mp_a));
+                }
             }
             let p = &PILLS[i];
             let price = g.pill_price(i);
@@ -3712,6 +3761,8 @@ fn draw_bag(g: &mut Game) {
         }
         if g.bag_tab == i as u8 {
             draw_rectangle(x, 120.0, 140.0, 3.0, C_GOLD);
+            // UX 批：选中条左端 12px 加亮段（三组页签同批同语，同坊市口批注）
+            draw_rectangle(x, 120.0, 12.0, 3.0, Color::from_rgba(255, 244, 200, 255));
         }
     }
     draw_rectangle(160.0, 134.0, 960.0, 1.5, Color::from_rgba(96, 76, 130, 160));
@@ -3925,7 +3976,16 @@ fn draw_offline_card(g: &mut Game) {
     let Some(r) = g.offline_card.as_ref() else {
         return;
     };
-    draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, 0.78));
+    // 演出包㉘ 离闭归来·结算卡浮现（v1.16.50）：resume_life n>=10 臂同帧旁置
+    // offline_anim→暗幕 α 淡入（相位反推照③ modal_anim 款：开启帧 k=1→p=0.3
+    // 系暗幕 0.234 先行压暗、随进度升至 0.78；稳态 anim==0 → k=0 → p=1.0 →
+    // α 恒等 0.78 逐像素不变）。卡面 panel_card 无 α 口仅暗幕先行——勘察六备
+    // 案：不做整体位移（卡内 txt 绝对坐标全改 dy 成本高）；动画期照常可点命
+    // 中所见（①款独占输入判定不动）
+    let k = (g.offline_anim / crate::game::OFFLINE_ANIM_T).clamp(0.0, 1.0); // 1=开启帧 → 0=稳态
+    let p = 1.0 - k; // 入场进度 0→1
+    let dim = 0.78 * (0.3 + 0.7 * p);
+    draw_rectangle(0.0, 0.0, V_W, V_H, Color::new(0.0, 0.0, 0.0, dim));
     panel_card(340.0, 160.0, 600.0, 400.0);
     txt_c("离 闭 归 来", V_W * 0.5, 188.0, 24, C_GOLD);
     draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
@@ -5691,6 +5751,261 @@ mod v11656_market_depart_tests {
             draw_p.matches("Some(\"开始此世模拟\"),\n        ready,\n        ready,").count(),
             1,
             "按钮花样 A：落笔钮 ready 门控 accent 恰 1（未选态逐比特一致照 button 委托先例）"
+        );
+    }
+}
+
+// ================= v1.16.50 演出包㉗㉘+UX 沉浸感批钉测 =================
+// 模组名注：v11645..v11657 全链占用（占用链见 draw.rs v11656 头注+game.rs
+// v11657 头注）；v11658 原系勘察三提名时空闲，但段二十三扩池批（施工单二）
+// 先行落位 v11658_seg23_tests（game.rs）——本批钉测模块名顺延 v11659，内容版
+// 本以本头注 v1.16.50 为准（占用链纪律照 v11656 头注款；措辞避开消费面扫描
+// 子串防自指）。
+// 钉面：①㉗ 远征收手·霞光合拢契约链（常量/字段/置值恰 1+位点序 set<exp=None
+// 照㉔收敛出口款/save.rs 零引用/递减两恰 1/消费口恰 2+早退门恰 1/世界图调用
+// 恰 1+exp_start 区零置值旁证——勿碰 exp_depart 照 v11656 语义写死红线）
+// ②㉘ 离闭归来·结算卡浮现契约链（常量/字段/置值恰 1+位点序 set>offline_card
+// =Some/save.rs 零引用/递减两恰 1/消费口恰 1+暗幕先行式恰 1）③㉖ 覆盖层增强
+// B 案钉（面板域二次调用恰 1——v11656「世界图调用恰 1」全参精确串不受影响照
+// 旧）④㉕ 涟漪末行伪影修复钉（勘察六 finding① 根因闭环：末行门恰 1+早退门字
+// 面照旧旁证）⑤UX 四件静态钉（步进点 cur 脉动/世界图 hot 外圈呼吸/页签三组
+// 加亮段/拾取卡标题插值）⑥修为圆满两口文案钉（draw 左栏整句+charpanel 破境条
+// 两字，同批同语义防半改）
+#[cfg(test)]
+mod v11659_ux_immersion_tests {
+    fn prod_of(fname: &str) -> String {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(fname))
+            .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", fname, e));
+        // 行首 #[cfg(test)] 起至行首顶格 } 止滤测试区（照 v11656 prod 款防自指）
+        let mut out = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
+    }
+
+    // ── ㉗ 远征收手·霞光合拢契约链（照 v11656 exp_depart 款七钉，方向/色反） ──
+    #[test]
+    fn exp_return_static_pins() {
+        let game_p = prod_of("game.rs");
+        assert_eq!(
+            game_p.matches("pub const EXP_RETURN_T: f32 = 1.0;").count(),
+            1,
+            "㉗ 常量恰 1（照 ㉖ EXP_DEPART_T 款带窗长头注）"
+        );
+        assert_eq!(game_p.matches("pub exp_return: f32,").count(), 1, "㉗ 字段恰 1");
+        let world_p = prod_of("world.rs");
+        let set_needle = "g.exp_return = crate::game::EXP_RETURN_T;";
+        assert_eq!(
+            world_p.matches(set_needle).count(),
+            1,
+            "㉗ 置值口恰 1（exp_quit 收敛口单口——链中收手与链尾归返共用）"
+        );
+        let set_at = world_p.find(set_needle).expect("㉗ 置值行在位");
+        // exp_quit 特有锚（多行形态——「g.world.exp = None;」另有 real_die 死亡
+        // 清场一处 :90 区，须锚 exp_quit 收敛口特有的 cache 清行连缀形态）
+        let none_at = world_p
+            .find("g.world.exp = None;\n    g.exp_p_cache = None;")
+            .expect("㉗ exp_quit 收敛清场行对在位");
+        assert!(
+            set_at < none_at,
+            "㉗ 位点序：置值须在收敛清场 g.world.exp=None 之前（照㉔收敛出口款防挪清场后）"
+        );
+        // 语义写死旁证：exp_start 区零置值（exp_return 在 world.rs 仅置值口一处）
+        assert_eq!(
+            world_p.matches("g.exp_return").count(),
+            1,
+            "㉗ world.rs 仅置值口一处引用（exp_start/exp_choose 均不置值=每远征仅收手一口）"
+        );
+        let save_p = prod_of("save.rs");
+        assert_eq!(
+            save_p.matches("exp_return").count(),
+            0,
+            "㉗ 会话态不进存档（save.rs 零引用）"
+        );
+        let main_p = prod_of("main.rs");
+        assert_eq!(
+            main_p.matches("if g.exp_return > 0.0 {").count(),
+            1,
+            "㉗ 递减早退门恰 1"
+        );
+        assert_eq!(
+            main_p.matches("g.exp_return = (g.exp_return - dt).max(0.0);").count(),
+            1,
+            "㉗ 递减行恰 1"
+        );
+        let draw_p = prod_of("draw.rs");
+        assert_eq!(
+            draw_p.matches("er / crate::game::EXP_RETURN_T").count(),
+            2,
+            "㉗ 消费口恰 2（draw_return_beam 内 α 与 prog 双算同源同一口）"
+        );
+        assert_eq!(draw_p.matches("if er <= 0.0 {").count(), 1, "㉗ 早退门恰 1（稳态零像素）");
+        assert_eq!(
+            world_p
+                .matches("crate::draw::draw_return_beam(g, 8.0, 60.0, 1264.0, 480.0);")
+                .count(),
+            1,
+            "㉗ 世界图调用恰 1（置于㉖ draw_depart_beam 口之后不动既有叠序）"
+        );
+        // 反向红线旁证：㉗ 勿碰 exp_depart——置值口恰 1 由 v11656 续守，此处旁证
+        assert_eq!(
+            world_p.matches("g.exp_depart = crate::game::EXP_DEPART_T;").count(),
+            1,
+            "㉗ 交叉红线：exp_depart 置值仍恰 1（exp_start 启程口未被本批改动）"
+        );
+    }
+
+    // ── ㉘ 离闭归来·结算卡浮现契约链（置值口在 game.rs resume_life n>=10 臂） ──
+    #[test]
+    fn offline_anim_static_pins() {
+        let game_p = prod_of("game.rs");
+        assert_eq!(
+            game_p.matches("pub const OFFLINE_ANIM_T: f32 = 0.22;").count(),
+            1,
+            "㉘ 常量恰 1（照 zoom_anim 0.22 款带窗长头注）"
+        );
+        assert_eq!(game_p.matches("pub offline_anim: f32,").count(), 1, "㉘ 字段恰 1");
+        let set_needle = "self.offline_anim = crate::game::OFFLINE_ANIM_T;";
+        assert_eq!(
+            game_p.matches(set_needle).count(),
+            1,
+            "㉘ 置值口恰 1（resume_life n>=10 臂单口——else 短载分支不置值）"
+        );
+        let card_at = game_p
+            .find("self.offline_card = Some(OfflineReport { years: n, qi, stones });")
+            .expect("㉘ offline_card=Some 行在位（resume_life 特有锚）");
+        let set_at = game_p.find(set_needle).expect("㉘ 置值行在位");
+        assert!(
+            set_at > card_at,
+            "㉘ 位点序：置值须在 offline_card=Some 之后（卡片赋值同帧旁置防挪 else 臂）"
+        );
+        let save_p = prod_of("save.rs");
+        assert_eq!(
+            save_p.matches("offline_anim").count(),
+            0,
+            "㉘ 会话态不进存档（save.rs 零引用）"
+        );
+        let main_p = prod_of("main.rs");
+        assert_eq!(
+            main_p.matches("if g.offline_anim > 0.0 {").count(),
+            1,
+            "㉘ 递减早退门恰 1"
+        );
+        assert_eq!(
+            main_p.matches("g.offline_anim = (g.offline_anim - dt).max(0.0);").count(),
+            1,
+            "㉘ 递减行恰 1"
+        );
+        let draw_p = prod_of("draw.rs");
+        assert_eq!(
+            draw_p
+                .matches("g.offline_anim / crate::game::OFFLINE_ANIM_T")
+                .count(),
+            1,
+            "㉘ 消费口恰 1（draw_offline_card 暗幕相位反推单口）"
+        );
+        assert_eq!(
+            draw_p.matches("let dim = 0.78 * (0.3 + 0.7 * p);").count(),
+            1,
+            "㉘ 暗幕先行式恰 1（照③ modal_anim 款——稳态 p=1.0 恒等 0.78）"
+        );
+    }
+
+    // ── ㉖ 覆盖层增强 B 案 + ㉕ 涟漪末行伪影修复（勘察六 finding①② 根因闭环） ──
+    #[test]
+    fn overlay_beam_and_ripple_endline_pins() {
+        let world_p = prod_of("world.rs");
+        assert_eq!(
+            world_p
+                .matches("crate::draw::draw_depart_beam(g, 240.0, 140.0, 800.0, 420.0);")
+                .count(),
+            1,
+            "㉖ B 案覆盖层面板域二次调用恰 1（霞光扫过远征卷轴——v11656 世界图全参 needle 不受影响照旧）"
+        );
+        let draw_p = prod_of("draw.rs");
+        assert_eq!(
+            draw_p.matches("if i < 5 {").count(),
+            1,
+            "㉕ 涟漪末行门恰 1（i=5 线落底部提示行字形带内不画线——勘察六 finding①）"
+        );
+        assert_eq!(
+            draw_p.matches("if mp_a > 0.0 {").count(),
+            1,
+            "㉕ 早退门字面照旧（嵌套 if 保 v11656 钉面 needle 零漂移）"
+        );
+    }
+
+    // ── UX 四件静态钉（步进点脉动/hot 外圈呼吸/页签三组加亮段/拾取卡标题插值） ──
+    #[test]
+    fn ux_four_static_pins() {
+        let world_p = prod_of("world.rs");
+        assert_eq!(
+            world_p.matches("5.0 + 0.8 * (g.time * 2.6).sin()").count(),
+            1,
+            "UX① 远征步进点 cur 微脉动恰 1（照世界图节点圈常驻脉动先例）"
+        );
+        assert_eq!(
+            world_p.matches("0.35 + 0.15 * (g.time * 2.4).sin()").count(),
+            1,
+            "UX② 世界图 hot 外圈 α 呼吸恰 1（内圈静态满金作选中锚）"
+        );
+        let draw_p = prod_of("draw.rs");
+        assert_eq!(
+            draw_p.matches("Color::from_rgba(255, 244, 200, 255)").count(),
+            2,
+            "UX③ 页签加亮段 draw.rs 恰 2（坊市/行囊——三组同批同语防半改）"
+        );
+        let char_p = prod_of("charpanel.rs");
+        assert_eq!(
+            char_p.matches("Color::from_rgba(255, 244, 200, 255)").count(),
+            1,
+            "UX③ 页签加亮段 charpanel 恰 1（角色页）"
+        );
+        assert_eq!(
+            draw_p.matches("let life_t = (is_a / 0.12).clamp(0.0, 1.0);").count(),
+            1,
+            "UX④ 拾取卡标题插值恰 1（复用㉔ is_a 零新状态，稳态恒等 C_GOLD）"
+        );
+    }
+
+    // ── 修为圆满两口文案钉（勘察六③真出戏口——143% 直出收敛为圆满语汇） ──
+    #[test]
+    fn qi_full_wording_pins() {
+        let draw_p = prod_of("draw.rs");
+        assert_eq!(
+            draw_p.matches("\"修为圆满\".to_string()").count(),
+            1,
+            "UX⑤ draw 左栏口整句恰 1（frac>=1.0 分支替换 evf 2615）"
+        );
+        assert_eq!(
+            draw_p.matches("if frac >= 1.0 {").count(),
+            1,
+            "UX⑤ draw 满判定门恰 1（frac<1.0 走原查表逐像素不变）"
+        );
+        let char_p = prod_of("charpanel.rs");
+        assert_eq!(
+            char_p.matches("txt(\"圆满\", 412.0, 392.0, 14, C_TEXT);").count(),
+            1,
+            "UX⑤ charpanel 破境条口两字恰 1（左标签「修为」已有故两字足义同位等宽）"
+        );
+        assert_eq!(
+            char_p.matches("if frac >= 1.0 {").count(),
+            1,
+            "UX⑤ charpanel 满判定门恰 1（两口同批同语义防半改）"
         );
     }
 }
