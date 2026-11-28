@@ -189,7 +189,14 @@ fn draw_panel_chrome_act(g: &Game) -> Option<PanelAct> {
         if g.char_tab == i as u8 {
             draw_rectangle(x, 108.0, 98.0, 3.0, C_GOLD);
             // UX 批：选中条左端 12px 加亮段（三组页签同批同语，同 draw.rs 坊市口批注）
-            draw_rectangle(x, 108.0, 12.0, 3.0, Color::from_rgba(255, 244, 200, 255));
+            // v1.16.51 UX 沉浸批：加亮段改常驻呼吸（同坊市口款，三组同批同语）
+            draw_rectangle(
+                x,
+                108.0,
+                12.0,
+                3.0,
+                Color::from_rgba(255, 244, 200, (255.0 * (0.7 + 0.3 * (g.time * 2.4).sin())) as u8),
+            );
         }
     }
     None
@@ -1561,6 +1568,13 @@ fn draw_comp_main_card(
                     Color::from_rgba(96, 82, 124, 255)
                 },
             );
+            // v1.16.51 UX 沉浸批：按压态内衬线（照 button 内衬 draw.rs:181 款——
+            // is_mouse_button_down 持续态驱动，press=false 帧零像素逐比特恒等；
+            // 点击仍边沿拾取语言不改，故不做 y+2 下沉；与继承项行/朱批行同批
+            // 同语防半改——裸热区按压反馈三处收官）
+            if hot && is_mouse_button_down(MouseButton::Left) {
+                draw_rectangle_lines(bx + 2.0, by + 2.0, 336.0, 56.0, 1.0, Color::from_rgba(160, 128, 200, 130));
+            }
             txt_c(
                 "双修共进",
                 bx + 170.0,

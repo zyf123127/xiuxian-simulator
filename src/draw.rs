@@ -1561,6 +1561,26 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     // 等面板之前——面板后绘覆盖，仅背板缝隙透光，不扰任何 UI 像素；anim<=0 或晴
     // （表值 α=0）早退不落像素，稳态逐像素不变
     draw_weather_veil(g, 0.0, 0.0, V_W, V_H);
+    // v1.16.51 演出包㉚ 现实突破·钟磬光纹：act_break 三 ok 臂置值（同境进层/
+    // 跨境进境/问笔飞升），主区钟磬同心矩形光纹（现实主面板 (140,60,1000,600)
+    // 外扩三圈）+全屏轻光晕（k=g.brk_bell/BRK_BELL_T 走 brk_veil_a 共用包络照
+    // ㉗ 消费款；三败臂与 can_break 早退不置值=稳态 bell==0 → 早退不落像素逐
+    // 比特恒等；纯矩形零分配零新字形）
+    let bell_a = 0.08 * brk_veil_a(g.brk_bell / crate::game::BRK_BELL_T);
+    if bell_a > 0.0 {
+        draw_rectangle(0.0, 0.0, V_W, V_H, fade(C_GOLD, bell_a * 0.5));
+        for ring in 0..3 {
+            let ex = 26.0 + 30.0 * ring as f32;
+            draw_rectangle_lines(
+                140.0 - ex,
+                60.0 - ex,
+                1000.0 + 2.0 * ex,
+                600.0 + 2.0 * ex,
+                2.0,
+                fade(C_GOLD, bell_a * (1.0 - 0.28 * ring as f32)),
+            );
+        }
+    }
     draw_sky_life(g);
     draw_motes(g);
     render_top(g, l);
@@ -2765,6 +2785,28 @@ pub fn draw_modal_card(g: &mut Game) {
         .opts
         .iter()
         .any(|o| o.1.special == 17);
+    // v1.16.51 演出包㉙ 收册人问·墨圈涟漪门控采样（照⑳ card_rite 同构先例）：
+    // opts 静态扫描 special==79（检定窗 79=386 收册人问唯一接线——build_event
+    // 386 臂 e1.special=79 与 apply_eff 79 臂全仓唯一，钉测 count==1 契约照旧）；
+    // 零新会话态复用 modal_anim 入场计时（照⑭零新状态先例）
+    let card_ask = g
+        .rmodal
+        .as_ref()
+        .or(g.modal.as_ref())
+        .unwrap()
+        .opts
+        .iter()
+        .any(|o| o.1.special == 79);
+    // v1.16.51 UX 沉浸批：检定卡识别采样（照⑳ card_rite 同构；窗口清单走
+    // CHECK_SPECIALS 单源切片勿双写）
+    let card_check = g
+        .rmodal
+        .as_ref()
+        .or(g.modal.as_ref())
+        .unwrap()
+        .opts
+        .iter()
+        .any(|o| crate::game::CHECK_SPECIALS.contains(&o.1.special));
     // v1.16.46 演出包⑲ 破境金辉氛围层：暗幕上卡体下全屏金辉（brk 门控=天劫/破境
     // 两路统一置位 game.rs:3420「天劫/破境两路同点」）；brk_veil_a(k) 三角包络
     // 峰值 α=0.08，稳态 modal_anim==0 → k=0 → α=0 → 早退不落像素逐比特恒等；
@@ -2772,6 +2814,25 @@ pub fn draw_modal_card(g: &mut Game) {
     let brk_a = 0.08 * brk_veil_a(k);
     if brk_a > 0.0 {
         draw_rectangle(0.0, 0.0, V_W, V_H, fade(C_GOLD, brk_a));
+    }
+    // v1.16.51 演出包㉙ 收册人问·墨圈涟漪：检定卡卡缘两圈同心矩形环墨圈脉冲
+    //（照⑳ 结缘金尘同构；几何粒→环、色金→墨两异照三异论证款；k=modal_anim/0.18
+    // 复用入场计时零新会话态；环体在卡体矩形 (240,100,800,520) 外扩域、卡体
+    // panel_card_a 之前绘不盖卡面内容；稳态 modal_anim==0 → k=0 → brk_veil_a(0)=0
+    // → 早退不落像素逐比特恒等；纯矩形零分配零新字形）
+    let ask_a = 0.07 * brk_veil_a(g.modal_anim / 0.18);
+    if card_ask && ask_a > 0.0 {
+        for ring in 0..2 {
+            let ex = 10.0 + 12.0 * ring as f32;
+            draw_rectangle_lines(
+                240.0 - ex,
+                100.0 - ex,
+                800.0 + 2.0 * ex,
+                520.0 + 2.0 * ex,
+                2.0,
+                fade(C_INK, ask_a * (1.0 - 0.35 * ring as f32)),
+            );
+        }
     }
     // v1.16.21 场景要素行采样（&str 借用横跨绘制段——与 modal_desc 同为只读，
     // 段内唯一 &mut 是段尾 modal_min，借用纪律不破）
@@ -3061,7 +3122,7 @@ pub fn draw_modal_card(g: &mut Game) {
     // 道途首钮=下标 0「剑修」——推荐/默认路径的可扫视性提升）
     let kind_acc = g.rmodal.as_ref().or(g.modal.as_ref()).map(|c| c.kind);
 
-    for (i, (label, _)) in g
+    for (i, (label, e)) in g
         .rmodal
         .as_ref()
         .or(g.modal.as_ref())
@@ -3079,7 +3140,11 @@ pub fn draw_modal_card(g: &mut Game) {
         let accent = matches!(kind_acc, Some(crate::game::CardKind::Path) if i == 0)
             || matches!(kind_acc, Some(crate::game::CardKind::Finale) if i == 1)
             // v1.16.21 破境抉择卡首钮（立即破境/立即问笔）推荐位金描边
-            || (card_brk && i == 0);
+            || (card_brk && i == 0)
+            // v1.16.51 UX 沉浸批：检定臂选项金描边（检定卡识别照 CHECK_SPECIALS
+            // 单源切片；仅检定臂 accent、散臂同款——检定窗仪式感可扫视区分，
+            // 非检定卡逐像素不变）
+            || (card_check && crate::game::CHECK_SPECIALS.contains(&e.special));
         // v1.16.37 单3 剧情演出包⑦：选项钮逐条入场节奏——开启帧起 0.06s 后每钮
         // 错峰 30ms（相位式照 draw_event_text 段除数压缩先例，除数取 0.03 恒定：
         // 稳态 modal_anim==0 时值=(0.12−0.03i)/0.03=4−i，i≤3 恒 ≥1.0 收敛为
@@ -3253,6 +3318,13 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
     for h in &note_lines {
         let noted = g.meta.note_line.as_deref() == Some(h.as_str());
         let hot = nmx >= 84.0 && nmx <= 456.0 && nmy >= y - 4.0 && nmy <= y + 20.0;
+        // v1.16.51 UX 沉浸批：按压态内衬线（照 button 内衬 draw.rs:181 款——
+        // is_mouse_button_down 持续态驱动，press=false 帧零像素逐比特恒等；
+        // 行点击仍边沿拾取语言不改；hover C_GOLD 提亮照旧）
+        let press = hot && is_mouse_button_down(MouseButton::Left);
+        if press {
+            draw_rectangle_lines(86.0, y - 2.0, 368.0, 20.0, 1.0, Color::from_rgba(160, 128, 200, 130));
+        }
         if noted {
             txt("朱", 84.0, y, 14, C_RED);
         }
@@ -3319,6 +3391,13 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
             },
         );
         draw_rectangle_lines(520.0, y, 680.0, 62.0, 1.5, C_GOLD_D);
+        // v1.16.51 UX 沉浸批：按压态内衬线（照 button 内衬 draw.rs:181 款——
+        // is_mouse_button_down 持续态驱动，press=false 帧零像素逐比特恒等；
+        // 点击仍 is_mouse_button_pressed 边沿拾取语言不改，故不做 y+2 下沉）
+        let press = hot && is_mouse_button_down(MouseButton::Left);
+        if press {
+            draw_rectangle_lines(522.0, y + 2.0, 676.0, 58.0, 1.0, Color::from_rgba(160, 128, 200, 130));
+        }
         txt(&format!("【{}】", card.name()), 536.0, y + 10.0, 18, C_GOLD);
         txt(card.desc(), 700.0, y + 12.0, 14, C_TEXT);
         txt_c("选此项", 1160.0, y + 12.0, 14, C_CYAN);
@@ -3511,7 +3590,15 @@ fn draw_shop(g: &mut Game) {
             draw_rectangle(x, 108.0, 150.0, 3.0, C_GOLD);
             // UX 批：选中条左端 12px 加亮段（坊市/行囊/角色页三组页签同批同语防
             // 半改；零状态纯新增像素照花样 D 先例口径；原位叠画不改选中条本体）
-            draw_rectangle(x, 108.0, 12.0, 3.0, Color::from_rgba(255, 244, 200, 255));
+            // v1.16.51 UX 沉浸批：加亮段改常驻呼吸（0.7+0.3×sin 照 world.rs:738
+            // 选中外圈呼吸语言同频 2.4Hz；三组同批同语；选中条本体不动）
+            draw_rectangle(
+                x,
+                108.0,
+                12.0,
+                3.0,
+                Color::from_rgba(255, 244, 200, (255.0 * (0.7 + 0.3 * (g.time * 2.4).sin())) as u8),
+            );
         }
     }
     if g.shop_tab == 2 {
@@ -3762,7 +3849,14 @@ fn draw_bag(g: &mut Game) {
         if g.bag_tab == i as u8 {
             draw_rectangle(x, 120.0, 140.0, 3.0, C_GOLD);
             // UX 批：选中条左端 12px 加亮段（三组页签同批同语，同坊市口批注）
-            draw_rectangle(x, 120.0, 12.0, 3.0, Color::from_rgba(255, 244, 200, 255));
+            // v1.16.51 UX 沉浸批：加亮段改常驻呼吸（同坊市口款，三组同批同语）
+            draw_rectangle(
+                x,
+                120.0,
+                12.0,
+                3.0,
+                Color::from_rgba(255, 244, 200, (255.0 * (0.7 + 0.3 * (g.time * 2.4).sin())) as u8),
+            );
         }
     }
     draw_rectangle(160.0, 134.0, 960.0, 1.5, Color::from_rgba(96, 76, 130, 160));
@@ -4019,6 +4113,13 @@ fn draw_offline_card(g: &mut Game) {
     );
     if button(490.0, 420.0, 300.0, 64.0, "收功", Some("归于现实 · 落盘"), true) {
         g.offline_card = None;
+        // v1.16.51 UX 沉浸批：收功接棒道途卡入场补投——离闭卡独占早退期间排队
+        // 道途卡的 modal_anim 0.18s 在主循环空耗（递减不看可见性），闭卡后若
+        // rmodal 排队卡在位则重置入场计时一次（无排队卡路径零变化；modal_anim
+        // 0.18 置值口族 5→6，v11662 钉测随批写死）
+        if g.rmodal.is_some() {
+            g.modal_anim = 0.18;
+        }
         g.play(crate::sounds::Which::Gain);
         g.log(evtx(2552)/* 原文：你收功出关，将离闭所攒尽数归于己身。 */, C_GOLD);
         g.sync_save();
@@ -5964,16 +6065,20 @@ mod v11659_ux_immersion_tests {
             "UX② 世界图 hot 外圈 α 呼吸恰 1（内圈静态满金作选中锚）"
         );
         let draw_p = prod_of("draw.rs");
+        // v1.16.51 UX 沉浸批随批改写：加亮段改常驻呼吸（0.7+0.3×sin 照 world.rs:738
+        // 呼吸语言），旧「Color::from_rgba(255, 244, 200, 255) 恰 2」断言随批改扫
+        // 呼吸串（照 v11658 len 钉批间滚动先例；charpanel 侧恰 1 补钉落 v11662）
         assert_eq!(
-            draw_p.matches("Color::from_rgba(255, 244, 200, 255)").count(),
+            draw_p.matches("(255.0 * (0.7 + 0.3 * (g.time * 2.4).sin())) as u8").count(),
             2,
-            "UX③ 页签加亮段 draw.rs 恰 2（坊市/行囊——三组同批同语防半改）"
+            "UX③ 页签加亮段 draw.rs 呼吸串恰 2（坊市/行囊——三组同批同语防半改）"
         );
         let char_p = prod_of("charpanel.rs");
+        // v1.16.51 UX 沉浸批随批改写（同上 draw 侧缘由）：charpanel 侧呼吸串恰 1
         assert_eq!(
-            char_p.matches("Color::from_rgba(255, 244, 200, 255)").count(),
+            char_p.matches("(255.0 * (0.7 + 0.3 * (g.time * 2.4).sin())) as u8").count(),
             1,
-            "UX③ 页签加亮段 charpanel 恰 1（角色页）"
+            "UX③ 页签加亮段 charpanel 呼吸串恰 1（角色页——三组同批同语）"
         );
         assert_eq!(
             draw_p.matches("let life_t = (is_a / 0.12).clamp(0.0, 1.0);").count(),
@@ -6006,6 +6111,217 @@ mod v11659_ux_immersion_tests {
             char_p.matches("if frac >= 1.0 {").count(),
             1,
             "UX⑤ charpanel 满判定门恰 1（两口同批同语义防半改）"
+        );
+    }
+}
+
+// ================= v1.16.51 演出包㉙㉚+UX 沉浸批钉测 =================
+// 模组名注：v11645..v11660 全链占用（占用链见 v11659/v11660 头注）；v11661 已被
+// v11661_seg24_tests（game.rs，段二十四扩池批施工单二）先行落位——本批钉测模块
+// 名顺延 v11662，内容版本以本头注 v1.16.51 为准（占用链纪律照 v11659 头注款；
+// 措辞避开消费面扫描子串防自指）。
+// 钉面：①㉙ 收册人问·墨圈涟漪契约（draw 侧门控串恰 1/消费 α 串恰 1/C_INK 色表
+// 恰 1/save.rs 零引用/386 臂 e1.special=79 全仓恰 1 照 v11658 旧钉旁证/包络两端
+// 零稳态复断言）②㉚ 现实突破·钟磬光纹契约链（常量/字段/两构造器 Default/三置
+// 值口位点序（同境 play BreakOk 后/跨境 log 1566 后 break_ok_settle 前/飞升 play
+// Ascend 后）/败臂零置值旁证/save.rs 零引用/递减恰 1/消费口恰 1）③UX 批静态钉
+//（CHECK_SPECIALS 声明恰 1+accent 臂恰 1/按压内衬串恰 3/页签呼吸三组恰 3/节点
+// hover 门恰 1/收功补投行恰 1+modal_anim 0.18 置值口族 6 恰）
+#[cfg(test)]
+mod v11662_ask_ink_tests {
+    use super::brk_veil_a;
+
+    fn prod_of(fname: &str) -> String {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(fname))
+            .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", fname, e));
+        // 行首 #[cfg(test)] 起至行首顶格 } 止滤测试区（照 v11659 prod 款防自指）
+        let mut out = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
+    }
+
+    // ── ㉙ 收册人问·墨圈涟漪契约（照 v11659 ㉗ 款） ──
+    #[test]
+    fn ask_ink_static_pins() {
+        let draw_p = prod_of("draw.rs");
+        let game_p = prod_of("game.rs");
+        let save_p = prod_of("save.rs");
+        // 门控采样恰 1（special==79 draw 侧唯一门；386 臂 e1.special=79 生产侧
+        // 唯一接线照 v11658 count==1 契约不动）
+        assert_eq!(
+            draw_p.matches("o.1.special == 79").count(),
+            1,
+            "㉙ 门控串恰 1（special79 draw 侧唯一门）"
+        );
+        assert_eq!(
+            game_p.matches("e1.special = 79").count(),
+            1,
+            "386 臂 e1.special=79 全仓恰 1（v11658 契约旁证不动）"
+        );
+        // 消费 α 串恰 1（墨圈环体段唯一）
+        assert_eq!(
+            draw_p.matches("ask_a * (1.0 - 0.35 * ring as f32)").count(),
+            1,
+            "㉙ 消费 α 串恰 1（墨圈环体唯一）"
+        );
+        // C_INK 色表恰 1（单源定义；消费面 fade(C_INK 恰 1）
+        assert_eq!(
+            game_p.matches("pub const C_INK: Color").count(),
+            1,
+            "C_INK 色表定义恰 1"
+        );
+        assert_eq!(
+            draw_p.matches("fade(C_INK,").count(),
+            1,
+            "C_INK 消费恰 1（墨圈环体）"
+        );
+        // save.rs 零引用（门控走既有 modal_anim，无新会话态字段旁证）
+        assert_eq!(
+            save_p.matches("card_ask").count(),
+            0,
+            "save.rs 零引用（㉙ 无新字段）"
+        );
+        // 包络两端零稳态复断言（三角包络 k<=0 早退照旧）
+        assert_eq!(brk_veil_a(0.0), 0.0, "brk_veil_a(0)=0 稳态");
+        assert_eq!(brk_veil_a(1.0), 0.0, "brk_veil_a(1)=0 稳态");
+    }
+
+    // ── ㉚ 现实突破·钟磬光纹契约链（照 v11659 ㉗㉘ 款） ──
+    #[test]
+    fn brk_bell_contract_pins() {
+        let draw_p = prod_of("draw.rs");
+        let game_p = prod_of("game.rs");
+        let main_p = prod_of("main.rs");
+        let save_p = prod_of("save.rs");
+        // 常量/字段/Default 三件套
+        assert_eq!(
+            game_p.matches("pub const BRK_BELL_T: f32 = 1.0;").count(),
+            1,
+            "BRK_BELL_T 常量声明恰 1"
+        );
+        assert_eq!(game_p.matches("pub brk_bell: f32,").count(), 1, "brk_bell 字段恰 1");
+        assert_eq!(
+            game_p.matches("brk_bell: 0.0,").count(),
+            1,
+            "brk_bell 生产构造器 Default 恰 1（prod 面；game.rs 第二处 brk_bell: 0.0 属 revenge_tests 夹具构造器、cfg(test) 首块 16812 起被 prod 滤除——struct 全字段零值语义与 offline_anim 同款）"
+        );
+        // 三置值口（同境/跨境/飞升）+位点序
+        assert_eq!(
+            game_p.matches("self.brk_bell = BRK_BELL_T;").count(),
+            3,
+            "act_break 三 ok 臂置值恰 3"
+        );
+        let play_ok = game_p
+            .matches("self.play(crate::sounds::Which::BreakOk);\n                // 演出包㉚")
+            .count();
+        assert_eq!(play_ok, 1, "同境口位点序：play BreakOk 之后置值");
+        let ascend_pos = game_p
+            .matches("self.play(crate::sounds::Which::Ascend);\n                        // 演出包㉚")
+            .count();
+        assert_eq!(ascend_pos, 1, "飞升口位点序：play Ascend 之后置值");
+        // 败臂零置值旁证：全仓 BreakFail 五处（现实 act_break 同境撞关 3866/跨境
+        // 反噬 15606+模拟侧 14076/15525/15891），败臂零置值由「恰 3」主钉兜底
+        assert_eq!(
+            game_p.matches("Which::BreakFail").count(),
+            5,
+            "BreakFail 全仓恰 5 处旁证（败臂零置值由恰 3 主钉兜底）"
+        );
+        // 递减恰 1/消费口恰 1/save.rs 零引用
+        assert_eq!(
+            main_p.matches("if g.brk_bell > 0.0 {").count(),
+            1,
+            "主循环递减恰 1"
+        );
+        assert_eq!(
+            draw_p.matches("let bell_a = 0.08 * brk_veil_a(").count(),
+            1,
+            "draw_reality 消费口恰 1"
+        );
+        assert_eq!(
+            save_p.matches("brk_bell").count(),
+            0,
+            "save.rs 零引用（会话态不进存档，旧档载入天然 0）"
+        );
+    }
+
+    // ── UX 批静态钉（检定 accent/按压内衬/页签呼吸/hover/补投） ──
+    #[test]
+    fn ux_immersion2_static_pins() {
+        let draw_p = prod_of("draw.rs");
+        let game_p = prod_of("game.rs");
+        let char_p = prod_of("charpanel.rs");
+        let world_p = prod_of("world.rs");
+        // CHECK_SPECIALS 单源：声明恰 1/消费恰 2（采样门+accent 臂）
+        assert_eq!(
+            game_p.matches("pub const CHECK_SPECIALS: [u8; 12]").count(),
+            1,
+            "CHECK_SPECIALS 声明恰 1（单源）"
+        );
+        assert_eq!(
+            draw_p.matches("crate::game::CHECK_SPECIALS.contains(&").count(),
+            2,
+            "CHECK_SPECIALS 消费恰 2（card_check 采样+检定臂 accent）"
+        );
+        // 检定臂 accent 臂恰 1
+        assert_eq!(
+            draw_p.matches("(card_check && crate::game::CHECK_SPECIALS.contains(&e.special))")
+                .count(),
+            1,
+            "检定臂 accent 臂恰 1"
+        );
+        // 三处按压内衬串恰 3（朱批/继承项/draw 侧）+charpanel 双修钮恰 1
+        assert_eq!(
+            draw_p.matches("let press = hot && is_mouse_button_down(MouseButton::Left);")
+                .count(),
+            2,
+            "draw 侧按压门恰 2（朱批行+继承项行）"
+        );
+        assert_eq!(
+            char_p.matches("if hot && is_mouse_button_down(MouseButton::Left) {").count(),
+            1,
+            "charpanel 双修钮按压门恰 1"
+        );
+        assert_eq!(
+            draw_p.matches("Color::from_rgba(160, 128, 200, 130)").count() >= 3,
+            true,
+            "内衬线色三处在位（含 button 既有内衬同款）"
+        );
+        // 页签呼吸三组同语：draw 恰 2+charpanel 恰 1 均已由 v11659
+        // ux_four_static_pins 随批改写钉守（勿双写重复断言，本批不另钉）
+        // 节点 hover 门恰 1（gate+sel 互斥+28 命中半径同源）
+        assert_eq!(
+            world_p.matches("&& (hmx - nx) * (hmx - nx) + (hmy - ny) * (hmy - ny) < 28.0 * 28.0")
+                .count(),
+            1,
+            "节点 hover 命中门恰 1"
+        );
+        // 收功补投行恰 1+modal_anim 0.18 置值口族 6 恰（补投前 5）
+        assert_eq!(
+            draw_p.matches("if g.rmodal.is_some() {\n            g.modal_anim = 0.18;").count(),
+            1,
+            "收功补投行恰 1"
+        );
+        let game_set = game_p.matches("self.modal_anim = 0.18;").count();
+        assert_eq!(game_set, 5, "game.rs modal_anim 0.18 置值口恰 5（族本底）");
+        assert_eq!(
+            draw_p.matches("g.modal_anim = 0.18;").count(),
+            1,
+            "draw.rs 补投置值恰 1（族 5+1=6）"
         );
     }
 }

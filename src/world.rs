@@ -708,6 +708,9 @@ pub fn draw_world(g: &mut Game, art: &Art) {
     }
     // 节点 ×6（v1.6.0：坐标经 node_xy 含主题抖动）
     let sel = g.world.sel.min(LOCATIONS.len() - 1);
+    // v1.16.51 UX 沉浸批：节点 hover 判定鼠标前置取用（点击选点块内另有块作用
+    // 域取点不受影响；命中半径 28 与下方点击判定同源）
+    let (hmx, hmy) = crate::cam::mouse();
     for (i, nd) in LOCATIONS.iter().enumerate() {
         let (bx, by) = node_xy(i, g.meta.map_region);
         let nx = bx + 8.0;
@@ -736,6 +739,22 @@ pub fn draw_world(g: &mut Game, art: &Art) {
                 r + 9.0,
                 1.0,
                 Color::new(1.0, 0.85, 0.5, 0.35 + 0.15 * (g.time * 2.4).sin()),
+            );
+        }
+        // v1.16.51 UX 沉浸批：节点 hover 光晕（非选中节点悬停 r+14 细圈呼吸，
+        // 照选中外圈呼吸语言同频 2.4Hz——hover≠selected 两级可辨；gate 关闭
+        // （弹层/远征/洞府中）不画照 P5 总闸语义；命中半径 28 与点击判定同源；
+        // 零新状态零分配）
+        if gate
+            && sel != i
+            && (hmx - nx) * (hmx - nx) + (hmy - ny) * (hmy - ny) < 28.0 * 28.0
+        {
+            draw_circle_lines(
+                nx,
+                ny,
+                r + 14.0,
+                1.0,
+                Color::new(1.0, 0.85, 0.5, 0.10 + 0.06 * (g.time * 2.4).sin()),
             );
         }
         draw_texture_ex(

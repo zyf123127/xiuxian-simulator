@@ -778,6 +778,12 @@ async fn main() {
         if g.offline_anim > 0.0 {
             g.offline_anim = (g.offline_anim - dt).max(0.0);
         }
+        // 演出包㉚ 现实突破·钟磬光纹计时递减（会话态，draw_reality 主区钟磬光纹
+        // 共用包络消费），照 exp_return 主循环先例——1.0s 一次性自灭；三 ok 臂
+        // 置值、败臂不置（game.rs act_break 三口），稳态 bell==0 早退零像素
+        if g.brk_bell > 0.0 {
+            g.brk_bell = (g.brk_bell - dt).max(0.0);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if debug {
             autopilot(&mut g, frame, &mut shots);
