@@ -784,6 +784,12 @@ async fn main() {
         if g.brk_bell > 0.0 {
             g.brk_bell = (g.brk_bell - dt).max(0.0);
         }
+        // 演出包㉜ 山河图·节点抵达踏痕计时递减（会话态，draw_world 玩家标记块
+        // 旁两环外扩踏痕共用包络消费），照㉚ 主循环先例——0.9s 一次性自灭；
+        // travel 唯一抵达口置值、死亡臂/出生口不置，稳态 arrive_t<=0 早退零像素
+        if g.arrive_t > 0.0 {
+            g.arrive_t = (g.arrive_t - dt).max(0.0);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if debug {
             autopilot(&mut g, frame, &mut shots);

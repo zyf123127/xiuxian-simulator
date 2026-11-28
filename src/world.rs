@@ -118,6 +118,12 @@ pub fn travel(g: &mut Game, to: usize) {
     // 非洞府抵达为幂等空转；覆盖离府再归路径——出生即洞府路径由 open_world 口覆盖）
     g.sys_hint_dongfu();
     g.play(crate::sounds::Which::Page);
+    // v1.16.52 演出包㉜ 山河图·节点抵达踏痕：置值在 l.loc=to 置位之后/play Page
+    // 之后/sync_save 之前（照㉕「sync_save 之前置值不影响落档」game.rs:163 款；
+    // 死亡臂 spend_year false 早退不置值=赶路毙无演出；出生即洞府路径 open_world
+    // 不置值=仅 travel 抵达有演出）；draw_world 玩家标记块 crate::draw::
+    // draw_arrive_marks 消费（k=g.arrive_t/ARRIVE_T 走 brk_veil_a 共用包络）
+    g.arrive_t = crate::game::ARRIVE_T;
     // v1.10.2：travel 不换 region，此处预烘为幂等兜底（防未来 region 联动改动漏烘）
     crate::art::map_bg_for(g.meta.map_region, g.meta.map_seed);
     g.sync_save();
@@ -787,6 +793,11 @@ pub fn draw_world(g: &mut Game, art: &Art) {
             );
         }
         txt_c("你在此", px, py + 48.0, 14, C_CYAN);
+        // v1.16.52 演出包㉜ 山河图·节点抵达踏痕：消费口（照㉖㉗ 世界图消费口
+        // 包装 fn 先例，brk_veil_a/fade 单源在 draw.rs；稳态 arrive_t<=0 早退
+        // 不落像素逐像素不变；与 hover 光晕/刻度圈无同位叠画——环体 r 14.5/22.5
+        // 在刻度圈 6.5 与节点名 txt 之外）
+        crate::draw::draw_arrive_marks(g, px, py);
     }
     // 点击选点（P5 门④：覆盖层打开时静默；v1.5.0 经信箱相机回虚拟坐标）
     {

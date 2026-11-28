@@ -142,6 +142,8 @@ def main():
     seg23 = parse_const(data_txt, "EV_SEG23")
     # v1.16.51 段二十四扩池：EV_SEG24=392 快照段界（v1.16.50 段二十三预建本批引用）
     seg24 = parse_const(data_txt, "EV_SEG24")
+    # v1.16.52 段二十五扩池：EV_SEG25=395 快照段界（v1.16.51 段二十四预建本批引用）
+    seg25 = parse_const(data_txt, "EV_SEG25")
     b1 = parse_inc_base("TXT_NAME_BASE")
     b2 = parse_inc_base("TXT_NAME2_BASE")
     b3 = parse_inc_base("TXT_NAME3_BASE")
@@ -179,6 +181,8 @@ def main():
     b23 = parse_inc_base("TXT_NAME23_BASE")
     # v1.16.51 段二十四扩池：段二十四基址 TXT_NAME24_BASE
     b24 = parse_inc_base("TXT_NAME24_BASE")
+    # v1.16.52 段二十五扩池：段二十五基址 TXT_NAME25_BASE
+    b25 = parse_inc_base("TXT_NAME25_BASE")
 
     # id -> 名段 N 映射（与 data.rs EvTable base8+base9 双段九段连寻同口径）
     def name_n(eid):
@@ -287,7 +291,13 @@ def main():
         if eid < seg23:
             return b23 + (eid - seg22)
         # v1.16.51 段二十四：EV_SEG24=392 快照段界，段二十四基址 TXT_NAME24_BASE
-        return b24 + (eid - seg23)
+        #（v1.16.52 段二十五：段二十四分支由无卫语句末段 return 改带 if eid<seg24
+        # 卫语句——段二十五开设后段二十四不再末段；新增分支勿替换本行——同上
+        # v1.16.33 段八红线）
+        if eid < seg24:
+            return b24 + (eid - seg23)
+        # v1.16.52 段二十五：EV_SEG25=395 快照段界，段二十五基址 TXT_NAME25_BASE
+        return b25 + (eid - seg24)
 
     # 钉B：名段覆盖断言（真相源逐条可解析、非空、行号=N）
     src_lines = SRC.read_text(encoding="utf-8").splitlines()
@@ -349,7 +359,10 @@ def main():
                         (388, "讹捐封口"),
                         # v1.16.51 段二十四扩池：三新元组追加（旧行零替换照款）
                         (389, "闲章一方"), (390, "漏行残诀"),
-                        (391, "押卷取赎")):
+                        (391, "押卷取赎"),
+                        # v1.16.52 段二十五扩池：三新元组追加（旧行零替换照款）
+                        (392, "废稿拟声"), (393, "洗笔澄心"),
+                        (394, "假帖索润")):
         if names.get(_eid) != _want:
             raise SystemExit("FATAL 钉B-2 名段内容钉失败: id%d → %r (期望 %r)"
                              % (_eid, names.get(_eid), _want))
@@ -440,11 +453,12 @@ def main():
     # v1.16.49 段二十二：随批 +1 到 seg1..seg21/b1..b22（照 v1.16.48 口径）
     # v1.16.50 段二十三：随批 +1 到 seg1..seg22/b1..b23（照 v1.16.49 口径）
     # v1.16.51 段二十四：随批 +1 到 seg1..seg23/b1..b24（照 v1.16.50 口径）
+    # v1.16.52 段二十五：随批 +1 到 seg1..seg24/b1..b25（照 v1.16.51 口径）
     print(
-        "OK 钉B 名段覆盖 ✓（N_EVENTS=%d 段界 %d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d 基址 %d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d）"
+        "OK 钉B 名段覆盖 ✓（N_EVENTS=%d 段界 %d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d 基址 %d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d/%d）"
         % (n_events, seg1, seg2, seg3, seg4, seg5, seg6, seg7, seg8, seg9, seg10,
-           seg11, seg12, seg13, seg14, seg15, seg16, seg17, seg18, seg19, seg20, seg21, seg22, seg23,
-           b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16, b17, b18, b19, b20, b21, b22, b23, b24)
+           seg11, seg12, seg13, seg14, seg15, seg16, seg17, seg18, seg19, seg20, seg21, seg22, seg23, seg24,
+           b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16, b17, b18, b19, b20, b21, b22, b23, b24, b25)
     )
     print("title_recheck 全绿")
 

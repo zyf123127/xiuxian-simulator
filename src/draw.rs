@@ -856,6 +856,30 @@ pub fn draw_return_beam(g: &Game, x: f32, y: f32, w: f32, h: f32) {
     draw_rectangle(x, yy, w, 2.0, fade(C_CYAN, a));
 }
 
+// v1.16.52 演出包㉜ 山河图·节点抵达踏痕（世界图消费口）：travel 唯一抵达口置
+// 值 arrive_t→玩家标记旁两圈同心圆环金踏痕脉冲（照㉖ draw_depart_beam/㉗
+// draw_return_beam 世界图消费口包装 fn 先例——brk_veil_a/fade 单源在 draw.rs，
+// world.rs 只调包装；语义抵达 vs 启程/收手、几何同心圆环 vs 横线竖扫、区域节点
+// 局部 vs 全画布三异照论证款）；k=g.arrive_t/ARRIVE_T 走 brk_veil_a 共用包络；
+// arrive_t<=0 早退不落像素稳态逐像素不变；纯圆环零分配零新字形；travel 死亡臂
+// （spend_year false）与出生即洞府路径（open_world）不置值=无演出
+pub fn draw_arrive_marks(g: &Game, px: f32, py: f32) {
+    let arr_a = 0.08 * brk_veil_a(g.arrive_t / crate::game::ARRIVE_T);
+    if arr_a <= 0.0 {
+        return;
+    }
+    for ring in 0..2 {
+        let er = 8.0 + 8.0 * ring as f32;
+        draw_circle_lines(
+            px,
+            py,
+            6.5 + er,
+            2.0,
+            fade(C_GOLD, arr_a * (1.0 - 0.35 * ring as f32)),
+        );
+    }
+}
+
 #[inline]
 fn banner_sweep_phase(k: f32) -> f32 {
     (k * 1.2) % 1.0
@@ -1562,20 +1586,25 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
     // （表值 α=0）早退不落像素，稳态逐像素不变
     draw_weather_veil(g, 0.0, 0.0, V_W, V_H);
     // v1.16.51 演出包㉚ 现实突破·钟磬光纹：act_break 三 ok 臂置值（同境进层/
-    // 跨境进境/问笔飞升），主区钟磬同心矩形光纹（现实主面板 (140,60,1000,600)
+    // 跨境进境/问笔飞升），主区钟磬同心矩形光纹（现实日志面板 (376,60,896,552)
     // 外扩三圈）+全屏轻光晕（k=g.brk_bell/BRK_BELL_T 走 brk_veil_a 共用包络照
     // ㉗ 消费款；三败臂与 can_break 早退不置值=稳态 bell==0 → 早退不落像素逐
     // 比特恒等；纯矩形零分配零新字形）
+    // v1.16.52 沉浸修正（勘察六 finding2 选 a 真同心款）：锚由 (140,60,1000,600)
+    // 改现实日志面板 (376,60,896,552)（draw_reality 实绘 draw.rs:1590-1604 同源，
+    // 原矩形系坊市/指引弹层 panel_card 几何非现实页实有面板，环心 x=640 与日志
+    // 中心 x=824 偏 184px 呈「底缘漏光、偏左」弧段）；稳态 bell==0 早退零像素
+    // 不变，与左栏/顶栏/底栏框线无同位叠画
     let bell_a = 0.08 * brk_veil_a(g.brk_bell / crate::game::BRK_BELL_T);
     if bell_a > 0.0 {
         draw_rectangle(0.0, 0.0, V_W, V_H, fade(C_GOLD, bell_a * 0.5));
         for ring in 0..3 {
             let ex = 26.0 + 30.0 * ring as f32;
             draw_rectangle_lines(
-                140.0 - ex,
+                376.0 - ex,
                 60.0 - ex,
-                1000.0 + 2.0 * ex,
-                600.0 + 2.0 * ex,
+                896.0 + 2.0 * ex,
+                552.0 + 2.0 * ex,
                 2.0,
                 fade(C_GOLD, bell_a * (1.0 - 0.28 * ring as f32)),
             );
@@ -2322,6 +2351,37 @@ pub fn draw_draft(g: &mut Game, art: &Art) {
                 Color::from_rgba(tr, tg, tb, 150),
             );
         }
+        // v1.16.52 UX 沉浸批②：天赍面 draft 卡 hover 金角饰——hot&&!selected 时
+        // 框内四角 L 形金饰（照 draw.rs:218-252 花样 A 内缩款：2px 内缩/leg 10px/
+        // 厚 2px；色 C_GOLD 与品级线 tr,tg,tb 分异）。选中卡走既有品级线外圈不
+        // 双饰（!selected 门控）；卡宽 280/间距 30 角饰不出框；非 hot 帧零像素
+        // 逐像素不变；零状态零分配零新字形（勘察六②B 提名落地）
+        if hot && !selected {
+            let jgold = fade(C_GOLD, 0.5);
+            let jleg = 10.0f32;
+            let jt = 2.0f32;
+            for (ax, ay, adx, ady) in [
+                (x + 2.0, y + 2.0, 1.0, 1.0),
+                (x + cw - 2.0, y + 2.0, -1.0, 1.0),
+                (x + 2.0, y + ch - 2.0, 1.0, -1.0),
+                (x + cw - 2.0, y + ch - 2.0, -1.0, -1.0),
+            ] {
+                draw_rectangle(
+                    ax - if adx < 0.0 { jleg } else { 0.0 },
+                    ay - if ady < 0.0 { jt } else { 0.0 },
+                    jleg,
+                    jt,
+                    jgold,
+                );
+                draw_rectangle(
+                    ax - if adx < 0.0 { jt } else { 0.0 },
+                    ay - if ady < 0.0 { jleg } else { 0.0 },
+                    jt,
+                    jleg,
+                    jgold,
+                );
+            }
+        }
         // 品级徽标
         draw_rectangle(
             x + cw * 0.5 - 34.0,
@@ -2589,6 +2649,15 @@ pub fn draw_sim(g: &mut Game, art: &Art) {
         }
         if on {
             draw_rectangle(880.0 + i as f32 * 88.0, 44.0, 80.0, 3.0, C_GOLD);
+            // v1.16.52 UX 沉浸批②：速度选中条左端 12px 呼吸加亮段（照坊市款同语
+            // 补全——顶栏选中条与页签同语防半改）
+            draw_rectangle(
+                880.0 + i as f32 * 88.0,
+                44.0,
+                12.0,
+                3.0,
+                Color::from_rgba(255, 244, 200, (255.0 * (0.7 + 0.3 * (g.time * 2.4).sin())) as u8),
+            );
         }
     }
     // v1.9.23：退出刷词条——未沉入/想重来时退回选天赋（点数已退还）
@@ -2815,25 +2884,6 @@ pub fn draw_modal_card(g: &mut Game) {
     if brk_a > 0.0 {
         draw_rectangle(0.0, 0.0, V_W, V_H, fade(C_GOLD, brk_a));
     }
-    // v1.16.51 演出包㉙ 收册人问·墨圈涟漪：检定卡卡缘两圈同心矩形环墨圈脉冲
-    //（照⑳ 结缘金尘同构；几何粒→环、色金→墨两异照三异论证款；k=modal_anim/0.18
-    // 复用入场计时零新会话态；环体在卡体矩形 (240,100,800,520) 外扩域、卡体
-    // panel_card_a 之前绘不盖卡面内容；稳态 modal_anim==0 → k=0 → brk_veil_a(0)=0
-    // → 早退不落像素逐比特恒等；纯矩形零分配零新字形）
-    let ask_a = 0.07 * brk_veil_a(g.modal_anim / 0.18);
-    if card_ask && ask_a > 0.0 {
-        for ring in 0..2 {
-            let ex = 10.0 + 12.0 * ring as f32;
-            draw_rectangle_lines(
-                240.0 - ex,
-                100.0 - ex,
-                800.0 + 2.0 * ex,
-                520.0 + 2.0 * ex,
-                2.0,
-                fade(C_INK, ask_a * (1.0 - 0.35 * ring as f32)),
-            );
-        }
-    }
     // v1.16.21 场景要素行采样（&str 借用横跨绘制段——与 modal_desc 同为只读，
     // 段内唯一 &mut 是段尾 modal_min，借用纪律不破）
     let scene: Option<&str> = g
@@ -2869,6 +2919,36 @@ pub fn draw_modal_card(g: &mut Game) {
     let segs = text.matches('\n').count() + 1;
     let tall = !meeting && kind_is_npc && lines + segs - 1 > 3; // 加高容量 ≤4 行（v1.16.46 勘四必修①改准：4*28+段距8=120px 恰 tall max_h——原 132px 注与 112px 实参自相矛盾已修正）
     let cy = if tall { 140.0 } else { 160.0 };
+    // v1.16.51 演出包㉙ 收册人问·墨圈涟漪：检定卡卡缘两圈同心矩形环墨圈脉冲
+    //（照⑳ 结缘金尘同构；几何粒→环、色金→墨两异照三异论证款；k=modal_anim/0.18
+    // 复用入场计时零新会话态；稳态 modal_anim==0 → k=0 → brk_veil_a(0)=0
+    // → 早退不落像素逐比特恒等；纯矩形零分配零新字形）
+    // v1.16.52 沉浸修正（勘察六 finding1 根因修复）：环块整体移至 tall/cy 采样
+    // 之后（panel_card_a 之前 z 序不变——环先绘卡体后绘覆盖），原锚死邂逅矩形
+    // (240,100,800,520) 而 386 收册人问 actor=None 走普通版式 (340,cy,600,…)，
+    // 环悬空成绕卡一大圈的错位松框（横向差约 108px）；锚改 meeting ?
+    // (240,100,800,520) : (340,cy,600,tall?440:400) 与实绘卡体同源（panel_card_a
+    // 两版式实参逐值对照），y 同乘 dy 使涟漪随卡滑入（照 meeting 卡体 100+dy/
+    // 普通卡体 cy+dy 同款）
+    let ask_a = 0.07 * brk_veil_a(g.modal_anim / 0.18);
+    if card_ask && ask_a > 0.0 {
+        let (ax, ay, aw, ah) = if meeting {
+            (240.0, 100.0, 800.0, 520.0)
+        } else {
+            (340.0, cy, 600.0, if tall { 440.0 } else { 400.0 })
+        };
+        for ring in 0..2 {
+            let ex = 10.0 + 12.0 * ring as f32;
+            draw_rectangle_lines(
+                ax - ex,
+                ay + dy - ex,
+                aw + 2.0 * ex,
+                ah + 2.0 * ex,
+                2.0,
+                fade(C_INK, ask_a * (1.0 - 0.35 * ring as f32)),
+            );
+        }
+    }
     // v1.16.4 暂避钮命中先采样：title/descs 只读借用横跨绘制段直到选项循环结束，
     // g.modal_min 的 &mut 移到段尾执行，免 E0502（钮面在两版式分支内照常绘出）
     let (mxp, myp) = crate::cam::mouse();
@@ -3118,6 +3198,33 @@ pub fn draw_modal_card(g: &mut Game) {
         .or(g.modal.as_ref())
         .is_some_and(|c| c.kind == crate::game::CardKind::Finale);
     let (step, bh) = if fin { (58.0, 58.0) } else { (74.0, 62.0) };
+    // v1.16.52 演出包㉛ 检定族遇卡·钮缘墨晕：检定族（card_check 单源采样）首
+    // 选项钮缘两圈同心矩形环灰墨脉冲——与㉙ 显式互斥（检定族识别且非收册卡，
+    // 79∈CHECK_SPECIALS，否则 386 卡卡缘环与钮缘环双圈叠画）；单环套首钮非逐钮
+    // （勘察六「逐钮涟漪需逐钮计时」不建议口照办——零新会话态复用入场相位）；
+    // 几何与钮矩形同源（meeting (530,330+dy,480,62)/普通 (380,316+dy,520,bh)
+    // 逐值对照）随 dy 同滑；k=modal_anim/0.18 走 brk_veil_a 共用包络照㉙款；
+    // 稳态 modal_anim==0 → k=0 → 早退不落像素逐比特恒等；环先绘钮后绘（本块
+    // 在 button_a_accent 循环前）不盖钮面；纯矩形零分配零新字形
+    let ask_ring_a = 0.09 * brk_veil_a(g.modal_anim / 0.18);
+    if card_check && !card_ask && ask_ring_a > 0.0 {
+        let (rx, ry, rw, rh) = if meeting {
+            (530.0, 330.0 + dy, 480.0, 62.0)
+        } else {
+            (380.0, 316.0 + dy, 520.0, bh)
+        };
+        for ring in 0..2 {
+            let ex = 10.0 + 12.0 * ring as f32;
+            draw_rectangle_lines(
+                rx - ex,
+                ry - ex,
+                rw + 2.0 * ex,
+                rh + 2.0 * ex,
+                2.0,
+                fade(C_INK_D, ask_ring_a * (1.0 - 0.35 * ring as f32)),
+            );
+        }
+    }
     // 剧情演出包④：主选项金描边（终战推荐位=下标 1「《留白》·撕稿」副标「推荐」、
     // 道途首钮=下标 0「剑修」——推荐/默认路径的可扫视性提升）
     let kind_acc = g.rmodal.as_ref().or(g.modal.as_ref()).map(|c| c.kind);
@@ -4083,6 +4190,10 @@ fn draw_offline_card(g: &mut Game) {
     panel_card(340.0, 160.0, 600.0, 400.0);
     txt_c("离 闭 归 来", V_W * 0.5, 188.0, 24, C_GOLD);
     draw_rectangle(380.0, 208.0, 520.0, 1.5, Color::from_rgba(96, 76, 130, 160));
+    // v1.16.52 UX 沉浸批②：离闭归来卡标题分隔线加中心饰（⑤ 语言补齐——分隔线
+    // 中心恰 x=640 与事件卡/终战已用口同语；α 传 ㉘ 入场进度 p 稳态恒 1 逐像素
+    // 不变）
+    title_ornament(V_W * 0.5, 208.0, p);
     // v1.16.12 免烧寿元：原文「现实人间已悄然流逝 N 载」与 age 不动自相矛盾，改口
     txt(
         &evf(2548, &[&(r.years) as &dyn core::fmt::Display])/* 原文：离闭吐纳 {} 载功行，未曾间断。 */,
@@ -4152,6 +4263,16 @@ fn draw_upgrade_panel(g: &mut Game) {
         }
         if g.tab == i as u8 {
             draw_rectangle(x, 188.0, 190.0, 3.0, C_GOLD);
+            // v1.16.52 UX 沉浸批②：选中条左端 12px 呼吸加亮段（照坊市/行囊/角色
+            // 页三组常驻呼吸款同语补全防半改——三组已改四组漏网的最后一组；零
+            // 状态纯新增像素照花样 D 先例口径，原位叠画不改选中条本体）
+            draw_rectangle(
+                x,
+                188.0,
+                12.0,
+                3.0,
+                Color::from_rgba(255, 244, 200, (255.0 * (0.7 + 0.3 * (g.time * 2.4).sin())) as u8),
+            );
         }
     }
     // 行带：每页 5 行 ×72（原 10 行 ×42 一屏摊不下 72 大行，分页后行距翻近一倍）
@@ -4242,6 +4363,14 @@ fn draw_help_panel(g: &mut Game) {
         }
         if g.help_tab == i as u8 {
             draw_rectangle(x, 170.0, 190.0, 3.0, C_GOLD);
+            // v1.16.52 UX 沉浸批②：选中条左端 12px 呼吸加亮段（照坊市款同语补全）
+            draw_rectangle(
+                x,
+                170.0,
+                12.0,
+                3.0,
+                Color::from_rgba(255, 244, 200, (255.0 * (0.7 + 0.3 * (g.time * 2.4).sin())) as u8),
+            );
         }
     }
     // v1.16.26 直引号统一：弯引号 “ ” → 「」（字形均在 cmap，字节中性）；
@@ -4475,6 +4604,14 @@ fn draw_guide_panel(g: &mut Game) {
         }
         if g.guide_tab == i as u8 {
             draw_rectangle(x, 162.0, 190.0, 3.0, C_GOLD);
+            // v1.16.52 UX 沉浸批②：选中条左端 12px 呼吸加亮段（照坊市款同语补全）
+            draw_rectangle(
+                x,
+                162.0,
+                12.0,
+                3.0,
+                Color::from_rgba(255, 244, 200, (255.0 * (0.7 + 0.3 * (g.time * 2.4).sin())) as u8),
+            );
         }
     }
     // v1.16.16 主线汇总：页签行右「主线 X/9」（chap_done 位计数，prog_txt 静态查表
@@ -5473,8 +5610,8 @@ mod v11650_ux_pins_tests {
         );
         assert_eq!(
             draw_p.matches("for (ax, ay, adx, ady) in [").count(),
-            1,
-            "花样 A：四角 L 形元组循环恰 1（照 panel_card 角饰语言小号款）"
+            2,
+            "花样 A：四角 L 形元组循环恰 2（v1.16.52 UX② 天赍卡 hover 角饰随批 +1 照款同语；原 1 系天赍批前时点）"
         );
         assert_eq!(
             draw_p
@@ -6070,8 +6207,8 @@ mod v11659_ux_immersion_tests {
         // 呼吸串（照 v11658 len 钉批间滚动先例；charpanel 侧恰 1 补钉落 v11662）
         assert_eq!(
             draw_p.matches("(255.0 * (0.7 + 0.3 * (g.time * 2.4).sin())) as u8").count(),
-            2,
-            "UX③ 页签加亮段 draw.rs 呼吸串恰 2（坊市/行囊——三组同批同语防半改）"
+            6,
+            "UX③ 页签加亮段 draw.rs 呼吸串恰 6（v1.16.52 UX② 四组同语补全：坊市/行囊+烙印/帮助/指引/模拟速度——同批同语防半改）"
         );
         let char_p = prod_of("charpanel.rs");
         // v1.16.51 UX 沉浸批随批改写（同上 draw 侧缘由）：charpanel 侧呼吸串恰 1
@@ -6234,8 +6371,11 @@ mod v11662_ask_ink_tests {
             .matches("self.play(crate::sounds::Which::Ascend);\n                        // 演出包㉚")
             .count();
         assert_eq!(ascend_pos, 1, "飞升口位点序：play Ascend 之后置值");
-        // 败臂零置值旁证：全仓 BreakFail 五处（现实 act_break 同境撞关 3866/跨境
-        // 反噬 15606+模拟侧 14076/15525/15891），败臂零置值由「恰 3」主钉兜底
+        // 败臂零置值旁证：全仓 BreakFail 五处（现实 act_break 同境撞关 3866/
+        // 跨境反噬 15606+模拟侧 14076/15525/15891），败臂零置值由「恰 3」主钉兜底
+        //（v1.16.52 注正：3866 实测在 sim_do_break 模拟侧 slog 臂内，v1.16.51
+        // 原注「现实 act_break 同境撞关」系归属标注错位——count==5 主钉本身
+        // 正确不动，照勘察三 suggestion 顺手改注勿动断言）
         assert_eq!(
             game_p.matches("Which::BreakFail").count(),
             5,
@@ -6322,6 +6462,234 @@ mod v11662_ask_ink_tests {
             draw_p.matches("g.modal_anim = 0.18;").count(),
             1,
             "draw.rs 补投置值恰 1（族 5+1=6）"
+        );
+    }
+}
+
+// ================= v1.16.52 演出包㉛㉜+UX 沉浸批②钉测（施工单四） =================
+// 模组名注：v11645..v11664 全链占用（占用链见 v11658/v11660/v11663 头注）；v11661
+// 已被 v11661_seg24_tests（game.rs，段二十四扩池批施工单二）占用、v11662 已被
+// v11662_ask_ink_tests（draw.rs，演出包㉙㉚+UX 批施工单四 v1.16.51）占用、v11663
+// 已被 v11663_len8_9_batch_tests（game.rs，剧情加长批施工单三）占用、v11664 已被
+// v11664_seg25_tests（game.rs，段二十五扩池批施工单二 v1.16.52）占用——本批钉测
+// 模块名顺延 v11665，内容版本以本头注 v1.16.52 为准（占用链纪律照 v11654 头注款）。
+// 钉面清单（照 v11662 兼㉙㉚+UX 三段先例）：㉙ 锚随版式修正（移位位点序+新锚串+
+// 旧锚串零残留）/㉚ 锚改现实日志面板（376 新锚+140 旧锚零残留）/㉛ 检定族首钮
+// 缘墨晕（互斥门控串恰 1/CHECK_SPECIALS.contains 契约仍恰 2/accent 臂串仍恰 1/
+// C_INK_D 声明与消费各恰 1/C_INK fade 契约仍恰 1）/㉜ 抵达踏痕四件套（常量/字段/
+// Default/递减/置值位点序/消费口/save.rs 零引用）/UX②（天赍 hover 角饰恰 1+
+// jleg 同款恰 2+离闭 title_ornament 口恰 1）/brk_veil_a 两端零稳态复断言。
+#[cfg(test)]
+mod v11665_ask_ring_ux_tests {
+    use super::brk_veil_a;
+
+    // prod_of 滤测试区助手：照 v11662 prod_of 款复制私有副本（头注措辞避开
+    // 消费面子串防自指，照 draw.rs:6122 纪律）
+    fn prod_of(fname: &str) -> String {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(fname))
+            .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", fname, e));
+        // 行首 #[cfg(test)] 起至行首顶格 } 止滤测试区（照 press_sink prod 款）
+        let mut out = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip {
+                if line == "}" {
+                    skip = false;
+                }
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
+    }
+
+    // ── ㉙ 锚随版式修正 + ㉚ 锚改现实日志面板（勘察六 finding①② 根因闭环） ──
+    #[test]
+    fn ink_anchor_versioned_pins() {
+        let draw_p = prod_of("draw.rs");
+        // ㉙：环块移位采样式恰 1（tall/cy 采样之后——锚随实绘版式）
+        assert_eq!(
+            draw_p.matches("let (ax, ay, aw, ah) = if meeting").count(),
+            1,
+            "㉙ 版式锚采样恰 1（v1.16.52 移位后唯一）"
+        );
+        // ㉙：环体随卡滑入式恰 1（y 同乘 dy 照 meeting 卡体 100+dy/普通 cy+dy 款）
+        assert_eq!(
+            draw_p.matches("ay + dy - ex,").count(),
+            1,
+            "㉙ 环体 dy 同乘恰 1（随卡滑入）"
+        );
+        // ㉙：旧锚串零残留（原块 y=100.0-ex 已随批移除）
+        assert_eq!(
+            draw_p.matches("100.0 - ex,").count(),
+            0,
+            "㉙ 旧锚串零残留（v1.16.52 移位后 100.0-ex 不复存在）"
+        );
+        // ㉚：新锚串恰 1（现实日志面板 (376,60,896,552)）
+        assert_eq!(
+            draw_p.matches("376.0 - ex,").count(),
+            1,
+            "㉚ 新锚串恰 1（现实日志面板真同心）"
+        );
+        // ㉚：旧锚串零残留（原坊市弹层几何 (140,60,1000,600)）
+        assert_eq!(
+            draw_p.matches("140.0 - ex,").count(),
+            0,
+            "㉚ 旧锚串零残留（140.0-ex 随批改现实日志面板）"
+        );
+        // 两端稳态复断言（修正不破三角包络契约）
+        assert_eq!(brk_veil_a(0.0), 0.0, "brk_veil_a(0)=0 稳态");
+        assert_eq!(brk_veil_a(1.0), 0.0, "brk_veil_a(1)=0 稳态");
+    }
+
+    // ── ㉛ 检定族遇卡·首钮缘墨晕契约链 ──
+    #[test]
+    fn ask_ring_ink_pins() {
+        let draw_p = prod_of("draw.rs");
+        let game_p = prod_of("game.rs");
+        let save_p = prod_of("save.rs");
+        // 互斥门控串恰 1（card_check && !card_ask：79∈CHECK_SPECIALS 防 386 双圈叠画）
+        assert_eq!(
+            draw_p.matches("card_check && !card_ask").count(),
+            1,
+            "㉛ 互斥门控串恰 1（与㉙ 显式互斥）"
+        );
+        // CHECK_SPECIALS.contains 契约仍恰 2（㉛ 门控走 card_check 既有采样，
+        // 勿另写 contains 扫描防双写漂移——v11662 契约不动）
+        assert_eq!(
+            draw_p.matches("crate::game::CHECK_SPECIALS.contains(&").count(),
+            2,
+            "CHECK_SPECIALS 消费仍恰 2（card_check 采样+检定臂 accent——v11662 契约不动）"
+        );
+        // accent 臂串仍恰 1
+        assert_eq!(
+            draw_p.matches("(card_check && crate::game::CHECK_SPECIALS.contains(&e.special))").count(),
+            1,
+            "检定臂 accent 臂串仍恰 1（v11662 契约不动）"
+        );
+        // C_INK_D 新色单源：声明恰 1/消费恰 1
+        assert_eq!(
+            game_p.matches("pub const C_INK_D: Color").count(),
+            1,
+            "C_INK_D 色表定义恰 1（独立色位单源）"
+        );
+        assert_eq!(
+            draw_p.matches("fade(C_INK_D,").count(),
+            1,
+            "C_INK_D 消费恰 1（首钮缘环体）"
+        );
+        // C_INK 契约仍恰 1（勿复用——v11662 钉不动）
+        assert_eq!(
+            draw_p.matches("fade(C_INK,").count(),
+            1,
+            "C_INK 消费仍恰 1（㉙ 卡缘环体——v11662 契约不动）"
+        );
+        // 消费 α 串恰 1
+        assert_eq!(
+            draw_p.matches("ask_ring_a * (1.0 - 0.35 * ring as f32)").count(),
+            1,
+            "㉛ 消费 α 串恰 1（首钮缘环体唯一）"
+        );
+        // save.rs 零引用（零新会话态——复用 modal_anim 旁证）
+        assert_eq!(
+            save_p.matches("C_INK_D").count(),
+            0,
+            "save.rs 零引用（㉛ 无新字段）"
+        );
+    }
+
+    // ── ㉜ 山河图·节点抵达踏痕契约链 ──
+    #[test]
+    fn arrive_marks_pins() {
+        let draw_p = prod_of("draw.rs");
+        let game_p = prod_of("game.rs");
+        let main_p = prod_of("main.rs");
+        let world_p = prod_of("world.rs");
+        let save_p = prod_of("save.rs");
+        // 常量/字段/Default 三件套
+        assert_eq!(
+            game_p.matches("pub const ARRIVE_T: f32 = 0.9;").count(),
+            1,
+            "ARRIVE_T 常量声明恰 1"
+        );
+        assert_eq!(game_p.matches("pub arrive_t: f32,").count(), 1, "arrive_t 字段恰 1");
+        assert_eq!(
+            game_p.matches("arrive_t: 0.0,").count(),
+            1,
+            "arrive_t 生产构造器 Default 恰 1（prod 面）"
+        );
+        // 置值口恰 1+位点序（l.loc=to 之后/play Page 之后/sync_save 之前）
+        assert_eq!(
+            world_p.matches("g.arrive_t = crate::game::ARRIVE_T;").count(),
+            1,
+            "travel 唯一抵达口置值恰 1"
+        );
+        assert_eq!(
+            world_p.matches("g.sys_hint_dongfu();
+    g.play(crate::sounds::Which::Page);
+    // v1.16.52 演出包㉜").count(),
+            1,
+            "置值位点序：sys_hint_dongfu+play Page 之后（travel 口 play Page 全仓多处唯此带包号尾注）"
+        );
+        // 递减恰 1/消费口恰 1
+        assert_eq!(
+            main_p.matches("if g.arrive_t > 0.0 {").count(),
+            1,
+            "主循环递减恰 1"
+        );
+        assert_eq!(
+            draw_p.matches("pub fn draw_arrive_marks").count(),
+            1,
+            "draw_arrive_marks 包装 fn 恰 1"
+        );
+        assert_eq!(
+            world_p.matches("crate::draw::draw_arrive_marks(g, px, py);").count(),
+            1,
+            "玩家标记块消费口恰 1"
+        );
+        // save.rs 零引用（会话态不进存档，旧档载入天然 0）
+        assert_eq!(
+            save_p.matches("arrive_t").count(),
+            0,
+            "save.rs 零引用（㉜ 会话态）"
+        );
+        assert_eq!(
+            save_p.matches("ARRIVE_T").count(),
+            0,
+            "save.rs 零引用（ARRIVE_T 常量）"
+        );
+        // 两端稳态复断言
+        assert_eq!(brk_veil_a(0.0), 0.0, "brk_veil_a(0)=0 稳态");
+        assert_eq!(brk_veil_a(1.0), 0.0, "brk_veil_a(1)=0 稳态");
+    }
+
+    // ── UX 沉浸批② 静态钉（天赍 hover 角饰/离闭 title_ornament） ──
+    #[test]
+    fn ux_immersion3_static_pins() {
+        let draw_p = prod_of("draw.rs");
+        // 天赍卡 hover 角饰门控恰 1（!selected 与选中外圈互斥防双饰）
+        assert_eq!(
+            draw_p.matches("if hot && !selected {").count(),
+            1,
+            "天赍卡 hover 角饰门控恰 1（选中卡不双饰）"
+        );
+        // 花样 A 同款角饰几何恰 2（按钮花样 A + 天赍卡同语）
+        assert_eq!(
+            draw_p.matches("let jleg = 10.0f32;").count(),
+            2,
+            "角饰几何 jleg 恰 2（按钮花样 A+天赍卡同款同语）"
+        );
+        // 离闭归来标题饰口恰 1（事件卡/终战既有口不动）
+        assert_eq!(
+            draw_p.matches("title_ornament(V_W * 0.5, 208.0, p);").count(),
+            1,
+            "离闭归来 title_ornament 口恰 1（⑤ 语言补齐）"
         );
     }
 }

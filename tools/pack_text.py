@@ -228,6 +228,13 @@ BRIEF23_BASE_MANIFEST = 2882
 # 法兑现（len23 改差）/EV_SEG24=392 快照预建同批登记）
 NAME24_BASE_MANIFEST = 2896
 BRIEF24_BASE_MANIFEST = 2899
+# v1.16.52 段二十五扩池起：段二十四（3 条）满员后新批连号追加为段二十五（3 条：名
+# 2911..=2913/简 2914..=2916，真相源手写连号段先于正文——本批无检定卡无副标手写
+# 行（special80 检定窗 79 后第二批/三批未到留档），正文占 N2917..2925（392/393/394
+# 每卡 intro+2 结局 3 行）故段二十五即 2911/2914——与 data.rs EV_SEG24=392 差写
+# 法兑现（len24 改差）/EV_SEG25=395 快照预建同批登记）
+NAME25_BASE_MANIFEST = 2911
+BRIEF25_BASE_MANIFEST = 2914
 
 dry = '--dry-run' in sys.argv
 collect_tables = '--tables' in sys.argv  # 刀②/③通道开关（单刀量测用；表收编后自动幂等）
@@ -1053,7 +1060,8 @@ def table_bases_from_inc():
                  'TXT_NAME21_BASE', 'TXT_BRIEF21_BASE',
                  'TXT_NAME22_BASE', 'TXT_BRIEF22_BASE',
                  'TXT_NAME23_BASE', 'TXT_BRIEF23_BASE',
-                 'TXT_NAME24_BASE', 'TXT_BRIEF24_BASE')
+                 'TXT_NAME24_BASE', 'TXT_BRIEF24_BASE',
+                 'TXT_NAME25_BASE', 'TXT_BRIEF25_BASE')
                 + BASE_KEYS_TABLES2):
             mm = re.search(r'pub static %s: u32 = (\d+);' % key, txt)
             if mm:
@@ -2251,6 +2259,13 @@ if name_base is not None:
 if brief_base is not None:
     inc += emit_base('TXT_BRIEF24_BASE',
                      inc_bases.get('TXT_BRIEF24_BASE', BRIEF24_BASE_MANIFEST))
+# v1.16.52 段二十五基址（同段二十四款：首轮 emit manifest 手分、此后回读 .inc 幂等）
+if name_base is not None:
+    inc += emit_base('TXT_NAME25_BASE',
+                     inc_bases.get('TXT_NAME25_BASE', NAME25_BASE_MANIFEST))
+if brief_base is not None:
+    inc += emit_base('TXT_BRIEF25_BASE',
+                     inc_bases.get('TXT_BRIEF25_BASE', BRIEF25_BASE_MANIFEST))
 # v1.16.29 刀B 整表基址（首轮 emit 收编 N 段基址；此后每次运行从 .inc 回读重发，
 # 与段一/二/三同款幂等——非 --tables2 运行也不许丢基址，否则 include! 断链）
 for bk2 in BASE_KEYS_TABLES2:
