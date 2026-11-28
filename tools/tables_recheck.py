@@ -136,6 +136,9 @@ _SEG24 = 392
 # v1.16.52 段二十五开设：EV_SEG25=395 快照段界（本批预建下批引用；照 v1.16.48
 # 修直纪律 _SEGN=EV_SEGN 一一对应，勿把新 N_EVENTS 写进 _SEG）
 _SEG25 = 395
+# v1.16.53 段二十六开设：EV_SEG26=398 快照段界（本批预建下批引用；照 v1.16.48
+# 修直纪律 _SEGN=EV_SEGN 一一对应，勿把新 N_EVENTS 写进 _SEG）
+_SEG26 = 398
 # v1.16.36 单5 low 清账：对账段数常量（段一..段十五）——标签行随此动态写，
 # 下批扩段十六时随批 +1（勘察建议「随段数常量动态改写」款）
 # v1.16.40 单3 扩段十五：SEGS_COUNT 14→15 随批
@@ -149,7 +152,8 @@ _SEG25 = 395
 # v1.16.50 段二十三扩池：SEGS_COUNT 22→23 随批
 # v1.16.51 段二十四扩池：SEGS_COUNT 23→24 随批
 # v1.16.52 段二十五扩池：SEGS_COUNT 24→25 随批
-SEGS_COUNT = 25
+# v1.16.53 段二十六扩池：SEGS_COUNT 25→26 随批
+SEGS_COUNT = 26
 _name2 = re.search(r"pub static TXT_NAME2_BASE: u32 = (\d+);", inc)
 _brief2 = re.search(r"pub static TXT_BRIEF2_BASE: u32 = (\d+);", inc)
 _name3 = re.search(r"pub static TXT_NAME3_BASE: u32 = (\d+);", inc)
@@ -266,11 +270,17 @@ _name25 = re.search(r"pub static TXT_NAME25_BASE: u32 = (\d+);", inc)
 _brief25 = re.search(r"pub static TXT_BRIEF25_BASE: u32 = (\d+);", inc)
 name25_base = int(_name25.group(1)) if _name25 else None
 brief25_base = int(_brief25.group(1)) if _brief25 else None
+# v1.16.53 段二十六扩池：段二十六基址（.inc 回读同款）
+_name26 = re.search(r"pub static TXT_NAME26_BASE: u32 = (\d+);", inc)
+_brief26 = re.search(r"pub static TXT_BRIEF26_BASE: u32 = (\d+);", inc)
+name26_base = int(_name26.group(1)) if _name26 else None
+brief26_base = int(_brief26.group(1)) if _brief26 else None
 
 
 def _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, base9,
               base10, base11, base12, base13, base14, base15, base16, base17,
-              base18, base19, base20, base21, base22, base23, base24, base25, n):
+              base18, base19, base20, base21, base22, base23, base24, base25,
+              base26, n):
     """段一 0..min(n,291) + 段二..段十四续号（扩池批）；返回行号列表"""
     out = [base + i for i in range(min(n, _SEG1))]
     if n > _SEG1:
@@ -382,18 +392,24 @@ def _seg_rows(base, base2, base3, base4, base5, base6, base7, base8, base9,
         out += [base24 + k for k in range(min(n, _SEG24) - _SEG23)]
     if n > _SEG24:
         assert base25 is not None, "扩池后段二十五基址缺失（pack_text.py 未登记）"
-        # v1.16.52 段二十五开设：段二十五无界末段（下批扩段二十六时改有界）
-        out += [base25 + k for k in range(n - _SEG24)]
+        # v1.16.53 段二十六红线：段二十五由无界末段改有界（段二十六开设后段
+        # 二十五不再末段——旧行为 n−_SEG24 在扩池后会把段二十六行错读进段二
+        # 十五，照 v1.16.52 段二十四块同款纪律）
+        out += [base25 + k for k in range(min(n, _SEG25) - _SEG24)]
+    if n > _SEG25:
+        assert base26 is not None, "扩池后段二十六基址缺失（pack_text.py 未登记）"
+        # v1.16.53 段二十六开设：段二十六无界末段（下批扩段二十七时改有界）
+        out += [base26 + k for k in range(n - _SEG25)]
     return out
 brief_base = int(re.search(r"pub static TXT_BRIEF_BASE: u32 = (\d+);", inc).group(1))
 
 tables = {}
-for tname, base, base2, base3, base4, base5, base6, base7, base8, base9, base10, base11, base12, base13, base14, base15, base16, base17, base18, base19, base20, base21, base22, base23, base24, base25 in (
-        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base, name6_base, name7_base, name8_base, name9_base, name10_base, name11_base, name12_base, name13_base, name14_base, name15_base, name16_base, name17_base, name18_base, name19_base, name20_base, name21_base, name22_base, name23_base, name24_base, name25_base),
-        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base, brief6_base, brief7_base, brief8_base, brief9_base, brief10_base, brief11_base, brief12_base, brief13_base, brief14_base, brief15_base, brief16_base, brief17_base, brief18_base, brief19_base, brief20_base, brief21_base, brief22_base, brief23_base, brief24_base, brief25_base)):
+for tname, base, base2, base3, base4, base5, base6, base7, base8, base9, base10, base11, base12, base13, base14, base15, base16, base17, base18, base19, base20, base21, base22, base23, base24, base25, base26 in (
+        ("EVENT_NAMES", name_base, name2_base, name3_base, name4_base, name5_base, name6_base, name7_base, name8_base, name9_base, name10_base, name11_base, name12_base, name13_base, name14_base, name15_base, name16_base, name17_base, name18_base, name19_base, name20_base, name21_base, name22_base, name23_base, name24_base, name25_base, name26_base),
+        ("EVENT_BRIEF", brief_base, brief2_base, brief3_base, brief4_base, brief5_base, brief6_base, brief7_base, brief8_base, brief9_base, brief10_base, brief11_base, brief12_base, brief13_base, brief14_base, brief15_base, brief16_base, brief17_base, brief18_base, brief19_base, brief20_base, brief21_base, brief22_base, brief23_base, brief24_base, brief25_base, brief26_base)):
     entries = []
     for n in _seg_rows(base, base2, base3, base4, base5, base6, base7, base8,
-                       base9, base10, base11, base12, base13, base14, base15, base16, base17, base18, base19, base20, base21, base22, base23, base24, base25, n_events):
+                       base9, base10, base11, base12, base13, base14, base15, base16, base17, base18, base19, base20, base21, base22, base23, base24, base25, base26, n_events):
         assert n in rows, f"{tname} 段缺行 N={n}（基址漂移/收编段不齐）"
         val = decode_raw(rows[n])
         assert val is not None, f"{tname} N={n} 不可解码"
@@ -414,6 +430,8 @@ for tname, base, base2, base3, base4, base5, base6, base7, base8, base9, base10,
           "base24", base24,
           # v1.16.52 段二十五：打印行随扩段 +1 列 base25（同上款）
           "base25", base25,
+          # v1.16.53 段二十六：打印行随扩段 +1 列 base26（同上款）
+          "base26", base26,
           "rows", len(entries), "aligned:",
           # v1.16.48：aligned 去硬编码 380 改随 N_EVENTS 动态（380 硬编码在
           # 扩池批每轮过期，且曾掩盖 _SEG 错位巧合——对账本身即行数全等断言）
@@ -485,7 +503,10 @@ for tname in ("EVENT_NAMES", "EVENT_BRIEF"):
         r"\s*base22: \w+ as u16," + _C + r"\s*len22: \(?\w+ - \w+\)? as u16," + _C +
         r"\s*base23: \w+ as u16," + _C + r"\s*len23: \(?\w+ - \w+\)? as u16," + _C +
         r"\s*base24: \w+ as u16," + _C + r"\s*len24: \(?\w+ - \w+\)? as u16," + _C +
-        r"\s*base25: \w+ as u16," + _C + r"\s*len25: \(?\w+ - \w+\)? as u16,\s*\};"
+        r"\s*base25: \w+ as u16," + _C + r"\s*len25: \(?\w+ - \w+\)? as u16," + _C +
+        # v1.16.53 段二十六扩段：base26/len26 双段登记随批（len25 本批改差兑现
+        # (EV_SEG25−EV_SEG24)，正则两形态通吃——同上款）
+        r"\s*base26: \w+ as u16," + _C + r"\s*len26: \(?\w+ - \w+\)? as u16,\s*\};"
     )
     m = re.search(pat, src)
     assert m, f"{tname} EvTable 声明缺失"
@@ -567,8 +588,10 @@ _nize_body = re.sub(r"//[^\n]*", "", _mt0.group(2))
 _nize_slots = [int(x) for x in re.findall(r"\d+", _nize_body)]
 # v1.16.50 段二十三：槽数 79→80 随批（special 覆盖 0..=79——收册人问 386 检定
 # 副标「合卷一问」N2885 启用槽 79）
-assert len(_nize_slots) == _nize_size == 80, (
-    f"SPECIAL_SUB 槽数 {len(_nize_slots)}/{_nize_size} != 80（special 覆盖 0..=79；扩臂须同步改表）")
+# v1.16.53 段二十六：槽数 80→81 随批（special 覆盖 0..=80——朱点回访 395 检定
+# 副标「朱点复勘」N2932 启用槽 80）
+assert len(_nize_slots) == _nize_size == 81, (
+    f"SPECIAL_SUB 槽数 {len(_nize_slots)}/{_nize_size} != 81（special 覆盖 0..=80；扩臂须同步改表）")
 # v1.16.37 单2 槽 76 启用（哑缶一声 356 检定副标「受缶一问」N2690 手写行）：
 # 原断言 0/19/76 三槽同值兜底随启用过时——改钉 0/19 兜底 + 76 启用值反向钉
 #（2690 N 不变号纪律下稳定；误改回兜底当场红）
@@ -585,6 +608,9 @@ assert _nize_slots[78] != _nize_slots[0] and _nize_slots[78] == 2838, (
 # v1.16.50 槽 79 启用（收册人问 386 检定副标「合卷一问」N2885 手写行）
 assert _nize_slots[79] != _nize_slots[0] and _nize_slots[79] == 2885, (
     f"SPECIAL_SUB 槽 79 应为启用值 2885（合卷一问），实为 {_nize_slots[79]}")
+# v1.16.53 槽 80 启用（朱点回访 395 检定副标「朱点复勘」N2932 手写行）
+assert _nize_slots[80] != _nize_slots[0] and _nize_slots[80] == 2932, (
+    f"SPECIAL_SUB 槽 80 应为启用值 2932（朱点复勘），实为 {_nize_slots[80]}")
 for _n in _nize_slots:
     assert _n in rows, f"SPECIAL_SUB N={_n} 缺行"
     _v = decode_raw(rows[_n])

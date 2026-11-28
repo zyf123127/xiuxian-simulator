@@ -1469,6 +1469,16 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
     // 需目检支撑，本件为纯新增像素低风险
     if g.meta.music {
         draw_rectangle(bx, 592.0 + 44.0 - 3.0, 140.0, 3.0, C_GOLD);
+        // v1.16.53 按钮花样 c（勘察六候选 c）：toggle on 态下划线左端 12px 呼吸
+        // 加亮段（照 UX 批②速度选中条呼吸同语 draw.rs:2651 款；纯新增像素零状
+        // 态，off 态零像素；g.time 常驻时钟照 magic_circle 先例）
+        draw_rectangle(
+            bx,
+            592.0 + 44.0 - 3.0,
+            12.0,
+            3.0,
+            Color::from_rgba(255, 244, 200, (255.0 * (0.7 + 0.3 * (g.time * 2.4).sin())) as u8),
+        );
     }
     let slabel = if g.meta.sfx {
         "音效：开"
@@ -1483,6 +1493,14 @@ pub fn draw_menu(g: &mut Game, art: &Art) {
     // v1.16.47 花样 D 同批（音效 toggle，几何照音乐款）
     if g.meta.sfx {
         draw_rectangle(bx + 155.0, 592.0 + 44.0 - 3.0, 140.0, 3.0, C_GOLD);
+        // v1.16.53 花样 c 同批（音效 toggle 呼吸段，几何照音乐款）
+        draw_rectangle(
+            bx + 155.0,
+            592.0 + 44.0 - 3.0,
+            12.0,
+            3.0,
+            Color::from_rgba(255, 244, 200, (255.0 * (0.7 + 0.3 * (g.time * 2.4).sin())) as u8),
+        );
     }
     if button(bx + 310.0, 592.0, 140.0, 44.0, "轮回烙印", None, true) {
         g.panel = 3;
@@ -1607,6 +1625,29 @@ pub fn draw_reality(g: &mut Game, art: &Art) {
                 552.0 + 2.0 * ex,
                 2.0,
                 fade(C_GOLD, bell_a * (1.0 - 0.28 * ring as f32)),
+            );
+        }
+    }
+    // v1.16.53 演出包㉝ 现实冲击失败·墨痕褪散：act_break 三败臂置值（同境撞关/
+    // 问笔雷劫/跨境反噬），现实日志面板 (376,60,896,552) 同锚同心矩形环内收
+    //（ex=(26+30r)×k 随衰减递减=墨迹褪散，与㉚外扩反向成对）+全屏轻暗罩（α
+    // 0.04=㉚光晕 0.08 减半）；k=(g.brk_fail_t/BRK_FAIL_T).clamp 走 brk_veil_a
+    // 共用包络照 ㉚ 消费款；ok 臂置㉚ 败臂置㉝ 天然互斥（act_break 单调用单臂），
+    // can_break 早退与稳态 fail==0 → α=0 早退不落像素逐比特恒等；独立色位照
+    // C_INK_D 先例勿复用；纯矩形零分配零新字形
+    let fail_k = (g.brk_fail_t / crate::game::BRK_FAIL_T).clamp(0.0, 1.0);
+    let fail_a = 0.04 * brk_veil_a(fail_k);
+    if fail_a > 0.0 {
+        draw_rectangle(0.0, 0.0, V_W, V_H, fade(C_BRK_FAIL, fail_a * 0.5));
+        for ring in 0..3 {
+            let ex = (26.0 + 30.0 * ring as f32) * fail_k;
+            draw_rectangle_lines(
+                376.0 - ex,
+                60.0 - ex,
+                896.0 + 2.0 * ex,
+                552.0 + 2.0 * ex,
+                2.0,
+                fade(C_BRK_FAIL, fail_a * (1.0 - 0.28 * ring as f32)),
             );
         }
     }
@@ -3392,6 +3433,21 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
         296.0, 16,
         C_GOLD,
     );
+    // v1.16.53 演出包㉞ 草稿退回·道韵入账流光：sim_die 尾段 scene=Inherit 同帧
+    // 旁置值（唯一置值口照㉘同帧旁置款），道韵行带内亮带左→右横扫一次（外带
+    // w60/内芯 w44 两矩形叠法照⑪流光款；k=(g.inh_arrive_t/INH_ARRIVE_T).clamp
+    // 走 brk_veil_a 共用包络照㉔消费款，p=1−k 扫程、外带 ±30 恒在 84..424 行带
+    // 内勿越卡缘照勘察款；与㉔三异：触发 sim_die 落页 vs take_inherit 拾取、区
+    // 域道韵行局部 vs 此生卡描边外扩、语义入账 vs 拾遗）；稳态 inh_arrive<=0 →
+    // α=0 早退不落像素逐比特恒等；speed=3 后台结算落页时包络已自然衰减照㉔备
+    // 案款；纯矩形零分配零新字形
+    let inh_k = (g.inh_arrive_t / crate::game::INH_ARRIVE_T).clamp(0.0, 1.0);
+    let inh_a = brk_veil_a(inh_k);
+    if inh_a > 0.0 {
+        let cx = 114.0 + 280.0 * (1.0 - inh_k);
+        draw_rectangle(cx - 30.0, 296.0, 60.0, 16.0, fade(C_GOLD, inh_a * 0.18));
+        draw_rectangle(cx - 22.0, 296.0, 44.0, 16.0, fade(C_GOLD, inh_a * 0.30));
+    }
     // v1.16.8 主线感：本稿剧情一行（SimResult.story 与旧稿档案 hq= 同源一次拼接；
     // 会话态零新键，&str 借用分片绘制零 format!；无摘要整行隐去零位移）。
     // v1.16.13 本稿剧情行点开『本稿遭遇』列表：此处只读绘制+热态金色反馈+记
@@ -3497,11 +3553,21 @@ pub fn draw_inherit(g: &mut Game, art: &Art) {
                 Color::from_rgba(44, 34, 70, 235)
             },
         );
-        draw_rectangle_lines(520.0, y, 680.0, 62.0, 1.5, C_GOLD_D);
+        // v1.16.53 按钮花样 a（勘察六候选 a）：继承拾取行 press 时行框 C_GOLD_D→
+        // C_GOLD（press 持续态驱动零新状态；press=false 帧框色 C_GOLD_D 逐比特
+        // 恒等）
+        let press = hot && is_mouse_button_down(MouseButton::Left);
+        draw_rectangle_lines(
+            520.0,
+            y,
+            680.0,
+            62.0,
+            1.5,
+            if press { C_GOLD } else { C_GOLD_D },
+        );
         // v1.16.51 UX 沉浸批：按压态内衬线（照 button 内衬 draw.rs:181 款——
         // is_mouse_button_down 持续态驱动，press=false 帧零像素逐比特恒等；
         // 点击仍 is_mouse_button_pressed 边沿拾取语言不改，故不做 y+2 下沉）
-        let press = hot && is_mouse_button_down(MouseButton::Left);
         if press {
             draw_rectangle_lines(522.0, y + 2.0, 676.0, 58.0, 1.0, Color::from_rgba(160, 128, 200, 130));
         }
@@ -6207,8 +6273,8 @@ mod v11659_ux_immersion_tests {
         // 呼吸串（照 v11658 len 钉批间滚动先例；charpanel 侧恰 1 补钉落 v11662）
         assert_eq!(
             draw_p.matches("(255.0 * (0.7 + 0.3 * (g.time * 2.4).sin())) as u8").count(),
-            6,
-            "UX③ 页签加亮段 draw.rs 呼吸串恰 6（v1.16.52 UX② 四组同语补全：坊市/行囊+烙印/帮助/指引/模拟速度——同批同语防半改）"
+            8,
+            "UX③ 页签加亮段 draw.rs 呼吸串恰 8（v1.16.52 UX② 四组同语补全：坊市/行囊+烙印/帮助/指引/模拟速度；v1.16.53 施工单四 toggle 呼吸段同语 +2——音乐/音效下划线照选中条款，同批同语防半改）"
         );
         let char_p = prod_of("charpanel.rs");
         // v1.16.51 UX 沉浸批随批改写（同上 draw 侧缘由）：charpanel 侧呼吸串恰 1
@@ -6406,9 +6472,10 @@ mod v11662_ask_ink_tests {
         let game_p = prod_of("game.rs");
         let char_p = prod_of("charpanel.rs");
         let world_p = prod_of("world.rs");
-        // CHECK_SPECIALS 单源：声明恰 1/消费恰 2（采样门+accent 臂）
+        // CHECK_SPECIALS 单源：声明恰 1/消费恰 2（采样门+accent 臂）——
+        // v1.16.53 段二十六随批：special80 启用 [u8; 12]→[u8; 13] 字面随批
         assert_eq!(
-            game_p.matches("pub const CHECK_SPECIALS: [u8; 12]").count(),
+            game_p.matches("pub const CHECK_SPECIALS: [u8; 13]").count(),
             1,
             "CHECK_SPECIALS 声明恰 1（单源）"
         );
@@ -6531,11 +6598,12 @@ mod v11665_ask_ring_ux_tests {
             0,
             "㉙ 旧锚串零残留（v1.16.52 移位后 100.0-ex 不复存在）"
         );
-        // ㉚：新锚串恰 1（现实日志面板 (376,60,896,552)）
+        // ㉚：新锚串恰 2（现实日志面板 (376,60,896,552)；v1.16.53 施工单四 ㉝
+        // 败臂内收环同锚 +1 成对——ok 置㉚ 败臂置㉝ 同面板同几何）
         assert_eq!(
             draw_p.matches("376.0 - ex,").count(),
-            1,
-            "㉚ 新锚串恰 1（现实日志面板真同心）"
+            2,
+            "㉚+㉝ 新锚串恰 2（现实日志面板真同心，㉝ 败臂成对）"
         );
         // ㉚：旧锚串零残留（原坊市弹层几何 (140,60,1000,600)）
         assert_eq!(
@@ -6619,8 +6687,11 @@ mod v11665_ask_ring_ux_tests {
             "ARRIVE_T 常量声明恰 1"
         );
         assert_eq!(game_p.matches("pub arrive_t: f32,").count(), 1, "arrive_t 字段恰 1");
+        // v1.16.53 施工单四随批消歧：needle 加行首锚——inh_arrive_t: 0.0,（㉞
+        // 新字段）是 arrive_t: 0.0, 的超串，裸 needle 会被新字段子串命中多计；
+        // 行首锚后语义不变（生产构造器恰 1）
         assert_eq!(
-            game_p.matches("arrive_t: 0.0,").count(),
+            game_p.matches("\n            arrive_t: 0.0,").count(),
             1,
             "arrive_t 生产构造器 Default 恰 1（prod 面）"
         );
@@ -6690,6 +6761,195 @@ mod v11665_ask_ring_ux_tests {
             draw_p.matches("title_ornament(V_W * 0.5, 208.0, p);").count(),
             1,
             "离闭归来 title_ornament 口恰 1（⑤ 语言补齐）"
+        );
+    }
+}
+
+// ================= v1.16.53 演出包㉝㉞+按钮花样 a/c 钉测（施工单四） =================
+// 模组名注：v11645..v11667 全链占用（占用链见 v11658/v11660/v11663/v11665/
+// v11666 头注；v11667 已被 v11667_seg26_tests（game.rs，段二十六扩池+special80
+// 落地批施工单二）占用——本批钉测模块名顺延 v11668，内容版本以本头注 v1.16.53
+// 为准（占用链纪律照 v11654 头注款）。钉面：①㉝ brk_fail 四件套（常量/字段/
+// Default/递减口恰 1）+三败臂置值恰 3+消费口恰 1+C_BRK_FAIL 独立色位声明恰 1/
+// 消费恰 2+save.rs 三名零引用+㉚ 契约不动（bell 置值恰 3）②㉞ inh_arrive 四件
+// 套+sim_die 唯一置值恰 1+消费口恰 1+save.rs 双名零引用+㉔ is_a 串契约不动③按
+// 钮花样 a press 框串恰 1+c toggle 呼吸段几何恰 2④brk_veil_a 两端稳态复断言照
+// v11665 款。
+#[cfg(test)]
+mod v11668_perform_pins {
+    use super::*;
+
+    fn prod_of(fname: &str) -> String {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let src = std::fs::read_to_string(std::path::Path::new(root).join("src").join(fname))
+            .unwrap_or_else(|e| panic!("读 src/{} 失败：{}", fname, e));
+        // 行首 #[cfg(test)] 起至行首顶格 } 止滤测试区（照 press_sink prod 款）
+        let mut out = String::new();
+        let mut skip = false;
+        for line in src.lines() {
+            if line.starts_with("#[cfg(test)]") {
+                skip = true;
+                continue;
+            }
+            if skip && line == "}" {
+                skip = false;
+                continue;
+            }
+            if !skip {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+        out
+    }
+
+    // ── 演出包㉝㉞ 全链钉（生产面 prod：测试区滤除后计数） ──
+    #[test]
+    fn brk_fail_and_inh_arrive_pins() {
+        let draw_p = prod_of("draw.rs");
+        let game_p = prod_of("game.rs");
+        let main_p = prod_of("main.rs");
+        let save_p = prod_of("save.rs");
+        // ㉝ 四件套：常量/字段/Default/递减口恰 1
+        assert_eq!(
+            game_p.matches("pub const BRK_FAIL_T: f32 = 1.0;").count(),
+            1,
+            "BRK_FAIL_T 常量恰 1"
+        );
+        assert_eq!(
+            game_p.matches("pub brk_fail_t: f32,").count(),
+            1,
+            "brk_fail_t 字段恰 1"
+        );
+        assert_eq!(
+            game_p.matches("brk_fail_t: 0.0,").count(),
+            1,
+            "brk_fail_t 生产构造器 Default 恰 1（prod 面；game.rs 第二处属 revenge_tests 夹具构造器、cfg(test) 首块被 prod 滤除——struct 全字段零值语义与 brk_bell 同款）"
+        );
+        assert_eq!(
+            main_p.matches("if g.brk_fail_t > 0.0 {").count(),
+            1,
+            "brk_fail_t 主循环递减口恰 1"
+        );
+        // 三败臂置值恰 3；㉚ 契约不动恰 3（ok 臂置㉚ 败臂置㉝ 天然互斥旁证）
+        assert_eq!(
+            game_p.matches("self.brk_fail_t = BRK_FAIL_T;").count(),
+            3,
+            "brk_fail_t 三败臂置值恰 3（同境/问笔/跨境）"
+        );
+        assert_eq!(
+            game_p.matches("self.brk_bell = BRK_BELL_T;").count(),
+            3,
+            "㉚ 契约不动：brk_bell 三 ok 臂置值恰 3"
+        );
+        // 消费口恰 1+C_BRK_FAIL 独立色位声明恰 1/消费恰 2
+        assert_eq!(
+            draw_p.matches("g.brk_fail_t / crate::game::BRK_FAIL_T").count(),
+            1,
+            "brk_fail_t 消费口恰 1（draw_reality ㉝ 块）"
+        );
+        assert_eq!(
+            game_p.matches("pub const C_BRK_FAIL: Color").count(),
+            1,
+            "C_BRK_FAIL 独立色位声明恰 1"
+        );
+        assert_eq!(
+            draw_p.matches("fade(C_BRK_FAIL,").count(),
+            2,
+            "C_BRK_FAIL 消费恰 2（轻暗罩+环体）"
+        );
+        // ㉞ 四件套：常量/字段/Default/递减口恰 1+sim_die 唯一置值恰 1
+        assert_eq!(
+            game_p.matches("pub const INH_ARRIVE_T: f32 = 0.9;").count(),
+            1,
+            "INH_ARRIVE_T 常量恰 1"
+        );
+        assert_eq!(
+            game_p.matches("pub inh_arrive_t: f32,").count(),
+            1,
+            "inh_arrive_t 字段恰 1"
+        );
+        assert_eq!(
+            game_p.matches("inh_arrive_t: 0.0,").count(),
+            1,
+            "inh_arrive_t 生产构造器 Default 恰 1（prod 面；同 brk_fail_t 夹具口径）"
+        );
+        assert_eq!(
+            main_p.matches("if g.inh_arrive_t > 0.0 {").count(),
+            1,
+            "inh_arrive_t 主循环递减口恰 1"
+        );
+        assert_eq!(
+            game_p.matches("self.inh_arrive_t = INH_ARRIVE_T;").count(),
+            1,
+            "inh_arrive_t sim_die 唯一置值口恰 1（全部死因经 sim_die 收敛覆盖）"
+        );
+        assert_eq!(
+            draw_p.matches("g.inh_arrive_t / crate::game::INH_ARRIVE_T").count(),
+            1,
+            "inh_arrive_t 消费口恰 1（draw_inherit 道韵行流光）"
+        );
+        // ㉔ is_a 串契约不动恰 1（inherit 页既有拾取演出零变化旁证）
+        assert_eq!(
+            draw_p
+                .matches(
+                    "let is_a = 0.12 * brk_veil_a((g.inh_spark / crate::game::INH_SPARK_T).clamp(0.0, 1.0));"
+                )
+                .count(),
+            1,
+            "㉔ is_a 串契约不动恰 1"
+        );
+        // save.rs 零引用（两演出态+新色位全零——照 bar_anim 口径会话态不进存档）
+        assert_eq!(
+            save_p.matches("brk_fail_t").count(),
+            0,
+            "save.rs brk_fail_t 零引用（会话态不进存档）"
+        );
+        assert_eq!(
+            save_p.matches("BRK_FAIL_T").count(),
+            0,
+            "save.rs BRK_FAIL_T 零引用"
+        );
+        assert_eq!(
+            save_p.matches("inh_arrive_t").count(),
+            0,
+            "save.rs inh_arrive_t 零引用（会话态不进存档）"
+        );
+        assert_eq!(
+            save_p.matches("INH_ARRIVE_T").count(),
+            0,
+            "save.rs INH_ARRIVE_T 零引用"
+        );
+        assert_eq!(
+            save_p.matches("C_BRK_FAIL").count(),
+            0,
+            "save.rs C_BRK_FAIL 零引用"
+        );
+        // brk_veil_a 两端稳态复断言（照 v11662/:6399 款——㉝㉞ 包络端点零 α）
+        assert_eq!(brk_veil_a(0.0), 0.0, "brk_veil_a(0)=0 稳态");
+        assert_eq!(brk_veil_a(1.0), 0.0, "brk_veil_a(1)=0 稳态");
+    }
+
+    // ── 按钮花样 a/c 钉（press 持续态驱动零新状态；呼吸段照 UX 批②同语） ──
+    #[test]
+    fn button_flourish_pins() {
+        let draw_p = prod_of("draw.rs");
+        // 花样 a：继承拾取行 press 框串恰 1（press=false 帧框色 C_GOLD_D 逐比特恒等）
+        assert_eq!(
+            draw_p.matches("if press { C_GOLD } else { C_GOLD_D }").count(),
+            1,
+            "继承拾取行 press 框换色恰 1"
+        );
+        // 花样 c：toggle 下划线呼吸段几何恰 2（音乐/音效同语——四行结构串唯一
+        // 对准两处新增块，既有 140px 全宽下划线单行形态不match）
+        assert_eq!(
+            draw_p
+                .matches(
+                    "592.0 + 44.0 - 3.0,\n            12.0,\n            3.0,\n            Color::from_rgba(255, 244, 200,"
+                )
+                .count(),
+            2,
+            "toggle 呼吸段几何恰 2（音乐/音效）"
         );
     }
 }

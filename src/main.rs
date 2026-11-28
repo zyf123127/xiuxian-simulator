@@ -790,6 +790,18 @@ async fn main() {
         if g.arrive_t > 0.0 {
             g.arrive_t = (g.arrive_t - dt).max(0.0);
         }
+        // 演出包㉝ 现实冲击失败·墨痕褪散计时递减（会话态，draw_reality 败臂内收
+        // 环+轻暗罩共用包络消费），照㉚ 主循环先例——1.0s 一次性自灭；三败臂
+        // 置值、ok 臂不置（game.rs act_break 三口），稳态 fail==0 早退零像素
+        if g.brk_fail_t > 0.0 {
+            g.brk_fail_t = (g.brk_fail_t - dt).max(0.0);
+        }
+        // 演出包㉞ 草稿退回·道韵入账流光计时递减（会话态，draw_inherit 道韵行
+        // 亮带横扫共用包络消费），照㉜ 主循环先例——0.9s 一次性自灭；sim_die
+        // 尾段唯一置值口，稳态 arrive<=0 早退零像素
+        if g.inh_arrive_t > 0.0 {
+            g.inh_arrive_t = (g.inh_arrive_t - dt).max(0.0);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if debug {
             autopilot(&mut g, frame, &mut shots);
